@@ -10,3 +10,7 @@ _Avoid_: Command, Workflow (reserved — see below), Item
 
 **Workflow**:
 Reserved term, not yet built. A future user-composed chain of multiple Actions into a pipeline. Do not use "Workflow" to mean a single multi-step Action.
+
+**Fallback Action**:
+A noun-first Action that is always present in the result list and consumes the user's literal typed text as its payload (e.g. "Search web for 'X'", "Create reminder 'X'", "Copy 'X'"). Distinguished from a verb-first match, where the text fuzzy-matches an Action's name/alias. The single result list interleaves both; the user resolves intent by choosing a row, never by a mode toggle.
+_Avoid_: Default action, catch-all
