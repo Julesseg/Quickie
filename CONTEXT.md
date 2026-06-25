@@ -26,3 +26,7 @@ _Avoid_: Clipboard history, clip, stash
 **Clipboard prefill**:
 A launch-time offer to seed the input field with the current clipboard contents. Quickie silently checks only whether the clipboard *has text* (metadata, no system banner) and, if so, shows a tap-to-fill paste chip backed by the iOS Paste control — reading the actual content only on tap, never ambiently.
 _Avoid_: Auto-paste, clipboard read
+
+**Indexed Folder**:
+A folder the user has explicitly granted Quickie access to (via the document picker), persisted as a security-scoped bookmark. File search is bounded to the union of Indexed Folders — iOS forbids whole-filesystem or global indexing. Filenames within them are indexed for fuzzy matching; results open via QuickLook / share / open-in-place.
+_Avoid_: Search scope, watched folder, library
