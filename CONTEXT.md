@@ -18,3 +18,11 @@ _Avoid_: Default action, catch-all
 **Argument**:
 A typed or picked value an Action consumes during its lifecycle. An Action declares zero or more. They are collected one slot at a time in the single bottom input field, with the active Action and filled slots shown as a breadcrumb/pill (`[New Reminder] ▸ "buy milk" ▸ …`). Verb-first selection clears the search query and prompts for the first Argument; noun-first (Fallback) selection passes the literal typed text in as the first Argument.
 _Avoid_: Parameter, field, input (ambiguous)
+
+**Snippet**:
+A piece of saved text the user can quickly re-copy to the clipboard. The user-curated list is searchable as Actions and can be added to via the Share Extension. Snippets are the app's answer to "saved text"; Quickie deliberately has no automatic clipboard history (iOS forbids ambient clipboard access).
+_Avoid_: Clipboard history, clip, stash
+
+**Clipboard prefill**:
+A launch-time offer to seed the input field with the current clipboard contents. Quickie silently checks only whether the clipboard *has text* (metadata, no system banner) and, if so, shows a tap-to-fill paste chip backed by the iOS Paste control — reading the actual content only on tap, never ambiently.
+_Avoid_: Auto-paste, clipboard read
