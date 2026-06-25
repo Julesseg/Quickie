@@ -14,3 +14,7 @@ Reserved term, not yet built. A future user-composed chain of multiple Actions i
 **Fallback Action**:
 A noun-first Action that is always present in the result list and consumes the user's literal typed text as its payload (e.g. "Search web for 'X'", "Create reminder 'X'", "Copy 'X'"). Distinguished from a verb-first match, where the text fuzzy-matches an Action's name/alias. The single result list interleaves both; the user resolves intent by choosing a row, never by a mode toggle.
 _Avoid_: Default action, catch-all
+
+**Argument**:
+A typed or picked value an Action consumes during its lifecycle. An Action declares zero or more. They are collected one slot at a time in the single bottom input field, with the active Action and filled slots shown as a breadcrumb/pill (`[New Reminder] ▸ "buy milk" ▸ …`). Verb-first selection clears the search query and prompts for the first Argument; noun-first (Fallback) selection passes the literal typed text in as the first Argument.
+_Avoid_: Parameter, field, input (ambiguous)
