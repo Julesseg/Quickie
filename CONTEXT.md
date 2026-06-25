@@ -24,8 +24,12 @@ A typed or picked value an Action consumes during its lifecycle. An Action decla
 _Avoid_: Parameter, field, input (ambiguous)
 
 **Snippet**:
-A piece of saved text the user can quickly re-copy to the clipboard. The user-curated list is searchable as Actions and can be added to via the Share Extension. Snippets are the app's answer to "saved text"; Quickie deliberately has no automatic clipboard history (iOS forbids ambient clipboard access).
+A piece of saved, reusable text whose primary action is **Copy** — canned replies, an address, a template the user pastes repeatedly. Stored in Quickie (SwiftData + CloudKit), searchable as Actions, addable via the Share Extension. Quickie deliberately has no automatic clipboard history (iOS forbids ambient clipboard access).
 _Avoid_: Clipboard history, clip, stash
+
+**Note**:
+A captured free-text thought whose primary action is **Open/read** (with append and copy secondary) — the brain-dump target. Stored in Quickie (SwiftData + CloudKit), captured instantly and silently (no app switch). Sending a Note to Apple Notes is an optional export, not the default. Distinct from a Snippet (reusable copy-out text) though they share storage.
+_Avoid_: Memo, Apple Note (that is the export target, not a Quickie Note)
 
 **Clipboard prefill**:
 A launch-time offer to seed the input field with the current clipboard contents. Quickie silently checks only whether the clipboard *has text* (metadata, no system banner) and, if so, shows a tap-to-fill paste chip backed by the iOS Paste control — reading the actual content only on tap, never ambiently.
