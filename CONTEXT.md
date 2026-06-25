@@ -49,6 +49,14 @@ _Avoid_: Pinned, starred, bookmark (bookmark means Quicklink here)
 The frequency × recency ranking signal derived from a user's past Action selections. Drives the auto-suggested list on Home and boosts ranking in Results. Distinct from Favorite (which is manual).
 _Avoid_: Recents, history, MRU
 
+**Shortcut Action**:
+An Action that runs one of the user's iOS Shortcuts by name, via x-callback-url, capturing any returned output back into Quickie. Registered either by bulk import (via the Sync Shortcut) or one-by-one manual add — never enumerated through an API, which iOS forbids.
+_Avoid_: Shortcut command, automation
+
+**Sync Shortcut**:
+A Quickie-provided iOS Shortcut the user installs and runs manually. It calls the Shortcuts `Get My Shortcuts` action to collect the names of all the user's shortcuts and returns them to Quickie via the `quickie://` URL scheme, populating the user's Shortcut Actions. Re-run to re-sync; there is no background/automatic refresh.
+_Avoid_: Importer, bridge shortcut
+
 **Indexed Folder**:
 A folder the user has explicitly granted Quickie access to (via the document picker), persisted as a security-scoped bookmark. File search is bounded to the union of Indexed Folders — iOS forbids whole-filesystem or global indexing. Filenames within them are indexed for fuzzy matching; results open via QuickLook / share / open-in-place.
 _Avoid_: Search scope, watched folder, library
