@@ -12,8 +12,12 @@ _Avoid_: Command, Workflow (reserved — see below), Item
 Reserved term, not yet built. A future user-composed chain of multiple Actions into a pipeline. Do not use "Workflow" to mean a single multi-step Action.
 
 **Fallback Action**:
-A noun-first Action that is always present in the result list and consumes the user's literal typed text as its payload (e.g. "Search web for 'X'", "Create reminder 'X'", "Copy 'X'"). Distinguished from a verb-first match, where the text fuzzy-matches an Action's name/alias. The single result list interleaves both; the user resolves intent by choosing a row, never by a mode toggle.
+Any Action (typically a placeholder-Quicklink) flagged to always appear in the result list and consume the user's literal typed text as its payload (e.g. "Search web for 'X'", "Create reminder 'X'"). Distinguished from a verb-first match, where the text fuzzy-matches an Action's name/alias. The single result list interleaves both; the user resolves intent by choosing a row, never by a mode toggle. Default web search is the built-in Fallback.
 _Avoid_: Default action, catch-all
+
+**Quicklink**:
+A stored URL template with zero or more `{placeholder}` tokens. With no placeholder it is a static link that opens directly (Indexed Provider); with a placeholder it takes an Argument the typed text fills (e.g. `https://github.com/search?q={query}`). Opens in the user's system-default browser. Web search is a built-in placeholder-Quicklink, and any placeholder-Quicklink can be flagged a Fallback Action. Added via the Share Extension or manually.
+_Avoid_: Bookmark, link, URL action
 
 **Argument**:
 A typed or picked value an Action consumes during its lifecycle. An Action declares zero or more. They are collected one slot at a time in the single bottom input field, with the active Action and filled slots shown as a breadcrumb/pill (`[New Reminder] ▸ "buy milk" ▸ …`). Verb-first selection clears the search query and prompts for the first Argument; noun-first (Fallback) selection passes the literal typed text in as the first Argument.
