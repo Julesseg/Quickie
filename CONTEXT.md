@@ -37,6 +37,18 @@ A Provider whose Actions are a known, enumerable set, pre-indexed for fuzzy sear
 **Dynamic Provider**:
 A Provider that computes Actions on the fly from the current query and is never in the fuzzy index (Calculator, Unit Converter, File Search, Web Search / Fallbacks). Queried live per keystroke (debounced, cancellable, may be async), and decides for itself whether it applies to the query.
 
+**Home**:
+The empty-query state shown the instant the app opens: the Clipboard prefill chip (when applicable), a row of Favorites, then a Frecency list. The tap-without-typing fast path. Replaced by the Results state on the first keystroke.
+_Avoid_: Landing, start screen, default view
+
+**Favorite**:
+An Action the user has manually pinned. Favorites appear as shortcuts on Home and receive a ranking boost in Results.
+_Avoid_: Pinned, starred, bookmark (bookmark means Quicklink here)
+
+**Frecency**:
+The frequency × recency ranking signal derived from a user's past Action selections. Drives the auto-suggested list on Home and boosts ranking in Results. Distinct from Favorite (which is manual).
+_Avoid_: Recents, history, MRU
+
 **Indexed Folder**:
 A folder the user has explicitly granted Quickie access to (via the document picker), persisted as a security-scoped bookmark. File search is bounded to the union of Indexed Folders — iOS forbids whole-filesystem or global indexing. Filenames within them are indexed for fuzzy matching; results open via QuickLook / share / open-in-place.
 _Avoid_: Search scope, watched folder, library
