@@ -19,6 +19,7 @@ struct ResultListView: View {
                         ResultRow(action: action)
                     }
                     .buttonStyle(.plain)
+                    .accessibilityIdentifier(action.id)
                 }
             }
             .frame(maxWidth: .infinity)

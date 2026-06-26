@@ -14,6 +14,7 @@ struct InputBar: View {
             .font(.title3)
             .focused(focused)
             .submitLabel(.go)
+            .accessibilityIdentifier("search-input")
             .autocorrectionDisabled()
             .textInputAutocapitalization(.never)
             .padding(.horizontal, 18)

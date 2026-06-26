@@ -1,5 +1,7 @@
 # Quickie
 
+[![CI](https://github.com/Julesseg/Quickie/actions/workflows/ci.yml/badge.svg)](https://github.com/Julesseg/Quickie/actions/workflows/ci.yml)
+
 iOS launcher built around a single text input: type → ranked Actions → do it.
 See [`CONTEXT.md`](CONTEXT.md) for the domain language and [`docs/adr/`](docs/adr)
 for the decisions behind the architecture.
@@ -49,13 +51,34 @@ engine, and ranking — the "type → ranked result → run" loop minus the pixe
 ### The app
 
 Open `App/Quickie.xcodeproj` in **Xcode 26** (iOS 26 deployment target) and run
-on an iOS 26 simulator.
+on an iOS 26 simulator. The `Quickie` scheme builds the app and runs the
+`QuickieUITests` XCUITest target.
+
+From the command line (what CI runs):
+
+```sh
+cd App
+xcodebuild test -project Quickie.xcodeproj -scheme Quickie \
+  -destination 'platform=iOS Simulator,name=iPhone 16,OS=latest' \
+  CODE_SIGNING_ALLOWED=NO
+```
 
 **App Group setup:** the store lives in the shared App Group
 `group.com.quickie.shared` (see `QuickieStore.swift` and `Quickie.entitlements`).
 On a real device you must enable the App Groups capability for the bundle ID
 (`com.quickie.app`) in your Apple Developer account and set your signing team.
 The simulator runs without that step.
+
+## Continuous integration
+
+`.github/workflows/ci.yml` runs on every PR (GitHub-hosted runners, no Mac of
+your own needed):
+
+- **Core · swift test (Linux)** — runs `cd Core && swift test` in the official
+  `swift:6.0.3` container. Fast and cheap; covers all the loop's logic.
+- **App · XCUITest (macOS)** — selects the latest stable Xcode and runs
+  `xcodebuild test` for the `Quickie` scheme on an iOS simulator, exercising the
+  UI acceptance criteria (auto-focus, filter, tap-to-run, Home).
 
 ## Manual QA checklist (issue #3 acceptance criteria)
 

@@ -10,14 +10,30 @@
 		1A0000000000000000000012 /* QuickieCore in Frameworks */ = {isa = PBXBuildFile; productRef = 1A0000000000000000000011 /* QuickieCore */; };
 /* End PBXBuildFile section */
 
+/* Begin PBXContainerItemProxy section */
+		1A000000000000000000002A /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = 1A0000000000000000000001 /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = 1A0000000000000000000005;
+			remoteInfo = Quickie;
+		};
+/* End PBXContainerItemProxy section */
+
 /* Begin PBXFileReference section */
 		1A0000000000000000000006 /* Quickie.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = Quickie.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		1A0000000000000000000021 /* QuickieUITests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = QuickieUITests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 /* End PBXFileReference section */
 
 /* Begin PBXFileSystemSynchronizedRootGroup section */
 		1A0000000000000000000004 /* Quickie */ = {
 			isa = PBXFileSystemSynchronizedRootGroup;
 			path = Quickie;
+			sourceTree = "<group>";
+		};
+		1A0000000000000000000025 /* QuickieUITests */ = {
+			isa = PBXFileSystemSynchronizedRootGroup;
+			path = QuickieUITests;
 			sourceTree = "<group>";
 		};
 /* End PBXFileSystemSynchronizedRootGroup section */
@@ -31,6 +47,13 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
+		1A0000000000000000000023 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 /* End PBXFrameworksBuildPhase section */
 
 /* Begin PBXGroup section */
@@ -38,6 +61,7 @@
 			isa = PBXGroup;
 			children = (
 				1A0000000000000000000004 /* Quickie */,
+				1A0000000000000000000025 /* QuickieUITests */,
 				1A0000000000000000000003 /* Products */,
 			);
 			sourceTree = "<group>";
@@ -46,6 +70,7 @@
 			isa = PBXGroup;
 			children = (
 				1A0000000000000000000006 /* Quickie.app */,
+				1A0000000000000000000021 /* QuickieUITests.xctest */,
 			);
 			name = Products;
 			sourceTree = "<group>";
@@ -76,6 +101,29 @@
 			productReference = 1A0000000000000000000006 /* Quickie.app */;
 			productType = "com.apple.product-type.application";
 		};
+		1A0000000000000000000020 /* QuickieUITests */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = 1A0000000000000000000026 /* Build configuration list for PBXNativeTarget "QuickieUITests" */;
+			buildPhases = (
+				1A0000000000000000000022 /* Sources */,
+				1A0000000000000000000023 /* Frameworks */,
+				1A0000000000000000000024 /* Resources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+				1A0000000000000000000029 /* PBXTargetDependency */,
+			);
+			fileSystemSynchronizedGroups = (
+				1A0000000000000000000025 /* QuickieUITests */,
+			);
+			name = QuickieUITests;
+			packageProductDependencies = (
+			);
+			productName = QuickieUITests;
+			productReference = 1A0000000000000000000021 /* QuickieUITests.xctest */;
+			productType = "com.apple.product-type.bundle.ui-testing";
+		};
 /* End PBXNativeTarget section */
 
 /* Begin PBXProject section */
@@ -88,6 +136,10 @@
 				TargetAttributes = {
 					1A0000000000000000000005 = {
 						CreatedOnToolsVersion = 26.0;
+					};
+					1A0000000000000000000020 = {
+						CreatedOnToolsVersion = 26.0;
+						TestTargetID = 1A0000000000000000000005;
 					};
 				};
 			};
@@ -110,12 +162,20 @@
 			projectRoot = "";
 			targets = (
 				1A0000000000000000000005 /* Quickie */,
+				1A0000000000000000000020 /* QuickieUITests */,
 			);
 		};
 /* End PBXProject section */
 
 /* Begin PBXResourcesBuildPhase section */
 		1A0000000000000000000009 /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		1A0000000000000000000024 /* Resources */ = {
 			isa = PBXResourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
@@ -132,7 +192,22 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
+		1A0000000000000000000022 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 /* End PBXSourcesBuildPhase section */
+
+/* Begin PBXTargetDependency section */
+		1A0000000000000000000029 /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = 1A0000000000000000000005 /* Quickie */;
+			targetProxy = 1A000000000000000000002A /* PBXContainerItemProxy */;
+		};
+/* End PBXTargetDependency section */
 
 /* Begin XCBuildConfiguration section */
 		1A000000000000000000000C /* Debug */ = {
@@ -308,6 +383,40 @@
 			};
 			name = Release;
 		};
+		1A0000000000000000000027 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				GENERATE_INFOPLIST_FILE = YES;
+				IPHONEOS_DEPLOYMENT_TARGET = 26.0;
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = com.quickie.app.uitests;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SWIFT_EMIT_LOC_STRINGS = NO;
+				SWIFT_VERSION = 6.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
+				TEST_TARGET_NAME = Quickie;
+			};
+			name = Debug;
+		};
+		1A0000000000000000000028 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				GENERATE_INFOPLIST_FILE = YES;
+				IPHONEOS_DEPLOYMENT_TARGET = 26.0;
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = com.quickie.app.uitests;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SWIFT_EMIT_LOC_STRINGS = NO;
+				SWIFT_VERSION = 6.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
+				TEST_TARGET_NAME = Quickie;
+			};
+			name = Release;
+		};
 /* End XCBuildConfiguration section */
 
 /* Begin XCConfigurationList section */
@@ -325,6 +434,15 @@
 			buildConfigurations = (
 				1A000000000000000000000E /* Debug */,
 				1A000000000000000000000F /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+		1A0000000000000000000026 /* Build configuration list for PBXNativeTarget "QuickieUITests" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				1A0000000000000000000027 /* Debug */,
+				1A0000000000000000000028 /* Release */,
 			);
 			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Release;

@@ -10,6 +10,7 @@ struct HomePlaceholder: View {
             Text("Start typing")
                 .font(.callout)
                 .foregroundStyle(.tertiary)
+                .accessibilityIdentifier("home-placeholder")
             Spacer()
         }
         .frame(maxWidth: .infinity)

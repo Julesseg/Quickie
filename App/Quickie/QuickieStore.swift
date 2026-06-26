@@ -36,13 +36,26 @@ final class StoredQuicklink {
 enum QuickieStore {
     static let container: ModelContainer = {
         let schema = Schema([StoredQuicklink.self])
-        let configuration = ModelConfiguration(
+
+        // Preferred: the shared App Group container, so extensions/widgets read
+        // the same store (ADR 0006).
+        let grouped = ModelConfiguration(
             schema: schema,
             groupContainer: .identifier(AppGroup.identifier),
             cloudKitDatabase: .none
         )
+        if let container = try? ModelContainer(for: schema, configurations: [grouped]) {
+            return container
+        }
+
+        // Graceful degradation (ADR 0012: never block the input). If the App
+        // Group isn't available — capability not yet provisioned for this build,
+        // or a signing-disabled CI simulator — fall back to a plain local store
+        // so the app still launches. Data simply isn't shared with extensions
+        // until the group is configured.
+        let local = ModelConfiguration(schema: schema, cloudKitDatabase: .none)
         do {
-            return try ModelContainer(for: schema, configurations: [configuration])
+            return try ModelContainer(for: schema, configurations: [local])
         } catch {
             fatalError("Failed to create Quickie ModelContainer: \(error)")
         }
