@@ -8,6 +8,18 @@ Quickie is an iOS launcher built around a single text input: the user types or t
 A single invokable capability shown in the fuzzy list (e.g. Open App, Web Search, Copy Snippet, Run Shortcut, Calculate). There is exactly one type of thing in the index — an Action — and every subsystem (fuzzy finder, indexing, favorites, fallbacks) operates on it. An Action has an execution lifecycle (selected → optionally collecting input → presenting results), so a multi-step capability is still a single Action, not a separate concept.
 _Avoid_: Command, Workflow (reserved — see below), Item
 
+**Main action**:
+The single default behavior an Action (or result row) performs when tapped — open a Quicklink in the browser, open a file, run a Shortcut, copy a math result. Every row in the result list is presented by its main action.
+_Avoid_: Default, primary (use "main action")
+
+**Secondary action**:
+An additional action that operates on a specific result's content, reached by long-pressing the row (deferred feature). The eligible secondary actions are determined by the result's content type. This is the home for "execute actions on a Note" and cross-cutting content actions. Distinct from Fallback/content-on-the-text actions, which appear as their own rows rather than behind long-press.
+_Avoid_: Context action, more actions
+
+**Result list**:
+The single, reversed (bottom-anchored, best match nearest the input/thumb) list shown while typing. Composed of: fuzzy name-matches over Actions, type-triggered results injected with boosted rank by Dynamic Providers (e.g. a math result on top), and Fallback Actions that consume the raw input text as content. All appear as ranked rows; nothing essential is hidden behind a gesture.
+_Avoid_: Results, suggestions, search results
+
 **Workflow**:
 Reserved term, not yet built. A future user-composed chain of multiple Actions into a pipeline. Do not use "Workflow" to mean a single multi-step Action.
 
