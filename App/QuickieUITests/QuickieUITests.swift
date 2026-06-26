@@ -11,13 +11,24 @@ final class QuickieUITests: XCTestCase {
         continueAfterFailure = false
     }
 
+    /// Launches the app and dumps its state + accessibility tree to the test
+    /// log, so a CI failure shows exactly what rendered instead of just
+    /// "element not found".
+    @MainActor
+    private func launchApp() -> XCUIApplication {
+        let app = XCUIApplication()
+        app.launch()
+        print("== Quickie launch state: \(app.state.rawValue) (3 == runningForeground)")
+        print("== Quickie accessibility tree ==\n\(app.debugDescription)")
+        return app
+    }
+
     /// The input auto-focuses on launch, so text typed *without tapping* lands
     /// in it — and the matching built-in Action appears. A strong, non-flaky
     /// proxy for "keyboard up, input focused" (ADR 0012).
     @MainActor
     func testInputAutoFocusesOnLaunch() throws {
-        let app = XCUIApplication()
-        app.launch()
+        let app = launchApp()
 
         let input = app.textFields["search-input"]
         XCTAssertTrue(input.waitForExistence(timeout: 10), "bottom input should exist on launch")
@@ -33,8 +44,7 @@ final class QuickieUITests: XCTestCase {
     /// An empty query shows the minimal Home placeholder.
     @MainActor
     func testEmptyQueryShowsHome() throws {
-        let app = XCUIApplication()
-        app.launch()
+        let app = launchApp()
 
         XCTAssertTrue(
             app.staticTexts["home-placeholder"].waitForExistence(timeout: 10),
@@ -46,8 +56,7 @@ final class QuickieUITests: XCTestCase {
     /// URL, which deactivates the app as the browser takes over).
     @MainActor
     func testTypingFiltersAndTapRunsMainAction() throws {
-        let app = XCUIApplication()
-        app.launch()
+        let app = launchApp()
 
         let input = app.textFields["search-input"]
         XCTAssertTrue(input.waitForExistence(timeout: 10))
