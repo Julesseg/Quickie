@@ -21,7 +21,11 @@ The single, reversed (bottom-anchored, best match nearest the input/thumb) list 
 _Avoid_: Results, suggestions, search results
 
 **Workflow**:
-Reserved term, not yet built. A future user-composed chain of multiple Actions into a pipeline. Do not use "Workflow" to mean a single multi-step Action.
+Reserved term, not yet built. A future user-composed chain of multiple Actions, where each Action's output content feeds the next Action's input (validated by content type), authored as visual step-chaining rather than a text DSL. Made possible by every Action declaring typed input/output content from day one. Do not use "Workflow" to mean a single multi-step Action.
+
+**Content type**:
+The kind of a value flowing through Quickie — text, url, file, number, etc. An item's content type determines which Actions are eligible for it (and their ranking), which secondary actions a result exposes, and — in a future Workflow — whether one Action's output can feed another's input.
+_Avoid_: Data type, kind, payload type
 
 **Fallback Action**:
 Any Action (typically a placeholder-Quicklink) flagged to always appear in the result list and consume the user's literal typed text as its payload (e.g. "Search web for 'X'", "Create reminder 'X'"). Distinguished from a verb-first match, where the text fuzzy-matches an Action's name/alias. The single result list interleaves both; the user resolves intent by choosing a row, never by a mode toggle. Default web search is the built-in Fallback.
