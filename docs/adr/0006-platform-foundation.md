@@ -8,3 +8,5 @@
 
 - **Indexed-Folder grants are per-device, not synced.** A security-scoped bookmark is device-specific and will not resolve on another device, so the access grant is modeled as per-device state; each device re-picks its folders. (The folder *list* may surface as "not available on this device" rather than a dead bookmark.)
 - **Frecency stats sync** as additive counters, so ranking feels consistent across devices.
+
+**App Group from day one.** The SwiftData store lives in a shared **App Group** container so the Share Extension (and widgets/App Intents) write to the same source of truth as the app. This is decided up front because moving the store into an App Group later is a painful migration.
