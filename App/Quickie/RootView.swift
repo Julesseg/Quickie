@@ -13,6 +13,10 @@ struct RootView: View {
     /// (ADR 0006: index rebuilt from the source of truth).
     @Query(sort: \StoredQuicklink.createdAt) private var quicklinks: [StoredQuicklink]
 
+    /// User Snippets feed the same index — copy-out Actions ranked beside every
+    /// other capability (issue #6).
+    @Query(sort: \StoredSnippet.createdAt) private var snippets: [StoredSnippet]
+
     /// The user's editable default search engine — just a URL template
     /// (CONTEXT.md → Quicklink; issue #5 AC #6). Persisted in app storage and
     /// fed to the built-in web-search Fallback.
@@ -21,14 +25,18 @@ struct RootView: View {
 
     @State private var query = ""
     @State private var showingManage = false
+    @State private var showingSnippets = false
     @FocusState private var inputFocused: Bool
+    /// A transient confirmation banner shown after a copy-out main action runs —
+    /// the "lightweight confirmation" snippets need since copying is silent.
+    @State private var copyConfirmation: String?
 
     /// Tracks the active keyboard so the matcher weights adjacent-key typos for
     /// the layout the user is actually typing on (ADR 0005).
     @State private var keyboardLayout = KeyboardLayoutModel()
 
     private var engine: SearchEngine {
-        let stored = quicklinks.map { link in
+        let storedLinks = quicklinks.map { link in
             Action.quicklink(
                 id: link.persistentModelID.hashValue.description,
                 title: link.title,
@@ -37,10 +45,18 @@ struct RootView: View {
                 isFallback: link.isFallback
             )
         }
+        let storedSnippets = snippets.map { snippet in
+            Action.snippet(
+                id: "snippet.\(snippet.persistentModelID.hashValue.description)",
+                title: snippet.title,
+                body: snippet.body
+            )
+        }
         return SearchEngine(
             providers: [
                 IndexedProvider.builtIns(webSearchTemplate: engineTemplate),
-                IndexedProvider(catalog: stored),
+                IndexedProvider(catalog: storedLinks),
+                IndexedProvider(catalog: storedSnippets),
             ],
             layout: keyboardLayout.layout
         )
@@ -64,21 +80,39 @@ struct RootView: View {
                 InputBar(query: $query, focused: $inputFocused)
             }
 
-            // A quiet affordance into Quicklink management — kept out of the
-            // input's way so it never competes with the typing fast path.
-            manageButton
+            // Quiet affordances into the user's libraries — Snippets and
+            // Quicklink management — sharing one top-trailing row so neither
+            // competes with the typing fast path nor overlaps the other.
+            libraryButtons
+
+            if let copyConfirmation {
+                CopyConfirmationBanner(text: copyConfirmation)
+            }
         }
         // Auto-focus on launch, keyboard up — the core promise (ADR 0012).
         .onAppear { inputFocused = true }
-        .sheet(isPresented: $showingManage) {
-            ManageQuicklinksView(engineTemplate: $engineTemplate)
-        }
     }
 
-    private var manageButton: some View {
+    /// The top-trailing library buttons. Each owns its own `.sheet` so the two
+    /// presentations never collide (SwiftUI ignores a second `.sheet` attached
+    /// to the same view).
+    private var libraryButtons: some View {
         VStack {
-            HStack {
+            HStack(spacing: 4) {
                 Spacer()
+                Button {
+                    showingSnippets = true
+                } label: {
+                    Image(systemName: "doc.on.clipboard")
+                        .font(.title3)
+                        .padding(10)
+                }
+                .accessibilityIdentifier("open-snippets")
+                .accessibilityLabel("Manage Snippets")
+                .sheet(isPresented: $showingSnippets) {
+                    SnippetManagerView()
+                }
+
                 Button {
                     showingManage = true
                 } label: {
@@ -88,6 +122,9 @@ struct RootView: View {
                 }
                 .accessibilityIdentifier("manage-quicklinks")
                 .accessibilityLabel("Manage Quicklinks")
+                .sheet(isPresented: $showingManage) {
+                    ManageQuicklinksView(engineTemplate: $engineTemplate)
+                }
             }
             Spacer()
         }
@@ -102,8 +139,39 @@ struct RootView: View {
             openURL(url)
         case .copyText(let text):
             UIPasteboard.general.string = text
+            confirmCopy()
         case .none:
             break
         }
+    }
+
+    /// Flashes the copy confirmation, then clears it after a beat.
+    private func confirmCopy() {
+        withAnimation { copyConfirmation = "Copied" }
+        Task {
+            try? await Task.sleep(for: .seconds(1.4))
+            withAnimation { copyConfirmation = nil }
+        }
+    }
+}
+
+/// The lightweight "Copied" confirmation: a brief, non-blocking banner that
+/// acknowledges a silent copy-out without stealing focus from the input.
+private struct CopyConfirmationBanner: View {
+    let text: String
+
+    var body: some View {
+        VStack {
+            Spacer()
+            Text(text)
+                .font(.callout.weight(.medium))
+                .padding(.horizontal, 16)
+                .padding(.vertical, 10)
+                .background(.thinMaterial, in: Capsule())
+                .padding(.bottom, 90)
+                .accessibilityIdentifier("copy-confirmation")
+        }
+        .transition(.opacity)
+        .allowsHitTesting(false)
     }
 }

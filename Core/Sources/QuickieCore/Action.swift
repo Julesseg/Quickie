@@ -184,4 +184,21 @@ extension Action {
             isFallback: isFallback
         )
     }
+
+    /// A Snippet: saved, reusable text whose main action is **Copy**
+    /// (CONTEXT.md → Snippet). Self-contained — it ignores the typed text and
+    /// always copies its stored `body` to the clipboard, which is what
+    /// distinguishes it from a Note (copy-out vs read).
+    public static func snippet(
+        id: String,
+        title: String,
+        body: String
+    ) -> Action {
+        Action(
+            id: id,
+            title: title,
+            inputTypes: [],
+            outputType: .text
+        ) { _ in .copyText(body) }
+    }
 }
