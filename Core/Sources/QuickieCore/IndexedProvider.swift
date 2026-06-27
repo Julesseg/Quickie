@@ -8,11 +8,17 @@ import Foundation
 public struct IndexedProvider: Provider {
     public let kind: ProviderKind = .indexed
 
+    /// This provider's match-score multiplier (issue #9 AC #3). `1.0` (neutral)
+    /// unless a caller deliberately lifts or lowers a source — e.g. ranking the
+    /// user's own Quicklinks above the shipped built-ins.
+    public let weight: Double
+
     /// The full, enumerable set of Actions this provider indexes.
     public let catalog: [Action]
 
-    public init(catalog: [Action]) {
+    public init(catalog: [Action], weight: Double = 1.0) {
         self.catalog = catalog
+        self.weight = weight
     }
 
     /// Returns the whole catalog: an indexed provider does not filter, it
