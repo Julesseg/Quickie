@@ -11,9 +11,14 @@ import Foundation
 /// `results(for:)` shape the UI depends on.
 public struct SearchEngine {
     private let providers: [Provider]
+    /// The active keyboard layout, used by the Matcher to weight adjacent-key
+    /// typos. The App keeps this in step with `UITextInputMode`; the Core
+    /// defaults to QWERTY so it stays platform-agnostic and testable.
+    private let layout: KeyboardLayout
 
-    public init(providers: [Provider]) {
+    public init(providers: [Provider], layout: KeyboardLayout = .qwerty) {
         self.providers = providers
+        self.layout = layout
     }
 
     /// The ranked Result list for `query`, best match first. An empty or
@@ -45,7 +50,7 @@ public struct SearchEngine {
     /// that hits any of an Action's names surfaces it.
     private func bestScore(for action: Action, query: String) -> Double? {
         ([action.title] + action.aliases)
-            .compactMap { Matcher.score(query: query, candidate: $0) }
+            .compactMap { Matcher.score(query: query, candidate: $0, layout: layout) }
             .max()
     }
 }

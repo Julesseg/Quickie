@@ -16,15 +16,22 @@ struct RootView: View {
     @State private var query = ""
     @FocusState private var inputFocused: Bool
 
+    /// Tracks the active keyboard so the matcher weights adjacent-key typos for
+    /// the layout the user is actually typing on (ADR 0005).
+    @State private var keyboardLayout = KeyboardLayoutModel()
+
     private var engine: SearchEngine {
         let stored = quicklinks.compactMap { link -> Action? in
             guard let url = URL(string: link.urlString) else { return nil }
             return .staticLink(id: link.persistentModelID.hashValue.description, title: link.title, url: url)
         }
-        return SearchEngine(providers: [
-            IndexedProvider.builtIns(),
-            IndexedProvider(catalog: stored),
-        ])
+        return SearchEngine(
+            providers: [
+                IndexedProvider.builtIns(),
+                IndexedProvider(catalog: stored),
+            ],
+            layout: keyboardLayout.layout
+        )
     }
 
     private var isHome: Bool {
