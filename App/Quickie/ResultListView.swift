@@ -8,6 +8,10 @@ import QuickieCore
 struct ResultListView: View {
     let results: [Action]
     let onRun: (Action) -> Void
+    /// Whether a row's Action is pinned — drives its Pin/Unpin menu label.
+    let isFavorite: (Action) -> Bool
+    /// Toggles a row's Favorite pin (issue #9 AC #1).
+    let onToggleFavorite: (Action) -> Void
 
     var body: some View {
         ScrollView {
@@ -16,10 +20,14 @@ struct ResultListView: View {
                     Button {
                         onRun(action)
                     } label: {
-                        ResultRow(action: action)
+                        ActionRow(action: action)
                     }
                     .buttonStyle(.plain)
                     .accessibilityIdentifier(action.id)
+                    .favoriteContextMenu(
+                        isFavorite: isFavorite(action),
+                        toggle: { onToggleFavorite(action) }
+                    )
                 }
             }
             .frame(maxWidth: .infinity)
@@ -28,8 +36,10 @@ struct ResultListView: View {
     }
 }
 
-/// One row: the Action presented by its main action (title + optional subtitle).
-private struct ResultRow: View {
+/// One row: an Action presented by its main action (title + optional subtitle).
+/// Shared by the Result list and the Home Frecency list so a remembered Action
+/// reads identically wherever it appears.
+struct ActionRow: View {
     let action: Action
 
     var body: some View {
@@ -49,5 +59,22 @@ private struct ResultRow: View {
         .padding(.horizontal, 20)
         .padding(.vertical, 12)
         .contentShape(Rectangle())
+    }
+}
+
+extension View {
+    /// The Pin/Unpin affordance shared by every row that can be favorited. A
+    /// long-press context menu keeps pinning out of the typing fast path; it is
+    /// distinct from the deferred *secondary actions* long-press (ADR 0008),
+    /// which operates on a result's content rather than its place in the index.
+    func favoriteContextMenu(isFavorite: Bool, toggle: @escaping () -> Void) -> some View {
+        contextMenu {
+            Button {
+                toggle()
+            } label: {
+                Label(isFavorite ? "Unpin Favorite" : "Pin as Favorite",
+                      systemImage: isFavorite ? "star.slash" : "star")
+            }
+        }
     }
 }
