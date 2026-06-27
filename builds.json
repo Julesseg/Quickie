@@ -1,0 +1,32 @@
+[
+  {
+    "pr": 22,
+    "title": "Add Snippets provider (issue #6)",
+    "sha": "ec587a8",
+    "time": "2026-06-27T17:45:32.418Z"
+  },
+  {
+    "pr": 24,
+    "title": "Forgiving layout-adaptive matcher (#4)",
+    "sha": "a32cc0f",
+    "time": "2026-06-27T17:40:35.275Z"
+  },
+  {
+    "pr": 23,
+    "title": "Quicklinks provider + web-search Fallback (issue #5)",
+    "sha": "f45c61e",
+    "time": "2026-06-27T17:36:57.163Z"
+  },
+  {
+    "pr": 25,
+    "title": "Add PR review skills from OnTheRoad",
+    "sha": "d8d2a42",
+    "time": "2026-06-27T17:20:09.826Z"
+  },
+  {
+    "pr": 21,
+    "title": "Installable per-PR iOS builds via GitHub Pages",
+    "sha": "0c184a3",
+    "time": "2026-06-27T16:41:09.962Z"
+  }
+]
