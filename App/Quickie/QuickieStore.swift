@@ -31,11 +31,29 @@ final class StoredQuicklink {
     }
 }
 
+/// A user-saved Snippet: reusable text whose main action is **Copy**
+/// (CONTEXT.md → Snippet) — canned replies, an address, a template pasted
+/// repeatedly. Persisted in SwiftData alongside Quicklinks; the in-memory index
+/// is rebuilt from these on launch (ADR 0006). A Snippet shares storage with a
+/// future Note but is distinct in intent: copy-out, not read.
+@Model
+final class StoredSnippet {
+    var title: String
+    var body: String
+    var createdAt: Date
+
+    init(title: String, body: String, createdAt: Date = Date()) {
+        self.title = title
+        self.body = body
+        self.createdAt = createdAt
+    }
+}
+
 /// Owns the single `ModelContainer`, configured for the shared App Group with
 /// CloudKit off for now (M1 is fully local — ADR 0006 / ROADMAP).
 enum QuickieStore {
     static let container: ModelContainer = {
-        let schema = Schema([StoredQuicklink.self])
+        let schema = Schema([StoredQuicklink.self, StoredSnippet.self])
 
         // Only ask SwiftData for the shared App Group container when this build
         // is actually entitled for it — `containerURL(forSecurityApplication…)`
