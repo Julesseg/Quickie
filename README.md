@@ -80,6 +80,14 @@ your own needed):
   `xcodebuild test` for the `Quickie` scheme on an iOS simulator, exercising the
   UI acceptance criteria (auto-focus, filter, tap-to-run, Home).
 
+### Installable PR builds
+
+`.github/workflows/release.yml` additionally builds a **signed, installable
+`.ipa`** per PR (on the hosted `macos-15` runner) and publishes it to a GitHub
+Pages site, so you can install any PR's build on your iPhone from Safari. It stays
+dormant until the signing secrets and Pages source are configured — see
+[`ci/README.md`](ci/README.md) for the one-time Apple Developer / secrets setup.
+
 ## Manual QA checklist (issue #3 acceptance criteria)
 
 The UI behaviors run only in Xcode/simulator. Verify:
