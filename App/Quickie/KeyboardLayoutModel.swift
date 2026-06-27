@@ -15,7 +15,10 @@ import QuickieCore
 @Observable
 final class KeyboardLayoutModel {
     private(set) var layout: KeyboardLayout = .qwerty
-    @ObservationIgnored private var observer: NSObjectProtocol?
+    // `nonisolated(unsafe)` so the (nonisolated) deinit can remove the observer
+    // token; it is written once at init and only read again at dealloc, so the
+    // unchecked access is safe in practice. `removeObserver` is thread-safe.
+    @ObservationIgnored private nonisolated(unsafe) var observer: NSObjectProtocol?
 
     init() {
         refresh()
