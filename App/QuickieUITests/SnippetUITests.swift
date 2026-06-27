@@ -51,7 +51,14 @@ final class SnippetUITests: XCTestCase {
         input.tap()
         input.typeText("greeting")
 
-        let row = app.staticTexts[title]
+        // A result row is a Button whose label is the snippet title; its
+        // identifier is a store-derived hash, so match on the label. (The inner
+        // Text is merged into the Button's accessibility element, so it is not
+        // independently queryable as a staticText — mirror the built-in tests,
+        // which find rows by the button, not the text.)
+        let row = app.buttons.matching(
+            NSPredicate(format: "label CONTAINS[c] %@", title)
+        ).firstMatch
         XCTAssertTrue(row.waitForExistence(timeout: 5), "the saved snippet should appear as a searchable result")
 
         // Running its main action copies, acknowledged by the confirmation banner.
