@@ -32,4 +32,21 @@ struct IndexedProviderTests {
         let provider = IndexedProvider.builtIns()
         #expect(provider.candidates(for: "").count >= 3)
     }
+
+    @Test("the built-ins ship a web-search Fallback")
+    func builtInsShipWebSearchFallback() {
+        // The one Fallback the skeleton ships, so any typed text always has a
+        // home (CONTEXT.md → Fallback Action; issue #5).
+        let fallbacks = IndexedProvider.builtIns().candidates(for: "").filter(\.isFallback)
+        #expect(fallbacks.contains { $0.id == "builtin.web-search" })
+    }
+
+    @Test("the built-in web-search engine is configurable")
+    func builtInsAcceptCustomEngine() {
+        // The app passes the user's persisted engine template here (AC #6).
+        let provider = IndexedProvider.builtIns(webSearchTemplate: "https://www.google.com/search?q={query}")
+        let search = provider.candidates(for: "").first { $0.id == "builtin.web-search" }!
+        #expect(search.run(input: "swift")
+                == .openURL(URL(string: "https://www.google.com/search?q=swift")!))
+    }
 }
