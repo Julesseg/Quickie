@@ -13,17 +13,37 @@ struct RootView: View {
     /// (ADR 0006: index rebuilt from the source of truth).
     @Query(sort: \StoredQuicklink.createdAt) private var quicklinks: [StoredQuicklink]
 
+    /// User Snippets feed the same index — copy-out Actions ranked beside every
+    /// other capability (issue #6).
+    @Query(sort: \StoredSnippet.createdAt) private var snippets: [StoredSnippet]
+
     @State private var query = ""
     @FocusState private var inputFocused: Bool
+    @State private var showingSnippets = false
+    /// A transient confirmation banner shown after a copy-out main action runs —
+    /// the "lightweight confirmation" snippets need since copying is silent.
+    @State private var copyConfirmation: String?
+    /// Identifies the most recent copy so its dismiss timer is the only one that
+    /// clears the banner — rapid copies coalesce instead of cutting each other
+    /// short.
+    @State private var copyToken = UUID()
 
     private var engine: SearchEngine {
-        let stored = quicklinks.compactMap { link -> Action? in
+        let storedLinks = quicklinks.compactMap { link -> Action? in
             guard let url = URL(string: link.urlString) else { return nil }
             return .staticLink(id: link.persistentModelID.hashValue.description, title: link.title, url: url)
         }
+        let storedSnippets = snippets.map { snippet in
+            Action.snippet(
+                id: "snippet.\(snippet.persistentModelID.hashValue.description)",
+                title: snippet.title,
+                body: snippet.body
+            )
+        }
         return SearchEngine(providers: [
             IndexedProvider.builtIns(),
-            IndexedProvider(catalog: stored),
+            IndexedProvider(catalog: storedLinks),
+            IndexedProvider(catalog: storedSnippets),
         ])
     }
 
@@ -44,9 +64,32 @@ struct RootView: View {
                 }
                 InputBar(query: $query, focused: $inputFocused)
             }
+
+            // The library affordance: an unobtrusive top-trailing button to
+            // manage Snippets, kept out of the input's way (ADR 0012).
+            VStack {
+                HStack {
+                    Spacer()
+                    Button {
+                        showingSnippets = true
+                    } label: {
+                        Image(systemName: "doc.on.clipboard")
+                            .padding(12)
+                    }
+                    .accessibilityIdentifier("open-snippets")
+                }
+                Spacer()
+            }
+
+            if let copyConfirmation {
+                CopyConfirmationBanner(text: copyConfirmation)
+            }
         }
         // Auto-focus on launch, keyboard up — the core promise (ADR 0012).
         .onAppear { inputFocused = true }
+        .sheet(isPresented: $showingSnippets) {
+            SnippetManagerView()
+        }
     }
 
     /// Runs a row's main action and performs its outcome at the platform edge.
@@ -56,8 +99,45 @@ struct RootView: View {
             openURL(url)
         case .copyText(let text):
             UIPasteboard.general.string = text
+            confirmCopy()
         case .none:
             break
         }
+    }
+
+    /// Flashes the copy confirmation, then clears it after a beat. Each copy
+    /// stamps a fresh token; only the latest copy's timer clears the banner, so
+    /// two copies in quick succession keep it up for the full beat after the
+    /// most recent one rather than the first.
+    private func confirmCopy() {
+        let token = UUID()
+        copyToken = token
+        withAnimation { copyConfirmation = "Copied" }
+        Task {
+            try? await Task.sleep(for: .seconds(1.4))
+            guard copyToken == token else { return }
+            withAnimation { copyConfirmation = nil }
+        }
+    }
+}
+
+/// The lightweight "Copied" confirmation: a brief, non-blocking banner that
+/// acknowledges a silent copy-out without stealing focus from the input.
+private struct CopyConfirmationBanner: View {
+    let text: String
+
+    var body: some View {
+        VStack {
+            Spacer()
+            Text(text)
+                .font(.callout.weight(.medium))
+                .padding(.horizontal, 16)
+                .padding(.vertical, 10)
+                .background(.thinMaterial, in: Capsule())
+                .padding(.bottom, 90)
+                .accessibilityIdentifier("copy-confirmation")
+        }
+        .transition(.opacity)
+        .allowsHitTesting(false)
     }
 }
