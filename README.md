@@ -64,9 +64,9 @@ xcodebuild test -project Quickie.xcodeproj -scheme Quickie \
 ```
 
 **App Group setup:** the store lives in the shared App Group
-`group.com.quickie.shared` (see `QuickieStore.swift` and `Quickie.entitlements`).
+`group.com.julesseguin.quickie` (see `QuickieStore.swift` and `Quickie.entitlements`).
 On a real device you must enable the App Groups capability for the bundle ID
-(`com.quickie.app`) in your Apple Developer account and set your signing team.
+(`com.julesseguin.quickie`) in your Apple Developer account and set your signing team.
 The simulator runs without that step.
 
 ## Continuous integration
@@ -79,6 +79,13 @@ your own needed):
 - **App · XCUITest (macOS)** — selects the latest stable Xcode and runs
   `xcodebuild test` for the `Quickie` scheme on an iOS simulator, exercising the
   UI acceptance criteria (auto-focus, filter, tap-to-run, Home).
+
+### Installable PR builds
+
+`.github/workflows/release.yml` additionally builds a **signed, installable
+`.ipa`** per PR (on the hosted `macos-15` runner) and publishes it to a GitHub
+Pages site, so you can install any PR's build on your iPhone from Safari. See
+[`ci/README.md`](ci/README.md) for the one-time signing secrets / Pages setup.
 
 ## Manual QA checklist (issue #3 acceptance criteria)
 

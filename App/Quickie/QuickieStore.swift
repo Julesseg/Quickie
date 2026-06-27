@@ -10,7 +10,7 @@ import SwiftData
 /// entry in `Quickie.entitlements`, and the App Group must be enabled for the
 /// app's bundle ID in your Apple Developer account.
 enum AppGroup {
-    static let identifier = "group.com.quickie.shared"
+    static let identifier = "group.com.julesseguin.quickie"
 }
 
 /// A user-saved Quicklink: a stored URL that opens directly (CONTEXT.md →
