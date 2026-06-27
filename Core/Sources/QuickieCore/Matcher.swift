@@ -8,10 +8,10 @@ import Foundation
 ///    token-order independence so `"github open"` hits `"Open GitHub"`.
 /// 2. **Subsequence tier** (`0.40 … 1.0`) — fzf-style scoring rewarding exact
 ///    names, prefixes, contiguous runs, and tight fits.
-/// 3. **Forgiving tier** (`0 … <0.40`) — a keyboard-adjacency-weighted
-///    Damerau-Levenshtein pass within a small edit budget catches
-///    transpositions and single-character slips, always ranked below any clean
-///    subsequence match (a lower-confidence signal).
+/// 3. **Forgiving tier** (`0 … <0.40`) — a Damerau-Levenshtein pass within a
+///    length-scaled edit budget (~1 slip per 4 chars) catches transpositions
+///    and single-character slips, adjacency-weighted so physically plausible
+///    slips rank higher. Always below any clean subsequence match.
 /// 4. **Trigram prefilter** — a cheap, sound gate that skips the edit-distance
 ///    pass for hopeless candidates so it scales over a large index.
 ///
@@ -105,11 +105,6 @@ public enum Matcher {
 
     // MARK: - Forgiving (Damerau-Levenshtein) tier (0 … <0.40)
 
-    /// The most weighted edits a query may be from *some window of* the
-    /// candidate and still count as a typo rather than a different word. Sized
-    /// for phone typing: a swap plus a stray character, no more.
-    private static let editBudget = 2.0
-
     /// Ceiling for the fuzzy tier, held strictly below the scattered-subsequence
     /// base (0.40) so a real subsequence always wins.
     private static let fuzzyCeiling = 0.35
@@ -117,16 +112,38 @@ public enum Matcher {
     /// The cheapest single edit: a substitution onto a physically adjacent key.
     private static let minEditCost = 0.5
 
-    /// Scores `q` against `c` by the cheapest Damerau-Levenshtein alignment of
-    /// `q` to any equal-length-ish window of `c`. Returns `nil` when the best
-    /// alignment costs more than `editBudget`. Lower cost → higher score. The
-    /// trigram prefilter screens out hopeless candidates before this runs.
+    /// How many edit *operations* a query of this length may be from a window of
+    /// the candidate and still count as a typo rather than a different word —
+    /// roughly one slip per four characters. Returns `0` for very short queries
+    /// (1–3 chars), which gates the fuzzy tier off for them entirely: a 2–3 char
+    /// query that isn't a subsequence is two edits from *some* window of almost
+    /// anything, so fuzzy-matching it would drag in the whole index.
+    private static func maxEdits(forQueryLength length: Int) -> Int {
+        length / 4
+    }
+
+    /// Scores `q` against `c` via the forgiving tier. The gate is the *true*
+    /// (unit-cost) edit distance: at most `maxEdits` operations, where an
+    /// adjacency slip still counts as one edit. Adjacency weighting then only
+    /// ranks the survivors — a physically plausible slip scores higher than a
+    /// distant one. The trigram prefilter screens hopeless candidates first.
     private static func fuzzyScore(_ q: String, _ c: String, layout: KeyboardLayout) -> Double? {
-        guard passesTrigramPrefilter(q, c) else { return nil }
-        let cost = bestEditCost(query: q, candidate: c, layout: layout)
-        guard let cost, cost <= editBudget else { return nil }
+        let budget = maxEdits(forQueryLength: q.count)
+        guard budget > 0, passesTrigramPrefilter(q, c) else { return nil }
+
+        // Gate on the number of edits (unit cost), so an adjacency discount can
+        // never smuggle in extra operations past the budget.
+        guard let edits = bestEditCost(query: q, candidate: c, substitution: { _, _ in 1.0 }),
+              edits <= Double(budget) else { return nil }
+
+        // Rank by the adjacency-weighted cost: adjacent-key slips cost less.
+        let weighted = bestEditCost(query: q, candidate: c) { typed, intended in
+            substitutionCost(typed, intended, layout: layout)
+        } ?? edits
+
         // Monotonic in cost: cheaper typo → higher score, always < 0.40.
-        return fuzzyCeiling * (editBudget + 1 - cost) / (editBudget + 1)
+        let span = Double(budget) + 1
+        return fuzzyCeiling * (span - weighted) / span
     }
 
     // MARK: - Trigram prefilter
@@ -136,18 +153,20 @@ public enum Matcher {
     /// of the query over a large index (ADR 0005). It is **sound**: it never
     /// rejects a candidate the full matcher would accept.
     ///
-    /// Each edit alters at most three trigrams, and the cheapest edit costs
-    /// `minEditCost`, so a candidate within `editBudget` of the query shares at
-    /// least `qTrigrams - 3·maxEdits` of the query's trigrams. We demand that
-    /// many. When the query is too short to form that many trigrams the bound
-    /// goes non-positive and the gate passes everything — it can't soundly
-    /// reject, so it defers to the full matcher.
+    /// Each edit alters at most three trigrams, so a candidate within the
+    /// query's length-scaled edit budget (`maxEdits` operations) shares at least
+    /// `qTrigrams - 3·maxEdits` of the query's trigrams. We demand that many.
+    /// When the query is too short to form that many trigrams the bound goes
+    /// non-positive and the gate passes everything — it can't soundly reject, so
+    /// it defers to the full matcher. Because the budget grows slower than the
+    /// query (one edit per four chars), the gate becomes selective at everyday
+    /// query lengths, not only very long ones.
     static func passesTrigramPrefilter(_ query: String, _ candidate: String) -> Bool {
-        let queryGrams = trigrams(normalize(query))
+        let normalized = normalize(query)
+        let queryGrams = trigrams(normalized)
         guard !queryGrams.isEmpty else { return true }
 
-        let maxEdits = Int((editBudget / minEditCost).rounded(.up))
-        let needed = queryGrams.count - 3 * maxEdits
+        let needed = queryGrams.count - 3 * maxEdits(forQueryLength: normalized.count)
         guard needed > 0 else { return true }
 
         let shared = queryGrams.intersection(trigrams(normalize(candidate))).count
@@ -170,7 +189,11 @@ public enum Matcher {
     /// candidate (so "gthub" matches deep inside "Open GitHub"): the first row
     /// is zero-cost (free leading skip) and the answer is the minimum over the
     /// last row (free trailing skip).
-    private static func bestEditCost(query: String, candidate: String, layout: KeyboardLayout) -> Double? {
+    private static func bestEditCost(
+        query: String,
+        candidate: String,
+        substitution: (Character, Character) -> Double
+    ) -> Double? {
         let a = Array(query)
         let b = Array(candidate)
         guard !a.isEmpty, !b.isEmpty else { return nil }
@@ -184,7 +207,7 @@ public enum Matcher {
         for i in 1...n {
             for j in 1...m {
                 let match = a[i - 1] == b[j - 1]
-                let subCost = match ? 0.0 : substitutionCost(a[i - 1], b[j - 1], layout: layout)
+                let subCost = match ? 0.0 : substitution(a[i - 1], b[j - 1])
                 var best = min(
                     d[i - 1][j] + 1.0,             // delete from query
                     d[i][j - 1] + 1.0,             // insert (skip candidate char)

@@ -103,6 +103,15 @@ struct MatcherTests {
         #expect(Matcher.score(query: "gxywub", candidate: "GitHub") == nil)
     }
 
+    @Test("a tiny non-subsequence query does not fuzz-match unrelated names")
+    func shortGarbageDoesNotMatch() {
+        // The edit allowance scales with query length: a 2-char query that
+        // isn't a subsequence is below the fuzzy threshold, so it doesn't drag
+        // the whole index in just because it's two edits from some window.
+        #expect(Matcher.score(query: "zx", candidate: "GitHub") == nil)
+        #expect(Matcher.score(query: "qp", candidate: "Calculator") == nil)
+    }
+
     @Test("an adjacent-key typo scores higher than a distant-key typo")
     func adjacencyWeightsSubstitution() {
         // Both are a single substitution of the leading 'g' in "github". On
@@ -162,5 +171,14 @@ struct MatcherTests {
         // Long enough to trigram, and not a single run in common — exactly the
         // unrelated candidate the prefilter exists to skip.
         #expect(!Matcher.passesTrigramPrefilter("abcdefghijklmno", "zyxwvutsrqponml"))
+    }
+
+    @Test("the prefilter is selective for everyday-length queries")
+    func prefilterFiresForMediumQueries() {
+        // Because the edit allowance scales with length, a ~10-char query needs
+        // shared trigrams to clear the gate — the prefilter actually skips the
+        // edit-distance pass for unrelated candidates at realistic lengths, not
+        // only for very long ones.
+        #expect(!Matcher.passesTrigramPrefilter("abcdefghij", "zyxwvutsrq"))
     }
 }
