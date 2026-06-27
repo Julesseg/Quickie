@@ -8,6 +8,7 @@ import QuickieCore
 /// state shows the Home placeholder (ADR 0008 / issue #3).
 struct RootView: View {
     @Environment(\.openURL) private var openURL
+    @Environment(\.modelContext) private var context
 
     /// User Quicklinks from the store feed the index alongside the built-ins
     /// (ADR 0006: index rebuilt from the source of truth).
@@ -16,6 +17,10 @@ struct RootView: View {
     /// User Snippets feed the same index — copy-out Actions ranked beside every
     /// other capability (issue #6).
     @Query(sort: \StoredSnippet.createdAt) private var snippets: [StoredSnippet]
+
+    /// User Notes feed the same index — read Actions whose main action opens the
+    /// note (issue #7), ranked beside every other capability.
+    @Query(sort: \StoredNote.createdAt) private var notes: [StoredNote]
 
     /// The user's editable default search engine — just a URL template
     /// (CONTEXT.md → Quicklink; issue #5 AC #6). Persisted in app storage and
@@ -26,6 +31,10 @@ struct RootView: View {
     @State private var query = ""
     @State private var showingManage = false
     @State private var showingSnippets = false
+    @State private var showingNotes = false
+    /// The Note a result row's main action opened for reading, presented in the
+    /// note editor sheet (CONTEXT.md → Note: main action is Open/read).
+    @State private var noteUnderRead: StoredNote?
     @FocusState private var inputFocused: Bool
     /// A transient confirmation banner shown after a copy-out main action runs —
     /// the "lightweight confirmation" snippets need since copying is silent.
@@ -56,14 +65,28 @@ struct RootView: View {
                 body: snippet.body
             )
         }
+        let storedNotes = notes.map { note in
+            Action.note(id: Self.noteActionID(note), title: note.title)
+        }
         return SearchEngine(
             providers: [
                 IndexedProvider.builtIns(webSearchTemplate: engineTemplate),
                 IndexedProvider(catalog: storedLinks),
                 IndexedProvider(catalog: storedSnippets),
+                // Stored Notes plus the always-present "New Note" capture
+                // (CONTEXT.md → Note, Fallback Action) — the instant, silent
+                // brain-dump that turns the typed text into a Note.
+                IndexedProvider(catalog: storedNotes + [.newNote()]),
             ],
             layout: keyboardLayout.layout
         )
+    }
+
+    /// The stable Action id derived from a stored Note's identity, used both when
+    /// indexing the Note and when resolving an `openNote(id:)` outcome back to the
+    /// StoredNote to present.
+    private static func noteActionID(_ note: StoredNote) -> String {
+        "note.\(note.persistentModelID.hashValue.description)"
     }
 
     private var isHome: Bool {
@@ -84,9 +107,9 @@ struct RootView: View {
                 InputBar(query: $query, focused: $inputFocused)
             }
 
-            // Quiet affordances into the user's libraries — Snippets and
-            // Quicklink management — sharing one top-trailing row so neither
-            // competes with the typing fast path nor overlaps the other.
+            // Quiet affordances into the user's libraries — Notes, Snippets, and
+            // Quicklink management — sharing one top-trailing row so none
+            // competes with the typing fast path nor overlaps the others.
             libraryButtons
 
             if let copyConfirmation {
@@ -95,15 +118,33 @@ struct RootView: View {
         }
         // Auto-focus on launch, keyboard up — the core promise (ADR 0012).
         .onAppear { inputFocused = true }
+        // A note's main action opens it here for reading/editing — the read
+        // counterpart to a snippet's silent copy.
+        .sheet(item: $noteUnderRead) { note in
+            NoteEditorView(note: note)
+        }
     }
 
-    /// The top-trailing library buttons. Each owns its own `.sheet` so the two
+    /// The top-trailing library buttons. Each owns its own `.sheet` so the
     /// presentations never collide (SwiftUI ignores a second `.sheet` attached
     /// to the same view).
     private var libraryButtons: some View {
         VStack {
             HStack(spacing: 4) {
                 Spacer()
+                Button {
+                    showingNotes = true
+                } label: {
+                    Image(systemName: "note.text")
+                        .font(.title3)
+                        .padding(10)
+                }
+                .accessibilityIdentifier("open-notes")
+                .accessibilityLabel("Manage Notes")
+                .sheet(isPresented: $showingNotes) {
+                    NoteManagerView()
+                }
+
                 Button {
                     showingSnippets = true
                 } label: {
@@ -143,20 +184,39 @@ struct RootView: View {
             openURL(url)
         case .copyText(let text):
             UIPasteboard.general.string = text
-            confirmCopy()
+            flashConfirmation("Copied")
+        case .openNote(let id):
+            // A note's main action opens it for reading — resolve the id back to
+            // the stored note and present the reader/editor.
+            noteUnderRead = notes.first { Self.noteActionID($0) == id }
+        case .createNote(let text):
+            captureNote(text)
         case .none:
             break
         }
     }
 
-    /// Flashes the copy confirmation, then clears it after a beat. Each copy
-    /// stamps a fresh token; only the latest copy's timer clears the banner, so
-    /// two copies in quick succession keep it up for the full beat after the
-    /// most recent one rather than the first.
-    private func confirmCopy() {
+    /// The instant, silent "New Note" capture (CONTEXT.md → Note): turn the typed
+    /// text into a stored Note with no app switch, clear the input back to Home,
+    /// and flash a lightweight confirmation — the capture is silent, so the banner
+    /// is the only acknowledgement. A blank capture is ignored.
+    private func captureNote(_ text: String) {
+        let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else { return }
+        context.insert(StoredNote.capture(text: trimmed))
+        query = ""
+        flashConfirmation("Note saved")
+    }
+
+    /// Flashes a lightweight confirmation banner, then clears it after a beat.
+    /// Each flash stamps a fresh token; only the latest flash's timer clears the
+    /// banner, so two confirmations in quick succession keep it up for the full
+    /// beat after the most recent one rather than the first. Shared by the silent
+    /// copy-out ("Copied") and the silent note capture ("Note saved").
+    private func flashConfirmation(_ message: String) {
         let token = UUID()
         copyToken = token
-        withAnimation { copyConfirmation = "Copied" }
+        withAnimation { copyConfirmation = message }
         Task {
             try? await Task.sleep(for: .seconds(1.4))
             guard copyToken == token else { return }

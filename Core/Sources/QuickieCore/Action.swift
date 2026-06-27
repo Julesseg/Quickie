@@ -8,6 +8,16 @@ import Foundation
 public enum ActionOutcome: Equatable, Sendable {
     case openURL(URL)
     case copyText(String)
+    /// Open a stored Note for reading (CONTEXT.md → Note): a Note's main action.
+    /// The core carries only the Note's identity; the app layer resolves it to
+    /// the stored body and presents the reader — keeping the loop pure and
+    /// testable, exactly like `copyText` defers the pasteboard.
+    case openNote(id: String)
+    /// Capture the raw typed text into a new Note (CONTEXT.md → Note): the
+    /// "New Note" Fallback's instant, silent capture. The core only declares the
+    /// intent; the app layer inserts the StoredNote — keeping capture pure and
+    /// testable while the persistence stays at the platform edge.
+    case createNote(String)
     case none
 }
 
@@ -200,5 +210,40 @@ extension Action {
             inputTypes: [],
             outputType: .text
         ) { _ in .copyText(body) }
+    }
+
+    /// A Note: a captured free-text thought whose main action is **Open/read**
+    /// (CONTEXT.md → Note). Self-contained — it ignores the typed text and
+    /// resolves to `openNote(id:)`, which the app turns into the reader. This is
+    /// the read-vs-copy-out distinction from a Snippet: same storage, opposite
+    /// main action. The Note's body lives in the store; the Action carries only
+    /// its identity and title so it matches and ranks like any other capability.
+    public static func note(
+        id: String,
+        title: String
+    ) -> Action {
+        Action(
+            id: id,
+            title: title,
+            inputTypes: [],
+            outputType: .text
+        ) { _ in .openNote(id: id) }
+    }
+
+    /// The "New Note" Fallback (CONTEXT.md → Note, Fallback Action): a
+    /// Fallback-style capture that always rides in the bottom region and turns
+    /// the user's literal typed text into a new Note instantly and silently —
+    /// no app switch. Like the web-search Fallback it consumes the raw text;
+    /// unlike it, the outcome is `createNote`, which the app persists. The
+    /// running text becomes the note's body.
+    public static func newNote() -> Action {
+        Action(
+            id: "builtin.new-note",
+            title: "New Note",
+            aliases: ["note", "capture", "jot"],
+            inputTypes: [.text],
+            outputType: .text,
+            isFallback: true
+        ) { input in .createNote(input ?? "") }
     }
 }

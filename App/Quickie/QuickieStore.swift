@@ -67,11 +67,50 @@ final class StoredSnippet {
     }
 }
 
+/// A user-captured Note: a free-text thought whose main action is **Open/read**
+/// (CONTEXT.md → Note) — the brain-dump target. Persisted in SwiftData alongside
+/// Quicklinks and Snippets; the in-memory index is rebuilt from these on launch
+/// (ADR 0006). A Note shares storage with a Snippet but is distinct in intent:
+/// read, not copy-out. `updatedAt` advances on every edit/append so the library
+/// can show what was touched most recently.
+@Model
+final class StoredNote {
+    var title: String
+    var body: String
+    var createdAt: Date
+    var updatedAt: Date
+
+    init(title: String, body: String, createdAt: Date = Date(), updatedAt: Date = Date()) {
+        self.title = title
+        self.body = body
+        self.createdAt = createdAt
+        self.updatedAt = updatedAt
+    }
+
+    /// Builds a Note from a single blob of captured text — the instant, silent
+    /// "New Note" capture (CONTEXT.md → Note). The whole text is the body; the
+    /// title is its first non-empty line, trimmed and length-capped, so the note
+    /// reads well in the library and matches by a sensible name. An untitled
+    /// blank capture falls back to a stable placeholder rather than an empty row.
+    static func capture(text: String, now: Date = Date()) -> StoredNote {
+        let body = text.trimmingCharacters(in: .whitespacesAndNewlines)
+        let firstLine = body
+            .split(separator: "\n", omittingEmptySubsequences: true)
+            .first
+            .map(String.init) ?? ""
+        let trimmedLine = firstLine.trimmingCharacters(in: .whitespaces)
+        let title = trimmedLine.isEmpty
+            ? "Note"
+            : String(trimmedLine.prefix(60))
+        return StoredNote(title: title, body: body, createdAt: now, updatedAt: now)
+    }
+}
+
 /// Owns the single `ModelContainer`, configured for the shared App Group with
 /// CloudKit off for now (M1 is fully local — ADR 0006 / ROADMAP).
 enum QuickieStore {
     static let container: ModelContainer = {
-        let schema = Schema([StoredQuicklink.self, StoredSnippet.self])
+        let schema = Schema([StoredQuicklink.self, StoredSnippet.self, StoredNote.self])
 
         // Only ask SwiftData for the shared App Group container when this build
         // is actually entitled for it — `containerURL(forSecurityApplication…)`
