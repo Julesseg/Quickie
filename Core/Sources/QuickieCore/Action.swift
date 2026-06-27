@@ -102,12 +102,25 @@ extension Action {
     /// Substitutes the typed text into every `{placeholder}` token (M1's single
     /// Argument fills them all), percent-encoding it for the query string. A
     /// template with no placeholder ignores `input` and opens as stored.
+    ///
+    /// The substitution is *literal*: each `{…}` token is matched, then replaced
+    /// with the encoded text as a plain string. We never feed the typed text to
+    /// a regex replacement template, where `$1`/`\` would be read as capture
+    /// references — `.urlQueryAllowed` leaves `$` unescaped, so "$5 menu" would
+    /// otherwise lose its "$5".
     private static func fill(template: String, with input: String?) -> ActionOutcome {
         let raw = input ?? ""
         let encoded = raw.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? raw
-        let filled = template.replacingOccurrences(
-            of: "\\{[^}]+\\}", with: encoded, options: .regularExpression
-        )
+
+        // Replace one token at a time, re-scanning from the start. This
+        // terminates because the encoded text can never contain `{`/`}` (both
+        // are escaped by `.urlQueryAllowed`), so each pass strictly removes one
+        // token and never introduces a new one.
+        var filled = template
+        while let token = filled.range(of: "\\{[^}]+\\}", options: .regularExpression) {
+            filled.replaceSubrange(token, with: encoded)
+        }
+
         guard let url = URL(string: filled) else { return .none }
         return .openURL(url)
     }

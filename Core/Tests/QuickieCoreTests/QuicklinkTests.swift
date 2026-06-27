@@ -50,6 +50,17 @@ struct QuicklinkTests {
         #expect(placeholder.inputTypes == [.text])
     }
 
+    @Test("typed text is substituted literally, not as a regex template")
+    func substitutionIsLiteral() {
+        // '$' survives `.urlQueryAllowed` encoding, so the substitution must not
+        // read "$5" as a (non-existent) capture-group reference and drop it.
+        let link = Action.quicklink(
+            id: "s", title: "Search", template: "https://example.com/?q={query}"
+        )
+        #expect(link.run(input: "$5 menu")
+                == .openURL(URL(string: "https://example.com/?q=$5%20menu")!))
+    }
+
     @Test("placeholder detection drives the static-vs-Argument decision")
     func placeholderDetection() {
         #expect(Action.templateHasPlaceholder("https://github.com/search?q={query}"))
