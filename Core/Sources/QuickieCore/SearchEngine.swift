@@ -23,14 +23,17 @@ public struct SearchEngine {
         let trimmed = query.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty else { return [] }
 
-        let scored = providers
-            .flatMap { $0.candidates(for: trimmed) }
+        let candidates = providers.flatMap { $0.candidates(for: trimmed) }
+
+        // Verb-first: name-matchable Actions, scored against the query and
+        // dropped when they don't match. Fallbacks never compete here — they're
+        // reached by always being present, not by name (CONTEXT.md → Fallback).
+        let matches = candidates
+            .filter { !$0.isFallback }
             .compactMap { action -> (action: Action, score: Double)? in
                 guard let score = bestScore(for: action, query: trimmed) else { return nil }
                 return (action, score)
             }
-
-        return scored
             .sorted { lhs, rhs in
                 if lhs.score != rhs.score { return lhs.score > rhs.score }
                 // Deterministic tie-break so equal scores never reorder
@@ -39,6 +42,14 @@ public struct SearchEngine {
                 return lhs.action.id < rhs.action.id
             }
             .map(\.action)
+
+        // Fallbacks are pinned to the bottom region — appended after every
+        // name-match, present for any non-empty query, consuming the raw text.
+        let fallbacks = candidates
+            .filter(\.isFallback)
+            .sorted { $0.title != $1.title ? $0.title < $1.title : $0.id < $1.id }
+
+        return matches + fallbacks
     }
 
     /// The best match score across an Action's title and its aliases — a query

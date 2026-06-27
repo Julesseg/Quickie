@@ -27,6 +27,10 @@ public struct Action: Identifiable, Sendable {
     public let inputTypes: [ContentType]
     /// The content type this Action produces.
     public let outputType: ContentType
+    /// Whether this Action is a Fallback: always surfaced in the Result list,
+    /// pinned in the bottom fallback region, consuming the raw typed text rather
+    /// than matching by name (CONTEXT.md → Fallback Action).
+    public let isFallback: Bool
 
     private let effect: @Sendable (String?) -> ActionOutcome
 
@@ -37,6 +41,7 @@ public struct Action: Identifiable, Sendable {
         aliases: [String] = [],
         inputTypes: [ContentType] = [],
         outputType: ContentType,
+        isFallback: Bool = false,
         effect: @escaping @Sendable (String?) -> ActionOutcome
     ) {
         self.id = id
@@ -45,6 +50,7 @@ public struct Action: Identifiable, Sendable {
         self.aliases = aliases
         self.inputTypes = inputTypes
         self.outputType = outputType
+        self.isFallback = isFallback
         self.effect = effect
     }
 
@@ -57,9 +63,60 @@ public struct Action: Identifiable, Sendable {
 }
 
 extension Action {
+    /// A Quicklink built from a single stored URL *template* (CONTEXT.md →
+    /// Quicklink). The one field drives both shapes: a template with a
+    /// `{placeholder}` token takes the typed text as its Argument and
+    /// substitutes it (consuming `.text`); a template with none opens directly
+    /// (consuming nothing). This is the auto-detecting model the SwiftData store
+    /// persists and the manage UI edits — no static/placeholder mode toggle.
+    public static func quicklink(
+        id: String,
+        title: String,
+        subtitle: String? = nil,
+        aliases: [String] = [],
+        template: String,
+        isFallback: Bool = false
+    ) -> Action {
+        let hasPlaceholder = templateHasPlaceholder(template)
+        return Action(
+            id: id,
+            title: title,
+            subtitle: subtitle,
+            aliases: aliases,
+            inputTypes: hasPlaceholder ? [.text] : [],
+            outputType: .url,
+            isFallback: isFallback
+        ) { input in
+            fill(template: template, with: input)
+        }
+    }
+
+    /// True when `template` carries at least one `{placeholder}` token — the
+    /// signal that the Quicklink takes an Argument rather than opening directly.
+    /// Exposed so the app's editor can mirror the same static-vs-placeholder
+    /// detection the factory uses (issue #5).
+    public static func templateHasPlaceholder(_ template: String) -> Bool {
+        template.range(of: "\\{[^}]+\\}", options: .regularExpression) != nil
+    }
+
+    /// Substitutes the typed text into every `{placeholder}` token (M1's single
+    /// Argument fills them all), percent-encoding it for the query string. A
+    /// template with no placeholder ignores `input` and opens as stored.
+    private static func fill(template: String, with input: String?) -> ActionOutcome {
+        let raw = input ?? ""
+        let encoded = raw.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? raw
+        let filled = template.replacingOccurrences(
+            of: "\\{[^}]+\\}", with: encoded, options: .regularExpression
+        )
+        guard let url = URL(string: filled) else { return .none }
+        return .openURL(url)
+    }
+
     /// A static Quicklink: a fixed URL that opens directly, consuming no input
-    /// (CONTEXT.md → Quicklink with no placeholder). The bread-and-butter of
-    /// the built-in Indexed Provider in the skeleton.
+    /// (CONTEXT.md → Quicklink with no placeholder). A convenience over
+    /// `quicklink` for callers that already hold a parsed `URL` (the built-in
+    /// Indexed Provider). A placeholder-free URL routes through the same
+    /// substitution path, so it simply opens as stored.
     public static func staticLink(
         id: String,
         title: String,
@@ -67,39 +124,51 @@ extension Action {
         aliases: [String] = [],
         url: URL
     ) -> Action {
-        Action(
+        quicklink(
             id: id,
             title: title,
             subtitle: subtitle,
             aliases: aliases,
-            inputTypes: [],
-            outputType: .url
-        ) { _ in .openURL(url) }
+            template: url.absoluteString
+        )
     }
 
-    /// A placeholder-Quicklink: a URL template with a single `{query}` token
-    /// the typed text fills (CONTEXT.md → Quicklink, Fallback Action). The
-    /// foundation for the built-in web-search fallback.
+    /// The built-in web-search Fallback (CONTEXT.md → Fallback Action): a
+    /// placeholder-Quicklink, flagged a Fallback, that consumes the raw typed
+    /// text. The search engine *is* the template, so swapping engines is just
+    /// passing a different one — "the default search engine is editable." The
+    /// app persists the chosen template and passes it here.
+    public static func webSearch(
+        template: String = "https://duckduckgo.com/?q={query}"
+    ) -> Action {
+        quicklink(
+            id: "builtin.web-search",
+            title: "Search the web",
+            aliases: ["search", "google", "ddg"],
+            template: template,
+            isFallback: true
+        )
+    }
+
+    /// A placeholder-Quicklink: a URL template with a `{placeholder}` token the
+    /// typed text fills (CONTEXT.md → Quicklink, Fallback Action). A thin alias
+    /// over `quicklink` for call sites that read better naming the placeholder
+    /// intent explicitly; both share one substitution path.
     public static func placeholderLink(
         id: String,
         title: String,
         subtitle: String? = nil,
         aliases: [String] = [],
-        template: String
+        template: String,
+        isFallback: Bool = false
     ) -> Action {
-        Action(
+        quicklink(
             id: id,
             title: title,
             subtitle: subtitle,
             aliases: aliases,
-            inputTypes: [.text],
-            outputType: .url
-        ) { input in
-            let raw = input ?? ""
-            let encoded = raw.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? raw
-            let filled = template.replacingOccurrences(of: "{query}", with: encoded)
-            guard let url = URL(string: filled) else { return .none }
-            return .openURL(url)
-        }
+            template: template,
+            isFallback: isFallback
+        )
     }
 }

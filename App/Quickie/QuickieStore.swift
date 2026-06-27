@@ -13,20 +13,38 @@ enum AppGroup {
     static let identifier = "group.com.julesseguin.quickie"
 }
 
-/// A user-saved Quicklink: a stored URL that opens directly (CONTEXT.md →
-/// Quicklink, no placeholder). The skeleton persists these in SwiftData and
-/// rebuilds the in-memory search index from them on launch (ADR 0006: the store
-/// is the source of truth, the index is a derived cache). Snippets, Notes, and
-/// placeholder-Quicklinks join the schema in later slices.
+/// A user-saved Quicklink: a stored URL *template* with zero or more
+/// `{placeholder}` tokens (CONTEXT.md → Quicklink). With no placeholder it opens
+/// directly; with one it takes the typed text as its Argument. The skeleton
+/// persists these in SwiftData and rebuilds the in-memory search index from them
+/// on launch (ADR 0006: the store is the source of truth, the index is a derived
+/// cache). Snippets and Notes join the schema in later slices.
+///
+/// `alias` and `isFallback` are additive (issue #5): optional / defaulted so
+/// SwiftData migrates existing stores automatically. `urlString` holds the URL
+/// template; a placeholder-Quicklink flagged `isFallback` always rides in the
+/// bottom fallback region, consuming the raw typed text.
 @Model
 final class StoredQuicklink {
     var title: String
     var urlString: String
+    /// An optional alternative name also matched against the query.
+    var alias: String?
+    /// When true, this placeholder-Quicklink is pinned as a Fallback row.
+    var isFallback: Bool = false
     var createdAt: Date
 
-    init(title: String, urlString: String, createdAt: Date = Date()) {
+    init(
+        title: String,
+        urlString: String,
+        alias: String? = nil,
+        isFallback: Bool = false,
+        createdAt: Date = Date()
+    ) {
         self.title = title
         self.urlString = urlString
+        self.alias = alias
+        self.isFallback = isFallback
         self.createdAt = createdAt
     }
 }
