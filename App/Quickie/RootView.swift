@@ -30,6 +30,10 @@ struct RootView: View {
     /// A transient confirmation banner shown after a copy-out main action runs —
     /// the "lightweight confirmation" snippets need since copying is silent.
     @State private var copyConfirmation: String?
+    /// Identifies the most recent copy so its dismiss timer is the only one that
+    /// clears the banner — rapid copies coalesce instead of cutting each other
+    /// short.
+    @State private var copyToken = UUID()
 
     /// Tracks the active keyboard so the matcher weights adjacent-key typos for
     /// the layout the user is actually typing on (ADR 0005).
@@ -145,11 +149,17 @@ struct RootView: View {
         }
     }
 
-    /// Flashes the copy confirmation, then clears it after a beat.
+    /// Flashes the copy confirmation, then clears it after a beat. Each copy
+    /// stamps a fresh token; only the latest copy's timer clears the banner, so
+    /// two copies in quick succession keep it up for the full beat after the
+    /// most recent one rather than the first.
     private func confirmCopy() {
+        let token = UUID()
+        copyToken = token
         withAnimation { copyConfirmation = "Copied" }
         Task {
             try? await Task.sleep(for: .seconds(1.4))
+            guard copyToken == token else { return }
             withAnimation { copyConfirmation = nil }
         }
     }
