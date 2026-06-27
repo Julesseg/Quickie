@@ -70,6 +70,10 @@ struct RootView: View {
         }
         return SearchEngine(
             providers: [
+                // The Dynamic Calculator + unit-conversion Provider: when the
+                // query parses as math or a conversion it injects a boosted top
+                // result whose main action copies the answer (issue #8).
+                CalculatorProvider(),
                 IndexedProvider.builtIns(webSearchTemplate: engineTemplate),
                 IndexedProvider(catalog: storedLinks),
                 IndexedProvider(catalog: storedSnippets),

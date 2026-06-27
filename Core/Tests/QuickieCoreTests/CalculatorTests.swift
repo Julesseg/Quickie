@@ -102,4 +102,11 @@ struct CalculatorTests {
     func subtractPercent() {
         #expect(Calculator.evaluate("200 - 10%") == 180)
     }
+
+    @Test("a result that overflows to infinity declines")
+    func declinesNonFinite() {
+        // A power large enough to overflow Double would otherwise render as
+        // "inf"; declining keeps a nonsense row out of the list.
+        #expect(Calculator.evaluate("9^9^9") == nil)
+    }
 }
