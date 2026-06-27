@@ -8,14 +8,17 @@ import SwiftUI
 /// through the user's tap, then seeds the input and the chip gives way to the
 /// normal Result list (the seeded, non-empty query leaves the Home state).
 struct ClipboardPasteChip: View {
-    @Binding var query: String
+    /// Delivers the pasted text to the host on tap. The host seeds the input and
+    /// retires the chip for the session — the chip itself stays content-unaware
+    /// beyond this single hand-off.
+    let onPaste: (String) -> Void
 
     var body: some View {
         PasteButton(payloadType: String.self) { strings in
             // Reached only on an explicit tap of the system paste control, so
             // this is the first and only moment any content is read.
             guard let text = strings.first else { return }
-            query = text
+            onPaste(text)
         }
         .labelStyle(.titleAndIcon)
         .buttonBorderShape(.capsule)
