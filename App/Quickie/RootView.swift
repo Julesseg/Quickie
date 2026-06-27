@@ -113,7 +113,11 @@ struct RootView: View {
     /// The content-free decision (QuickieCore) on whether to offer the paste
     /// chip: only on Home, and only when the silent metadata check found text.
     private var clipboardPrefill: ClipboardPrefill {
-        ClipboardPrefill(clipboardHasText: clipboard.clipboardHasText, isHome: isHome)
+        ClipboardPrefill(
+            clipboardHasText: clipboard.clipboardHasText,
+            isHome: isHome,
+            hasBeenUsed: clipboard.hasBeenUsed
+        )
     }
 
     var body: some View {
@@ -139,10 +143,14 @@ struct RootView: View {
                 }
                 // The launch-time paste chip rides just above the input, offered
                 // only on Home with text on the clipboard (ADR 0002). Tapping it
-                // seeds `query`, which leaves Home and hands off to the Result
-                // list — so the same `isChipOffered` rule retires it.
+                // seeds `query` and marks the offer used, so it stays gone for the
+                // rest of the session — even if the user clears the input back to
+                // Home with text still on the clipboard.
                 if clipboardPrefill.isChipOffered {
-                    ClipboardPasteChip(query: $query)
+                    ClipboardPasteChip { text in
+                        query = text
+                        clipboard.markUsed()
+                    }
                 }
                 InputBar(query: $query, focused: $inputFocused)
             }

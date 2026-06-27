@@ -31,4 +31,13 @@ struct ClipboardPrefillTests {
         let prefill = ClipboardPrefill(clipboardHasText: true, isHome: false)
         #expect(prefill.isChipOffered == false)
     }
+
+    @Test("a used chip stays gone for the session, even back on Home with text")
+    func noChipAfterUseThisSession() {
+        // The offer is a once-per-launch thing: after the user has taken it, the
+        // clipboard still holds text and clearing the input returns to Home — but
+        // the chip must not come back until the next app start.
+        let prefill = ClipboardPrefill(clipboardHasText: true, isHome: true, hasBeenUsed: true)
+        #expect(prefill.isChipOffered == false)
+    }
 }
