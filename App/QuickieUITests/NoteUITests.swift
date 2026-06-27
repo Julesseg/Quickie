@@ -32,7 +32,8 @@ final class NoteUITests: XCTestCase {
         let app = launchApp()
 
         let input = app.textFields["search-input"]
-        XCTAssertTrue(input.waitForExistence(timeout: 10))
+        // First interaction after launch — allow for a slow cold-launch boot.
+        XCTAssertTrue(input.waitForExistence(timeout: 30))
         input.tap()
         let thought = "Call the dentist tomorrow"
         input.typeText(thought)
@@ -61,8 +62,13 @@ final class NoteUITests: XCTestCase {
     func testCreateNoteThenSearchAndOpen() throws {
         let app = launchApp()
 
-        // Open the Note library and compose a new note.
-        app.buttons["open-notes"].tap()
+        // Open the Note library and compose a new note. Wait for the button
+        // before tapping: this is the first interaction after launch, and on a
+        // cold-launched simulator tapping before the app is ready drops the tap
+        // and the sheet never presents.
+        let openNotes = app.buttons["open-notes"]
+        XCTAssertTrue(openNotes.waitForExistence(timeout: 30))
+        openNotes.tap()
         XCTAssertTrue(app.buttons["note-add"].waitForExistence(timeout: 10))
         app.buttons["note-add"].tap()
 

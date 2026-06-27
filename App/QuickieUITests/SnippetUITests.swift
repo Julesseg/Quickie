@@ -28,8 +28,12 @@ final class SnippetUITests: XCTestCase {
     func testCreateSnippetThenSearchAndCopy() throws {
         let app = launchApp()
 
-        // Open the Snippet library and compose a new snippet.
-        app.buttons["open-snippets"].tap()
+        // Open the Snippet library and compose a new snippet. Wait for the
+        // button before tapping: on a cold-launched simulator tapping before the
+        // app is ready drops the first tap and the sheet never presents.
+        let openSnippets = app.buttons["open-snippets"]
+        XCTAssertTrue(openSnippets.waitForExistence(timeout: 30))
+        openSnippets.tap()
         XCTAssertTrue(app.buttons["snippet-add"].waitForExistence(timeout: 10))
         app.buttons["snippet-add"].tap()
 
