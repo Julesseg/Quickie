@@ -28,6 +28,11 @@ struct RootView: View {
     @AppStorage("searchEngineTemplate")
     private var engineTemplate = "https://duckduckgo.com/?q={query}"
 
+    /// The user's ranking signals — pinned Favorites and Frecency of past
+    /// selections — persisted across launches (issue #9). Feeds the engine and
+    /// is updated on every pin/unpin and main-action tap.
+    @State private var signals = SignalsStore.launch()
+
     @State private var query = ""
     @State private var showingManage = false
     @State private var showingSnippets = false
@@ -82,7 +87,9 @@ struct RootView: View {
                 // brain-dump that turns the typed text into a Note.
                 IndexedProvider(catalog: storedNotes + [.newNote()]),
             ],
-            layout: keyboardLayout.layout
+            layout: keyboardLayout.layout,
+            favorites: signals.favorites,
+            frecency: signals.frecency
         )
     }
 
@@ -106,9 +113,19 @@ struct RootView: View {
 
             VStack(spacing: 0) {
                 if isHome {
-                    HomePlaceholder()
+                    HomeView(
+                        content: engine.home(),
+                        onRun: run,
+                        isFavorite: { signals.isFavorite($0.id) },
+                        onToggleFavorite: { signals.toggleFavorite($0.id) }
+                    )
                 } else {
-                    ResultListView(results: engine.results(for: query), onRun: run)
+                    ResultListView(
+                        results: engine.results(for: query),
+                        onRun: run,
+                        isFavorite: { signals.isFavorite($0.id) },
+                        onToggleFavorite: { signals.toggleFavorite($0.id) }
+                    )
                 }
                 InputBar(query: $query, focused: $inputFocused)
             }
@@ -184,7 +201,10 @@ struct RootView: View {
     }
 
     /// Runs a row's main action and performs its outcome at the platform edge.
+    /// Selecting an Action records a frecency event (issue #9 AC #2), so the
+    /// chosen row climbs the next Home Frecency list and Results ranking.
     private func run(_ action: Action) {
+        signals.record(action.id)
         switch action.run(input: query) {
         case .openURL(let url):
             openURL(url)

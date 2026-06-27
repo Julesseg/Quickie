@@ -1,0 +1,85 @@
+import Foundation
+import Observation
+import QuickieCore
+
+/// Owns the user's ranking signals — pinned **Favorites** and the **Frecency**
+/// of past selections (CONTEXT.md → Favorite, Frecency; issue #9) — and persists
+/// them so they survive launches. Both feed `SearchEngine`: the App rebuilds the
+/// engine from this store on every keystroke, and records a frecency event on
+/// every main-action tap.
+///
+/// Stored in the shared App Group's `UserDefaults` (ADR 0006: the future Share
+/// Extension and widgets read the same source of truth). Small, structured, and
+/// rewritten whole on each change — no CloudKit yet (M1 is local). Favorites are
+/// an ordered list (pin order is what Home renders); Frecency is `Codable`, so
+/// it round-trips as JSON.
+@MainActor
+@Observable
+final class SignalsStore {
+    /// Pinned Favorites in pin order — the order Home renders the row in.
+    private(set) var favorites: [String]
+    /// The frequency × recency record of past selections.
+    private(set) var frecency: Frecency
+
+    @ObservationIgnored private let defaults: UserDefaults
+    private static let favoritesKey = "signals.favorites"
+    private static let frecencyKey = "signals.frecency"
+
+    init(defaults: UserDefaults = SignalsStore.sharedDefaults) {
+        self.defaults = defaults
+        self.favorites = defaults.stringArray(forKey: Self.favoritesKey) ?? []
+        self.frecency = Self.loadFrecency(from: defaults)
+    }
+
+    /// The store the app launches with. Under UI tests it starts from a clean
+    /// slate (the `-uitest-reset-signals` launch argument) so persisted Favorites
+    /// and Frecency from a prior run can't leak across tests — without it, one
+    /// test tapping a row would record frecency that a later "empty Home"
+    /// assertion would then trip over.
+    static func launch() -> SignalsStore {
+        if ProcessInfo.processInfo.arguments.contains("-uitest-reset-signals") {
+            let defaults = sharedDefaults
+            defaults.removeObject(forKey: favoritesKey)
+            defaults.removeObject(forKey: frecencyKey)
+        }
+        return SignalsStore()
+    }
+
+    /// Whether `id` is currently pinned — drives the Pin/Unpin affordance.
+    func isFavorite(_ id: String) -> Bool {
+        favorites.contains(id)
+    }
+
+    /// Pins an unpinned Action (appending to the end of the row) or unpins a
+    /// pinned one (issue #9 AC #1), then persists.
+    func toggleFavorite(_ id: String) {
+        if let index = favorites.firstIndex(of: id) {
+            favorites.remove(at: index)
+        } else {
+            favorites.append(id)
+        }
+        defaults.set(favorites, forKey: Self.favoritesKey)
+    }
+
+    /// Records that the user selected `id` now (issue #9 AC #2), then persists.
+    func record(_ id: String, at date: Date = Date()) {
+        frecency.record(id, at: date)
+        if let data = try? JSONEncoder().encode(frecency) {
+            defaults.set(data, forKey: Self.frecencyKey)
+        }
+    }
+
+    private static func loadFrecency(from defaults: UserDefaults) -> Frecency {
+        guard let data = defaults.data(forKey: frecencyKey),
+              let decoded = try? JSONDecoder().decode(Frecency.self, from: data)
+        else { return Frecency() }
+        return decoded
+    }
+
+    /// The App Group `UserDefaults`, falling back to `.standard` when the group
+    /// isn't provisioned — the same degrade-gracefully posture as the SwiftData
+    /// store (QuickieStore), so signals work on an unentitled build too.
+    static var sharedDefaults: UserDefaults {
+        UserDefaults(suiteName: AppGroup.identifier) ?? .standard
+    }
+}

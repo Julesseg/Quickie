@@ -14,6 +14,9 @@ final class QuickieUITests: XCTestCase {
     @MainActor
     private func launchApp() -> XCUIApplication {
         let app = XCUIApplication()
+        // Start from a clean signals slate so persisted Favorites/Frecency from a
+        // prior run can't pollute these tests (issue #9).
+        app.launchArguments += ["-uitest-reset-signals"]
         app.launch()
         return app
     }
@@ -67,5 +70,37 @@ final class QuickieUITests: XCTestCase {
 
         row.tap()
         XCTAssertNotEqual(app.state, .notRunning, "running a main action should not crash the app")
+    }
+
+    /// Pinning an Action as a Favorite via its long-press menu makes it appear as
+    /// a Home shortcut once the query clears — covering pin (AC #1) and Home being
+    /// restored when the input empties (AC #5). Pinning, unlike tapping, doesn't
+    /// run the Action, so the test stays in-app (no Safari hand-off to race).
+    @MainActor
+    func testPinningAnActionSurfacesItOnHome() throws {
+        let app = launchApp()
+
+        let input = app.textFields["search-input"]
+        XCTAssertTrue(input.waitForExistence(timeout: 10))
+        input.tap()
+        input.typeText("git")
+
+        let row = app.buttons["builtin.github"]
+        XCTAssertTrue(row.waitForExistence(timeout: 5), "typing 'git' surfaces Open GitHub")
+
+        // Long-press opens the Pin/Unpin context menu, then pin it.
+        row.press(forDuration: 1.2)
+        let pin = app.buttons["Pin as Favorite"]
+        XCTAssertTrue(pin.waitForExistence(timeout: 5), "long-press should offer Pin as Favorite")
+        pin.tap()
+
+        // Clear the query — Home returns, now with the pinned Favorite shortcut.
+        input.tap()
+        input.typeText(String(repeating: XCUIKeyboardKey.delete.rawValue, count: 4))
+
+        XCTAssertTrue(
+            app.buttons["favorite.builtin.github"].waitForExistence(timeout: 5),
+            "the pinned Action should appear as a Favorite shortcut on Home"
+        )
     }
 }
