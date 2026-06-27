@@ -90,4 +90,44 @@ struct SearchEngineTests {
         let top = engine().results(for: "github").first!
         #expect(top.run() == .openURL(URL(string: "https://github.com")!))
     }
+
+    // A Dynamic Provider that always injects one result, regardless of the
+    // query — a stand-in for the Calculator, exercising the boost path without
+    // depending on the evaluator.
+    private struct AlwaysProvider: Provider {
+        let kind: ProviderKind = .dynamic
+        func candidates(for query: String) -> [Action] {
+            [Action(id: "dynamic", title: "= 161", outputType: .number) { _ in .copyText("161") }]
+        }
+    }
+
+    @Test("a Dynamic Provider's result floats to the top, above name-matches")
+    func dynamicResultIsBoostedToTop() {
+        // ADR 0008: a type-triggered result is injected with boosted rank so it
+        // reads as a top hit even though its title ("= 161") is not a name match
+        // for the query.
+        let engine = SearchEngine(providers: [
+            IndexedProvider(catalog: [
+                .staticLink(id: "github", title: "Open GitHub", url: URL(string: "https://github.com")!),
+            ]),
+            AlwaysProvider(),
+        ])
+        let ids = engine.results(for: "github").map(\.id)
+        #expect(ids.first == "dynamic")
+        #expect(ids.contains("github"))
+    }
+
+    @Test("a Dynamic Provider's result survives even when it matches nothing by name")
+    func dynamicResultNotDroppedByMatcher() {
+        // The calculator answer "= 161" shares no letters with "23*7"; the
+        // matcher would drop it. The engine must show it anyway — the Provider
+        // already decided it applies.
+        let engine = SearchEngine(providers: [
+            IndexedProvider(catalog: [
+                .staticLink(id: "github", title: "Open GitHub", url: URL(string: "https://github.com")!),
+            ]),
+            AlwaysProvider(),
+        ])
+        #expect(engine.results(for: "23*7").map(\.id) == ["dynamic"])
+    }
 }

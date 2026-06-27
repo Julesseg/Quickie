@@ -28,13 +28,31 @@ public struct SearchEngine {
         let trimmed = query.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty else { return [] }
 
-        let candidates = providers.flatMap { $0.candidates(for: trimmed) }
+        // Sort each Provider's candidates into the three regions of the Result
+        // list (ADR 0008), preserving the provider order the App wired. A
+        // candidate's region is decided by *how* it earns its place: a Fallback
+        // is pinned bottom; a Dynamic Provider's result is a type-triggered hit
+        // that floats top; everything else is a verb-first name-match.
+        var boosted: [Action] = []   // type-triggered, already query-relevant
+        var matchable: [Action] = [] // verb-first, scored by the matcher
+        var fallbacks: [Action] = [] // pinned to the bottom region
+        for provider in providers {
+            for action in provider.candidates(for: trimmed) {
+                if action.isFallback {
+                    fallbacks.append(action)
+                } else if provider.kind == .dynamic {
+                    boosted.append(action)
+                } else {
+                    matchable.append(action)
+                }
+            }
+        }
 
         // Verb-first: name-matchable Actions, scored against the query and
-        // dropped when they don't match. Fallbacks never compete here — they're
-        // reached by always being present, not by name (CONTEXT.md → Fallback).
-        let matches = candidates
-            .filter { !$0.isFallback }
+        // dropped when they don't match. Dynamic results skip this — the
+        // Provider already decided they apply, so they are not name-matched
+        // (Provider.swift: "dynamic candidates arrive already query-relevant").
+        let matches = matchable
             .compactMap { action -> (action: Action, score: Double)? in
                 guard let score = bestScore(for: action, query: trimmed) else { return nil }
                 return (action, score)
@@ -48,13 +66,13 @@ public struct SearchEngine {
             }
             .map(\.action)
 
-        // Fallbacks are pinned to the bottom region — appended after every
-        // name-match, present for any non-empty query, consuming the raw text.
-        let fallbacks = candidates
-            .filter(\.isFallback)
+        // Fallbacks are pinned to the bottom region — present for any non-empty
+        // query, consuming the raw text — and given a deterministic order.
+        let sortedFallbacks = fallbacks
             .sorted { $0.title != $1.title ? $0.title < $1.title : $0.id < $1.id }
 
-        return matches + fallbacks
+        // Boosted (top) → name-matches (middle) → fallbacks (bottom).
+        return boosted + matches + sortedFallbacks
     }
 
     /// The best match score across an Action's title and its aliases — a query

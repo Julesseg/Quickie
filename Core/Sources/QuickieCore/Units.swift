@@ -44,7 +44,8 @@ public enum Units {
         let measurement = Measurement(value: parsed.amount, unit: from.unit)
         let converted = measurement.converted(to: to.unit)
         let rounded = round(converted.value)
-        return Conversion(value: rounded, unit: to.symbol, formatted: "\(format(rounded)) \(to.symbol)")
+        let text = NumberFormat.string(rounded, maxFractionDigits: 4)
+        return Conversion(value: rounded, unit: to.symbol, formatted: "\(text) \(to.symbol)")
     }
 
     // MARK: - Parsing
@@ -137,23 +138,9 @@ public enum Units {
     // MARK: - Formatting
 
     /// Rounds a converted value to four fractional digits — enough precision for
-    /// everyday conversions without a wall of float noise.
+    /// everyday conversions without a wall of float noise. Display formatting is
+    /// shared with the Calculator via `NumberFormat`.
     private static func round(_ value: Double) -> Double {
         (value * 10_000).rounded() / 10_000
-    }
-
-    /// Formats a number for display, locale-independently (always a `.`
-    /// separator, no grouping): whole values lose their `.0`, fractions keep
-    /// only their significant digits.
-    private static func format(_ value: Double) -> String {
-        var v = value
-        if v == 0 { v = 0 } // normalise -0
-        if v == v.rounded() {
-            return String(format: "%.0f", v)
-        }
-        var s = String(format: "%.4f", v)
-        while s.hasSuffix("0") { s.removeLast() }
-        if s.hasSuffix(".") { s.removeLast() }
-        return s
     }
 }
