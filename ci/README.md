@@ -1,10 +1,23 @@
 # Installable PR builds
 
-`.github/workflows/release.yml` builds a **signed, installable `.ipa`** for every
-PR and publishes it to a GitHub Pages site, so you can install any PR's build on
-your iPhone straight from Safari — the same flow as
+The release workflow builds a **signed, installable `.ipa`** for every PR and
+publishes it to a GitHub Pages site, so you can install any PR's build on your
+iPhone straight from Safari — the same flow as
 [OnTheRoad](https://github.com/Julesseg/OnTheRoad), but on GitHub's hosted
 `macos-15` runner instead of a self-hosted Mac.
+
+> **Activate it first.** The workflow ships parked at [`ci/release.yml`](release.yml)
+> because the automation that opened this PR can't write under
+> `.github/workflows/` (that needs the `workflow` OAuth scope / GitHub-App
+> permission). Move it into place with your own credentials and push:
+>
+> ```sh
+> git mv ci/release.yml .github/workflows/release.yml
+> git commit -m "Activate release workflow"
+> git push
+> ```
+>
+> It's a plain copy — review it at `ci/release.yml`, then move it as-is.
 
 ```
 PR opened/updated
@@ -75,7 +88,8 @@ pile up in history), not something you commit to by hand.
 - `assemble-build-history.mjs` — upserts the current PR's slot into `builds.json`,
   keeps the 5 newest, copies in the `.ipa`, and regenerates the OTA manifests and
   install pages. Pure Node, no dependencies.
-- `release.yml` (in `.github/workflows/`) — the build + publish pipeline.
+- `release.yml` — the build + publish pipeline. Parked here; move it to
+  `.github/workflows/release.yml` to activate (see the box at the top).
 
 ## Notes & limits
 
