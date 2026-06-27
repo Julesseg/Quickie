@@ -1,12 +1,12 @@
 import SwiftUI
 import SwiftData
 
-/// Read, create, edit, or append to a single Note — the brain-dump target whose
-/// main action is **Open/read** (CONTEXT.md → Note). A `nil` note means
-/// "create"; an existing one means "open/read", and the same form lets the user
-/// read the body, edit it inline, or quickly append a new line without scrolling
-/// to the end. Saving inserts or updates in SwiftData; the in-memory index is
-/// rebuilt from the store on the next query (ADR 0006).
+/// Read, create, or edit a single Note — the brain-dump target whose main
+/// action is **Open/read** (CONTEXT.md → Note). A `nil` note means "create"; an
+/// existing one means "open/read", and the same form lets the user read the body
+/// and edit it inline — appending is just typing at the end of the editable
+/// body. Saving inserts or updates in SwiftData; the in-memory index is rebuilt
+/// from the store on the next query (ADR 0006).
 ///
 /// This is the single surface behind both the library (tap a row to open) and
 /// the Result list (a note's main action opens it here) — read and edit share
@@ -20,9 +20,6 @@ struct NoteEditorView: View {
 
     @State private var title: String
     @State private var bodyText: String
-    /// The scratch field for a quick append — kept separate from the body so the
-    /// user can tack on a thought without hunting for the end of a long note.
-    @State private var appendText: String = ""
 
     init(note: StoredNote?) {
         self.note = note
@@ -33,10 +30,6 @@ struct NoteEditorView: View {
     private var isValid: Bool {
         !title.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
             && !bodyText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
-    }
-
-    private var canAppend: Bool {
-        !appendText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
     }
 
     var body: some View {
@@ -50,14 +43,6 @@ struct NoteEditorView: View {
                     TextField("Your thoughts…", text: $bodyText, axis: .vertical)
                         .lineLimit(5...20)
                         .accessibilityIdentifier("note-body-field")
-                }
-                Section("Append") {
-                    TextField("Add another line", text: $appendText, axis: .vertical)
-                        .lineLimit(1...4)
-                        .accessibilityIdentifier("note-append-field")
-                    Button("Append", action: append)
-                        .disabled(!canAppend)
-                        .accessibilityIdentifier("note-append-button")
                 }
             }
             .navigationTitle(note == nil ? "New Note" : "Note")
@@ -73,16 +58,6 @@ struct NoteEditorView: View {
                 }
             }
         }
-    }
-
-    /// Tacks the scratch text onto the end of the body as a new line, then clears
-    /// the scratch field. Editing in place stays available; this is just the fast
-    /// path for the common "open and add one more thing" gesture.
-    private func append() {
-        let addition = appendText.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !addition.isEmpty else { return }
-        bodyText = bodyText.isEmpty ? addition : bodyText + "\n" + addition
-        appendText = ""
     }
 
     private func save() {
