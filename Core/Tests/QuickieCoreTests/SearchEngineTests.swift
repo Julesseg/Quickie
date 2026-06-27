@@ -64,6 +64,26 @@ struct SearchEngineTests {
         #expect(Set(engine.results(for: "alpha").map(\.id)) == ["a", "b"])
     }
 
+    @Test("a fat-fingered query still surfaces its action")
+    func surfacesTypoMatch() {
+        // "gtihub" swaps two letters of "GitHub" — the forgiving matcher should
+        // still float it into the Result list.
+        let ids = engine().results(for: "gtihub").map(\.id)
+        #expect(ids.contains("github"))
+    }
+
+    @Test("the engine matches through its configured keyboard layout")
+    func honorsConfiguredLayout() {
+        let engine = SearchEngine(
+            providers: [IndexedProvider(catalog: [
+                .staticLink(id: "zoom", title: "Zoom", url: URL(string: "https://zoom.us")!),
+            ])],
+            layout: .azerty
+        )
+        // 'e' sits beside 'z' on AZERTY: "eoom" is a plausible slip for "Zoom".
+        #expect(engine.results(for: "eoom").map(\.id).contains("zoom"))
+    }
+
     @Test("running the top result's main action performs its effect end-to-end")
     func runTopResultMainAction() {
         // type → ranked result → run: the tracer bullet through the core.
