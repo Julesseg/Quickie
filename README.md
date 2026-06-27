@@ -28,6 +28,7 @@ App/                       Quickie — thin SwiftUI/SwiftData iOS app (Xcode)
     InputBar.swift         bottom auto-focused input
     ResultListView.swift   reversed, bottom-anchored Result list (ADR 0008)
     HomePlaceholder.swift  minimal empty-query Home state
+    ManageQuicklinksView.swift  create/edit/delete Quicklinks + editable engine (issue #5)
     Quickie.entitlements   App Group entitlement
 ```
 
@@ -97,6 +98,19 @@ The UI behaviors run only in Xcode/simulator. Verify:
 - [ ] The Result list is reversed/bottom-anchored — best match nearest the input
 - [ ] Tapping a result runs its main action (opens the URL)
 - [ ] Clearing the query shows the minimal Home placeholder
+
+## Manual QA checklist (issue #5 acceptance criteria)
+
+Quicklinks + the web-search Fallback. The CRUD UI lives behind the manage
+button (top-trailing `slider.horizontal.3`); the loop's logic is covered by
+`QuickieCore`'s tests.
+
+- [ ] Create / edit / delete a Quicklink (name, URL template, optional alias) — it persists across launches
+- [ ] A zero-placeholder Quicklink (e.g. `https://apple.com`) opens directly when run
+- [ ] A `{placeholder}` Quicklink takes the typed text and substitutes it into the URL
+- [ ] The built-in web-search Fallback appears in the bottom region for any non-matching query and searches the typed text
+- [ ] Flagging a placeholder-Quicklink as a Fallback pins it in the bottom region too
+- [ ] Editing the default search-engine template changes what the web-search Fallback opens
 
 ## Status
 

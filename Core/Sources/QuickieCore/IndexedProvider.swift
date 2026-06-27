@@ -25,8 +25,12 @@ public struct IndexedProvider: Provider {
 extension IndexedProvider {
     /// The handful of built-in Actions the skeleton ships so the loop has
     /// something to match against on first launch, before the user has added
-    /// any Quicklinks or Snippets of their own.
-    public static func builtIns() -> IndexedProvider {
+    /// any Quicklinks or Snippets of their own. The web-search Fallback's engine
+    /// is configurable — the app passes the user's persisted template so the
+    /// default search engine stays editable (issue #5, AC #6).
+    public static func builtIns(
+        webSearchTemplate: String = "https://duckduckgo.com/?q={query}"
+    ) -> IndexedProvider {
         IndexedProvider(catalog: [
             .staticLink(
                 id: "builtin.github",
@@ -45,12 +49,7 @@ extension IndexedProvider {
                 aliases: ["wiki"],
                 url: URL(string: "https://wikipedia.org")!
             ),
-            .placeholderLink(
-                id: "builtin.web-search",
-                title: "Search the web",
-                aliases: ["search", "google", "ddg"],
-                template: "https://duckduckgo.com/?q={query}"
-            ),
+            .webSearch(template: webSearchTemplate),
         ])
     }
 }
