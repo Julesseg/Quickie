@@ -60,6 +60,9 @@ private struct Parser {
     mutating func parse() -> Double? {
         guard !tokens.isEmpty else { return nil }
         guard let result = parseExpression(), pos == tokens.count else { return nil }
+        // An overflow (or any non-finite outcome) is not a usable answer; decline
+        // rather than render "inf"/"nan".
+        guard result.plain.isFinite else { return nil }
         return result.plain
     }
 
