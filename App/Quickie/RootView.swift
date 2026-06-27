@@ -39,6 +39,10 @@ struct RootView: View {
     /// the layout the user is actually typing on (ADR 0005).
     @State private var keyboardLayout = KeyboardLayoutModel()
 
+    /// The silent `hasStrings` metadata check behind the Clipboard prefill chip
+    /// (ADR 0002). Carries no clipboard content — only whether text is present.
+    @State private var clipboard = ClipboardPrefillModel()
+
     private var engine: SearchEngine {
         let storedLinks = quicklinks.map { link in
             Action.quicklink(
@@ -70,6 +74,12 @@ struct RootView: View {
         query.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
     }
 
+    /// The content-free decision (QuickieCore) on whether to offer the paste
+    /// chip: only on Home, and only when the silent metadata check found text.
+    private var clipboardPrefill: ClipboardPrefill {
+        ClipboardPrefill(clipboardHasText: clipboard.clipboardHasText, isHome: isHome)
+    }
+
     var body: some View {
         ZStack {
             // A quiet backdrop for the Liquid Glass UI to sit over (ADR 0010).
@@ -80,6 +90,13 @@ struct RootView: View {
                     HomePlaceholder()
                 } else {
                     ResultListView(results: engine.results(for: query), onRun: run)
+                }
+                // The launch-time paste chip rides just above the input, offered
+                // only on Home with text on the clipboard (ADR 0002). Tapping it
+                // seeds `query`, which leaves Home and hands off to the Result
+                // list — so the same `isChipOffered` rule retires it.
+                if clipboardPrefill.isChipOffered {
+                    ClipboardPasteChip(query: $query)
                 }
                 InputBar(query: $query, focused: $inputFocused)
             }
