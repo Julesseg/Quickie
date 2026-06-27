@@ -84,9 +84,11 @@ struct RootView: View {
 
     /// The stable Action id derived from a stored Note's identity, used both when
     /// indexing the Note and when resolving an `openNote(id:)` outcome back to the
-    /// StoredNote to present.
+    /// StoredNote to present. Built on the note's persisted, collision-free `id`
+    /// (a UUID) — namespaced with a `note.` prefix to keep it distinct from other
+    /// providers' Action ids in the shared index.
     private static func noteActionID(_ note: StoredNote) -> String {
-        "note.\(note.persistentModelID.hashValue.description)"
+        "note.\(note.id)"
     }
 
     private var isHome: Bool {
@@ -187,8 +189,14 @@ struct RootView: View {
             flashConfirmation("Copied")
         case .openNote(let id):
             // A note's main action opens it for reading — resolve the id back to
-            // the stored note and present the reader/editor.
-            noteUnderRead = notes.first { Self.noteActionID($0) == id }
+            // the stored note and present the reader/editor. If the note was
+            // deleted after the list was indexed the lookup misses; flash a
+            // confirmation rather than letting the tap do nothing silently.
+            if let note = notes.first(where: { Self.noteActionID($0) == id }) {
+                noteUnderRead = note
+            } else {
+                flashConfirmation("Note not found")
+            }
         case .createNote(let text):
             captureNote(text)
         case .none:

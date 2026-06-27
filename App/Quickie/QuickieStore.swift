@@ -75,12 +75,18 @@ final class StoredSnippet {
 /// can show what was touched most recently.
 @Model
 final class StoredNote {
+    /// A stable, collision-free identity assigned at creation and persisted with
+    /// the note. This — not `persistentModelID.hashValue`, which is neither
+    /// collision-free nor stable across launches — is what the index uses to
+    /// derive a note's Action id and what `openNote(id:)` resolves back to.
+    var id: String
     var title: String
     var body: String
     var createdAt: Date
     var updatedAt: Date
 
-    init(title: String, body: String, createdAt: Date = Date(), updatedAt: Date = Date()) {
+    init(id: String = UUID().uuidString, title: String, body: String, createdAt: Date = Date(), updatedAt: Date = Date()) {
+        self.id = id
         self.title = title
         self.body = body
         self.createdAt = createdAt
@@ -133,4 +139,19 @@ enum QuickieStore {
             fatalError("Failed to create Quickie ModelContainer: \(error)")
         }
     }()
+
+    /// An ephemeral, in-memory container used under UI testing (the `--uitesting`
+    /// launch argument). Each launch starts with an empty store, so notes and
+    /// snippets never persist or accumulate across runs — the tests stay
+    /// idempotent and a capture assertion can't pass on a stale row from a
+    /// previous run.
+    static func inMemoryContainer() -> ModelContainer {
+        let schema = Schema([StoredQuicklink.self, StoredSnippet.self, StoredNote.self])
+        let configuration = ModelConfiguration(schema: schema, isStoredInMemoryOnly: true, cloudKitDatabase: .none)
+        do {
+            return try ModelContainer(for: schema, configurations: [configuration])
+        } catch {
+            fatalError("Failed to create in-memory Quickie ModelContainer: \(error)")
+        }
+    }
 }

@@ -15,6 +15,9 @@ final class SnippetUITests: XCTestCase {
     @MainActor
     private func launchApp() -> XCUIApplication {
         let app = XCUIApplication()
+        // Start from an empty in-memory store so snippets never accumulate across
+        // runs, keeping the test idempotent (shares the seam added for Notes).
+        app.launchArguments = ["--uitesting"]
         app.launch()
         return app
     }

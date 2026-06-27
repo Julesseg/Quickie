@@ -16,6 +16,10 @@ final class NoteUITests: XCTestCase {
     @MainActor
     private func launchApp() -> XCUIApplication {
         let app = XCUIApplication()
+        // Start from an empty in-memory store so notes never accumulate across
+        // runs — without this a capture assertion could pass on a stale row from
+        // a previous run.
+        app.launchArguments = ["--uitesting"]
         app.launch()
         return app
     }
@@ -69,6 +73,7 @@ final class NoteUITests: XCTestCase {
         titleField.typeText(title)
 
         let bodyField = app.textFields["note-body-field"]
+        XCTAssertTrue(bodyField.waitForExistence(timeout: 10))
         bodyField.tap()
         bodyField.typeText("Ship the notes provider")
 
