@@ -82,12 +82,10 @@ your own needed):
 
 ### Installable PR builds
 
-A release workflow additionally builds a **signed, installable `.ipa`** per PR (on
-the hosted `macos-15` runner) and publishes it to a GitHub Pages site, so you can
-install any PR's build on your iPhone from Safari. It ships parked at
-[`ci/release.yml`](ci/release.yml) — move it to `.github/workflows/release.yml` to
-activate, then set the signing secrets and Pages source. See
-[`ci/README.md`](ci/README.md) for the full one-time setup.
+`.github/workflows/release.yml` additionally builds a **signed, installable
+`.ipa`** per PR (on the hosted `macos-15` runner) and publishes it to a GitHub
+Pages site, so you can install any PR's build on your iPhone from Safari. See
+[`ci/README.md`](ci/README.md) for the one-time signing secrets / Pages setup.
 
 ## Manual QA checklist (issue #3 acceptance criteria)
 

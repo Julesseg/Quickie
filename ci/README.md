@@ -6,18 +6,7 @@ iPhone straight from Safari — the same flow as
 [OnTheRoad](https://github.com/Julesseg/OnTheRoad), but on GitHub's hosted
 `macos-15` runner instead of a self-hosted Mac.
 
-> **Activate it first.** The workflow ships parked at [`ci/release.yml`](release.yml)
-> because the automation that opened this PR can't write under
-> `.github/workflows/` (that needs the `workflow` OAuth scope / GitHub-App
-> permission). Move it into place with your own credentials and push:
->
-> ```sh
-> git mv ci/release.yml .github/workflows/release.yml
-> git commit -m "Activate release workflow"
-> git push
-> ```
->
-> It's a plain copy — review it at `ci/release.yml`, then move it as-is.
+The pipeline lives at [`.github/workflows/release.yml`](../.github/workflows/release.yml).
 
 ```
 PR opened/updated
@@ -79,6 +68,13 @@ stays green — the installable build simply doesn't run.
 *Settings → Pages → Build and deployment → Source: **GitHub Actions***. The deploy
 job uses `upload-pages-artifact` + `deploy-pages`, which needs that source.
 
+**Then allow PR branches to deploy.** Enabling Pages auto-creates a `github-pages`
+environment that, by default, only lets the **default branch** deploy — so the
+deploy job on a PR branch is rejected at the gate (a ~1-second failure with no
+runner and no steps). Fix it at *Settings → Environments → `github-pages` →
+Deployment branches and tags*: pick **No restriction**, or keep *Selected
+branches and tags* and add a `claude/*` rule to cover the PR branches.
+
 The `build-history` branch is created automatically on the first successful
 publish — it's a derived store (force-pushed each run so old `.ipa` blobs don't
 pile up in history), not something you commit to by hand.
@@ -88,8 +84,7 @@ pile up in history), not something you commit to by hand.
 - `assemble-build-history.mjs` — upserts the current PR's slot into `builds.json`,
   keeps the 5 newest, copies in the `.ipa`, and regenerates the OTA manifests and
   install pages. Pure Node, no dependencies.
-- `release.yml` — the build + publish pipeline. Parked here; move it to
-  `.github/workflows/release.yml` to activate (see the box at the top).
+- The build + publish pipeline itself lives at `.github/workflows/release.yml`.
 
 ## Notes & limits
 
