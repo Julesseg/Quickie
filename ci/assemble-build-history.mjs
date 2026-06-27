@@ -38,7 +38,7 @@ const REPO_URL = env("REPO_URL", "https://github.com/julesseg/Quickie").replace(
 const RETENTION = Number(env("RETENTION", "5"));
 const NOW = new Date();
 
-const BUNDLE_ID = "com.quickie.app";
+const BUNDLE_ID = "com.julesseguin.quickie";
 
 const escapeHtml = (s) =>
   String(s)

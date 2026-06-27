@@ -43,9 +43,9 @@ additive.)
 ### 1. Apple Developer (paid program required for on-device install)
 
 1. Register each test device's **UDID** under *Devices*.
-2. Make sure the **App ID** `com.quickie.app` exists with the **App Groups**
-   capability enabled (the app uses `group.com.quickie.shared`).
-3. Create an **Ad Hoc** distribution provisioning profile for `com.quickie.app`
+2. Make sure the **App ID** `com.julesseguin.quickie` exists with the **App Groups**
+   capability enabled (the app uses `group.com.julesseguin.quickie`).
+3. Create an **Ad Hoc** distribution provisioning profile for `com.julesseguin.quickie`
    that includes those devices, and download it (`.mobileprovision`).
 4. Have the matching **Apple Distribution** certificate in your keychain and
    export it as a `.p12` (with a password).

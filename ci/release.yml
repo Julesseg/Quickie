@@ -151,7 +151,7 @@ jobs:
             echo '<key>signingStyle</key><string>manual</string>'
             echo '<key>compileBitcode</key><false/>'
             echo '<key>provisioningProfiles</key><dict>'
-            echo "<key>com.quickie.app</key><string>${PROFILE_NAME}</string>"
+            echo "<key>com.julesseguin.quickie</key><string>${PROFILE_NAME}</string>"
             echo '</dict></dict></plist>'
           } > "$RUNNER_TEMP/ExportOptions.plist"
 

@@ -64,9 +64,9 @@ xcodebuild test -project Quickie.xcodeproj -scheme Quickie \
 ```
 
 **App Group setup:** the store lives in the shared App Group
-`group.com.quickie.shared` (see `QuickieStore.swift` and `Quickie.entitlements`).
+`group.com.julesseguin.quickie` (see `QuickieStore.swift` and `Quickie.entitlements`).
 On a real device you must enable the App Groups capability for the bundle ID
-(`com.quickie.app`) in your Apple Developer account and set your signing team.
+(`com.julesseguin.quickie`) in your Apple Developer account and set your signing team.
 The simulator runs without that step.
 
 ## Continuous integration
