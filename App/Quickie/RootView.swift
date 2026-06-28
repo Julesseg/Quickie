@@ -131,7 +131,11 @@ struct RootView: View {
             // calm base with a little depth — not a flat fill, not a busy one.
             QuietBackdrop()
 
-            VStack(spacing: 0) {
+            // The Home / Result list fills the whole screen so its bottom-anchored
+            // rows scroll *under* the floating input, where the Liquid Glass
+            // refracts them (ADR 0010) — rather than a flow layout that walls the
+            // input off behind an opaque strip the results can't pass.
+            Group {
                 if isHome {
                     HomeView(
                         content: engine.home(),
@@ -147,20 +151,22 @@ struct RootView: View {
                         onToggleFavorite: { signals.toggleFavorite($0.id) }
                     )
                 }
-                // The launch-time paste chip rides just above the input, offered
-                // only on Home with text on the clipboard (ADR 0002). Typing
-                // withdraws it transiently — it returns if the user clears back to
-                // an unused Home. Tapping it is what retires it for good: we seed
-                // `query` and mark the offer used, so a *used* chip stays gone for
-                // the rest of the launch even when the cleared input returns to
-                // Home with text still on the clipboard.
-                if clipboardPrefill.isChipOffered {
-                    ClipboardPasteChip { text in
-                        query = text
-                        clipboard.markUsed()
+            }
+            // The input — and the launch-time paste chip just above it — float in
+            // the bottom safe area, so the result list scrolls behind the glass
+            // instead of being walled off. The chip is offered only on Home with
+            // text on the clipboard (ADR 0002); typing withdraws it transiently and
+            // tapping it retires it for the rest of the launch.
+            .safeAreaInset(edge: .bottom, spacing: 0) {
+                VStack(spacing: 0) {
+                    if clipboardPrefill.isChipOffered {
+                        ClipboardPasteChip { text in
+                            query = text
+                            clipboard.markUsed()
+                        }
                     }
+                    InputBar(query: $query, focused: $inputFocused)
                 }
-                InputBar(query: $query, focused: $inputFocused)
             }
 
             // Quiet affordances into the user's libraries — Notes, Snippets, and
