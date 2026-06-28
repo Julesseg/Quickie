@@ -81,6 +81,13 @@ your own needed):
   `xcodebuild test` for the `Quickie` scheme on an iOS simulator, exercising the
   UI acceptance criteria (auto-focus, filter, tap-to-run, Home).
 
+> **UI tests run in CI only — by design.** XCUITest needs an iOS simulator that
+> exists only on macOS, so the `QuickieUITests` target runs on the hosted macOS
+> CI job, not as a local precondition for implementing an issue. Local iteration
+> leans on `QuickieCore`'s `swift test` suite (the loop's logic, runs anywhere);
+> CI's XCUITest job covers the UI behaviors on every PR. This split is the
+> intended workflow, not a gap to close. See [`AGENTS.md`](AGENTS.md).
+
 ### Installable PR builds
 
 `.github/workflows/release.yml` additionally builds a **signed, installable
