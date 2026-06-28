@@ -42,6 +42,7 @@ struct HomeView: View {
     private var favoritesSection: some View {
         VStack(alignment: .leading, spacing: 8) {
             sectionHeader("Favorites")
+                .padding(.horizontal, 20)
             ScrollView(.horizontal, showsIndicators: false) {
                 HStack(spacing: 10) {
                     ForEach(content.favorites) { action in
