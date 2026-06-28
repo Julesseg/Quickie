@@ -152,22 +152,6 @@ struct RootView: View {
                     )
                 }
             }
-            // The input — and the launch-time paste chip just above it — float in
-            // the bottom safe area, so the result list scrolls behind the glass
-            // instead of being walled off. The chip is offered only on Home with
-            // text on the clipboard (ADR 0002); typing withdraws it transiently and
-            // tapping it retires it for the rest of the launch.
-            .safeAreaInset(edge: .bottom, spacing: 0) {
-                VStack(spacing: 0) {
-                    if clipboardPrefill.isChipOffered {
-                        ClipboardPasteChip { text in
-                            query = text
-                            clipboard.markUsed()
-                        }
-                    }
-                    InputBar(query: $query, focused: $inputFocused)
-                }
-            }
 
             // Quiet affordances into the user's libraries — Notes, Snippets, and
             // Quicklink management — sharing one top-trailing row so none
@@ -176,6 +160,23 @@ struct RootView: View {
 
             if let copyConfirmation {
                 CopyConfirmationBanner(text: copyConfirmation)
+            }
+        }
+        // The input — and the launch-time paste chip just above it — float in the
+        // bottom safe area, so the result list scrolls behind the glass instead of
+        // being walled off. Attached to the whole screen (not the Home/Result list
+        // that swaps as the query changes) so the field keeps its identity and
+        // focus across that swap. The chip is offered only on Home with text on the
+        // clipboard (ADR 0002); typing withdraws it and tapping it retires it.
+        .safeAreaInset(edge: .bottom, spacing: 0) {
+            VStack(spacing: 0) {
+                if clipboardPrefill.isChipOffered {
+                    ClipboardPasteChip { text in
+                        query = text
+                        clipboard.markUsed()
+                    }
+                }
+                InputBar(query: $query, focused: $inputFocused)
             }
         }
         // Auto-focus on launch, keyboard up — the core promise (ADR 0012).
