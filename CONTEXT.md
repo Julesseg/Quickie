@@ -70,11 +70,15 @@ A Provider whose Actions are a known, enumerable set, pre-indexed for fuzzy sear
 A Provider that computes Actions on the fly from the current query and is never in the fuzzy index (Calculator, Unit Converter, File Search, Web Search / Fallbacks). Queried live per keystroke (debounced, cancellable, may be async), and decides for itself whether it applies to the query.
 
 **Home**:
-The empty-query state shown the instant the app opens: the Clipboard prefill chip (when applicable), a row of Favorites, then a Frecency list. The tap-without-typing fast path. Replaced by the Results state on the first keystroke.
+The empty-query state shown the instant the app opens: the Clipboard prefill chip (when applicable), a **Favorites grid** pinned at the top of the screen over a progressive-blur band, and a Frecency "Recent" list that scrolls *under* that band. The tap-without-typing fast path. On the first keystroke the Favorites grid disappears and the live Result list takes the full height, still scrolling under the same blurred top band.
 _Avoid_: Landing, start screen, default view
 
+**Favorites grid**:
+The 2×2 grid of small Favorite cards pinned at the top of Home over a progressive blur. Shows **at most four** Favorites, in pin order; it is the launch-time, tap-without-typing surface. Visible only on Home — it vanishes the moment the user starts typing, ceding the screen to results. Replaces the earlier horizontal Favorites chip row.
+_Avoid_: Favorites row, favorites bar
+
 **Favorite**:
-An Action the user has manually pinned. Favorites appear as shortcuts on Home and receive a ranking boost in Results.
+An Action the user has manually pinned. Capped at **four** (the Favorites grid is 2×2); a fifth pin is refused until one is unpinned. Favorites appear in the Favorites grid on Home and receive a ranking boost in Results.
 _Avoid_: Pinned, starred, bookmark (bookmark means Quicklink here)
 
 **Frecency**:
