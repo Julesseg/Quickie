@@ -20,6 +20,14 @@ _Avoid_: Context action, more actions
 The single, reversed (bottom-anchored, best match nearest the input/thumb) list shown while typing. Composed of: fuzzy name-matches over Actions, type-triggered results injected with boosted rank by Dynamic Providers (e.g. a math result on top), and Fallback Actions that consume the raw input text as content. All appear as ranked rows; nothing essential is hidden behind a gesture.
 _Avoid_: Results, suggestions, search results
 
+**Settings**:
+The app's preferences page, reached like any capability — by typing to surface a "Settings" command row, not via chrome (the old top-right gear button is gone). For now it holds a single control: **Appearance** (Light / Dark / System, defaulting to System, applied app-wide). It holds *only* settings — Quicklinks, Fallbacks, Notes, and Snippets each live on their own page.
+_Avoid_: Preferences sheet, manage screen (Settings is not where you manage content)
+
+**Management page**:
+A full-screen page for a library or preferences surface — Settings, Quicklinks, Fallbacks, All Notes, All Snippets. Each is reached as a filtered result-row command (e.g. typing "quicklinks") rather than from chrome, and each presents full-screen with its own dismiss affordance — never as a partial-height sheet. Replaces both the top-right gear button and the old combined "Manage Quicklinks + search engine" surface.
+_Avoid_: Sheet, manager (each page is single-purpose)
+
 **Workflow**:
 Reserved term, not yet built. A future user-composed chain of multiple Actions, where each Action's output content feeds the next Action's input (validated by content type), authored as visual step-chaining rather than a text DSL. Made possible by every Action declaring typed input/output content from day one. Do not use "Workflow" to mean a single multi-step Action.
 
