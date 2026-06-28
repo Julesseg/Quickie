@@ -39,6 +39,10 @@ _Avoid_: Bookmark, link, URL action, template (a Quicklink has no template)
 A stored URL template that **requires** at least one `{placeholder}` token and consumes the typed text as its query, opening the result in the browser (e.g. `https://github.com/search?q={query}`). One concrete kind of Fallback Action, managed on its own list page. Web search is a default-seeded Fallback query (a normal, fully deletable entry — a reset-to-defaults affordance may come later), not a privileged built-in. Like every Fallback it can be disabled without being deleted.
 _Avoid_: placeholder-Quicklink (the placeholder capability no longer lives on Quicklink), search action
 
+**Fallback list**:
+The single user-ordered list of every Fallback Action (Fallback queries + New Note + New Snippet), managed on one page and persisted as an explicit order. It reads **most-important-first**: the top of the page is the fallback nearest the input/thumb in results. Because the Result list renders reversed, this page order is reversed when projected into the bottom (screen-top) fallback region. Each row can be **disabled** (kept in the list, hidden from results); rows can be reordered; only Fallback queries can be deleted, while New Note and New Snippet are permanent (disable-only). Replaces the previous alphabetical fallback ordering.
+_Avoid_: Fallback settings, fallback order screen (it is one page, "Fallbacks")
+
 **Argument**:
 A typed or picked value an Action consumes during its lifecycle. An Action declares zero or more. They are collected one slot at a time in the single bottom input field, with the active Action and filled slots shown as a breadcrumb/pill (`[New Reminder] ▸ "buy milk" ▸ …`). Verb-first selection clears the search query and prompts for the first Argument; noun-first (Fallback) selection passes the literal typed text in as the first Argument.
 _Avoid_: Parameter, field, input (ambiguous)
