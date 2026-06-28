@@ -23,38 +23,39 @@ final class SnippetUITests: XCTestCase {
         return app
     }
 
-    /// Create a snippet through the library editor, then find it by typing and
-    /// run it — proving create → persist → index → search → copy end to end.
+    /// Compose a snippet from the input via the "New Snippet" Fallback, then find
+    /// it by typing and run it — proving compose → persist → index → search → copy
+    /// end to end. The seeded body is the typed text; the user titles and saves.
     @MainActor
-    func testCreateSnippetThenSearchAndCopy() throws {
+    func testComposeSnippetFromInputThenSearchAndCopy() throws {
         let app = launchApp()
 
-        // Open the Snippet library and compose a new snippet. Wait for the
-        // button before tapping: on a cold-launched simulator tapping before the
-        // app is ready drops the first tap and the sheet never presents.
-        let openSnippets = app.buttons["open-snippets"]
-        XCTAssertTrue(openSnippets.waitForExistence(timeout: 30))
-        openSnippets.tap()
-        XCTAssertTrue(app.buttons["snippet-add"].waitForExistence(timeout: 10))
-        app.buttons["snippet-add"].tap()
+        // Type the snippet's body text, then pick the always-present "New Snippet"
+        // Fallback — it opens the editor seeded with that text. Wait for the input
+        // first: on a cold-launched simulator an early tap is dropped.
+        let input = app.textFields["search-input"]
+        XCTAssertTrue(input.waitForExistence(timeout: 30))
+        input.tap()
+        input.typeText("Hello from Quickie")
 
+        let newSnippet = app.buttons.matching(
+            NSPredicate(format: "label CONTAINS[c] %@", "New Snippet")
+        ).firstMatch
+        XCTAssertTrue(newSnippet.waitForExistence(timeout: 5), "the New Snippet Fallback should always be offered")
+        newSnippet.tap()
+
+        // The editor opens with the body pre-filled; the user names it and saves.
         let title = "Quickie Greeting"
+        let bodyField = app.textFields["snippet-body-field"]
+        XCTAssertTrue(bodyField.waitForExistence(timeout: 10))
         let titleField = app.textFields["snippet-title-field"]
-        XCTAssertTrue(titleField.waitForExistence(timeout: 10))
         titleField.tap()
         titleField.typeText(title)
 
-        let bodyField = app.textFields["snippet-body-field"]
-        bodyField.tap()
-        bodyField.typeText("Hello from Quickie")
-
         app.buttons["snippet-save"].tap()
 
-        // Back in the library, dismiss to the input.
-        app.buttons["Done"].tap()
-
-        // Type to search — the snippet surfaces as a ranked Result row.
-        let input = app.textFields["search-input"]
+        // Back at the input (cleared to Home); type to search — the snippet
+        // surfaces as a ranked Result row.
         XCTAssertTrue(input.waitForExistence(timeout: 10))
         input.tap()
         input.typeText("greeting")

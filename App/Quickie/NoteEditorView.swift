@@ -27,6 +27,17 @@ struct NoteEditorView: View {
         _bodyText = State(initialValue: note?.body ?? "")
     }
 
+    /// Compose a brand-new note seeded with the user's typed text — the "New Note"
+    /// Fallback path. The body is the typed text and the title is its first line
+    /// (mirroring `StoredNote.capture`), so Save is ready the moment the editor
+    /// opens; the user can still rename or add before confirming.
+    init(seed: String) {
+        self.note = nil
+        let captured = StoredNote.capture(text: seed)
+        _title = State(initialValue: captured.title)
+        _bodyText = State(initialValue: captured.body)
+    }
+
     private var isValid: Bool {
         !title.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
             && !bodyText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty

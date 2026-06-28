@@ -13,12 +13,26 @@ public enum ActionOutcome: Equatable, Sendable {
     /// the stored body and presents the reader — keeping the loop pure and
     /// testable, exactly like `copyText` defers the pasteboard.
     case openNote(id: String)
-    /// Capture the raw typed text into a new Note (CONTEXT.md → Note): the
-    /// "New Note" Fallback's instant, silent capture. The core only declares the
-    /// intent; the app layer inserts the StoredNote — keeping capture pure and
-    /// testable while the persistence stays at the platform edge.
-    case createNote(String)
+    /// Open the Note editor seeded with the raw typed text (CONTEXT.md → Note):
+    /// the "New Note" Fallback. The core declares the intent and carries the
+    /// seed; the app presents the editor so the user titles and confirms before
+    /// it is stored — keeping the flow pure and testable.
+    case composeNote(seed: String)
+    /// Open the Snippet editor seeded with the raw typed text (CONTEXT.md →
+    /// Snippet): the "New Snippet" Fallback, the snippet counterpart to
+    /// `composeNote`.
+    case composeSnippet(seed: String)
+    /// Open one of the library list pages (CONTEXT.md → Snippet / Note): the
+    /// main-list command that surfaces the full Snippet or Note library, which
+    /// otherwise lives only as filtered result rows.
+    case openLibrary(Library)
     case none
+}
+
+/// Which library list page an `openLibrary` outcome opens.
+public enum Library: Equatable, Sendable {
+    case notes
+    case snippets
 }
 
 /// Which kind of Provider an Action came from (CONTEXT.md → Provider): the
@@ -31,6 +45,7 @@ public enum ActionKind: Equatable, Sendable {
     case snippet
     case note
     case newNote
+    case newSnippet
     case calculator
 }
 
@@ -42,7 +57,10 @@ public enum MainAction: Equatable, Sendable {
     case openInBrowser
     case copyToClipboard
     case openNote
-    case captureNote
+    /// Open an editor to compose a new Note or Snippet from the typed text.
+    case compose
+    /// Open a library list page (all Notes / all Snippets).
+    case openLibrary
     case none
 }
 
@@ -109,7 +127,8 @@ public struct Action: Identifiable, Sendable {
         case .openURL: return .openInBrowser
         case .copyText: return .copyToClipboard
         case .openNote: return .openNote
-        case .createNote: return .captureNote
+        case .composeNote, .composeSnippet: return .compose
+        case .openLibrary: return .openLibrary
         case .none: return .none
         }
     }
@@ -279,11 +298,11 @@ extension Action {
     }
 
     /// The "New Note" Fallback (CONTEXT.md → Note, Fallback Action): a
-    /// Fallback-style capture that always rides in the bottom region and turns
-    /// the user's literal typed text into a new Note instantly and silently —
-    /// no app switch. Like the web-search Fallback it consumes the raw text;
-    /// unlike it, the outcome is `createNote`, which the app persists. The
-    /// running text becomes the note's body.
+    /// Fallback-style action that always rides in the bottom region and, when
+    /// run, opens the Note editor seeded with the user's literal typed text. Like
+    /// the web-search Fallback it consumes the raw text; the outcome is
+    /// `composeNote`, which the app turns into a seeded editor the user titles and
+    /// confirms before it is stored.
     public static func newNote() -> Action {
         Action(
             id: "builtin.new-note",
@@ -293,6 +312,50 @@ extension Action {
             inputTypes: [.text],
             outputType: .text,
             isFallback: true
-        ) { input in .createNote(input ?? "") }
+        ) { input in .composeNote(seed: input ?? "") }
+    }
+
+    /// The "New Snippet" Fallback (CONTEXT.md → Snippet, Fallback Action): the
+    /// snippet counterpart to `newNote`. It rides the bottom region and, when run,
+    /// opens the Snippet editor seeded with the typed text as the copy-out body,
+    /// which the user titles and confirms before it is stored.
+    public static func newSnippet() -> Action {
+        Action(
+            id: "builtin.new-snippet",
+            kind: .newSnippet,
+            title: "New Snippet",
+            aliases: ["snippet", "clip", "save text"],
+            inputTypes: [.text],
+            outputType: .text,
+            isFallback: true
+        ) { input in .composeSnippet(seed: input ?? "") }
+    }
+
+    /// The "All Notes" command (CONTEXT.md → Note): a built-in main-list Action
+    /// that opens the Note library list page. Surfaces the full library as a
+    /// filterable, selectable row rather than a chrome button, so browsing notes
+    /// lives in the same loop as everything else.
+    public static func openNotesLibrary() -> Action {
+        Action(
+            id: "builtin.notes-library",
+            kind: .note,
+            title: "All Notes",
+            aliases: ["notes", "note library", "browse notes"],
+            inputTypes: [],
+            outputType: .text
+        ) { _ in .openLibrary(.notes) }
+    }
+
+    /// The "All Snippets" command (CONTEXT.md → Snippet): the snippet counterpart
+    /// to `openNotesLibrary`, opening the Snippet library list page.
+    public static func openSnippetsLibrary() -> Action {
+        Action(
+            id: "builtin.snippets-library",
+            kind: .snippet,
+            title: "All Snippets",
+            aliases: ["snippets", "snippet library", "browse snippets"],
+            inputTypes: [],
+            outputType: .text
+        ) { _ in .openLibrary(.snippets) }
     }
 }

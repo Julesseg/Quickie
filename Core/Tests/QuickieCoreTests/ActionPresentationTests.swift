@@ -31,7 +31,9 @@ struct ActionPresentationTests {
     func mainActionFollowsOutcome() {
         #expect(Action.quicklink(id: "q", title: "GitHub", template: "https://github.com").mainAction == .openInBrowser)
         #expect(Action.note(id: "n", title: "Idea").mainAction == .openNote)
-        #expect(Action.newNote().mainAction == .captureNote)
+        #expect(Action.newNote().mainAction == .compose)
+        #expect(Action.newSnippet().mainAction == .compose)
+        #expect(Action.openNotesLibrary().mainAction == .openLibrary)
     }
 
     @Test("provider kind and main action are independent axes")
@@ -45,5 +47,21 @@ struct ActionPresentationTests {
         #expect(snippet.mainAction == .copyToClipboard)
         #expect(calc?.kind == .calculator)
         #expect(snippet.kind == .snippet)
+    }
+
+    @Test("New Snippet opens the snippet editor seeded with the typed text")
+    func newSnippetComposesSeeded() {
+        let action = Action.newSnippet()
+        #expect(action.isFallback)
+        #expect(action.kind == .newSnippet)
+        #expect(action.run(input: "Hello from Quickie") == .composeSnippet(seed: "Hello from Quickie"))
+    }
+
+    @Test("the library commands open their list pages")
+    func libraryCommandsOpenPages() {
+        #expect(Action.openNotesLibrary().run() == .openLibrary(.notes))
+        #expect(Action.openSnippetsLibrary().run() == .openLibrary(.snippets))
+        // Commands, not Fallbacks — they match by name and don't ride the bottom.
+        #expect(Action.openNotesLibrary().isFallback == false)
     }
 }

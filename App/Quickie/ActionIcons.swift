@@ -17,6 +17,7 @@ extension ActionKind {
         case .snippet: return "doc.on.clipboard"
         case .note: return "note.text"
         case .newNote: return "square.and.pencil"
+        case .newSnippet: return "rectangle.and.pencil.and.ellipsis"
         case .calculator: return "function"
         }
     }
@@ -29,6 +30,7 @@ extension ActionKind {
         case .snippet: return .teal
         case .note: return .orange
         case .newNote: return .pink
+        case .newSnippet: return .purple
         case .calculator: return .green
         }
     }
@@ -42,7 +44,8 @@ extension MainAction {
         case .openInBrowser: return "arrow.up.right"
         case .copyToClipboard: return "doc.on.doc"
         case .openNote: return "book"
-        case .captureNote: return "plus"
+        case .compose: return "square.and.pencil"
+        case .openLibrary: return "chevron.right"
         case .none: return nil
         }
     }
@@ -62,6 +65,9 @@ struct ProviderBadge: View {
                     .font(.system(size: 14, weight: .semibold))
                     .foregroundStyle(.white)
             }
+            // Decorative: the row's meaning is its title, so the badge shouldn't
+            // add to the accessibility label (nor the symbol name to it).
+            .accessibilityHidden(true)
     }
 }
 
@@ -75,6 +81,7 @@ struct MainActionGlyph: View {
             Image(systemName: symbol)
                 .font(.footnote.weight(.semibold))
                 .foregroundStyle(.secondary)
+                .accessibilityHidden(true)
         }
     }
 }

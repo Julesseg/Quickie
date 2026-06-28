@@ -1,12 +1,12 @@
 import XCTest
 
 /// The UI-only acceptance criteria for Notes (issue #7) that can only be
-/// verified by driving the real app on a simulator: the instant "New Note"
-/// capture turns the typed text into a stored Note with no app switch, and a
-/// note created in the library persists, surfaces as a searchable Result row,
-/// and its main action opens it for reading. The read/capture *logic*
-/// (run → .openNote / .createNote) is covered deterministically by QuickieCore's
-/// NoteTests; these prove the SwiftData + UI wiring around it.
+/// verified by driving the real app on a simulator: the "New Note" Fallback opens
+/// a seeded editor whose saved note persists, surfaces as a searchable Result
+/// row, and opens for reading; and the "All Notes" command opens the library list
+/// page. The read/compose *logic* (run → .openNote / .composeNote) is covered
+/// deterministically by QuickieCore's NoteTests; these prove the SwiftData + UI
+/// wiring around it.
 final class NoteUITests: XCTestCase {
 
     override func setUpWithError() throws {
@@ -24,11 +24,11 @@ final class NoteUITests: XCTestCase {
         return app
     }
 
-    /// Type a thought, run the "New Note" capture from the Result list, then find
-    /// it in the Note library — proving capture → persist → list end to end with
-    /// no app switch.
+    /// Type a thought, open the seeded editor via the "New Note" Fallback and
+    /// save, then find the note by typing and open it for reading — proving
+    /// compose → persist → index → search → open end to end.
     @MainActor
-    func testNewNoteCaptureFromInput() throws {
+    func testComposeNoteFromInputThenSearchAndOpen() throws {
         let app = launchApp()
 
         let input = app.textFields["search-input"]
@@ -38,76 +38,56 @@ final class NoteUITests: XCTestCase {
         let thought = "Call the dentist tomorrow"
         input.typeText(thought)
 
-        // The always-present "New Note" Fallback rides the bottom of the list,
-        // labelled "New Note"; running it captures the typed text.
-        let capture = app.buttons.matching(
+        // The always-present "New Note" Fallback opens the editor seeded with the
+        // typed text — title derived from the first line, body the whole text.
+        let newNote = app.buttons.matching(
             NSPredicate(format: "label CONTAINS[c] %@", "New Note")
         ).firstMatch
-        XCTAssertTrue(capture.waitForExistence(timeout: 5), "the New Note capture should always be offered")
-        capture.tap()
-        XCTAssertNotEqual(app.state, .notRunning, "capturing a note should not crash the app")
+        XCTAssertTrue(newNote.waitForExistence(timeout: 5), "the New Note Fallback should always be offered")
+        newNote.tap()
 
-        // Open the Note library; the captured note persisted and is listed,
-        // titled by its first line.
-        app.buttons["open-notes"].tap()
+        // Seeded editor: the body is pre-filled and Save is ready (title seeded).
+        let bodyField = app.textFields["note-body-field"]
+        XCTAssertTrue(bodyField.waitForExistence(timeout: 10))
+        app.buttons["note-save"].tap()
+
+        // Back at the input (cleared to Home); search by the captured text — the
+        // note persisted and surfaces as a ranked Result row.
+        XCTAssertTrue(input.waitForExistence(timeout: 10))
+        input.tap()
+        input.typeText(thought)
+
         let row = app.buttons.matching(
             NSPredicate(format: "label CONTAINS[c] %@", thought)
         ).firstMatch
-        XCTAssertTrue(row.waitForExistence(timeout: 10), "the captured note should persist and appear in the library")
-    }
-
-    /// Create a note through the library editor, then find it by typing and run
-    /// it — proving create → persist → index → search → open end to end.
-    @MainActor
-    func testCreateNoteThenSearchAndOpen() throws {
-        let app = launchApp()
-
-        // Open the Note library and compose a new note. Wait for the button
-        // before tapping: this is the first interaction after launch, and on a
-        // cold-launched simulator tapping before the app is ready drops the tap
-        // and the sheet never presents.
-        let openNotes = app.buttons["open-notes"]
-        XCTAssertTrue(openNotes.waitForExistence(timeout: 30))
-        openNotes.tap()
-        XCTAssertTrue(app.buttons["note-add"].waitForExistence(timeout: 10))
-        app.buttons["note-add"].tap()
-
-        let title = "Quickie Roadmap"
-        let titleField = app.textFields["note-title-field"]
-        XCTAssertTrue(titleField.waitForExistence(timeout: 10))
-        titleField.tap()
-        titleField.typeText(title)
-
-        let bodyField = app.textFields["note-body-field"]
-        XCTAssertTrue(bodyField.waitForExistence(timeout: 10))
-        bodyField.tap()
-        bodyField.typeText("Ship the notes provider")
-
-        app.buttons["note-save"].tap()
-
-        // Back in the library, dismiss to the input.
-        app.buttons["Done"].tap()
-
-        // Type to search — the note surfaces as a ranked Result row.
-        let input = app.textFields["search-input"]
-        XCTAssertTrue(input.waitForExistence(timeout: 10))
-        input.tap()
-        input.typeText("roadmap")
-
-        // A result row is a Button whose label is the note title; its identifier
-        // is a store-derived hash, so match on the label (mirroring the snippet
-        // tests, which find rows by the button rather than the merged inner Text).
-        let row = app.buttons.matching(
-            NSPredicate(format: "label CONTAINS[c] %@", title)
-        ).firstMatch
         XCTAssertTrue(row.waitForExistence(timeout: 5), "the saved note should appear as a searchable result")
 
-        // Its main action opens the note for reading — assert the row is hittable
-        // and the open path is wired without crashing. The read outcome
-        // (run → .openNote(id:)) is covered deterministically by NoteTests.
+        // Its main action opens the note for reading.
         XCTAssertTrue(row.isHittable, "the note result row is an interactive, tappable control")
         row.tap()
         XCTAssertTrue(app.textFields["note-body-field"].waitForExistence(timeout: 5),
                       "opening a note's main action should present it for reading")
+    }
+
+    /// The Note library is reached as an "All Notes" result row (not a chrome
+    /// button): selecting it opens the list page.
+    @MainActor
+    func testAllNotesCommandOpensLibrary() throws {
+        let app = launchApp()
+
+        let input = app.textFields["search-input"]
+        XCTAssertTrue(input.waitForExistence(timeout: 30))
+        input.tap()
+        input.typeText("all notes")
+
+        let allNotes = app.buttons.matching(
+            NSPredicate(format: "label CONTAINS[c] %@", "All Notes")
+        ).firstMatch
+        XCTAssertTrue(allNotes.waitForExistence(timeout: 5), "the All Notes command should surface as a result row")
+        allNotes.tap()
+
+        // The Note library list page presents, with its add affordance.
+        XCTAssertTrue(app.buttons["note-add"].waitForExistence(timeout: 10),
+                      "selecting All Notes should open the Note library list page")
     }
 }

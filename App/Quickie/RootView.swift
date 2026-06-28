@@ -8,7 +8,6 @@ import QuickieCore
 /// state shows the Home placeholder (ADR 0008 / issue #3).
 struct RootView: View {
     @Environment(\.openURL) private var openURL
-    @Environment(\.modelContext) private var context
 
     /// User Quicklinks from the store feed the index alongside the built-ins
     /// (ADR 0006: index rebuilt from the source of truth).
@@ -35,11 +34,12 @@ struct RootView: View {
 
     @State private var query = ""
     @State private var showingManage = false
-    @State private var showingSnippets = false
-    @State private var showingNotes = false
-    /// The Note a result row's main action opened for reading, presented in the
-    /// note editor sheet (CONTEXT.md → Note: main action is Open/read).
-    @State private var noteUnderRead: StoredNote?
+    /// The single RootView-level sheet — reading a note, composing a seeded
+    /// note/snippet, or opening a library list page. One optional drives one
+    /// `.sheet`, sidestepping SwiftUI's one-`.sheet`-per-view rule now that these
+    /// presentations are triggered from the result list rather than chrome
+    /// buttons (each of which used to own its own sheet).
+    @State private var activeSheet: ActiveSheet?
     @FocusState private var inputFocused: Bool
     /// A transient confirmation banner shown after a copy-out main action runs —
     /// the "lightweight confirmation" snippets need since copying is silent.
@@ -85,11 +85,15 @@ struct RootView: View {
                 CalculatorProvider(),
                 IndexedProvider.builtIns(webSearchTemplate: engineTemplate),
                 IndexedProvider(catalog: storedLinks),
-                IndexedProvider(catalog: storedSnippets),
-                // Stored Notes plus the always-present "New Note" capture
-                // (CONTEXT.md → Note, Fallback Action) — the instant, silent
-                // brain-dump that turns the typed text into a Note.
+                // Stored Snippets plus the always-present "New Snippet" Fallback —
+                // typing then picking it opens the editor seeded with the text.
+                IndexedProvider(catalog: storedSnippets + [.newSnippet()]),
+                // Stored Notes plus the always-present "New Note" Fallback — the
+                // brain-dump that opens the editor seeded with the typed text.
                 IndexedProvider(catalog: storedNotes + [.newNote()]),
+                // The library commands: filterable main-list rows that open the
+                // full Snippet / Note list pages, in place of chrome buttons.
+                IndexedProvider(catalog: [.openNotesLibrary(), .openSnippetsLibrary()]),
             ],
             layout: keyboardLayout.layout,
             favorites: signals.favorites,
@@ -170,52 +174,33 @@ struct RootView: View {
         }
         // Auto-focus on launch, keyboard up — the core promise (ADR 0012).
         .onAppear { inputFocused = true }
-        // A note's main action opens it here for reading/editing — the read
-        // counterpart to a snippet's silent copy.
-        .sheet(item: $noteUnderRead) { note in
-            NoteEditorView(note: note)
+        // The one RootView sheet: a note opened for reading, a seeded compose
+        // editor, or a library list page — all reached from the result list.
+        .sheet(item: $activeSheet) { sheet in
+            switch sheet {
+            case .readNote(let note):
+                NoteEditorView(note: note)
+            case .composeNote(let seed):
+                NoteEditorView(seed: seed.text)
+            case .composeSnippet(let seed):
+                SnippetEditorView(seed: seed.text)
+            case .notesLibrary:
+                NoteManagerView()
+            case .snippetsLibrary:
+                SnippetManagerView()
+            }
         }
     }
 
-    /// The top-trailing library buttons. Each owns its own `.sheet` so the
-    /// presentations never collide (SwiftUI ignores a second `.sheet` attached
-    /// to the same view).
+    /// The top-trailing settings button — a single Liquid Glass toolbar control
+    /// for Quicklink management and the default search engine. The Notes and
+    /// Snippet libraries are no longer chrome buttons: they're reached as "All
+    /// Notes" / "All Snippets" rows in the result list, alongside everything else.
     private var libraryButtons: some View {
         VStack {
-            // The three library affordances as one Liquid Glass toolbar cluster —
-            // grouped in a single container so the glass capsules blend and morph
-            // together rather than reading as three separate chips.
             GlassEffectContainer(spacing: 8) {
                 HStack(spacing: 8) {
                     Spacer()
-                    Button {
-                        showingNotes = true
-                    } label: {
-                        Image(systemName: "note.text")
-                            .font(.title3)
-                    }
-                    .buttonStyle(.glass)
-                    .buttonBorderShape(.circle)
-                    .accessibilityIdentifier("open-notes")
-                    .accessibilityLabel("Manage Notes")
-                    .sheet(isPresented: $showingNotes) {
-                        NoteManagerView()
-                    }
-
-                    Button {
-                        showingSnippets = true
-                    } label: {
-                        Image(systemName: "doc.on.clipboard")
-                            .font(.title3)
-                    }
-                    .buttonStyle(.glass)
-                    .buttonBorderShape(.circle)
-                    .accessibilityIdentifier("open-snippets")
-                    .accessibilityLabel("Manage Snippets")
-                    .sheet(isPresented: $showingSnippets) {
-                        SnippetManagerView()
-                    }
-
                     Button {
                         showingManage = true
                     } label: {
@@ -254,34 +239,34 @@ struct RootView: View {
             // deleted after the list was indexed the lookup misses; flash a
             // confirmation rather than letting the tap do nothing silently.
             if let note = notes.first(where: { Self.noteActionID($0) == id }) {
-                noteUnderRead = note
+                activeSheet = .readNote(note)
             } else {
                 flashConfirmation("Note not found")
             }
-        case .createNote(let text):
-            captureNote(text)
+        case .composeNote(let seed):
+            // "New Note": open the editor seeded with the typed text. The text now
+            // lives in the editor, so clear the input back to Home behind the sheet.
+            activeSheet = .composeNote(ComposeSeed(text: seed))
+            query = ""
+        case .composeSnippet(let seed):
+            // "New Snippet": same, into the snippet editor.
+            activeSheet = .composeSnippet(ComposeSeed(text: seed))
+            query = ""
+        case .openLibrary(let library):
+            switch library {
+            case .notes: activeSheet = .notesLibrary
+            case .snippets: activeSheet = .snippetsLibrary
+            }
         case .none:
             break
         }
     }
 
-    /// The instant, silent "New Note" capture (CONTEXT.md → Note): turn the typed
-    /// text into a stored Note with no app switch, clear the input back to Home,
-    /// and flash a lightweight confirmation — the capture is silent, so the banner
-    /// is the only acknowledgement. A blank capture is ignored.
-    private func captureNote(_ text: String) {
-        let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !trimmed.isEmpty else { return }
-        context.insert(StoredNote.capture(text: trimmed))
-        query = ""
-        flashConfirmation("Note saved")
-    }
-
     /// Flashes a lightweight confirmation banner, then clears it after a beat.
     /// Each flash stamps a fresh token; only the latest flash's timer clears the
     /// banner, so two confirmations in quick succession keep it up for the full
-    /// beat after the most recent one rather than the first. Shared by the silent
-    /// copy-out ("Copied") and the silent note capture ("Note saved").
+    /// beat after the most recent one rather than the first. Used by the silent
+    /// copy-out ("Copied") and the rare "Note not found" miss.
     private func flashConfirmation(_ message: String) {
         let token = UUID()
         copyToken = token
@@ -290,6 +275,33 @@ struct RootView: View {
             try? await Task.sleep(for: .seconds(1.4))
             guard copyToken == token else { return }
             withAnimation { copyConfirmation = nil }
+        }
+    }
+}
+
+/// A one-shot seed for a compose editor: the typed text plus a fresh identity so
+/// each invocation drives a distinct `.sheet(item:)` presentation.
+private struct ComposeSeed: Identifiable {
+    let id = UUID()
+    let text: String
+}
+
+/// The single RootView-level sheet, as an Identifiable enum so one `.sheet(item:)`
+/// can present any of them without colliding on SwiftUI's one-sheet-per-view rule.
+private enum ActiveSheet: Identifiable {
+    case readNote(StoredNote)
+    case composeNote(ComposeSeed)
+    case composeSnippet(ComposeSeed)
+    case notesLibrary
+    case snippetsLibrary
+
+    var id: String {
+        switch self {
+        case .readNote(let note): return "read-\(note.id)"
+        case .composeNote(let seed): return "compose-note-\(seed.id)"
+        case .composeSnippet(let seed): return "compose-snippet-\(seed.id)"
+        case .notesLibrary: return "notes-library"
+        case .snippetsLibrary: return "snippets-library"
         }
     }
 }
