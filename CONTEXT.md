@@ -28,12 +28,16 @@ The kind of a value flowing through Quickie — text, url, file, number, etc. An
 _Avoid_: Data type, kind, payload type
 
 **Fallback Action**:
-Any Action (typically a placeholder-Quicklink) flagged to always appear in the result list and consume the user's literal typed text as its payload (e.g. "Search web for 'X'", "Create reminder 'X'"). Distinguished from a verb-first match, where the text fuzzy-matches an Action's name/alias. The single result list interleaves both; the user resolves intent by choosing a row, never by a mode toggle. Default web search is the built-in Fallback.
+Any Action flagged to always appear in the result list and consume the user's literal typed text as its payload, rather than matching by name. The umbrella over three concrete kinds: **Fallback queries** (URL templates), **New Note**, and **New Snippet**. Distinguished from a verb-first match, where the text fuzzy-matches an Action's name/alias. The single result list interleaves both; the user resolves intent by choosing a row, never by a mode toggle. Fallbacks live in one user-ordered, reversible list (see Fallback list) and each can be **disabled** (hidden from results) without being deleted.
 _Avoid_: Default action, catch-all
 
 **Quicklink**:
-A stored URL template with zero or more `{placeholder}` tokens. With no placeholder it is a static link that opens directly (Indexed Provider); with a placeholder it takes an Argument the typed text fills (e.g. `https://github.com/search?q={query}`). Opens in the user's system-default browser. Web search is a built-in placeholder-Quicklink, and any placeholder-Quicklink can be flagged a Fallback Action. Added via the Share Extension or manually.
-_Avoid_: Bookmark, link, URL action
+A stored *static* URL that opens directly in the user's system-default browser — no `{placeholder}` token, no typed text consumed (Indexed Provider). It matches by name/alias like any other Action. Templated, query-consuming links are a separate concept now — see Fallback query. Quickie ships **no default Quicklinks**; the user adds their own (via the Share Extension or the Quicklinks page).
+_Avoid_: Bookmark, link, URL action, template (a Quicklink has no template)
+
+**Fallback query**:
+A stored URL template that **requires** at least one `{placeholder}` token and consumes the typed text as its query, opening the result in the browser (e.g. `https://github.com/search?q={query}`). One concrete kind of Fallback Action, managed on its own list page. Web search is a default-seeded Fallback query (a normal, fully deletable entry — a reset-to-defaults affordance may come later), not a privileged built-in. Like every Fallback it can be disabled without being deleted.
+_Avoid_: placeholder-Quicklink (the placeholder capability no longer lives on Quicklink), search action
 
 **Argument**:
 A typed or picked value an Action consumes during its lifecycle. An Action declares zero or more. They are collected one slot at a time in the single bottom input field, with the active Action and filled slots shown as a breadcrumb/pill (`[New Reminder] ▸ "buy milk" ▸ …`). Verb-first selection clears the search query and prompts for the first Argument; noun-first (Fallback) selection passes the literal typed text in as the first Argument.
