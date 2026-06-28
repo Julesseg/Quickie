@@ -13,7 +13,12 @@ enum NumberFormat {
     /// without a decimal point.
     static func string(_ value: Double, maxFractionDigits: Int) -> String {
         let scale = pow(10.0, Double(maxFractionDigits))
-        var rounded = (value * scale).rounded() / scale
+        // Scaling a finite-but-large value (e.g. 1e300) can itself overflow to
+        // `inf`; when it does, skip rounding and format the value as-is so a
+        // legitimate finite result never renders as "inf" — holding the
+        // "never inf/nan" promise the Calculator's finiteness guard makes.
+        let scaled = value * scale
+        var rounded = scaled.isFinite ? scaled.rounded() / scale : value
         if rounded == 0 { rounded = 0 } // normalise -0 to 0
 
         if rounded == rounded.rounded() {

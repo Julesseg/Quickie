@@ -38,9 +38,11 @@ public struct CalculatorProvider: Provider {
 
     /// True when the query carries an arithmetic operator (or the `of` keyword) —
     /// the signal that the user is *calculating*, not merely typing a number.
+    /// `of` is matched on word boundaries so it triggers on "15% of 200" but not
+    /// on words that merely contain the letters (`profile`, `off`).
     private func isCalculation(_ query: String) -> Bool {
         if query.contains(where: { "+-*/^%()".contains($0) }) { return true }
-        return query.lowercased().contains("of")
+        return query.range(of: "\\bof\\b", options: [.regularExpression, .caseInsensitive]) != nil
     }
 
     /// Builds the boosted result row: its title is the answer, its subtitle the
