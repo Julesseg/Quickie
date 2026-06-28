@@ -1,4 +1,5 @@
 import XCTest
+import UIKit
 
 /// The clipboard-prefill acceptance criteria that can only be observed by
 /// driving the real app: the paste chip appears on Home exactly when the
