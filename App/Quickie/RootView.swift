@@ -182,50 +182,58 @@ struct RootView: View {
     /// to the same view).
     private var libraryButtons: some View {
         VStack {
-            HStack(spacing: 4) {
-                Spacer()
-                Button {
-                    showingNotes = true
-                } label: {
-                    Image(systemName: "note.text")
-                        .font(.title3)
-                        .padding(10)
-                }
-                .accessibilityIdentifier("open-notes")
-                .accessibilityLabel("Manage Notes")
-                .sheet(isPresented: $showingNotes) {
-                    NoteManagerView()
-                }
+            // The three library affordances as one Liquid Glass toolbar cluster —
+            // grouped in a single container so the glass capsules blend and morph
+            // together rather than reading as three separate chips.
+            GlassEffectContainer(spacing: 8) {
+                HStack(spacing: 8) {
+                    Spacer()
+                    Button {
+                        showingNotes = true
+                    } label: {
+                        Image(systemName: "note.text")
+                            .font(.title3)
+                    }
+                    .buttonStyle(.glass)
+                    .buttonBorderShape(.circle)
+                    .accessibilityIdentifier("open-notes")
+                    .accessibilityLabel("Manage Notes")
+                    .sheet(isPresented: $showingNotes) {
+                        NoteManagerView()
+                    }
 
-                Button {
-                    showingSnippets = true
-                } label: {
-                    Image(systemName: "doc.on.clipboard")
-                        .font(.title3)
-                        .padding(10)
-                }
-                .accessibilityIdentifier("open-snippets")
-                .accessibilityLabel("Manage Snippets")
-                .sheet(isPresented: $showingSnippets) {
-                    SnippetManagerView()
-                }
+                    Button {
+                        showingSnippets = true
+                    } label: {
+                        Image(systemName: "doc.on.clipboard")
+                            .font(.title3)
+                    }
+                    .buttonStyle(.glass)
+                    .buttonBorderShape(.circle)
+                    .accessibilityIdentifier("open-snippets")
+                    .accessibilityLabel("Manage Snippets")
+                    .sheet(isPresented: $showingSnippets) {
+                        SnippetManagerView()
+                    }
 
-                Button {
-                    showingManage = true
-                } label: {
-                    Image(systemName: "slider.horizontal.3")
-                        .font(.title3)
-                        .padding(10)
-                }
-                .accessibilityIdentifier("manage-quicklinks")
-                .accessibilityLabel("Manage Quicklinks")
-                .sheet(isPresented: $showingManage) {
-                    ManageQuicklinksView(engineTemplate: $engineTemplate)
+                    Button {
+                        showingManage = true
+                    } label: {
+                        Image(systemName: "slider.horizontal.3")
+                            .font(.title3)
+                    }
+                    .buttonStyle(.glass)
+                    .buttonBorderShape(.circle)
+                    .accessibilityIdentifier("manage-quicklinks")
+                    .accessibilityLabel("Manage Quicklinks")
+                    .sheet(isPresented: $showingManage) {
+                        ManageQuicklinksView(engineTemplate: $engineTemplate)
+                    }
                 }
             }
             Spacer()
         }
-        .padding(.horizontal, 8)
+        .padding(.horizontal, 12)
         .padding(.top, 4)
     }
 

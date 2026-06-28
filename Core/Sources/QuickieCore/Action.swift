@@ -21,6 +21,31 @@ public enum ActionOutcome: Equatable, Sendable {
     case none
 }
 
+/// Which kind of Provider an Action came from (CONTEXT.md → Provider): the
+/// leading provider badge shown on every Result row (issue #11). Every Action
+/// originates from exactly one Provider, so this is the row's identity — distinct
+/// from `mainAction`, which is what tapping it *does*.
+public enum ActionKind: Equatable, Sendable {
+    case quicklink
+    case webSearch
+    case snippet
+    case note
+    case newNote
+    case calculator
+}
+
+/// What tapping a row *does*, as a coarse classification of its `ActionOutcome`
+/// — the trailing main-action glyph the Result list shows (issue #11). It is
+/// derived from the Action's real outcome, never declared separately, so the
+/// glyph can't drift from the behavior.
+public enum MainAction: Equatable, Sendable {
+    case openInBrowser
+    case copyToClipboard
+    case openNote
+    case captureNote
+    case none
+}
+
 /// A single invokable capability shown in the Result list — the one kind of
 /// thing in the index. Every subsystem (matcher, ranking, providers) operates
 /// on Actions. An Action declares its typed input/output content (ADR 0011)
@@ -28,6 +53,8 @@ public enum ActionOutcome: Equatable, Sendable {
 /// as `run(input:)`.
 public struct Action: Identifiable, Sendable {
     public let id: String
+    /// Which Provider this Action came from — drives the leading provider badge.
+    public let kind: ActionKind
     /// The name shown in the row and matched against the query.
     public let title: String
     public let subtitle: String?
@@ -46,6 +73,7 @@ public struct Action: Identifiable, Sendable {
 
     public init(
         id: String,
+        kind: ActionKind = .quicklink,
         title: String,
         subtitle: String? = nil,
         aliases: [String] = [],
@@ -55,6 +83,7 @@ public struct Action: Identifiable, Sendable {
         effect: @escaping @Sendable (String?) -> ActionOutcome
     ) {
         self.id = id
+        self.kind = kind
         self.title = title
         self.subtitle = subtitle
         self.aliases = aliases
@@ -70,6 +99,20 @@ public struct Action: Identifiable, Sendable {
     public func run(input: String? = nil) -> ActionOutcome {
         effect(input)
     }
+
+    /// The trailing main-action glyph's meaning, classified from the Action's own
+    /// outcome (issue #11). The outcome *case* is stable regardless of the typed
+    /// input for every current Action, so this is read with no input and the
+    /// glyph always matches what a tap performs.
+    public var mainAction: MainAction {
+        switch run() {
+        case .openURL: return .openInBrowser
+        case .copyText: return .copyToClipboard
+        case .openNote: return .openNote
+        case .createNote: return .captureNote
+        case .none: return .none
+        }
+    }
 }
 
 extension Action {
@@ -81,6 +124,7 @@ extension Action {
     /// persists and the manage UI edits — no static/placeholder mode toggle.
     public static func quicklink(
         id: String,
+        kind: ActionKind = .quicklink,
         title: String,
         subtitle: String? = nil,
         aliases: [String] = [],
@@ -90,6 +134,7 @@ extension Action {
         let hasPlaceholder = templateHasPlaceholder(template)
         return Action(
             id: id,
+            kind: kind,
             title: title,
             subtitle: subtitle,
             aliases: aliases,
@@ -166,6 +211,7 @@ extension Action {
     ) -> Action {
         quicklink(
             id: "builtin.web-search",
+            kind: .webSearch,
             title: "Search the web",
             aliases: ["search", "google", "ddg"],
             template: template,
@@ -206,6 +252,7 @@ extension Action {
     ) -> Action {
         Action(
             id: id,
+            kind: .snippet,
             title: title,
             inputTypes: [],
             outputType: .text
@@ -224,6 +271,7 @@ extension Action {
     ) -> Action {
         Action(
             id: id,
+            kind: .note,
             title: title,
             inputTypes: [],
             outputType: .text
@@ -239,6 +287,7 @@ extension Action {
     public static func newNote() -> Action {
         Action(
             id: "builtin.new-note",
+            kind: .newNote,
             title: "New Note",
             aliases: ["note", "capture", "jot"],
             inputTypes: [.text],

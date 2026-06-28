@@ -59,7 +59,8 @@ struct ActionRow: View {
     let action: Action
 
     var body: some View {
-        HStack {
+        HStack(spacing: 12) {
+            ProviderBadge(kind: action.kind)
             VStack(alignment: .leading, spacing: 2) {
                 Text(action.title)
                     .font(.body)
@@ -70,10 +71,11 @@ struct ActionRow: View {
                         .foregroundStyle(.secondary)
                 }
             }
-            Spacer(minLength: 0)
+            Spacer(minLength: 8)
+            MainActionGlyph(mainAction: action.mainAction)
         }
-        .padding(.horizontal, 20)
-        .padding(.vertical, 12)
+        .padding(.horizontal, 16)
+        .padding(.vertical, 10)
         .frame(maxWidth: .infinity)
         .glassEffect(.regular.interactive(), in: Capsule())
         .padding(.horizontal, 12)
