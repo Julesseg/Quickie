@@ -22,9 +22,8 @@ Single-context layout: one `CONTEXT.md` + `docs/adr/` at the repo root. See `doc
 
 Commit subjects follow [Conventional Commits](https://www.conventionalcommits.org/),
 enforced by a `PreToolUse` hook (`.claude/hooks/validate-commit-msg.py`). **PR
-titles must match too** — a PR is squash-merged, so its title becomes the commit
-subject on `master`. Title PRs `<type>(<scope>)!: <description>` using the same
-types: `feat`, `fix`, `docs`, `style`, `refactor`, `perf`, `test`, `build`,
+titles must match too.** Title PRs `<type>(<scope>)!: <description>` using the
+same types: `feat`, `fix`, `docs`, `style`, `refactor`, `perf`, `test`, `build`,
 `ci`, `chore`, `revert`.
 
 ### UI tests run in CI only — this is intentional
