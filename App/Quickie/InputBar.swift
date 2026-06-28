@@ -1,5 +1,4 @@
 import SwiftUI
-import QuickieCore
 
 /// The single bottom input field — the one surface the whole app is built
 /// around. It auto-focuses on launch (the binding is driven by `RootView`),
@@ -8,8 +7,6 @@ import QuickieCore
 struct InputBar: View {
     @Binding var query: String
     var focused: FocusState<Bool>.Binding
-
-    @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     var body: some View {
         TextField("Type to search…", text: $query)
@@ -23,16 +20,6 @@ struct InputBar: View {
             .padding(.horizontal, 20)
             .padding(.vertical, 14)
             .glassEffect(.regular.interactive(), in: Capsule())
-            // A subtle accent ring springs in when the field takes focus — the
-            // "input focus" moment of the budget. It rides on top of the glass and
-            // animates only its own opacity, so the field itself never waits on it
-            // (protecting launch-to-focused-input speed).
-            .overlay {
-                Capsule()
-                    .strokeBorder(Color.accentColor.opacity(focused.wrappedValue ? 0.5 : 0), lineWidth: 1.5)
-            }
-            .animation(MotionPolicy(reduceMotion: reduceMotion).style(for: .inputFocus).animation,
-                       value: focused.wrappedValue)
             .padding(.horizontal, 12)
             .padding(.vertical, 10)
     }
