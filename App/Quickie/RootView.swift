@@ -142,9 +142,11 @@ struct RootView: View {
                     )
                 }
                 // The launch-time paste chip rides just above the input, offered
-                // only on Home with text on the clipboard (ADR 0002). Tapping it
-                // seeds `query` and marks the offer used, so it stays gone for the
-                // rest of the session — even if the user clears the input back to
+                // only on Home with text on the clipboard (ADR 0002). Typing
+                // withdraws it transiently — it returns if the user clears back to
+                // an unused Home. Tapping it is what retires it for good: we seed
+                // `query` and mark the offer used, so a *used* chip stays gone for
+                // the rest of the launch even when the cleared input returns to
                 // Home with text still on the clipboard.
                 if clipboardPrefill.isChipOffered {
                     ClipboardPasteChip { text in
