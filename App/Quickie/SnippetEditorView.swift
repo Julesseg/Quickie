@@ -21,6 +21,15 @@ struct SnippetEditorView: View {
         _bodyText = State(initialValue: snippet?.body ?? "")
     }
 
+    /// Compose a brand-new snippet seeded with the user's typed text as the
+    /// copy-out body — the "New Snippet" Fallback path. The title is left empty
+    /// for the user to name the snippet before saving.
+    init(seed: String) {
+        self.snippet = nil
+        _title = State(initialValue: "")
+        _bodyText = State(initialValue: seed.trimmingCharacters(in: .whitespacesAndNewlines))
+    }
+
     private var isValid: Bool {
         !title.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
             && !bodyText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty

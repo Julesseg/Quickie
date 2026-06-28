@@ -52,6 +52,7 @@ public struct CalculatorProvider: Provider {
     private func result(id: String, title: String, subtitle: String, copying copy: String) -> Action {
         Action(
             id: id,
+            kind: .calculator,
             title: title,
             subtitle: subtitle,
             inputTypes: [],

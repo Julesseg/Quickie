@@ -49,12 +49,16 @@ struct HomeView: View {
                         Button {
                             onRun(action)
                         } label: {
-                            Text(action.title)
-                                .font(.callout.weight(.medium))
-                                .lineLimit(1)
-                                .padding(.horizontal, 14)
-                                .padding(.vertical, 10)
-                                .background(.regularMaterial, in: Capsule())
+                            HStack(spacing: 8) {
+                                ProviderBadge(kind: action.kind)
+                                Text(action.title)
+                                    .font(.callout.weight(.medium))
+                                    .lineLimit(1)
+                                MainActionGlyph(mainAction: action.mainAction)
+                            }
+                            .padding(.horizontal, 12)
+                            .padding(.vertical, 8)
+                            .glassEffect(.regular.interactive(), in: Capsule())
                         }
                         .buttonStyle(.plain)
                         .accessibilityIdentifier("favorite.\(action.id)")
@@ -62,7 +66,13 @@ struct HomeView: View {
                     }
                 }
                 .padding(.horizontal, 20)
+                // Give the glass capsules' soft shadow room above and below so it
+                // isn't sheared off by the scroll view's bounds or the next row.
+                .padding(.vertical, 8)
             }
+            // Let the chip shadows overflow the horizontal scroll view rather than
+            // being clipped at its top and bottom edges.
+            .scrollClipDisabled()
         }
     }
 

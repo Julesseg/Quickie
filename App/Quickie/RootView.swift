@@ -8,7 +8,6 @@ import QuickieCore
 /// state shows the Home placeholder (ADR 0008 / issue #3).
 struct RootView: View {
     @Environment(\.openURL) private var openURL
-    @Environment(\.modelContext) private var context
 
     /// User Quicklinks from the store feed the index alongside the built-ins
     /// (ADR 0006: index rebuilt from the source of truth).
@@ -35,11 +34,12 @@ struct RootView: View {
 
     @State private var query = ""
     @State private var showingManage = false
-    @State private var showingSnippets = false
-    @State private var showingNotes = false
-    /// The Note a result row's main action opened for reading, presented in the
-    /// note editor sheet (CONTEXT.md → Note: main action is Open/read).
-    @State private var noteUnderRead: StoredNote?
+    /// The single RootView-level sheet — reading a note, composing a seeded
+    /// note/snippet, or opening a library list page. One optional drives one
+    /// `.sheet`, sidestepping SwiftUI's one-`.sheet`-per-view rule now that these
+    /// presentations are triggered from the result list rather than chrome
+    /// buttons (each of which used to own its own sheet).
+    @State private var activeSheet: ActiveSheet?
     @FocusState private var inputFocused: Bool
     /// A transient confirmation banner shown after a copy-out main action runs —
     /// the "lightweight confirmation" snippets need since copying is silent.
@@ -85,11 +85,15 @@ struct RootView: View {
                 CalculatorProvider(),
                 IndexedProvider.builtIns(webSearchTemplate: engineTemplate),
                 IndexedProvider(catalog: storedLinks),
-                IndexedProvider(catalog: storedSnippets),
-                // Stored Notes plus the always-present "New Note" capture
-                // (CONTEXT.md → Note, Fallback Action) — the instant, silent
-                // brain-dump that turns the typed text into a Note.
+                // Stored Snippets plus the always-present "New Snippet" Fallback —
+                // typing then picking it opens the editor seeded with the text.
+                IndexedProvider(catalog: storedSnippets + [.newSnippet()]),
+                // Stored Notes plus the always-present "New Note" Fallback — the
+                // brain-dump that opens the editor seeded with the typed text.
                 IndexedProvider(catalog: storedNotes + [.newNote()]),
+                // The library commands: filterable main-list rows that open the
+                // full Snippet / Note list pages, in place of chrome buttons.
+                IndexedProvider(catalog: [.openNotesLibrary(), .openSnippetsLibrary()]),
             ],
             layout: keyboardLayout.layout,
             favorites: signals.favorites,
@@ -122,10 +126,16 @@ struct RootView: View {
 
     var body: some View {
         ZStack {
-            // A quiet backdrop for the Liquid Glass UI to sit over (ADR 0010).
-            Color(.systemBackground).ignoresSafeArea()
+            // A quiet, adaptive backdrop for the Liquid Glass chrome to refract
+            // (ADR 0010): iOS can't show the wallpaper, so the glass needs its own
+            // calm base with a little depth — not a flat fill, not a busy one.
+            QuietBackdrop()
 
-            VStack(spacing: 0) {
+            // The Home / Result list fills the whole screen so its bottom-anchored
+            // rows scroll *under* the floating input, where the Liquid Glass
+            // refracts them (ADR 0010) — rather than a flow layout that walls the
+            // input off behind an opaque strip the results can't pass.
+            Group {
                 if isHome {
                     HomeView(
                         content: engine.home(),
@@ -141,20 +151,6 @@ struct RootView: View {
                         onToggleFavorite: { signals.toggleFavorite($0.id) }
                     )
                 }
-                // The launch-time paste chip rides just above the input, offered
-                // only on Home with text on the clipboard (ADR 0002). Typing
-                // withdraws it transiently — it returns if the user clears back to
-                // an unused Home. Tapping it is what retires it for good: we seed
-                // `query` and mark the offer used, so a *used* chip stays gone for
-                // the rest of the launch even when the cleared input returns to
-                // Home with text still on the clipboard.
-                if clipboardPrefill.isChipOffered {
-                    ClipboardPasteChip { text in
-                        query = text
-                        clipboard.markUsed()
-                    }
-                }
-                InputBar(query: $query, focused: $inputFocused)
             }
 
             // Quiet affordances into the user's libraries — Notes, Snippets, and
@@ -166,64 +162,73 @@ struct RootView: View {
                 CopyConfirmationBanner(text: copyConfirmation)
             }
         }
+        // The input — and the launch-time paste chip just above it — float in the
+        // bottom safe area, so the result list scrolls behind the glass instead of
+        // being walled off. Attached to the whole screen (not the Home/Result list
+        // that swaps as the query changes) so the field keeps its identity and
+        // focus across that swap. The chip is offered only on Home with text on the
+        // clipboard (ADR 0002); typing withdraws it and tapping it retires it.
+        .safeAreaInset(edge: .bottom, spacing: 0) {
+            VStack(spacing: 0) {
+                if clipboardPrefill.isChipOffered {
+                    ClipboardPasteChip { text in
+                        query = text
+                        clipboard.markUsed()
+                    }
+                }
+                InputBar(query: $query, focused: $inputFocused)
+            }
+        }
         // Auto-focus on launch, keyboard up — the core promise (ADR 0012).
         .onAppear { inputFocused = true }
-        // A note's main action opens it here for reading/editing — the read
-        // counterpart to a snippet's silent copy.
-        .sheet(item: $noteUnderRead) { note in
-            NoteEditorView(note: note)
+        // The one RootView sheet: a note opened for reading, a seeded compose
+        // editor, or a library list page — all reached from the result list.
+        .sheet(item: $activeSheet) { sheet in
+            switch sheet {
+            case .readNote(let note):
+                NoteEditorView(note: note)
+            case .composeNote(let seed):
+                NoteEditorView(seed: seed.text)
+            case .composeSnippet(let seed):
+                SnippetEditorView(seed: seed.text)
+            case .notesLibrary:
+                NoteManagerView()
+            case .snippetsLibrary:
+                SnippetManagerView()
+            }
         }
     }
 
-    /// The top-trailing library buttons. Each owns its own `.sheet` so the
-    /// presentations never collide (SwiftUI ignores a second `.sheet` attached
-    /// to the same view).
+    /// The top-trailing settings button — a single Liquid Glass toolbar control
+    /// for Quicklink management and the default search engine. The Notes and
+    /// Snippet libraries are no longer chrome buttons: they're reached as "All
+    /// Notes" / "All Snippets" rows in the result list, alongside everything else.
     private var libraryButtons: some View {
         VStack {
-            HStack(spacing: 4) {
-                Spacer()
-                Button {
-                    showingNotes = true
-                } label: {
-                    Image(systemName: "note.text")
-                        .font(.title3)
-                        .padding(10)
-                }
-                .accessibilityIdentifier("open-notes")
-                .accessibilityLabel("Manage Notes")
-                .sheet(isPresented: $showingNotes) {
-                    NoteManagerView()
-                }
-
-                Button {
-                    showingSnippets = true
-                } label: {
-                    Image(systemName: "doc.on.clipboard")
-                        .font(.title3)
-                        .padding(10)
-                }
-                .accessibilityIdentifier("open-snippets")
-                .accessibilityLabel("Manage Snippets")
-                .sheet(isPresented: $showingSnippets) {
-                    SnippetManagerView()
-                }
-
-                Button {
-                    showingManage = true
-                } label: {
-                    Image(systemName: "slider.horizontal.3")
-                        .font(.title3)
-                        .padding(10)
-                }
-                .accessibilityIdentifier("manage-quicklinks")
-                .accessibilityLabel("Manage Quicklinks")
-                .sheet(isPresented: $showingManage) {
-                    ManageQuicklinksView(engineTemplate: $engineTemplate)
+            GlassEffectContainer(spacing: 8) {
+                HStack(spacing: 8) {
+                    Spacer()
+                    Button {
+                        showingManage = true
+                    } label: {
+                        // Pad around the icon so the glass circle has room to
+                        // breathe — the button grows, the glyph stays the same size.
+                        Image(systemName: "slider.horizontal.3")
+                            .font(.title3)
+                            .padding(8)
+                    }
+                    .buttonStyle(.glass)
+                    .buttonBorderShape(.circle)
+                    .accessibilityIdentifier("manage-quicklinks")
+                    .accessibilityLabel("Manage Quicklinks")
+                    .sheet(isPresented: $showingManage) {
+                        ManageQuicklinksView(engineTemplate: $engineTemplate)
+                    }
                 }
             }
             Spacer()
         }
-        .padding(.horizontal, 8)
+        .padding(.horizontal, 12)
         .padding(.top, 4)
     }
 
@@ -244,34 +249,34 @@ struct RootView: View {
             // deleted after the list was indexed the lookup misses; flash a
             // confirmation rather than letting the tap do nothing silently.
             if let note = notes.first(where: { Self.noteActionID($0) == id }) {
-                noteUnderRead = note
+                activeSheet = .readNote(note)
             } else {
                 flashConfirmation("Note not found")
             }
-        case .createNote(let text):
-            captureNote(text)
+        case .composeNote(let seed):
+            // "New Note": open the editor seeded with the typed text. The text now
+            // lives in the editor, so clear the input back to Home behind the sheet.
+            activeSheet = .composeNote(ComposeSeed(text: seed))
+            query = ""
+        case .composeSnippet(let seed):
+            // "New Snippet": same, into the snippet editor.
+            activeSheet = .composeSnippet(ComposeSeed(text: seed))
+            query = ""
+        case .openLibrary(let library):
+            switch library {
+            case .notes: activeSheet = .notesLibrary
+            case .snippets: activeSheet = .snippetsLibrary
+            }
         case .none:
             break
         }
     }
 
-    /// The instant, silent "New Note" capture (CONTEXT.md → Note): turn the typed
-    /// text into a stored Note with no app switch, clear the input back to Home,
-    /// and flash a lightweight confirmation — the capture is silent, so the banner
-    /// is the only acknowledgement. A blank capture is ignored.
-    private func captureNote(_ text: String) {
-        let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !trimmed.isEmpty else { return }
-        context.insert(StoredNote.capture(text: trimmed))
-        query = ""
-        flashConfirmation("Note saved")
-    }
-
     /// Flashes a lightweight confirmation banner, then clears it after a beat.
     /// Each flash stamps a fresh token; only the latest flash's timer clears the
     /// banner, so two confirmations in quick succession keep it up for the full
-    /// beat after the most recent one rather than the first. Shared by the silent
-    /// copy-out ("Copied") and the silent note capture ("Note saved").
+    /// beat after the most recent one rather than the first. Used by the silent
+    /// copy-out ("Copied") and the rare "Note not found" miss.
     private func flashConfirmation(_ message: String) {
         let token = UUID()
         copyToken = token
@@ -281,6 +286,57 @@ struct RootView: View {
             guard copyToken == token else { return }
             withAnimation { copyConfirmation = nil }
         }
+    }
+}
+
+/// A one-shot seed for a compose editor: the typed text plus a fresh identity so
+/// each invocation drives a distinct `.sheet(item:)` presentation.
+private struct ComposeSeed: Identifiable {
+    let id = UUID()
+    let text: String
+}
+
+/// The single RootView-level sheet, as an Identifiable enum so one `.sheet(item:)`
+/// can present any of them without colliding on SwiftUI's one-sheet-per-view rule.
+private enum ActiveSheet: Identifiable {
+    case readNote(StoredNote)
+    case composeNote(ComposeSeed)
+    case composeSnippet(ComposeSeed)
+    case notesLibrary
+    case snippetsLibrary
+
+    var id: String {
+        switch self {
+        case .readNote(let note): return "read-\(note.id)"
+        case .composeNote(let seed): return "compose-note-\(seed.id)"
+        case .composeSnippet(let seed): return "compose-snippet-\(seed.id)"
+        case .notesLibrary: return "notes-library"
+        case .snippetsLibrary: return "snippets-library"
+        }
+    }
+}
+
+/// The quiet adaptive backdrop the Liquid Glass chrome floats over (ADR 0010).
+/// Built from system colors so it follows light/dark automatically: a soft
+/// top-to-bottom gradient with a faint accent glow pooled at the bottom, near the
+/// input, giving the glass capsules something with depth to refract — calm enough
+/// never to compete with the result text.
+private struct QuietBackdrop: View {
+    var body: some View {
+        LinearGradient(
+            colors: [Color(.systemBackground), Color(.secondarySystemBackground)],
+            startPoint: .top,
+            endPoint: .bottom
+        )
+        .overlay(alignment: .bottom) {
+            RadialGradient(
+                colors: [Color.accentColor.opacity(0.12), .clear],
+                center: .bottom,
+                startRadius: 0,
+                endRadius: 420
+            )
+        }
+        .ignoresSafeArea()
     }
 }
 
@@ -296,7 +352,7 @@ private struct CopyConfirmationBanner: View {
                 .font(.callout.weight(.medium))
                 .padding(.horizontal, 16)
                 .padding(.vertical, 10)
-                .background(.thinMaterial, in: Capsule())
+                .glassEffect(.regular, in: Capsule())
                 .padding(.bottom, 90)
                 .accessibilityIdentifier("copy-confirmation")
         }

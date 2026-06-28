@@ -55,18 +55,18 @@ struct NoteTests {
         #expect(note.run() != snippet.run())
     }
 
-    @Test("the New Note Fallback captures the raw typed text as a new note")
-    func newNoteCapturesTypedText() {
+    @Test("the New Note Fallback opens the editor seeded with the typed text")
+    func newNoteOpensSeededEditor() {
         let capture = Action.newNote()
         // A Fallback-style capture (CONTEXT.md → Fallback Action): it is flagged
-        // a Fallback, consumes text, and produces text. Running it emits the
-        // instant, silent capture the app turns into a stored Note — no app
-        // switch, the typed text becomes the note's body.
+        // a Fallback, consumes text, and produces text. Running it now opens the
+        // note editor pre-filled with the typed text rather than capturing
+        // silently — the user titles and confirms before it is stored.
         #expect(capture.isFallback)
         #expect(capture.inputTypes == [.text])
         #expect(capture.outputType == .text)
         #expect(capture.run(input: "remember to call the dentist")
-                == .createNote("remember to call the dentist"))
+                == .composeNote(seed: "remember to call the dentist"))
     }
 
     // An engine wired like the app: stored notes feeding the index plus the
