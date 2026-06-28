@@ -122,8 +122,10 @@ struct RootView: View {
 
     var body: some View {
         ZStack {
-            // A quiet backdrop for the Liquid Glass UI to sit over (ADR 0010).
-            Color(.systemBackground).ignoresSafeArea()
+            // A quiet, adaptive backdrop for the Liquid Glass chrome to refract
+            // (ADR 0010): iOS can't show the wallpaper, so the glass needs its own
+            // calm base with a little depth — not a flat fill, not a busy one.
+            QuietBackdrop()
 
             VStack(spacing: 0) {
                 if isHome {
@@ -284,6 +286,30 @@ struct RootView: View {
     }
 }
 
+/// The quiet adaptive backdrop the Liquid Glass chrome floats over (ADR 0010).
+/// Built from system colors so it follows light/dark automatically: a soft
+/// top-to-bottom gradient with a faint accent glow pooled at the bottom, near the
+/// input, giving the glass capsules something with depth to refract — calm enough
+/// never to compete with the result text.
+private struct QuietBackdrop: View {
+    var body: some View {
+        LinearGradient(
+            colors: [Color(.systemBackground), Color(.secondarySystemBackground)],
+            startPoint: .top,
+            endPoint: .bottom
+        )
+        .overlay(alignment: .bottom) {
+            RadialGradient(
+                colors: [Color.accentColor.opacity(0.12), .clear],
+                center: .bottom,
+                startRadius: 0,
+                endRadius: 420
+            )
+        }
+        .ignoresSafeArea()
+    }
+}
+
 /// The lightweight "Copied" confirmation: a brief, non-blocking banner that
 /// acknowledges a silent copy-out without stealing focus from the input.
 private struct CopyConfirmationBanner: View {
@@ -296,7 +322,7 @@ private struct CopyConfirmationBanner: View {
                 .font(.callout.weight(.medium))
                 .padding(.horizontal, 16)
                 .padding(.vertical, 10)
-                .background(.thinMaterial, in: Capsule())
+                .glassEffect(.regular, in: Capsule())
                 .padding(.bottom, 90)
                 .accessibilityIdentifier("copy-confirmation")
         }

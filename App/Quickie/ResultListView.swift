@@ -13,24 +13,40 @@ struct ResultListView: View {
     /// Toggles a row's Favorite pin (issue #9 AC #1).
     let onToggleFavorite: (Action) -> Void
 
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+
+    /// The tight animation budget (ADR 0010): a subtle spring as rows insert and
+    /// reorder with the ranking, degrading to a fade under Reduce Motion.
+    private var rowMotion: MotionStyle {
+        MotionPolicy(reduceMotion: reduceMotion).style(for: .rowInsert)
+    }
+
     var body: some View {
         ScrollView {
-            VStack(spacing: 0) {
-                ForEach(results.reversed()) { action in
-                    Button {
-                        onRun(action)
-                    } label: {
-                        ActionRow(action: action)
+            // A single container so the neighbouring glass capsules blend and
+            // morph as one Liquid Glass surface rather than stacking flatly.
+            GlassEffectContainer(spacing: 6) {
+                VStack(spacing: 6) {
+                    ForEach(results.reversed()) { action in
+                        Button {
+                            onRun(action)
+                        } label: {
+                            ActionRow(action: action)
+                        }
+                        .buttonStyle(.plain)
+                        .accessibilityIdentifier(action.id)
+                        .favoriteContextMenu(
+                            isFavorite: isFavorite(action),
+                            toggle: { onToggleFavorite(action) }
+                        )
+                        .transition(rowMotion.insertionTransition)
                     }
-                    .buttonStyle(.plain)
-                    .accessibilityIdentifier(action.id)
-                    .favoriteContextMenu(
-                        isFavorite: isFavorite(action),
-                        toggle: { onToggleFavorite(action) }
-                    )
                 }
+                .frame(maxWidth: .infinity)
             }
-            .frame(maxWidth: .infinity)
+            // Animate insert/reorder when the set or order of results changes —
+            // keystroke-fast, and never gating the keystroke itself.
+            .animation(rowMotion.animation, value: results.map(\.id))
         }
         .defaultScrollAnchor(.bottom)
     }
@@ -58,7 +74,10 @@ struct ActionRow: View {
         }
         .padding(.horizontal, 20)
         .padding(.vertical, 12)
-        .contentShape(Rectangle())
+        .frame(maxWidth: .infinity)
+        .glassEffect(.regular.interactive(), in: Capsule())
+        .padding(.horizontal, 12)
+        .contentShape(Capsule())
     }
 }
 

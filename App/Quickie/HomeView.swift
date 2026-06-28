@@ -54,7 +54,7 @@ struct HomeView: View {
                                 .lineLimit(1)
                                 .padding(.horizontal, 14)
                                 .padding(.vertical, 10)
-                                .background(.regularMaterial, in: Capsule())
+                                .glassEffect(.regular.interactive(), in: Capsule())
                         }
                         .buttonStyle(.plain)
                         .accessibilityIdentifier("favorite.\(action.id)")
