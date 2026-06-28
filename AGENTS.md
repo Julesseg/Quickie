@@ -18,6 +18,14 @@ Single-context layout: one `CONTEXT.md` + `docs/adr/` at the repo root. See `doc
 
 ## Conventions
 
+### Conventional Commits — commit subjects *and* PR titles
+
+Commit subjects follow [Conventional Commits](https://www.conventionalcommits.org/),
+enforced by a `PreToolUse` hook (`.claude/hooks/validate-commit-msg.py`). **PR
+titles must match too.** Title PRs `<type>(<scope>)!: <description>` using the
+same types: `feat`, `fix`, `docs`, `style`, `refactor`, `perf`, `test`, `build`,
+`ci`, `chore`, `revert`.
+
 ### UI tests run in CI only — this is intentional
 
 The `QuickieUITests` XCUITest target runs **only in CI** (the `App · XCUITest
