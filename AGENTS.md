@@ -18,26 +18,14 @@ Single-context layout: one `CONTEXT.md` + `docs/adr/` at the repo root. See `doc
 
 ## Conventions
 
-### Conventional Commits — for commit subjects *and* PR titles
+### Conventional Commits — commit subjects *and* PR titles
 
-Commit subjects follow [Conventional Commits](https://www.conventionalcommits.org/)
-and are enforced deterministically by a `PreToolUse` hook
-(`.claude/hooks/validate-commit-msg.py`), which blocks any `git commit` whose
-subject doesn't match.
-
-**Pull request titles must follow the exact same convention.** A PR is
-squash-merged, so its title becomes the commit subject that lands on `master` —
-a non-conforming title silently breaks the history the commit hook protects.
-When opening a PR, title it `<type>(<optional scope>)<optional !>: <description>`
-using the same allowed types as commits: `feat`, `fix`, `docs`, `style`,
-`refactor`, `perf`, `test`, `build`, `ci`, `chore`, `revert`.
-
-Examples:
-
-- `feat(launcher): add widget grid`
-- `fix: correct icon padding`
-- `docs: update README`
-- `feat!: drop iOS 16 support`
+Commit subjects follow [Conventional Commits](https://www.conventionalcommits.org/),
+enforced by a `PreToolUse` hook (`.claude/hooks/validate-commit-msg.py`). **PR
+titles must match too** — a PR is squash-merged, so its title becomes the commit
+subject on `master`. Title PRs `<type>(<scope>)!: <description>` using the same
+types: `feat`, `fix`, `docs`, `style`, `refactor`, `perf`, `test`, `build`,
+`ci`, `chore`, `revert`.
 
 ### UI tests run in CI only — this is intentional
 
