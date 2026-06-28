@@ -204,8 +204,11 @@ struct RootView: View {
                     Button {
                         showingManage = true
                     } label: {
+                        // Pad around the icon so the glass circle has room to
+                        // breathe — the button grows, the glyph stays the same size.
                         Image(systemName: "slider.horizontal.3")
                             .font(.title3)
+                            .padding(8)
                     }
                     .buttonStyle(.glass)
                     .buttonBorderShape(.circle)
