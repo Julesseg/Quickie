@@ -27,12 +27,25 @@ public struct Frecency: Codable, Sendable, Equatable {
     /// launcher's rhythm: yesterday's pick still counts, last month's barely.
     private static let halfLife: TimeInterval = 3 * 24 * 60 * 60
 
+    /// The most events ever retained. A launcher is tapped many times a day, so
+    /// an unbounded log would grow the persisted blob forever and make scoring
+    /// `O(events)`; capping bounds both. The dropped events are always the
+    /// oldest, whose decayed weight is already negligible (the cap is many
+    /// half-lives of everyday use), so ranking is unaffected in practice.
+    static let maxEvents = 500
+
     public init() {}
 
     /// Records that the user selected `id` at time `at` — the App calls this on
-    /// every main-action tap (issue #9 AC #2).
+    /// every main-action tap (issue #9 AC #2). Compacts to the most-recent
+    /// `maxEvents` once the log overflows, so storage and scoring stay bounded.
     public mutating func record(_ id: String, at: Date) {
         events.append(Event(id: id, at: at))
+        guard events.count > Self.maxEvents else { return }
+        // Keep the newest `maxEvents` by timestamp; the shed ones are the oldest,
+        // already decayed to near-zero weight.
+        events.sort { $0.at < $1.at }
+        events.removeFirst(events.count - Self.maxEvents)
     }
 
     /// The frecency score of `id` at time `now` — higher means chosen more often

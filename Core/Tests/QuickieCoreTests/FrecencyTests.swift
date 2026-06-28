@@ -68,6 +68,30 @@ struct FrecencyTests {
         #expect(abs(aged.score(for: "x", now: now) - 0.5 * fresh.score(for: "x", now: now)) < 0.0001)
     }
 
+    @Test("the event log is bounded so storage and scoring can't grow without limit")
+    func boundsStoredEvents() {
+        let now = Date()
+        var frecency = Frecency()
+        // Record well past the cap, all at the same instant: uncapped the score
+        // would be the full count, but the most-recent-N cap holds it at the
+        // ceiling — bounding both the persisted blob and the O(events) scoring.
+        for _ in 0..<(Frecency.maxEvents * 2 + 17) { frecency.record("x", at: now) }
+        #expect(frecency.score(for: "x", now: now) == Double(Frecency.maxEvents))
+    }
+
+    @Test("dropping the oldest events past the cap preserves the ranking")
+    func cappingKeepsTheMostRecent() {
+        let now = Date()
+        let old = now.addingTimeInterval(-30 * 24 * 60 * 60) // long since negligible
+        var frecency = Frecency()
+        // A flood of ancient picks for "stale" (each already ~nil weight), then a
+        // single fresh pick for "fresh". Even before the cap "fresh" wins; the cap
+        // only sheds events whose contribution was already negligible.
+        for _ in 0..<(Frecency.maxEvents * 2) { frecency.record("stale", at: old) }
+        frecency.record("fresh", at: now)
+        #expect(frecency.ranked(now: now).first == "fresh")
+    }
+
     @Test("frecency survives a Codable round-trip with its ranking intact")
     func codableRoundTrips() throws {
         let now = Date()
