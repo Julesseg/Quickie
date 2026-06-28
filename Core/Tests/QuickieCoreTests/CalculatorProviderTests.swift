@@ -63,4 +63,25 @@ struct CalculatorProviderTests {
         #expect(provider.candidates(for: "2+").isEmpty)
         #expect(provider.candidates(for: "1/0").isEmpty)
     }
+
+    @Test("a finite-but-large result never renders as inf")
+    func largeResultIsFinite() {
+        // 10^300 is finite, so the calculator returns it; the formatted row must
+        // not collapse to "inf" when the value is scaled for rounding.
+        let title = provider.candidates(for: "10^300").first?.title
+        #expect(title != nil)
+        #expect(title != "inf")
+        #expect(title?.contains("inf") == false)
+        #expect(title?.hasPrefix("1") == true)
+    }
+
+    @Test("\"of\" only triggers as a whole word, not inside another word")
+    func ofIsWordBounded() {
+        // The "of" calculation gate must not fire on words that merely contain
+        // the letters; "profile"/"off" are not calculations.
+        #expect(provider.candidates(for: "profile").isEmpty)
+        #expect(provider.candidates(for: "off").isEmpty)
+        // …but it still triggers as a real word.
+        #expect(provider.candidates(for: "15% of 200").first?.title == "30")
+    }
 }
