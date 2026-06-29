@@ -12,12 +12,20 @@ import QuickieCore
 /// that row's main action. On Home (empty query) there is no highlight and submit
 /// is a no-op.
 struct InputBar: View {
+    /// Stable identity for the input's Liquid Glass within the bottom
+    /// `GlassEffectContainer`. Pairing it with the paste button's id in a shared
+    /// namespace is what lets the button morph *out of and back into* this capsule
+    /// as it is offered and withdrawn (see `ClipboardPasteButton`, `RootView`).
+    static let glassID = "input-bar"
+
     @Binding var query: String
     var focused: FocusState<Bool>.Binding
     /// The highlighted result's Return-key label, or `.none` on Home.
     var returnKey: ReturnKeyLabel = .none
     /// Runs the highlighted result's main action; a no-op when there is none.
     var onSubmit: () -> Void = {}
+    /// The shared namespace the bottom glass surfaces morph within.
+    var glassNamespace: Namespace.ID
 
     var body: some View {
         TextField("Type to search…", text: $query)
@@ -32,7 +40,6 @@ struct InputBar: View {
             .padding(.horizontal, 20)
             .padding(.vertical, 14)
             .glassEffect(.regular.interactive(), in: Capsule())
-            .padding(.horizontal, 12)
-            .padding(.vertical, 10)
+            .glassEffectID(Self.glassID, in: glassNamespace)
     }
 }

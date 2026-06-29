@@ -58,6 +58,14 @@ struct RootView: View {
     @State private var keyboardLayout = KeyboardLayoutModel()
     @State private var clipboard = ClipboardPrefillModel()
 
+    /// Honour the system Reduce Motion setting: it gates the paste button's morph
+    /// so the glass snaps in/out instead of interpolating (ADR 0010 motion budget).
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+
+    /// The namespace the bottom Liquid Glass surfaces share so the paste button can
+    /// morph in and out of the input's capsule (see `InputBar`, `ClipboardPasteButton`).
+    @Namespace private var glassNamespace
+
     private var engine: SearchEngine {
         let storedLinks: [Action] = quicklinks.compactMap { link in
             guard let url = URL(string: link.urlString) else { return nil }
@@ -156,10 +164,15 @@ struct RootView: View {
                     CopyConfirmationBanner(text: copyConfirmation)
                 }
             }
-            // The input floats in the bottom safe area, with the launch-time paste
-            // chip above it. Kept *inside* the launcher's content so the reversed
+            // The input floats in the bottom safe area, with the paste button to
+            // its right. Kept *inside* the launcher's content so the reversed
             // result list reserves space for it — the best match sits just above
             // the input rather than behind it — and the keyboard lifts it.
+            //
+            // Both surfaces live in one `GlassEffectContainer` so they read as a
+            // single Liquid Glass body: when the clipboard offer comes and goes the
+            // button morphs *out of and back into* the input's capsule (paired by
+            // their `glassEffectID`s in `glassNamespace`) rather than just popping.
             //
             // Shown only while the launcher is on top (`path.isEmpty`): a pushed
             // page removes it, and popping back *re-adds* it. That fresh
@@ -170,20 +183,28 @@ struct RootView: View {
             // keyboard).
             .safeAreaInset(edge: .bottom, spacing: 0) {
                 if path.isEmpty {
-                    VStack(spacing: 0) {
-                        if clipboardPrefill.isChipOffered {
-                            ClipboardPasteChip { text in
-                                query = text
-                                clipboard.markUsed()
+                    GlassEffectContainer(spacing: 8) {
+                        HStack(spacing: 8) {
+                            InputBar(
+                                query: $query,
+                                focused: $inputFocused,
+                                returnKey: highlighted?.returnKeyLabel ?? ReturnKeyLabel.none,
+                                onSubmit: { if let highlighted { run(highlighted) } },
+                                glassNamespace: glassNamespace
+                            )
+                            if clipboardPrefill.isChipOffered {
+                                ClipboardPasteButton(glassNamespace: glassNamespace) { text in
+                                    query = text
+                                    clipboard.markUsed()
+                                }
                             }
                         }
-                        InputBar(
-                            query: $query,
-                            focused: $inputFocused,
-                            returnKey: highlighted?.returnKeyLabel ?? ReturnKeyLabel.none,
-                            onSubmit: { if let highlighted { run(highlighted) } }
-                        )
+                        .padding(.horizontal, 12)
+                        .padding(.vertical, 10)
                     }
+                    // Morph the button in/out as the offer changes — degraded to a
+                    // snap under Reduce Motion (ADR 0010 motion budget).
+                    .animation(reduceMotion ? nil : .smooth, value: clipboardPrefill.isChipOffered)
                     // Auto-focus on launch (the zero-wall promise, ADR 0012).
                     // Return-from-a-page focus is re-armed off the popped page's
                     // `onDisappear` (see the navigationDestination below) — a real
