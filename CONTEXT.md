@@ -24,7 +24,7 @@ _Avoid_: Results, suggestions, search results
 Reserved term, not yet built. A future user-composed chain of multiple Actions, where each Action's output content feeds the next Action's input (validated by content type), authored as visual step-chaining rather than a text DSL. Made possible by every Action declaring typed input/output content from day one. Do not use "Workflow" to mean a single multi-step Action.
 
 **Content type**:
-The kind of a value flowing through Quickie — text, url, file, number, etc. An item's content type determines which Actions are eligible for it (and their ranking), which secondary actions a result exposes, and — in a future Workflow — whether one Action's output can feed another's input.
+The kind of a value flowing through Quickie — text, url, file, number, date, etc. An item's content type determines which Actions are eligible for it (and their ranking), which secondary actions a result exposes, the **input method** used when it is collected as an Argument (e.g. `date` → an in-place date picker), and — in a future Workflow — whether one Action's output can feed another's input.
 _Avoid_: Data type, kind, payload type
 
 **Fallback Action**:
@@ -36,7 +36,7 @@ A stored URL template with zero or more `{placeholder}` tokens. With no placehol
 _Avoid_: Bookmark, link, URL action
 
 **Argument**:
-A typed or picked value an Action consumes during its lifecycle. An Action declares zero or more. They are collected one slot at a time in the single bottom input field, with the active Action and filled slots shown as a breadcrumb/pill (`[New Reminder] ▸ "buy milk" ▸ …`). Verb-first selection clears the search query and prompts for the first Argument; noun-first (Fallback) selection passes the literal typed text in as the first Argument.
+A typed or picked value an Action consumes during its lifecycle. An Action declares zero or more. They are collected one slot at a time in the single bottom input field, with the active Action and filled slots shown as a breadcrumb/pill (`[New Reminder] ▸ "buy milk" ▸ …`). Each Argument declares a **content type** that determines its **input method**: the single input region morphs to the right control per step — the keyboard for `text`, an in-place picker for `date` or a list/enum — so the user is never typing a value the system could pick. Verb-first selection clears the search query and prompts for the first Argument; noun-first (Fallback) selection passes the literal typed text in as the first Argument.
 _Avoid_: Parameter, field, input (ambiguous)
 
 **Snippet**:
