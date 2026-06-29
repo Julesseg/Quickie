@@ -77,7 +77,7 @@ struct NoteTests {
                 .note(id: "note.groceries", title: "Groceries"),
                 .note(id: "note.standup", title: "Standup talking points"),
             ]),
-            IndexedProvider(catalog: [.newNote(), .webSearch()]),
+            IndexedProvider(catalog: [.newNote(), .webSearchFallback()]),
         ])
     }
 

@@ -9,7 +9,7 @@ import Testing
 struct HomeTests {
 
     private func link(_ id: String, _ title: String) -> Action {
-        .staticLink(id: id, title: title, url: URL(string: "https://\(id).example")!)
+        .quicklink(id: id, title: title, url: URL(string: "https://\(id).example")!)
     }
 
     @Test("Home lists the pinned Favorites in pin order")
@@ -57,12 +57,30 @@ struct HomeTests {
         var frecency = Frecency()
         frecency.record("builtin.web-search", at: now)
         let engine = SearchEngine(
-            providers: [IndexedProvider(catalog: [.webSearch()])],
+            providers: [IndexedProvider(catalog: [.webSearchFallback()])],
             favorites: ["builtin.web-search"],
             frecency: frecency,
             now: now
         )
         #expect(engine.home().favorites.isEmpty)
         #expect(engine.home().frecent.isEmpty)
+    }
+
+    @Test("resolvableHomeIDs lists every indexed, non-Fallback id")
+    func resolvableHomeIDsCoversIndexedCatalog() {
+        let engine = SearchEngine(
+            providers: [IndexedProvider(catalog: [link("a", "Alpha"), link("b", "Bravo")])]
+        )
+        #expect(engine.resolvableHomeIDs() == ["a", "b"])
+    }
+
+    @Test("resolvableHomeIDs omits Fallbacks, so a Fallback Favorite reconciles away")
+    func resolvableHomeIDsExcludesFallbacks() {
+        let engine = SearchEngine(
+            providers: [IndexedProvider(catalog: [link("a", "Alpha"), .webSearchFallback()])]
+        )
+        // The web-search Fallback resolves nowhere on Home, so its id is absent —
+        // the App prunes any Favorite pinned to it (and to deleted/stale targets).
+        #expect(engine.resolvableHomeIDs() == ["a"])
     }
 }

@@ -10,7 +10,7 @@ import Observation
 /// It reads `UIPasteboard.general.hasStrings`, which is metadata only: it never
 /// fires the system "pasted from…" banner and never exposes the content. The
 /// content is read solely when the user taps the paste control (see
-/// `ClipboardPasteChip`), never ambiently. We re-check on `didBecomeActive` so
+/// `ClipboardPasteButton`), never ambiently. We re-check on `didBecomeActive` so
 /// text copied elsewhere while Quickie was backgrounded is reflected on return.
 @MainActor
 @Observable

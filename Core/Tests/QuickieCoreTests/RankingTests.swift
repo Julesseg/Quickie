@@ -12,7 +12,7 @@ import Testing
 struct RankingTests {
 
     private func link(_ id: String, _ title: String) -> Action {
-        .staticLink(id: id, title: title, url: URL(string: "https://\(id).example")!)
+        .quicklink(id: id, title: title, url: URL(string: "https://\(id).example")!)
     }
 
     @Test("a favorited Action outranks an equally-matched non-favorite")
@@ -66,7 +66,7 @@ struct RankingTests {
         // Fallbacks ride the bottom region regardless of signals — they're
         // reached by always being present, not by rank (issue #9 AC #4).
         let engine = SearchEngine(
-            providers: [IndexedProvider(catalog: [link("match", "Search Repo"), .webSearch()])],
+            providers: [IndexedProvider(catalog: [link("match", "Search Repo"), .webSearchFallback()])],
             favorites: ["builtin.web-search"]
         )
         let ids = engine.results(for: "search").map(\.id)

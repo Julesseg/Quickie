@@ -1,5 +1,6 @@
 import Foundation
 import SwiftData
+import QuickieCore
 
 /// The shared App Group that backs Quickie's store. Decided up front (ADR 0006)
 /// so the future Share Extension, widgets, and App Intents write to the same
@@ -13,38 +14,74 @@ enum AppGroup {
     static let identifier = "group.com.julesseguin.quickie"
 }
 
-/// A user-saved Quicklink: a stored URL *template* with zero or more
-/// `{placeholder}` tokens (CONTEXT.md → Quicklink). With no placeholder it opens
-/// directly; with one it takes the typed text as its Argument. The skeleton
-/// persists these in SwiftData and rebuilds the in-memory search index from them
-/// on launch (ADR 0006: the store is the source of truth, the index is a derived
-/// cache). Snippets and Notes join the schema in later slices.
+/// A user-saved Quicklink: a stored *static* URL that opens directly (CONTEXT.md
+/// → Quicklink; ADR 0013). It carries no `{placeholder}` and consumes no typed
+/// text — the query-consuming behaviour now lives on `StoredFallbackQuery`. The
+/// app persists these in SwiftData and rebuilds the in-memory index from them on
+/// launch (ADR 0006: the store is the source of truth, the index a derived
+/// cache). Quickie ships no default Quicklinks.
 ///
-/// `alias` and `isFallback` are additive (issue #5): optional / defaulted so
-/// SwiftData migrates existing stores automatically. `urlString` holds the URL
-/// template; a placeholder-Quicklink flagged `isFallback` always rides in the
-/// bottom fallback region, consuming the raw typed text.
+/// The former `isFallback` flag is gone (its rows migrate to Fallback queries —
+/// see `migrateToFallbackQueries`); SwiftData drops the column automatically.
 @Model
 final class StoredQuicklink {
+    /// A stable, collision-free identity assigned at creation and persisted with
+    /// the Quicklink. This — not `persistentModelID.hashValue`, which is neither
+    /// collision-free nor stable across launches (the same trap the Note avoids) —
+    /// is what the index derives this Quicklink's Action id from, so a pinned
+    /// Favorite or its Frecency survives relaunches instead of silently orphaning.
+    /// Defaulted at the property so existing rows migrate without a value.
+    var id: String = UUID().uuidString
     var title: String
     var urlString: String
     /// An optional alternative name also matched against the query.
     var alias: String?
-    /// When true, this placeholder-Quicklink is pinned as a Fallback row.
-    var isFallback: Bool = false
     var createdAt: Date
 
     init(
         title: String,
         urlString: String,
         alias: String? = nil,
-        isFallback: Bool = false,
         createdAt: Date = Date()
     ) {
         self.title = title
         self.urlString = urlString
         self.alias = alias
-        self.isFallback = isFallback
+        self.createdAt = createdAt
+    }
+}
+
+/// A user-saved Fallback query: a stored URL template that **requires** a
+/// `{placeholder}` and consumes the typed text as its query (CONTEXT.md →
+/// Fallback query; ADR 0013). One kind of Fallback Action, managed on the
+/// unified Fallbacks page alongside New Note / New Snippet. Web search is just a
+/// default-seeded, fully deletable instance of this (`migrateToFallbackQueries`
+/// seeds it on first launch).
+///
+/// `id` is a stable identity assigned at creation — the key the Fallbacks page's
+/// persisted order and disabled set reference, and the id of the Action built
+/// from this row, so reordering/disabling survives relaunches.
+@Model
+final class StoredFallbackQuery {
+    var id: String
+    var title: String
+    /// The URL template; always contains at least one `{placeholder}` (the
+    /// editor enforces it, mirroring `Action.fallbackQuery`).
+    var urlString: String
+    var alias: String?
+    var createdAt: Date
+
+    init(
+        id: String = UUID().uuidString,
+        title: String,
+        urlString: String,
+        alias: String? = nil,
+        createdAt: Date = Date()
+    ) {
+        self.id = id
+        self.title = title
+        self.urlString = urlString
+        self.alias = alias
         self.createdAt = createdAt
     }
 }
@@ -56,6 +93,13 @@ final class StoredQuicklink {
 /// future Note but is distinct in intent: copy-out, not read.
 @Model
 final class StoredSnippet {
+    /// A stable, collision-free identity assigned at creation and persisted with
+    /// the Snippet. This — not `persistentModelID.hashValue`, which is neither
+    /// collision-free nor stable across launches (the same trap the Note avoids) —
+    /// is what the index derives this Snippet's Action id from, so a pinned
+    /// Favorite or its Frecency survives relaunches instead of silently orphaning.
+    /// Defaulted at the property so existing rows migrate without a value.
+    var id: String = UUID().uuidString
     var title: String
     var body: String
     var createdAt: Date
@@ -116,7 +160,7 @@ final class StoredNote {
 /// CloudKit off for now (M1 is fully local — ADR 0006 / ROADMAP).
 enum QuickieStore {
     static let container: ModelContainer = {
-        let schema = Schema([StoredQuicklink.self, StoredSnippet.self, StoredNote.self])
+        let schema = Schema([StoredQuicklink.self, StoredFallbackQuery.self, StoredSnippet.self, StoredNote.self])
 
         // Only ask SwiftData for the shared App Group container when this build
         // is actually entitled for it — `containerURL(forSecurityApplication…)`
@@ -146,12 +190,70 @@ enum QuickieStore {
     /// idempotent and a capture assertion can't pass on a stale row from a
     /// previous run.
     static func inMemoryContainer() -> ModelContainer {
-        let schema = Schema([StoredQuicklink.self, StoredSnippet.self, StoredNote.self])
+        let schema = Schema([StoredQuicklink.self, StoredFallbackQuery.self, StoredSnippet.self, StoredNote.self])
         let configuration = ModelConfiguration(schema: schema, isStoredInMemoryOnly: true, cloudKitDatabase: .none)
         do {
             return try ModelContainer(for: schema, configurations: [configuration])
         } catch {
             fatalError("Failed to create in-memory Quickie ModelContainer: \(error)")
+        }
+    }
+
+    private static let defaultWebSearchTemplate = "https://duckduckgo.com/?q={query}"
+    private static let migrationFlagKey = "store.didMigrateToFallbackQueries.v1"
+
+    /// Exposed so the UI-testing launch path can clear the one-time migration flag
+    /// and let each fresh in-memory store re-seed the default web-search Fallback.
+    static var migrationFlagKeyForTesting: String { migrationFlagKey }
+
+    /// One-time data migration for the Quicklink / Fallback query split (ADR
+    /// 0013), run at launch and guarded by a flag so it happens exactly once.
+    /// Former placeholder-Quicklinks (the only ones that could be Fallbacks)
+    /// become `StoredFallbackQuery` rows; static ones stay Quicklinks. On a store
+    /// with no Fallback queries it also seeds the default, fully deletable
+    /// web-search query — so first launch and a clean migration both leave the
+    /// user able to search, without privileging web search as a built-in.
+    ///
+    /// Idempotent and defensive: it never deletes a static link, and the seed is
+    /// gated on "no Fallback queries *and* never migrated", so a user who later
+    /// deletes web search doesn't get it re-seeded.
+    @MainActor
+    static func migrateToFallbackQueries(
+        in context: ModelContext,
+        defaults: UserDefaults = SignalsStore.sharedDefaults
+    ) {
+        guard !defaults.bool(forKey: migrationFlagKey) else { return }
+
+        let placeholderLinks = (try? context.fetch(FetchDescriptor<StoredQuicklink>())) ?? []
+        for link in placeholderLinks where Action.templateContainsPlaceholder(link.urlString) {
+            context.insert(StoredFallbackQuery(
+                title: link.title,
+                urlString: link.urlString,
+                alias: link.alias,
+                createdAt: link.createdAt
+            ))
+            context.delete(link)
+        }
+
+        let existingQueries = (try? context.fetchCount(FetchDescriptor<StoredFallbackQuery>())) ?? 0
+        if existingQueries == 0 {
+            context.insert(StoredFallbackQuery(
+                title: "Search the web",
+                urlString: defaultWebSearchTemplate,
+                alias: "search"
+            ))
+        }
+
+        // Only record the migration as done once the save actually persists. If
+        // it throws, leave the flag unset so the migration retries next launch —
+        // otherwise the inserted Fallback queries and deleted placeholder
+        // Quicklinks would be lost with no way to recover (the guard would skip
+        // the retry forever).
+        do {
+            try context.save()
+            defaults.set(true, forKey: migrationFlagKey)
+        } catch {
+            // Save failed; migration will retry on the next launch.
         }
     }
 }
