@@ -52,6 +52,12 @@ struct RootView: View {
     /// and supports the system edge-swipe back, rather than rising as a sheet.
     @State private var path: [ManagementPage] = []
     @FocusState private var inputFocused: Bool
+    /// Whether the software keyboard is currently on screen, tracked from UIKit's
+    /// keyboard notifications. The return-trip refocus uses this as its success
+    /// signal: it keeps re-asserting focus until the keyboard actually appears,
+    /// rather than betting on a fixed delay that the pop/dismiss transition (much
+    /// slower under CI load) can outlast.
+    @State private var keyboardVisible = false
     @State private var copyConfirmation: String?
     @State private var copyToken = UUID()
 
@@ -161,32 +167,53 @@ struct RootView: View {
             // result list reserves space for it — the best match sits just above
             // the input rather than behind it — and the keyboard lifts it.
             //
-            // EXPERIMENT (option 3 / issue #36 follow-up): the field is mounted and
-            // focused across pushes — no `if path.isEmpty` gate — so it never
-            // resigns first responder and the keyboard is never dismissed. Popping
-            // back is therefore instant: there's nothing to restore. The known
-            // tradeoff being evaluated is that an undismissed keyboard lives in its
-            // own window *above* the pushed management page, so it may render over
-            // that page while it's open.
+            // Shown only while the launcher is on top (`path.isEmpty`): a pushed
+            // page removes it, and popping back *re-adds* it. That fresh
+            // appearance is the whole trick — its `onAppear` focuses a newly
+            // laid-out field, so the keyboard rises beneath it exactly as on
+            // launch, instead of a stale async refocus on a retained field that
+            // never took (and a mid-transition refocus that stranded it behind the
+            // keyboard).
             .safeAreaInset(edge: .bottom, spacing: 0) {
-                VStack(spacing: 0) {
-                    if clipboardPrefill.isChipOffered {
-                        ClipboardPasteChip { text in
-                            query = text
-                            clipboard.markUsed()
+                if path.isEmpty {
+                    VStack(spacing: 0) {
+                        if clipboardPrefill.isChipOffered {
+                            ClipboardPasteChip { text in
+                                query = text
+                                clipboard.markUsed()
+                            }
                         }
+                        InputBar(
+                            query: $query,
+                            focused: $inputFocused,
+                            returnKey: highlighted?.returnKeyLabel ?? ReturnKeyLabel.none,
+                            onSubmit: { if let highlighted { run(highlighted) } }
+                        )
                     }
-                    InputBar(
-                        query: $query,
-                        focused: $inputFocused,
-                        returnKey: highlighted?.returnKeyLabel ?? ReturnKeyLabel.none,
-                        onSubmit: { if let highlighted { run(highlighted) } }
-                    )
+                    // Auto-focus on launch (the zero-wall promise, ADR 0012).
+                    // Return-from-a-page focus is handled by the `path` change
+                    // below — a fresh `onAppear` fires mid-pop, too early for the
+                    // keyboard to take.
+                    .onAppear { inputFocused = true }
                 }
-                // Auto-focus on launch (the zero-wall promise, ADR 0012). With the
-                // field now retained across pushes, this fires once and focus
-                // persists — no return-trip refocus needed.
-                .onAppear { inputFocused = true }
+            }
+            // Re-arm focus when a pushed management page pops back to the
+            // launcher. Pushing a page resigns the input's first responder and
+            // drops the keyboard; SwiftUI doesn't restore it on return. This
+            // extends the zero-wall promise (ADR 0012) to the return trip. The
+            // pop has no completion callback, so `refocusInput` retries until the
+            // keyboard is actually back up (see its note).
+            .onChange(of: path.isEmpty) { _, launcherReturned in
+                guard launcherReturned else { return }
+                refocusInput(initialDelay: .milliseconds(300))
+            }
+            // Track keyboard visibility so `refocusInput` knows when to stop
+            // retrying — the moment the keyboard is up, not a guessed delay later.
+            .onReceive(NotificationCenter.default.publisher(for: UIResponder.keyboardDidShowNotification)) { _ in
+                keyboardVisible = true
+            }
+            .onReceive(NotificationCenter.default.publisher(for: UIResponder.keyboardDidHideNotification)) { _ in
+                keyboardVisible = false
             }
             // The launcher itself wears no navigation bar — it is the root; the
             // management pages push *on top* of it, sliding in from the right with
@@ -199,11 +226,12 @@ struct RootView: View {
                 QuickieStore.migrateToFallbackQueries(in: modelContext)
             }
             // A note opened for reading or a seeded compose editor stays a sheet —
-            // a quick modal task, distinct from the pushed management pages. No
-            // explicit refocus on dismiss: option 3 keeps `inputFocused` true on the
-            // retained launcher field, so focus is left to restore natively when the
-            // sheet closes (issue #36 follow-up — no manual refocus anywhere).
-            .sheet(item: $activeSheet) { sheet in
+            // a quick modal task, distinct from the pushed management pages.
+            // Dismissing a sheet also drops the keyboard, so re-arm focus on
+            // return. `onDismiss` fires *after* the dismiss animation finishes,
+            // so unlike the pushed-page pop this needs only a brief settle —
+            // the keyboard comes back almost immediately.
+            .sheet(item: $activeSheet, onDismiss: { refocusInput(initialDelay: .milliseconds(80)) }) { sheet in
                 switch sheet {
                 case .readNote(let note):
                     NoteEditorView(note: note)
@@ -228,6 +256,37 @@ struct RootView: View {
         case .fallbacks: FallbacksView(store: fallbacks)
         case .notes: NoteManagerView()
         case .snippets: SnippetManagerView()
+        }
+    }
+
+    /// Re-arms focus on the launcher input after a page or sheet closes and the
+    /// keyboard has dropped — extending the zero-wall promise (ADR 0012) to the
+    /// return trip.
+    ///
+    /// A single fixed delay can't do this reliably: the pop/dismiss transition
+    /// length varies and is much longer under CI load, and focus asserted while
+    /// the transition is still running is silently cancelled by UIKit *while the
+    /// `FocusState` still reads `true`* — so re-assigning `true` afterwards is a
+    /// no-op that lifts nothing. Instead, after an initial settle, retry: toggle
+    /// off→on (the off defeats the "already true" no-op) and wait for the
+    /// keyboard. `keyboardVisible` (driven by UIKit's keyboard notifications) is
+    /// the success signal — the loop stops the instant the keyboard is up, so a
+    /// successful attempt is never followed by another toggle (no flicker), it's
+    /// snappy on a fast device, and it still recovers on a slow, loaded runner.
+    private func refocusInput(initialDelay: Duration) {
+        Task { @MainActor in
+            try? await Task.sleep(for: initialDelay)
+            for _ in 0..<10 {
+                // Bail if we've navigated away again, or the keyboard is already up.
+                guard path.isEmpty, activeSheet == nil else { return }
+                if keyboardVisible { return }
+                inputFocused = false
+                try? await Task.sleep(for: .milliseconds(60))
+                inputFocused = true
+                // Allow the focus + keyboard-show animation to land (and fire
+                // keyboardDidShow) before deciding whether to retry.
+                try? await Task.sleep(for: .milliseconds(500))
+            }
         }
     }
 
@@ -315,15 +374,7 @@ private struct QuietBackdrop: View {
                 endRadius: 420
             )
         }
-        // Fill the device edges (notch, home indicator) but only the *container*
-        // safe area — NOT the keyboard region. A blanket `.ignoresSafeArea()` also
-        // ignores `.keyboard`, which in this ZStack keeps the whole stack full
-        // height when the keyboard rises, so the sibling Home/Result list never
-        // gets the keyboard's bottom inset and its lowest rows hide behind the
-        // keyboard. Scoping to `.container` lets the native keyboard avoidance push
-        // the content up — the keyboard is opaque, so the gradient not painting
-        // behind it is invisible.
-        .ignoresSafeArea(.container)
+        .ignoresSafeArea()
     }
 }
 
