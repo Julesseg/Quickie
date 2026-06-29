@@ -52,10 +52,6 @@ struct RootView: View {
     /// and supports the system edge-swipe back, rather than rising as a sheet.
     @State private var path: [ManagementPage] = []
     @FocusState private var inputFocused: Bool
-    /// Whether the one-time launch auto-focus has happened, so returning to the
-    /// launcher from a pushed page doesn't re-grab focus mid-transition (which
-    /// stranded the field behind the keyboard).
-    @State private var didAutoFocus = false
     @State private var copyConfirmation: String?
     @State private var copyToken = UUID()
 
@@ -163,22 +159,35 @@ struct RootView: View {
             // The input floats in the bottom safe area, with the launch-time paste
             // chip above it. Kept *inside* the launcher's content so the reversed
             // result list reserves space for it — the best match sits just above
-            // the input rather than behind it — and the keyboard lifts it. (Pushed
-            // pages replace this content, so they never show the input.)
+            // the input rather than behind it — and the keyboard lifts it.
+            //
+            // Shown only while the launcher is on top (`path.isEmpty`): a pushed
+            // page removes it, and popping back *re-adds* it. That fresh
+            // appearance is the whole trick — its `onAppear` focuses a newly
+            // laid-out field, so the keyboard rises beneath it exactly as on
+            // launch, instead of a stale async refocus on a retained field that
+            // never took (and a mid-transition refocus that stranded it behind the
+            // keyboard).
             .safeAreaInset(edge: .bottom, spacing: 0) {
-                VStack(spacing: 0) {
-                    if clipboardPrefill.isChipOffered {
-                        ClipboardPasteChip { text in
-                            query = text
-                            clipboard.markUsed()
+                if path.isEmpty {
+                    VStack(spacing: 0) {
+                        if clipboardPrefill.isChipOffered {
+                            ClipboardPasteChip { text in
+                                query = text
+                                clipboard.markUsed()
+                            }
                         }
+                        InputBar(
+                            query: $query,
+                            focused: $inputFocused,
+                            returnKey: highlighted?.returnKeyLabel ?? ReturnKeyLabel.none,
+                            onSubmit: { if let highlighted { run(highlighted) } }
+                        )
                     }
-                    InputBar(
-                        query: $query,
-                        focused: $inputFocused,
-                        returnKey: highlighted?.returnKeyLabel ?? ReturnKeyLabel.none,
-                        onSubmit: { if let highlighted { run(highlighted) } }
-                    )
+                    // Auto-focus whenever the launcher input appears — on launch
+                    // and on every return from a pushed page (the zero-wall
+                    // promise, ADR 0012, extended to the return trip).
+                    .onAppear { inputFocused = true }
                 }
             }
             // The launcher itself wears no navigation bar — it is the root; the
@@ -202,38 +211,6 @@ struct RootView: View {
                 case .composeSnippet(let seed):
                     SnippetEditorView(seed: seed.text)
                 }
-            }
-        }
-        // Auto-focus the input *once* on launch (the zero-wall promise, ADR 0012).
-        // Guarded so it doesn't re-fire when the launcher reappears after a page
-        // pops — re-grabbing focus mid-transition is what stranded the field
-        // behind the keyboard.
-        .onAppear {
-            if !didAutoFocus {
-                inputFocused = true
-                didAutoFocus = true
-            }
-        }
-        // Drop focus when a page is pushed so the keyboard doesn't linger behind
-        // it; restore focus when the launcher returns so the user lands back on a
-        // focused input — keyboard up, ready to keep typing without a tap (the
-        // zero-wall promise extended to the return trip, ADR 0012).
-        //
-        // The refocus is deferred until *after* the pop transition settles:
-        // grabbing focus mid-transition is the post-transition layout race that
-        // stranded the field behind the keyboard, because the launcher's
-        // bottom-inset layout isn't active yet to lift it. Waiting one transition
-        // length lets the field settle first, then the keyboard rises under it.
-        .onChange(of: path.isEmpty) { _, atRoot in
-            if atRoot {
-                Task { @MainActor in
-                    try? await Task.sleep(for: .milliseconds(350))
-                    // Only refocus if we're still at the root — a fast re-push
-                    // shouldn't be overridden by a stale, queued refocus.
-                    if path.isEmpty { inputFocused = true }
-                }
-            } else {
-                inputFocused = false
             }
         }
         .preferredColorScheme(Appearance(stored: appearanceRaw).colorScheme)
