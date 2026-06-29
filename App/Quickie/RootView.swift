@@ -52,6 +52,12 @@ struct RootView: View {
     /// and supports the system edge-swipe back, rather than rising as a sheet.
     @State private var path: [ManagementPage] = []
     @FocusState private var inputFocused: Bool
+    /// Whether the software keyboard is currently on screen, tracked from UIKit's
+    /// keyboard notifications. The return-trip refocus uses this as its success
+    /// signal: it keeps re-asserting focus until the keyboard actually appears,
+    /// rather than betting on a fixed delay that the pop/dismiss transition (much
+    /// slower under CI load) can outlast.
+    @State private var keyboardVisible = false
     @State private var copyConfirmation: String?
     @State private var copyToken = UUID()
 
@@ -193,16 +199,21 @@ struct RootView: View {
             }
             // Re-arm focus when a pushed management page pops back to the
             // launcher. Pushing a page resigns the input's first responder and
-            // drops the keyboard; SwiftUI doesn't restore it on return, and
-            // focusing *during* the pop is cancelled by the in-flight transition
-            // (and a no-op if the FocusState still reads `true`). So once the
-            // launcher is back, re-arm focus just past the pop, which reliably
-            // lifts the keyboard. This extends the zero-wall promise (ADR 0012)
-            // to the return trip. The pop has no completion callback, so the
-            // delay is timed to just clear the slide-back animation.
+            // drops the keyboard; SwiftUI doesn't restore it on return. This
+            // extends the zero-wall promise (ADR 0012) to the return trip. The
+            // pop has no completion callback, so `refocusInput` retries until the
+            // keyboard is actually back up (see its note).
             .onChange(of: path.isEmpty) { _, launcherReturned in
                 guard launcherReturned else { return }
-                refocusInput(after: .milliseconds(400))
+                refocusInput(initialDelay: .milliseconds(300))
+            }
+            // Track keyboard visibility so `refocusInput` knows when to stop
+            // retrying — the moment the keyboard is up, not a guessed delay later.
+            .onReceive(NotificationCenter.default.publisher(for: UIResponder.keyboardDidShowNotification)) { _ in
+                keyboardVisible = true
+            }
+            .onReceive(NotificationCenter.default.publisher(for: UIResponder.keyboardDidHideNotification)) { _ in
+                keyboardVisible = false
             }
             // The launcher itself wears no navigation bar — it is the root; the
             // management pages push *on top* of it, sliding in from the right with
@@ -220,7 +231,7 @@ struct RootView: View {
             // return. `onDismiss` fires *after* the dismiss animation finishes,
             // so unlike the pushed-page pop this needs only a brief settle —
             // the keyboard comes back almost immediately.
-            .sheet(item: $activeSheet, onDismiss: { refocusInput(after: .milliseconds(120)) }) { sheet in
+            .sheet(item: $activeSheet, onDismiss: { refocusInput(initialDelay: .milliseconds(80)) }) { sheet in
                 switch sheet {
                 case .readNote(let note):
                     NoteEditorView(note: note)
@@ -249,17 +260,33 @@ struct RootView: View {
     }
 
     /// Re-arms focus on the launcher input after a page or sheet closes and the
-    /// keyboard has dropped. Toggling off first makes the on-set a real state
-    /// change — re-assigning `true` to a `FocusState` that already reads `true`
-    /// lifts nothing. The `delay` lets the dismiss animation settle before the
-    /// on-set, so the focus isn't cancelled mid-transition: longer for a pushed
-    /// page (no completion callback, timed past the slide-back), brief for a
-    /// sheet (called from `onDismiss`, already past the animation).
-    private func refocusInput(after delay: Duration) {
-        inputFocused = false
+    /// keyboard has dropped — extending the zero-wall promise (ADR 0012) to the
+    /// return trip.
+    ///
+    /// A single fixed delay can't do this reliably: the pop/dismiss transition
+    /// length varies and is much longer under CI load, and focus asserted while
+    /// the transition is still running is silently cancelled by UIKit *while the
+    /// `FocusState` still reads `true`* — so re-assigning `true` afterwards is a
+    /// no-op that lifts nothing. Instead, after an initial settle, retry: toggle
+    /// off→on (the off defeats the "already true" no-op) and wait for the
+    /// keyboard. `keyboardVisible` (driven by UIKit's keyboard notifications) is
+    /// the success signal — the loop stops the instant the keyboard is up, so a
+    /// successful attempt is never followed by another toggle (no flicker), it's
+    /// snappy on a fast device, and it still recovers on a slow, loaded runner.
+    private func refocusInput(initialDelay: Duration) {
         Task { @MainActor in
-            try? await Task.sleep(for: delay)
-            inputFocused = true
+            try? await Task.sleep(for: initialDelay)
+            for _ in 0..<10 {
+                // Bail if we've navigated away again, or the keyboard is already up.
+                guard path.isEmpty, activeSheet == nil else { return }
+                if keyboardVisible { return }
+                inputFocused = false
+                try? await Task.sleep(for: .milliseconds(60))
+                inputFocused = true
+                // Allow the focus + keyboard-show animation to land (and fire
+                // keyboardDidShow) before deciding whether to retry.
+                try? await Task.sleep(for: .milliseconds(500))
+            }
         }
     }
 
