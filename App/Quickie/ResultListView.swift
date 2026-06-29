@@ -90,16 +90,18 @@ struct ActionRow: View {
         .padding(.horizontal, 16)
         .padding(.vertical, 10)
         .frame(maxWidth: .infinity)
-        .glassEffect(
-            isHighlighted ? .regular.tint(.accentColor.opacity(0.22)).interactive()
-                          : .regular.interactive(),
-            in: Capsule()
-        )
-        // A hairline accent ring lifts the highlighted row above the stack so it
-        // reads as the default without shouting (ADR 0010 budget).
+        .glassEffect(.regular.interactive(), in: Capsule())
+        // A hairline accent ring plus a soft accent wash lift the highlighted row
+        // above the stack so it reads as the default without shouting (ADR 0010
+        // budget).
         .overlay {
             if isHighlighted {
-                Capsule().strokeBorder(Color.accentColor.opacity(0.5), lineWidth: 1)
+                Capsule()
+                    .fill(Color.accentColor.opacity(0.12))
+                    .overlay {
+                        Capsule().strokeBorder(Color.accentColor.opacity(0.5), lineWidth: 1)
+                    }
+                    .allowsHitTesting(false)
             }
         }
         .padding(.horizontal, 12)

@@ -19,7 +19,7 @@ struct QuicklinksView: View {
     var body: some View {
         NavigationStack {
             List {
-                Section("Quicklinks") {
+                Section {
                     if quicklinks.isEmpty {
                         Text("No Quicklinks yet")
                             .foregroundStyle(.secondary)
@@ -33,6 +33,8 @@ struct QuicklinksView: View {
                         .buttonStyle(.plain)
                     }
                     .onDelete(perform: delete)
+                } header: {
+                    Text("Quicklinks")
                 } footer: {
                     Text("A Quicklink opens a fixed URL. For a search that consumes what you type, add a Fallback query on the Fallbacks page.")
                 }
