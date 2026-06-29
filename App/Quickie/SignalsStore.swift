@@ -82,6 +82,19 @@ final class SignalsStore {
         isFavorite(id) || favorites.count < Self.maxFavorites
     }
 
+    /// Drops any pinned Favorite whose Action can no longer be resolved from the
+    /// live catalog — its target was deleted, or it was pinned under an id that an
+    /// older build derived from an unstable `persistentModelID.hashValue`. Without
+    /// this an unresolvable Favorite draws no card yet still occupies one of the
+    /// four slots, so the user hits the cap "early" with an invisible pin they
+    /// can't see to unpin. Persists only when something actually changed.
+    func reconcileFavorites(against resolvableIDs: Set<String>) {
+        let kept = favorites.filter { resolvableIDs.contains($0) }
+        guard kept.count != favorites.count else { return }
+        favorites = kept
+        defaults.set(favorites, forKey: Self.favoritesKey)
+    }
+
     /// Records that the user selected `id` now (issue #9 AC #2), then persists.
     func record(_ id: String, at date: Date = Date()) {
         frecency.record(id, at: date)

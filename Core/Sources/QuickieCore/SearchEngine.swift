@@ -147,12 +147,7 @@ public struct SearchEngine {
     /// eligible: Home is the enumerable catalog of things to pin and reuse, not
     /// the query-driven Dynamic results or the raw-text Fallbacks.
     public func home() -> HomeContent {
-        var byId: [String: Action] = [:]
-        for provider in providers where provider.kind == .indexed {
-            for action in provider.candidates(for: "") where !action.isFallback {
-                if byId[action.id] == nil { byId[action.id] = action }
-            }
-        }
+        let byId = indexedActionsByID()
 
         let favorites: [Action] = favoriteOrder.compactMap { byId[$0] }
 
@@ -162,6 +157,27 @@ public struct SearchEngine {
         }
 
         return HomeContent(favorites: favorites, frecent: frecent)
+    }
+
+    /// The Indexed, non-Fallback Actions keyed by id — the enumerable catalog
+    /// `home()` resolves Favorite and Frecency ids against.
+    private func indexedActionsByID() -> [String: Action] {
+        var byId: [String: Action] = [:]
+        for provider in providers where provider.kind == .indexed {
+            for action in provider.candidates(for: "") where !action.isFallback {
+                if byId[action.id] == nil { byId[action.id] = action }
+            }
+        }
+        return byId
+    }
+
+    /// The ids of every Indexed, non-Fallback Action currently in the catalog —
+    /// exactly the set a Favorite or Frecency id can resolve to on Home. The App
+    /// reconciles persisted Favorites against this so an id whose target no longer
+    /// exists (a deleted Snippet, or a stale id from an older build) is pruned
+    /// rather than lingering invisibly and consuming a Favorites slot.
+    public func resolvableHomeIDs() -> Set<String> {
+        Set(indexedActionsByID().keys)
     }
 
     /// A scored match in flight: the raw matcher score (which fixes its tier)

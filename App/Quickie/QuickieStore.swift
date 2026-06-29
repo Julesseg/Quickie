@@ -25,6 +25,13 @@ enum AppGroup {
 /// see `migrateToFallbackQueries`); SwiftData drops the column automatically.
 @Model
 final class StoredQuicklink {
+    /// A stable, collision-free identity assigned at creation and persisted with
+    /// the Quicklink. This — not `persistentModelID.hashValue`, which is neither
+    /// collision-free nor stable across launches (the same trap the Note avoids) —
+    /// is what the index derives this Quicklink's Action id from, so a pinned
+    /// Favorite or its Frecency survives relaunches instead of silently orphaning.
+    /// Defaulted at the property so existing rows migrate without a value.
+    var id: String = UUID().uuidString
     var title: String
     var urlString: String
     /// An optional alternative name also matched against the query.
@@ -86,6 +93,13 @@ final class StoredFallbackQuery {
 /// future Note but is distinct in intent: copy-out, not read.
 @Model
 final class StoredSnippet {
+    /// A stable, collision-free identity assigned at creation and persisted with
+    /// the Snippet. This — not `persistentModelID.hashValue`, which is neither
+    /// collision-free nor stable across launches (the same trap the Note avoids) —
+    /// is what the index derives this Snippet's Action id from, so a pinned
+    /// Favorite or its Frecency survives relaunches instead of silently orphaning.
+    /// Defaulted at the property so existing rows migrate without a value.
+    var id: String = UUID().uuidString
     var title: String
     var body: String
     var createdAt: Date

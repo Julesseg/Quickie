@@ -62,7 +62,7 @@ struct RootView: View {
         let storedLinks: [Action] = quicklinks.compactMap { link in
             guard let url = URL(string: link.urlString) else { return nil }
             return Action.quicklink(
-                id: link.persistentModelID.hashValue.description,
+                id: link.id,
                 title: link.title,
                 aliases: link.alias.map { [$0] } ?? [],
                 url: url
@@ -78,7 +78,7 @@ struct RootView: View {
         }
         let storedSnippets = snippets.map { snippet in
             Action.snippet(
-                id: "snippet.\(snippet.persistentModelID.hashValue.description)",
+                id: "snippet.\(snippet.id)",
                 title: snippet.title,
                 body: snippet.body
             )
@@ -221,6 +221,12 @@ struct RootView: View {
             // seed the default web-search Fallback query (ADR 0013).
             .task {
                 QuickieStore.migrateToFallbackQueries(in: modelContext)
+                // Prune any pinned Favorite whose Action no longer resolves (a
+                // deleted Snippet/Quicklink, or a stale id from a build that
+                // derived ids from the unstable `persistentModelID.hashValue`) so
+                // an invisible pin can't silently occupy a Favorites slot. The
+                // @Query catalogs are loaded by the time this launch task runs.
+                signals.reconcileFavorites(against: engine.resolvableHomeIDs())
             }
             // A note opened for reading or a seeded compose editor stays a sheet —
             // a quick modal task, distinct from the pushed management pages.
