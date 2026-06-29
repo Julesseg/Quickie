@@ -29,12 +29,12 @@ same types: `feat`, `fix`, `docs`, `style`, `refactor`, `perf`, `test`, `build`,
 ### Always implement the UI part of an issue — never ask
 
 **If an issue requires UI work, implement it. Do not ask whether you should,
-and do not skip, defer, or stub it.** The fact that the UI is only verifiable in
-CI (not on your local machine) is **never** a reason to leave it out, hand it
-back to the user, or ask for permission. Treat "this is only testable by CI" as
-a normal, expected condition of working in this repo — not a blocker and not a
-question. The correct action is always: write the UI code, push it, and let CI
-verify it.
+and do not skip, defer, or stub it.** The fact that you may not be able to run
+the UI tests on the box you are on (cloud/web sessions cannot — see below) is
+**never** a reason to leave it out, hand it back to the user, or ask for
+permission. Treat "CI is the gate for this" as a normal, expected condition of
+working in this repo — not a blocker and not a question. The correct action is
+always: write the UI code, push it, and let CI verify it.
 
 Concretely, **do not** say or ask any of the following:
 
@@ -48,23 +48,24 @@ Concretely, **do not** say or ask any of the following:
 Just do the UI work and open the PR. CI is the verification step — that is what
 it is for.
 
-#### Why UI tests are CI-only (background, not a decision to revisit)
+#### CI is the canonical UI gate (background, not a decision to revisit)
 
-The `QuickieUITests` XCUITest target runs **only in CI** (the `App · XCUITest
-(macOS)` job in `.github/workflows/ci.yml`), never locally as a precondition for
-implementing an issue. This is the settled, correct setup — do not treat its
-CI-only execution as a gap to fix or a reason to change how you work.
+The `App · XCUITest (macOS)` job in `.github/workflows/ci.yml` is the canonical,
+reproducible gate for the `QuickieUITests` suite, and it runs on every PR. You
+**never** need to run the UI suite locally as a precondition for implementing an
+issue. This is the settled, correct setup — do not treat it as a gap to fix.
 
-- XCUITest needs an iOS runtime and simulator, which exist only on macOS. CI's
-  hosted `macos` runners are the canonical, reproducible environment for them;
-  reproducing that locally is unnecessary and platform-bound.
 - The loop's logic lives in `QuickieCore`, a pure SwiftPM package whose behavior
-  suite (`cd Core && swift test`) runs anywhere — that is what you exercise while
-  implementing. The UI target is a thin acceptance layer on top, best verified by
-  CI on every PR.
-- Keeping the UI tests CI-only keeps local iteration fast and platform-agnostic
-  while still gating every PR on the full UI acceptance criteria.
+  suite (`cd Core && swift test`) runs on any platform — that is what you
+  exercise while implementing. The UI target is a thin acceptance layer on top,
+  best verified by CI on every PR.
+- Whether the box you are on can run the UI suite at all is **environment-
+  specific**, so it is not stated here as a flat fact — a `SessionStart` hook
+  (`.claude/hooks/platform-guidance.sh`) reports it per session: cloud/web
+  sessions run on Linux with no iOS simulator and cannot build the `App/` target
+  or run XCUITest; a developer's Mac has Xcode and *can* run the suite locally,
+  though doing so is slow and optional. Follow whatever that hook tells you.
 
-When implementing an issue: write the UI code, rely on `swift test` for the logic
-locally, and let the CI XCUITest job cover the UI behaviors. That split is by
-design — it does not change the rule above: the UI always gets implemented.
+When implementing an issue: write the UI code, rely on `swift test` for the logic,
+and let the CI XCUITest job cover the UI behaviors. That split is by design — it
+does not change the rule above: the UI always gets implemented.
