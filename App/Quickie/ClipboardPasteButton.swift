@@ -16,9 +16,9 @@ import SwiftUI
 /// namespace is what makes the button *morph out of and back into* the input's
 /// capsule as it is offered and withdrawn, rather than just popping.
 ///
-/// It sizes itself to the input's height (`maxHeight: .infinity` against the
-/// bottom row, then a 1:1 `aspectRatio`) so the two read as one consistent body,
-/// while the `Circle()` glass keeps it round whatever that height is.
+/// It is a fixed circle of `InputBar.barHeight` — exactly the input's height — so
+/// the two read as one consistent body and the row never changes height as the
+/// button comes and goes.
 struct ClipboardPasteButton: View {
     /// Stable identity for this button's Liquid Glass within the bottom
     /// `GlassEffectContainer`, paired with `InputBar.glassID` to drive the morph.
@@ -45,10 +45,10 @@ struct ClipboardPasteButton: View {
         // shows; our glass below is the button's single surface and the only shape
         // the morph has to interpolate.
         .tint(.clear)
-        .font(.title3)
-        // Match the input's height, then square it up so the glass stays a circle.
-        .frame(maxHeight: .infinity)
-        .aspectRatio(1, contentMode: .fit)
+        .font(.title2)
+        // A fixed circle exactly the input's height — no greedy maxHeight, so the
+        // bottom row never grows taller (which had been lifting the input).
+        .frame(width: InputBar.barHeight, height: InputBar.barHeight)
         .glassEffect(.regular.interactive(), in: Circle())
         .glassEffectID(Self.glassID, in: glassNamespace)
         .accessibilityIdentifier("clipboard-paste-chip")

@@ -18,6 +18,10 @@ struct InputBar: View {
     /// as it is offered and withdrawn (see `ClipboardPasteButton`, `RootView`).
     static let glassID = "input-bar"
 
+    /// The bottom row's height. Fixed (rather than padding-derived) so the paste
+    /// button can be an exactly-matching circle beside it — see `ClipboardPasteButton`.
+    static let barHeight: CGFloat = 52
+
     @Binding var query: String
     var focused: FocusState<Bool>.Binding
     /// The highlighted result's Return-key label, or `.none` on Home.
@@ -38,7 +42,7 @@ struct InputBar: View {
             .autocorrectionDisabled()
             .textInputAutocapitalization(.never)
             .padding(.horizontal, 20)
-            .padding(.vertical, 14)
+            .frame(height: Self.barHeight)
             .glassEffect(.regular.interactive(), in: Capsule())
             .glassEffectID(Self.glassID, in: glassNamespace)
     }
