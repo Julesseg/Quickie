@@ -8,12 +8,17 @@ import SwiftUI
 /// the content arrives only through the user's tap, then seeds the input and the
 /// button retires for the session (the seeded, non-empty query leaves Home).
 ///
-/// It is a bare Liquid Glass circle: `.buttonStyle(.plain)` strips the system
-/// paste control's own chrome so the only surface is our `glassEffect`, and
-/// `glassEffectID` pairs that surface with the input's (`InputBar.glassID`) inside
-/// the bottom `GlassEffectContainer`. Sharing one namespace is what makes the
-/// button *morph out of and back into* the input's capsule as it is offered and
-/// withdrawn, rather than just popping.
+/// It is a bare Liquid Glass circle. `PasteButton` is a UIKit-backed control that
+/// ignores `buttonStyle`, so its prominent (blue) fill can't be removed that way;
+/// instead `.tint(.clear)` clears that fill, leaving just the icon over our own
+/// `glassEffect`. `glassEffectID` pairs that surface with the input's
+/// (`InputBar.glassID`) inside the bottom `GlassEffectContainer` — sharing one
+/// namespace is what makes the button *morph out of and back into* the input's
+/// capsule as it is offered and withdrawn, rather than just popping.
+///
+/// It sizes itself to the input's height (`maxHeight: .infinity` against the
+/// bottom row, then a 1:1 `aspectRatio`) so the two read as one consistent body,
+/// while the `Circle()` glass keeps it round whatever that height is.
 struct ClipboardPasteButton: View {
     /// Stable identity for this button's Liquid Glass within the bottom
     /// `GlassEffectContainer`, paired with `InputBar.glassID` to drive the morph.
@@ -36,11 +41,14 @@ struct ClipboardPasteButton: View {
             onPaste(text)
         }
         .labelStyle(.iconOnly)
-        // Defer the surface to our own glass so the button is a clean Liquid Glass
-        // circle and the morph has a single shape to interpolate.
-        .buttonStyle(.plain)
+        // Clear the system paste control's prominent (blue) fill so only the icon
+        // shows; our glass below is the button's single surface and the only shape
+        // the morph has to interpolate.
+        .tint(.clear)
         .font(.title3)
-        .padding(14)
+        // Match the input's height, then square it up so the glass stays a circle.
+        .frame(maxHeight: .infinity)
+        .aspectRatio(1, contentMode: .fit)
         .glassEffect(.regular.interactive(), in: Circle())
         .glassEffectID(Self.glassID, in: glassNamespace)
         .accessibilityIdentifier("clipboard-paste-chip")
