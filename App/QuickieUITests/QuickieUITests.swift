@@ -74,6 +74,46 @@ final class QuickieUITests: XCTestCase {
         XCTAssertNotEqual(app.state, .notRunning, "running a main action should not crash the app")
     }
 
+    /// Returning from a pushed management page lands back on a *focused* input
+    /// (ADR 0012, zero-wall — extended to the return trip): after popping the
+    /// Settings page, the keyboard comes back up and text typed *without tapping*
+    /// goes straight into the field. Proves focus is restored on return, so the
+    /// user can keep typing without re-tapping. We drive Settings because its
+    /// command row is always present (Quickie ships no default Quicklinks).
+    @MainActor
+    func testInputRefocusesWhenReturningFromAPage() throws {
+        let app = launchApp()
+
+        let input = app.textFields["search-input"]
+        XCTAssertTrue(input.waitForExistence(timeout: 10), "bottom input should exist on launch")
+        input.tap()
+        input.typeText("settings")
+
+        let row = app.buttons["builtin.settings"]
+        XCTAssertTrue(row.waitForExistence(timeout: 5), "typing 'settings' surfaces the Settings command")
+        row.tap()
+
+        // The Settings page pushes in over the launcher; pop it via the
+        // navigation bar's back button.
+        let back = app.navigationBars.buttons.firstMatch
+        XCTAssertTrue(back.waitForExistence(timeout: 10), "the pushed Settings page shows a back button")
+        back.tap()
+
+        // Back on the launcher: the refocus brings the keyboard up again — the
+        // strongest non-flaky proxy for "input focused" — and typing without a
+        // tap then filters, the proof the field reclaimed focus on return.
+        XCTAssertTrue(input.waitForExistence(timeout: 10), "the launcher input returns after popping the page")
+        XCTAssertTrue(
+            app.keyboards.firstMatch.waitForExistence(timeout: 10),
+            "returning from a page should refocus the input and bring the keyboard back up"
+        )
+        app.typeText("settings")
+        XCTAssertTrue(
+            app.buttons["builtin.settings"].waitForExistence(timeout: 5),
+            "with focus restored, typing without tapping should filter results"
+        )
+    }
+
     /// Pinning an Action as a Favorite via its long-press menu makes it appear in
     /// the Home Favorites grid once the query clears — covering pin (AC #1) and
     /// Home being restored when the input empties. Pinning, unlike tapping,

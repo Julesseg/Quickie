@@ -214,12 +214,27 @@ struct RootView: View {
                 didAutoFocus = true
             }
         }
-        // Drop focus when a page is pushed so the keyboard doesn't linger; on
-        // return we deliberately leave it unfocused (no keyboard) — the field sits
-        // correctly above the home indicator, and a tap re-shows the keyboard
-        // cleanly, sidestepping the post-transition layout race entirely.
+        // Drop focus when a page is pushed so the keyboard doesn't linger behind
+        // it; restore focus when the launcher returns so the user lands back on a
+        // focused input — keyboard up, ready to keep typing without a tap (the
+        // zero-wall promise extended to the return trip, ADR 0012).
+        //
+        // The refocus is deferred until *after* the pop transition settles:
+        // grabbing focus mid-transition is the post-transition layout race that
+        // stranded the field behind the keyboard, because the launcher's
+        // bottom-inset layout isn't active yet to lift it. Waiting one transition
+        // length lets the field settle first, then the keyboard rises under it.
         .onChange(of: path.isEmpty) { _, atRoot in
-            if !atRoot { inputFocused = false }
+            if atRoot {
+                Task { @MainActor in
+                    try? await Task.sleep(for: .milliseconds(350))
+                    // Only refocus if we're still at the root — a fast re-push
+                    // shouldn't be overridden by a stale, queued refocus.
+                    if path.isEmpty { inputFocused = true }
+                }
+            } else {
+                inputFocused = false
+            }
         }
         .preferredColorScheme(Appearance(stored: appearanceRaw).colorScheme)
     }
