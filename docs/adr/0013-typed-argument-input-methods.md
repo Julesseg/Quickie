@@ -1,0 +1,7 @@
+# Multi-step Arguments use typed input methods, not text + natural-language parsing
+
+When a multi-step Action collects an Argument, the single bottom input **morphs into the control that fits the Argument's content type** — a graphical date picker for a `date`, a fuzzy-find over a fixed option set (reusing the matcher and the reversed result list) for a choice, the keyboard for free `text`. The content type already drives eligibility and ranking (ADR 0011); here it also drives the *input experience*. We chose this over the obvious alternative — keep every step a text field and parse what the user types (e.g. `NSDataDetector` turning `tomorrow 5pm` into a date).
+
+We picked typed controls because a picker yields a correct, unambiguous value with no parsing failure modes, and because it generalises: every future Argument type gets the right control for free. The trade-off is that fast typists can't just type a date inline during a guided capture.
+
+Natural-language detection is not abandoned — it moves to a separate, deferred feature: detecting dates/lists *inline* in a free-text blob (highlight-and-commit), which is where parsing genuinely earns its keep. That is why the EventKit quick-captures epic (#12) ships **no** `NSDataDetector` parser: its date Argument is the graphical picker, and the headline "`buy milk tomorrow 5pm` sets a due date" magic belongs to the later inline-detection work.
