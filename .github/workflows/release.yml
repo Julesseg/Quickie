@@ -2,7 +2,7 @@ name: Release
 
 on:
   pull_request:
-    branches: [master]
+    branches: [main]
     # Skip building an installable when the PR only touches docs. The run is
     # skipped only if EVERY changed file matches one of these patterns.
     paths-ignore:
