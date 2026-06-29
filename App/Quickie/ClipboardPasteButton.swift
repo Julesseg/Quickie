@@ -1,20 +1,23 @@
 import SwiftUI
+import UIKit
 
 /// The icon-only paste control offered to the *right of the input* on Home when
 /// the clipboard holds text (CONTEXT.md → Clipboard prefill; ADR 0002). It is
-/// backed by the system paste control — SwiftUI's `PasteButton`, the front-end to
-/// `UIPasteControl` — which reads the clipboard *only* when tapped and never
-/// raises the "pasted from…" banner. Nothing here touches `UIPasteboard.string`;
-/// the content arrives only through the user's tap, then seeds the input and the
-/// button retires for the session (the seeded, non-empty query leaves Home).
+/// backed by the system paste control — `UIPasteControl`, the front-end SwiftUI's
+/// `PasteButton` also wraps — which reads the clipboard *only* when tapped and
+/// never raises the "pasted from…" banner. Nothing here touches
+/// `UIPasteboard.string`; the content arrives only through the user's tap, then
+/// seeds the input and the button retires for the session (the seeded, non-empty
+/// query leaves Home).
 ///
-/// It is a bare Liquid Glass circle. `PasteButton` is a UIKit-backed control that
-/// ignores `buttonStyle`, so its prominent (blue) fill can't be removed that way;
-/// instead `.tint(.clear)` clears that fill, leaving just the icon over our own
-/// `glassEffect`. `glassEffectID` pairs that surface with the input's
-/// (`InputBar.glassID`) inside the bottom `GlassEffectContainer` — sharing one
-/// namespace is what makes the button *morph out of and back into* the input's
-/// capsule as it is offered and withdrawn, rather than just popping.
+/// We drop down to `UIPasteControl` directly (rather than SwiftUI's `PasteButton`)
+/// for one reason: SwiftUI exposes no way to clear `PasteButton`'s own fill —
+/// `.tint(.clear)` only repaints it the label colour, leaving an opaque rectangle
+/// inside our glass. `UIPasteControl.Configuration.baseBackgroundColor = .clear`
+/// removes it entirely, so the only surface is our own `glassEffect`. That single
+/// glass shape, paired by `glassEffectID` with the input's (`InputBar.glassID`)
+/// inside the bottom `GlassEffectContainer`, is what lets the button *morph out of
+/// and back into* the input's capsule as it is offered and withdrawn.
 ///
 /// It is a fixed circle of `InputBar.barHeight` — exactly the input's height — so
 /// the two read as one consistent body and the row never changes height as the
@@ -34,23 +37,71 @@ struct ClipboardPasteButton: View {
     let onPaste: (String) -> Void
 
     var body: some View {
-        PasteButton(payloadType: String.self) { strings in
-            // Reached only on an explicit tap of the system paste control, so
-            // this is the first and only moment any content is read.
-            guard let text = strings.first else { return }
-            onPaste(text)
+        SystemPasteControl(onPaste: onPaste)
+            .frame(width: InputBar.barHeight, height: InputBar.barHeight)
+            .glassEffect(.regular.interactive(), in: Circle())
+            .glassEffectID(Self.glassID, in: glassNamespace)
+    }
+}
+
+/// A thin wrapper over `UIPasteControl`, configured with a clear background and an
+/// icon-only display so the only visible surface is the host's Liquid Glass. The
+/// control still does the privacy-preserving work: it reads the pasteboard only on
+/// the user's tap (no "pasted from…" banner), then hands the text up the responder
+/// chain to `PasteReceiverView.paste(itemProviders:)`.
+private struct SystemPasteControl: UIViewRepresentable {
+    let onPaste: (String) -> Void
+
+    func makeUIView(context: Context) -> PasteReceiverView {
+        let host = PasteReceiverView()
+        host.onPaste = onPaste
+
+        var configuration = UIPasteControl.Configuration()
+        configuration.displayMode = .iconOnly
+        // The whole point: clear the control's own fill so our glass is the surface.
+        configuration.baseBackgroundColor = .clear
+        configuration.baseForegroundColor = .label
+        configuration.cornerStyle = .capsule
+
+        let control = UIPasteControl(configuration: configuration)
+        control.translatesAutoresizingMaskIntoConstraints = false
+        // The XCUITest (`ClipboardPrefillUITests`) and the chip's contract address
+        // it by this identifier; keep it on the control itself, which is the button.
+        control.accessibilityIdentifier = "clipboard-paste-chip"
+        host.addSubview(control)
+        NSLayoutConstraint.activate([
+            control.topAnchor.constraint(equalTo: host.topAnchor),
+            control.bottomAnchor.constraint(equalTo: host.bottomAnchor),
+            control.leadingAnchor.constraint(equalTo: host.leadingAnchor),
+            control.trailingAnchor.constraint(equalTo: host.trailingAnchor),
+        ])
+        return host
+    }
+
+    func updateUIView(_ uiView: PasteReceiverView, context: Context) {
+        uiView.onPaste = onPaste
+    }
+}
+
+/// The responder that receives the pasted content. `UIPasteControl` doesn't take a
+/// target/action — on tap it walks the responder chain for a responder that can
+/// paste, so hosting the control here (as its superview, i.e. its next responder)
+/// routes the drop to these overrides without the view needing first-responder.
+final class PasteReceiverView: UIView {
+    var onPaste: ((String) -> Void)?
+
+    override func canPaste(_ itemProviders: [NSItemProvider]) -> Bool {
+        itemProviders.contains { $0.canLoadObject(ofClass: NSString.self) }
+    }
+
+    override func paste(itemProviders: [NSItemProvider]) {
+        guard let provider = itemProviders.first(where: { $0.canLoadObject(ofClass: NSString.self) })
+        else { return }
+        // Reached only on an explicit tap of the system paste control, so this is
+        // the first and only moment any content is read.
+        provider.loadObject(ofClass: NSString.self) { [weak self] object, _ in
+            guard let text = object as? String else { return }
+            DispatchQueue.main.async { self?.onPaste?(text) }
         }
-        .labelStyle(.iconOnly)
-        // Clear the system paste control's prominent (blue) fill so only the icon
-        // shows; our glass below is the button's single surface and the only shape
-        // the morph has to interpolate.
-        .tint(.clear)
-        .font(.title2)
-        // A fixed circle exactly the input's height — no greedy maxHeight, so the
-        // bottom row never grows taller (which had been lifting the input).
-        .frame(width: InputBar.barHeight, height: InputBar.barHeight)
-        .glassEffect(.regular.interactive(), in: Circle())
-        .glassEffectID(Self.glassID, in: glassNamespace)
-        .accessibilityIdentifier("clipboard-paste-chip")
     }
 }
