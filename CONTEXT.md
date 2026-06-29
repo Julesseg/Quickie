@@ -39,6 +39,10 @@ _Avoid_: Bookmark, link, URL action
 A typed or picked value an Action consumes during its lifecycle. An Action declares zero or more. They are collected one slot at a time in the single bottom input field, with the active Action and filled slots shown as a breadcrumb/pill (`[New Reminder] ▸ "buy milk" ▸ …`). Each Argument declares a **content type** that determines its **input method**: the single input region morphs to the right control per step — the keyboard for free `text`, an in-place graphical picker for a `date`, and for a fixed set of options a **fuzzy-find that reuses the matcher and the reversed result list** (type to filter, best match nearest the thumb) — so the user is never typing a value the system could pick. Verb-first selection clears the search query and prompts for the first Argument; noun-first (Fallback) selection passes the literal typed text in as the first Argument.
 _Avoid_: Parameter, field, input (ambiguous)
 
+**Input method**:
+The input control the single bottom field morphs into for the current Argument, chosen by that Argument's **content type**: the keyboard for `text`, an in-place graphical picker for a `date`, and a fuzzy-find over a fixed option set (reusing the matcher and the reversed result list) for a choice. The mechanism that lets one input region serve every Argument type without modes — the user never types a value the system could pick.
+_Avoid_: Input mode, control, widget
+
 **Snippet**:
 A piece of saved, reusable text whose primary action is **Copy** — canned replies, an address, a template the user pastes repeatedly. Stored in Quickie (SwiftData + CloudKit), searchable as Actions, addable via the Share Extension. Quickie deliberately has no automatic clipboard history (iOS forbids ambient clipboard access).
 _Avoid_: Clipboard history, clip, stash
@@ -46,6 +50,18 @@ _Avoid_: Clipboard history, clip, stash
 **Note**:
 A captured free-text thought whose primary action is **Open/read** (with append and copy secondary) — the brain-dump target. Stored in Quickie (SwiftData + CloudKit), captured instantly and silently (no app switch). Sending a Note to Apple Notes is an optional export, not the default. Distinct from a Snippet (reusable copy-out text) though they share storage.
 _Avoid_: Memo, Apple Note (that is the export target, not a Quickie Note)
+
+**Quick capture**:
+An Action that creates a record from the bottom input *without leaving Quickie* — the family comprising **Note** (Quickie-stored), **Reminder** and **Event** (written to EventKit). Each is silent by default (no app switch) and collects its fields through the breadcrumb, honoring just-in-time permission (ADR 0012).
+_Avoid_: Quick add, capture (ambiguous)
+
+**Reminder**:
+A quick-capture Action that creates an EventKit reminder from the breadcrumb — a **title**, an optional **due date** (with an alarm when a time is given; a date-only due date sets no alarm), and a target reminder **list**. Lives in the system Reminders store, distinct from a **Note** (a Quickie-stored thought). EventKit permission is requested just-in-time when the Action is activated, before data entry (ADR 0012).
+_Avoid_: Todo, task, alarm
+
+**Event**:
+A quick-capture Action that creates an EventKit calendar event from the breadcrumb — a **title**, a **start** (a timed start defaults to a one-hour duration; a date-only start becomes all-day), and a target **calendar**. Silent by default; a setting instead opens the pre-filled system event editor for final review. EventKit permission is requested just-in-time on activation (ADR 0012).
+_Avoid_: Appointment, meeting, calendar entry
 
 **Clipboard prefill**:
 A launch-time offer to seed the input field with the current clipboard contents. Quickie silently checks only whether the clipboard *has text* (metadata, no system banner) and, if so, shows a tap-to-fill paste chip backed by the iOS Paste control — reading the actual content only on tap, never ambiently.
