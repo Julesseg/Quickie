@@ -146,20 +146,32 @@ final class QuickieUITests: XCTestCase {
         // menu we opened just to check state.
         let backdrop = app.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.05))
         var pinned = false
-        for _ in 0..<5 {
+        for _ in 0..<6 {
+            // A context-menu platter from a prior attempt can linger and obscure
+            // the row, so the next long-press would throw "not hittable". Clear any
+            // platter and wait until the row is genuinely *hittable* (not merely
+            // present) before pressing.
+            if !row.waitForHittable(timeout: 5) {
+                backdrop.tap()
+                _ = row.waitForHittable(timeout: 5)
+            }
+            guard row.isHittable else { continue }
             row.press(forDuration: 1.2)
-            if unpinItem.waitForExistence(timeout: 3) {
+
+            // Reopening shows "Unpin Favorite" only once the pin is actually
+            // recorded — the proof the menu item's SwiftUI action fired, since a
+            // synthesized tap on it can silently no-op in the CI simulator. Gate on
+            // hittability so the tap itself can't throw on a still-animating item.
+            if unpinItem.waitForHittable(timeout: 3) {
                 pinned = true          // the menu flipped — the pin is recorded
                 backdrop.tap()         // dismiss the menu we opened to verify
                 break
             }
-            if pinItem.waitForExistence(timeout: 3) {
+            if pinItem.waitForHittable(timeout: 3) {
                 pinItem.tap()          // attempt the pin (also dismisses the menu)
             } else {
                 backdrop.tap()         // menu never opened — clear any stray platter
             }
-            // Let the menu/platter settle so the next long-press lands cleanly.
-            _ = input.waitForHittable(timeout: 10)
         }
         XCTAssertTrue(pinned,
                       "pinning via the long-press menu should register (the menu should flip to Unpin Favorite)")
