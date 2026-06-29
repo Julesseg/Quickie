@@ -156,7 +156,36 @@ struct RootView: View {
                     CopyConfirmationBanner(text: copyConfirmation)
                 }
             }
-            .safeAreaInset(edge: .bottom, spacing: 0) {
+            // The launcher itself wears no navigation bar — it is the root; the
+            // management pages push *on top* of it, sliding in from the right with
+            // the system edge-swipe back.
+            .toolbar(.hidden, for: .navigationBar)
+            .navigationDestination(for: ManagementPage.self) { destinationView(for: $0) }
+            // Run the Quicklink / Fallback query data migration once on launch and
+            // seed the default web-search Fallback query (ADR 0013).
+            .task {
+                QuickieStore.migrateToFallbackQueries(in: modelContext)
+            }
+            // A note opened for reading or a seeded compose editor stays a sheet —
+            // a quick modal task, distinct from the pushed management pages.
+            .sheet(item: $activeSheet) { sheet in
+                switch sheet {
+                case .readNote(let note):
+                    NoteEditorView(note: note)
+                case .composeNote(let seed):
+                    NoteEditorView(seed: seed.text)
+                case .composeSnippet(let seed):
+                    SnippetEditorView(seed: seed.text)
+                }
+            }
+        }
+        // The input floats in the bottom safe area of the *whole* screen — kept on
+        // the top-level view (outside the NavigationStack) so its keyboard
+        // avoidance stays stable across page push/pop; nesting it inside the stack
+        // left the field stranded behind the keyboard after a pop. It shows only on
+        // the launcher (no pushed page), so pages get the full height.
+        .safeAreaInset(edge: .bottom, spacing: 0) {
+            if path.isEmpty {
                 VStack(spacing: 0) {
                     if clipboardPrefill.isChipOffered {
                         ClipboardPasteChip { text in
@@ -172,29 +201,13 @@ struct RootView: View {
                     )
                 }
             }
-            // The launcher itself wears no navigation bar — it is the root; the
-            // management pages push *on top* of it, sliding in from the right with
-            // the system edge-swipe back.
-            .toolbar(.hidden, for: .navigationBar)
-            .navigationDestination(for: ManagementPage.self) { destinationView(for: $0) }
-            // Run the Quicklink / Fallback query data migration once on launch and
-            // seed the default web-search Fallback query (ADR 0013), then auto-focus.
-            .task {
-                QuickieStore.migrateToFallbackQueries(in: modelContext)
-            }
-            .onAppear { inputFocused = true }
-            // A note opened for reading or a seeded compose editor stays a sheet —
-            // a quick modal task, distinct from the pushed management pages.
-            .sheet(item: $activeSheet) { sheet in
-                switch sheet {
-                case .readNote(let note):
-                    NoteEditorView(note: note)
-                case .composeNote(let seed):
-                    NoteEditorView(seed: seed.text)
-                case .composeSnippet(let seed):
-                    SnippetEditorView(seed: seed.text)
-                }
-            }
+        }
+        // Auto-focus on launch (the zero-wall promise, ADR 0012), and keep focus in
+        // step with navigation: drop it when a page is pushed so the keyboard
+        // doesn't linger, restore it when the launcher returns.
+        .onAppear { inputFocused = true }
+        .onChange(of: path.isEmpty) { _, atRoot in
+            inputFocused = atRoot
         }
         .preferredColorScheme(Appearance(stored: appearanceRaw).colorScheme)
     }
