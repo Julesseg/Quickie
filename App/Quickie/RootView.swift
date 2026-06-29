@@ -184,10 +184,27 @@ struct RootView: View {
                             onSubmit: { if let highlighted { run(highlighted) } }
                         )
                     }
-                    // Auto-focus whenever the launcher input appears — on launch
-                    // and on every return from a pushed page (the zero-wall
-                    // promise, ADR 0012, extended to the return trip).
+                    // Auto-focus on launch (the zero-wall promise, ADR 0012).
+                    // Return-from-a-page focus is handled by the `path` change
+                    // below — a fresh `onAppear` fires mid-pop, too early for the
+                    // keyboard to take.
                     .onAppear { inputFocused = true }
+                }
+            }
+            // Re-arm focus when a pushed management page pops back to the
+            // launcher. Pushing a page resigns the input's first responder and
+            // drops the keyboard; SwiftUI doesn't restore it on return, and
+            // focusing *during* the pop is cancelled by the in-flight transition
+            // (and a no-op if the FocusState still reads `true`). So once the
+            // launcher is back, toggle focus off and — after the pop settles —
+            // on again, which reliably lifts the keyboard. This extends the
+            // zero-wall promise (ADR 0012) to the return trip.
+            .onChange(of: path.isEmpty) { _, launcherReturned in
+                guard launcherReturned else { return }
+                inputFocused = false
+                Task { @MainActor in
+                    try? await Task.sleep(for: .milliseconds(550))
+                    inputFocused = true
                 }
             }
             // The launcher itself wears no navigation bar — it is the root; the
