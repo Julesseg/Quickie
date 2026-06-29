@@ -10,14 +10,15 @@ import UIKit
 /// seeds the input and the button retires for the session (the seeded, non-empty
 /// query leaves Home).
 ///
-/// We drop down to `UIPasteControl` directly (rather than SwiftUI's `PasteButton`)
-/// for one reason: SwiftUI exposes no way to clear `PasteButton`'s own fill —
-/// `.tint(.clear)` only repaints it the label colour, leaving an opaque rectangle
-/// inside our glass. `UIPasteControl.Configuration.baseBackgroundColor = .clear`
-/// removes it entirely, so the only surface is our own `glassEffect`. That single
-/// glass shape, paired by `glassEffectID` with the input's (`InputBar.glassID`)
-/// inside the bottom `GlassEffectContainer`, is what lets the button *morph out of
-/// and back into* the input's capsule as it is offered and withdrawn.
+/// Neither SwiftUI's `PasteButton` nor `UIPasteControl` lets us clear its own
+/// opaque platter — `.tint(.clear)` / `baseBackgroundColor = .clear` are ignored
+/// and it renders a solid (black) disc, which clashed with the input's translucent
+/// glass. So the system control is kept as the (invisible) tap target — its alpha
+/// dropped just above UIKit's hit-test floor so taps still register and paste — and
+/// we draw our own icon over our own `glassEffect`. That single glass shape, paired
+/// by `glassEffectID` with the input's (`InputBar.glassID`) inside the bottom
+/// `GlassEffectContainer`, is what lets the button *morph out of and back into* the
+/// input's capsule as it is offered and withdrawn.
 ///
 /// It is a fixed circle of `InputBar.barHeight` — exactly the input's height — so
 /// the two read as one consistent body and the row never changes height as the
@@ -39,16 +40,25 @@ struct ClipboardPasteButton: View {
     var body: some View {
         SystemPasteControl(onPaste: onPaste)
             .frame(width: InputBar.barHeight, height: InputBar.barHeight)
+            // Our icon, over the glass — the invisible control beneath takes the tap.
+            // `allowsHitTesting(false)` lets the tap fall through to that control.
+            .overlay {
+                Image(systemName: "doc.on.clipboard")
+                    .font(.title3)
+                    .foregroundStyle(.primary)
+                    .allowsHitTesting(false)
+                    .accessibilityHidden(true)
+            }
             .glassEffect(.regular.interactive(), in: Circle())
             .glassEffectID(Self.glassID, in: glassNamespace)
     }
 }
 
-/// A thin wrapper over `UIPasteControl`, configured with a clear background and an
-/// icon-only display so the only visible surface is the host's Liquid Glass. The
-/// control still does the privacy-preserving work: it reads the pasteboard only on
-/// the user's tap (no "pasted from…" banner), then hands the text up the responder
-/// chain to `PasteReceiverView.paste(itemProviders:)`.
+/// A thin wrapper over `UIPasteControl`, kept as an invisible tap target beneath
+/// the host's own icon and Liquid Glass (its platter can't be made transparent, so
+/// we hide it rather than show it). The control still does the privacy-preserving
+/// work: it reads the pasteboard only on the user's tap (no "pasted from…" banner),
+/// then delivers the text to its `target`, `PasteReceiverView.paste(itemProviders:)`.
 private struct SystemPasteControl: UIViewRepresentable {
     let onPaste: (String) -> Void
 
@@ -61,12 +71,13 @@ private struct SystemPasteControl: UIViewRepresentable {
 
         var configuration = UIPasteControl.Configuration()
         configuration.displayMode = .iconOnly
-        // The whole point: clear the control's own fill so our glass is the surface.
-        configuration.baseBackgroundColor = .clear
-        configuration.baseForegroundColor = .label
         configuration.cornerStyle = .capsule
 
         let control = UIPasteControl(configuration: configuration)
+        // The control's platter can't be cleared, so hide the whole control and let
+        // our own icon/glass show instead. 0.02 is just above UIKit's hit-test alpha
+        // floor (0.01), so the control is invisible yet still receives the tap.
+        control.alpha = 0.02
         // Without an explicit target the paste action is sent to the *first
         // responder* — the search field, here — so it never reaches us and nothing
         // pastes. Point it at the host so `paste(itemProviders:)` below is called.
