@@ -94,13 +94,37 @@ final class QuickieUITests: XCTestCase {
         XCTAssertTrue(pin.waitForExistence(timeout: 5), "long-press should offer Pin as Favorite")
         pin.tap()
 
+        // Wait for the context menu to fully dismiss before touching the input
+        // again. Tapping mid-dismissal lands on the still-present menu platter
+        // dimming the input: the tap computes an invalid hit point, the field
+        // never regains focus, and the subsequent deletes type into nothing —
+        // leaving the query uncleared so Home never returns.
+        XCTAssertTrue(pin.waitForNonExistence(timeout: 5), "the Pin menu should dismiss after pinning")
+        XCTAssertTrue(input.waitForHittable(timeout: 5), "the input should be tappable once the menu dismisses")
+
         // Clear the query — Home returns, now with the pinned Favorite shortcut.
+        // Delete the field's current contents rather than a hard-coded count so
+        // the clear doesn't silently under-delete if the query ever changes.
         input.tap()
-        input.typeText(String(repeating: XCUIKeyboardKey.delete.rawValue, count: 4))
+        let typed = (input.value as? String) ?? ""
+        input.typeText(String(repeating: XCUIKeyboardKey.delete.rawValue, count: typed.count))
 
         XCTAssertTrue(
             app.buttons["favorite.builtin.github"].waitForExistence(timeout: 5),
             "the pinned Action should appear as a Favorite shortcut on Home"
         )
+    }
+}
+
+extension XCUIElement {
+    /// Waits until the element is **hittable**, not merely present. An element can
+    /// exist while still obscured — e.g. by a context menu's dimming platter as it
+    /// animates away — and tapping it then computes an invalid hit point and fails
+    /// to focus it. Polling `isHittable` rides out that transient.
+    @discardableResult
+    func waitForHittable(timeout: TimeInterval) -> Bool {
+        let predicate = NSPredicate(format: "isHittable == true")
+        let expectation = XCTNSPredicateExpectation(predicate: predicate, object: self)
+        return XCTWaiter().wait(for: [expectation], timeout: timeout) == .completed
     }
 }
