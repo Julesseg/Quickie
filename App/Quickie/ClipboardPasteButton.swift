@@ -55,6 +55,9 @@ private struct SystemPasteControl: UIViewRepresentable {
     func makeUIView(context: Context) -> PasteReceiverView {
         let host = PasteReceiverView()
         host.onPaste = onPaste
+        // Declaring what the host accepts is what enables the control (and lets it
+        // report it can paste) when the pasteboard holds matching content.
+        host.pasteConfiguration = UIPasteConfiguration(forAccepting: NSString.self)
 
         var configuration = UIPasteControl.Configuration()
         configuration.displayMode = .iconOnly
@@ -64,6 +67,10 @@ private struct SystemPasteControl: UIViewRepresentable {
         configuration.cornerStyle = .capsule
 
         let control = UIPasteControl(configuration: configuration)
+        // Without an explicit target the paste action is sent to the *first
+        // responder* — the search field, here — so it never reaches us and nothing
+        // pastes. Point it at the host so `paste(itemProviders:)` below is called.
+        control.target = host
         control.translatesAutoresizingMaskIntoConstraints = false
         // The XCUITest (`ClipboardPrefillUITests`) and the chip's contract address
         // it by this identifier; keep it on the control itself, which is the button.
@@ -83,10 +90,10 @@ private struct SystemPasteControl: UIViewRepresentable {
     }
 }
 
-/// The responder that receives the pasted content. `UIPasteControl` doesn't take a
-/// target/action — on tap it walks the responder chain for a responder that can
-/// paste, so hosting the control here (as its superview, i.e. its next responder)
-/// routes the drop to these overrides without the view needing first-responder.
+/// The responder that receives the pasted content. It is set as the control's
+/// explicit `target` (see `makeUIView`), so on tap UIKit calls `paste(itemProviders:)`
+/// here directly — bypassing the first responder (the search field) that would
+/// otherwise swallow the action — and we hand the text back to the host closure.
 final class PasteReceiverView: UIView {
     var onPaste: ((String) -> Void)?
 
