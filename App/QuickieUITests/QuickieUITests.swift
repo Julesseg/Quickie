@@ -175,10 +175,23 @@ final class QuickieUITests: XCTestCase {
             _ = favoriteCard.waitForExistence(timeout: 3)
         }
 
-        XCTAssertTrue(
-            favoriteCard.exists,
-            "the pinned Action should appear as a Favorite card on Home"
-        )
+        // If the card still isn't there, capture *why* in one shot rather than
+        // re-running blind: which of the three failure modes are we in? The
+        // booleans localize it precisely — query never cleared (the result row
+        // lingers), the pin never persisted (Home fell back to its empty
+        // placeholder), or the grid rendered but the card's identifier is wrong
+        // (the "Favorites" header is up yet the card is absent).
+        if !favoriteCard.exists {
+            let resultRowLingers = app.buttons["builtin.settings"].exists
+            let emptyPlaceholderShown = app.staticTexts["home-placeholder"].exists
+            let favoritesHeaderShown = app.staticTexts["Favorites"].exists
+            XCTFail("""
+            Pinned Favorite card 'favorite.builtin.settings' never appeared on Home. \
+            Diagnostics — 'settings' result row still present (query never cleared, Home never returned): \(resultRowLingers); \
+            Home empty placeholder shown (pin did not persist — no Favorites, no Recent): \(emptyPlaceholderShown); \
+            'Favorites' grid header shown (grid rendered but card identifier mismatched): \(favoritesHeaderShown).
+            """)
+        }
     }
 }
 
