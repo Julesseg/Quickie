@@ -28,6 +28,10 @@ _Avoid_: Preferences sheet, manage screen (Settings is not where you manage cont
 A full-screen page for a library or preferences surface — Settings, Quicklinks, Fallbacks, All Notes, All Snippets. Each is reached as a filtered result-row command (e.g. typing "quicklinks") rather than from chrome, and each presents full-screen with its own dismiss affordance — never as a partial-height sheet. Replaces both the top-right gear button and the old combined "Manage Quicklinks + search engine" surface.
 _Avoid_: Sheet, manager (each page is single-purpose)
 
+**Highlighted result**:
+The single best result row — `results[0]`, rendered nearest the input and thumb — shown with distinct emphasis so it reads as the default. It is always the nearest-thumb row regardless of how it earned its place (a boosted Calculator/Dynamic result, the best name-match, or the top Fallback when nothing else matches). Pressing **Enter** runs exactly this row's main action. Its Enter intent is signalled two ways: the keyboard's Return key maps to the closest system submit label (e.g. `.search` for a web query, `.go` for a link), and the row itself carries a `⏎`-plus-main-action-glyph hint showing precisely what Enter will do. On Home (empty query) there is no highlighted result and Enter does nothing.
+_Avoid_: First result (ambiguous: first-in-array vs first-on-screen), default row, selected result
+
 **Workflow**:
 Reserved term, not yet built. A future user-composed chain of multiple Actions, where each Action's output content feeds the next Action's input (validated by content type), authored as visual step-chaining rather than a text DSL. Made possible by every Action declaring typed input/output content from day one. Do not use "Workflow" to mean a single multi-step Action.
 
