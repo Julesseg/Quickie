@@ -20,6 +20,18 @@ _Avoid_: Context action, more actions
 The single, reversed (bottom-anchored, best match nearest the input/thumb) list shown while typing. Composed of: fuzzy name-matches over Actions, type-triggered results injected with boosted rank by Dynamic Providers (e.g. a math result on top), and Fallback Actions that consume the raw input text as content. All appear as ranked rows; nothing essential is hidden behind a gesture.
 _Avoid_: Results, suggestions, search results
 
+**Settings**:
+The app's preferences page, reached like any capability — by typing to surface a "Settings" command row, not via chrome (the old top-right gear button is gone). For now it holds a single control: **Appearance** (Light / Dark / System, defaulting to System, applied app-wide). It holds *only* settings — Quicklinks, Fallbacks, Notes, and Snippets each live on their own page.
+_Avoid_: Preferences sheet, manage screen (Settings is not where you manage content)
+
+**Management page**:
+A full-screen page for a library or preferences surface — Settings, Quicklinks, Fallbacks, All Notes, All Snippets. Each is reached as a filtered result-row command (e.g. typing "quicklinks") rather than from chrome, and each presents full-screen with its own dismiss affordance — never as a partial-height sheet. Replaces both the top-right gear button and the old combined "Manage Quicklinks + search engine" surface.
+_Avoid_: Sheet, manager (each page is single-purpose)
+
+**Highlighted result**:
+The single best result row — `results[0]`, rendered nearest the input and thumb — shown with distinct emphasis so it reads as the default. It is always the nearest-thumb row regardless of how it earned its place (a boosted Calculator/Dynamic result, the best name-match, or the top Fallback when nothing else matches). Pressing **Enter** runs exactly this row's main action. Its Enter intent is signalled two ways: the keyboard's Return key maps to the closest system submit label (e.g. `.search` for a web query, `.go` for a link), and the row itself carries a `⏎`-plus-main-action-glyph hint showing precisely what Enter will do. On Home (empty query) there is no highlighted result and Enter does nothing.
+_Avoid_: First result (ambiguous: first-in-array vs first-on-screen), default row, selected result
+
 **Workflow**:
 Reserved term, not yet built. A future user-composed chain of multiple Actions, where each Action's output content feeds the next Action's input (validated by content type), authored as visual step-chaining rather than a text DSL. Made possible by every Action declaring typed input/output content from day one. Do not use "Workflow" to mean a single multi-step Action.
 
@@ -28,12 +40,20 @@ The kind of a value flowing through Quickie — text, url, file, number, etc. An
 _Avoid_: Data type, kind, payload type
 
 **Fallback Action**:
-Any Action (typically a placeholder-Quicklink) flagged to always appear in the result list and consume the user's literal typed text as its payload (e.g. "Search web for 'X'", "Create reminder 'X'"). Distinguished from a verb-first match, where the text fuzzy-matches an Action's name/alias. The single result list interleaves both; the user resolves intent by choosing a row, never by a mode toggle. Default web search is the built-in Fallback.
+Any Action flagged to always appear in the result list and consume the user's literal typed text as its payload, rather than matching by name. The umbrella over three concrete kinds: **Fallback queries** (URL templates), **New Note**, and **New Snippet**. Distinguished from a verb-first match, where the text fuzzy-matches an Action's name/alias. The single result list interleaves both; the user resolves intent by choosing a row, never by a mode toggle. Fallbacks live in one user-ordered, reversible list (see Fallback list) and each can be **disabled** (hidden from results) without being deleted.
 _Avoid_: Default action, catch-all
 
 **Quicklink**:
-A stored URL template with zero or more `{placeholder}` tokens. With no placeholder it is a static link that opens directly (Indexed Provider); with a placeholder it takes an Argument the typed text fills (e.g. `https://github.com/search?q={query}`). Opens in the user's system-default browser. Web search is a built-in placeholder-Quicklink, and any placeholder-Quicklink can be flagged a Fallback Action. Added via the Share Extension or manually.
-_Avoid_: Bookmark, link, URL action
+A stored *static* URL that opens directly in the user's system-default browser — no `{placeholder}` token, no typed text consumed (Indexed Provider). It matches by name/alias like any other Action. Templated, query-consuming links are a separate concept now — see Fallback query. Quickie ships **no default Quicklinks**; the user adds their own (via the Share Extension or the Quicklinks page).
+_Avoid_: Bookmark, link, URL action, template (a Quicklink has no template)
+
+**Fallback query**:
+A stored URL template that **requires** at least one `{placeholder}` token and consumes the typed text as its query, opening the result in the browser (e.g. `https://github.com/search?q={query}`). One concrete kind of Fallback Action, managed on its own list page. Web search is a default-seeded Fallback query (a normal, fully deletable entry — a reset-to-defaults affordance may come later), not a privileged built-in. Like every Fallback it can be disabled without being deleted.
+_Avoid_: placeholder-Quicklink (the placeholder capability no longer lives on Quicklink), search action
+
+**Fallback list**:
+The single user-ordered list of every Fallback Action (Fallback queries + New Note + New Snippet), managed on one page and persisted as an explicit order. It reads **most-important-first**: the top of the page is the fallback nearest the input/thumb in results. Because the Result list renders reversed, this page order is reversed when projected into the bottom (screen-top) fallback region. Each row can be **disabled** (kept in the list, hidden from results); rows can be reordered; only Fallback queries can be deleted, while New Note and New Snippet are permanent (disable-only). Replaces the previous alphabetical fallback ordering.
+_Avoid_: Fallback settings, fallback order screen (it is one page, "Fallbacks")
 
 **Argument**:
 A typed or picked value an Action consumes during its lifecycle. An Action declares zero or more. They are collected one slot at a time in the single bottom input field, with the active Action and filled slots shown as a breadcrumb/pill (`[New Reminder] ▸ "buy milk" ▸ …`). Verb-first selection clears the search query and prompts for the first Argument; noun-first (Fallback) selection passes the literal typed text in as the first Argument.
@@ -62,11 +82,15 @@ A Provider whose Actions are a known, enumerable set, pre-indexed for fuzzy sear
 A Provider that computes Actions on the fly from the current query and is never in the fuzzy index (Calculator, Unit Converter, File Search, Web Search / Fallbacks). Queried live per keystroke (debounced, cancellable, may be async), and decides for itself whether it applies to the query.
 
 **Home**:
-The empty-query state shown the instant the app opens: the Clipboard prefill chip (when applicable), a row of Favorites, then a Frecency list. The tap-without-typing fast path. Replaced by the Results state on the first keystroke.
+The empty-query state shown the instant the app opens: the Clipboard prefill chip (when applicable), a **Favorites grid** pinned at the top of the screen over a progressive-blur band, and a Frecency "Recent" list that scrolls *under* that band. The tap-without-typing fast path. On the first keystroke the Favorites grid disappears and the live Result list takes the full height, still scrolling under the same blurred top band.
 _Avoid_: Landing, start screen, default view
 
+**Favorites grid**:
+The 2×2 grid of small Favorite cards pinned at the top of Home over a progressive blur. Shows **at most four** Favorites, in pin order; it is the launch-time, tap-without-typing surface. Visible only on Home — it vanishes the moment the user starts typing, ceding the screen to results. Replaces the earlier horizontal Favorites chip row.
+_Avoid_: Favorites row, favorites bar
+
 **Favorite**:
-An Action the user has manually pinned. Favorites appear as shortcuts on Home and receive a ranking boost in Results.
+An Action the user has manually pinned. Capped at **four** (the Favorites grid is 2×2); a fifth pin is refused until one is unpinned. Favorites appear in the Favorites grid on Home and receive a ranking boost in Results.
 _Avoid_: Pinned, starred, bookmark (bookmark means Quicklink here)
 
 **Frecency**:
