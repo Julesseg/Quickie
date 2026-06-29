@@ -32,6 +32,16 @@ final class SignalsStore {
     /// that passes it gets a fully reset launcher, not just reset Favorites.
     static let uitestResetArgument = "-uitest-reset-signals"
 
+    /// The launch argument that pre-pins a Favorite under UI testing — the Action
+    /// id to pin follows the flag. It exists because XCUITest cannot fire a SwiftUI
+    /// **context-menu** item's action in the iOS simulator (the menu is a separate
+    /// remote view; the tap is synthesized but the action never runs), even though
+    /// the long-press pin works on device. This seeds a pinned Favorite through the
+    /// real `toggleFavorite` path so a test can verify Home renders it, without
+    /// driving the undrivable gesture. Pair it with `-uitest-reset-signals` so the
+    /// pin lands on a clean slate.
+    static let uitestPinArgument = "-uitest-pin-favorite"
+
     init(defaults: UserDefaults = SignalsStore.sharedDefaults) {
         self.defaults = defaults
         self.favorites = defaults.stringArray(forKey: Self.favoritesKey) ?? []
@@ -44,12 +54,20 @@ final class SignalsStore {
     /// test tapping a row would record frecency that a later "empty Home"
     /// assertion would then trip over.
     static func launch() -> SignalsStore {
-        if ProcessInfo.processInfo.arguments.contains(uitestResetArgument) {
+        let arguments = ProcessInfo.processInfo.arguments
+        if arguments.contains(uitestResetArgument) {
             let defaults = sharedDefaults
             defaults.removeObject(forKey: favoritesKey)
             defaults.removeObject(forKey: frecencyKey)
         }
-        return SignalsStore()
+        let store = SignalsStore()
+        // UI-test hook: pre-pin the Favorite whose Action id follows the flag (see
+        // `uitestPinArgument`), through the real toggle path, so a test can assert
+        // Home renders a pinned Favorite without the undrivable context menu.
+        if let flag = arguments.firstIndex(of: uitestPinArgument), flag + 1 < arguments.count {
+            store.toggleFavorite(arguments[flag + 1])
+        }
+        return store
     }
 
     /// Whether `id` is currently pinned — drives the Pin/Unpin affordance.
