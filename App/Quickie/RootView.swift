@@ -4,14 +4,24 @@ import UIKit
 import QuickieCore
 
 /// The whole screen, and the whole loop made visible: a bottom auto-focused
-/// input, a reversed Result list above it, and tap-to-run. The empty-query
-/// state shows the Home placeholder (ADR 0008 / issue #3).
+/// input, a reversed Result list above it, and tap-to-run. The empty-query state
+/// shows Home — a 2×2 Favorites grid over the Recent list (ADR 0008 / issue #36).
+///
+/// Management surfaces (Settings, Quicklinks, Fallbacks, All Notes, All Snippets)
+/// are no longer chrome: each is reached by typing to surface a command row and
+/// presents **full-screen** (ADR 0013 / CONTEXT.md → Management page). The old
+/// top-right gear button and combined manage sheet are gone.
 struct RootView: View {
     @Environment(\.openURL) private var openURL
+    @Environment(\.modelContext) private var modelContext
 
-    /// User Quicklinks from the store feed the index alongside the built-ins
-    /// (ADR 0006: index rebuilt from the source of truth).
+    /// User static Quicklinks from the store feed the index alongside the
+    /// built-in command rows (ADR 0006: index rebuilt from the source of truth).
     @Query(sort: \StoredQuicklink.createdAt) private var quicklinks: [StoredQuicklink]
+
+    /// User Fallback queries — templated, query-consuming Fallback Actions (ADR
+    /// 0013). Web search is just a default-seeded one of these.
+    @Query(sort: \StoredFallbackQuery.createdAt) private var fallbackQueries: [StoredFallbackQuery]
 
     /// User Snippets feed the same index — copy-out Actions ranked beside every
     /// other capability (issue #6).
@@ -21,50 +31,47 @@ struct RootView: View {
     /// note (issue #7), ranked beside every other capability.
     @Query(sort: \StoredNote.createdAt) private var notes: [StoredNote]
 
-    /// The user's editable default search engine — just a URL template
-    /// (CONTEXT.md → Quicklink; issue #5 AC #6). Persisted in app storage and
-    /// fed to the built-in web-search Fallback.
-    @AppStorage("searchEngineTemplate")
-    private var engineTemplate = "https://duckduckgo.com/?q={query}"
+    /// The app-wide appearance preference (CONTEXT.md → Settings): Light / Dark /
+    /// System, applied to the whole app via `preferredColorScheme`.
+    @AppStorage("appearance") private var appearanceRaw = Appearance.default.rawValue
 
     /// The user's ranking signals — pinned Favorites and Frecency of past
-    /// selections — persisted across launches (issue #9). Feeds the engine and
-    /// is updated on every pin/unpin and main-action tap.
+    /// selections — persisted across launches (issue #9).
     @State private var signals = SignalsStore.launch()
 
+    /// The user's Fallback list state — explicit order + disabled set (ADR 0013),
+    /// persisted across launches.
+    @State private var fallbacks = FallbacksStore.launch()
+
     @State private var query = ""
-    @State private var showingManage = false
-    /// The single RootView-level sheet — reading a note, composing a seeded
-    /// note/snippet, or opening a library list page. One optional drives one
-    /// `.sheet`, sidestepping SwiftUI's one-`.sheet`-per-view rule now that these
-    /// presentations are triggered from the result list rather than chrome
-    /// buttons (each of which used to own its own sheet).
+    /// A note opened for reading or a seeded compose editor — presented as a
+    /// sheet, distinct from the full-screen management pages.
     @State private var activeSheet: ActiveSheet?
+    /// The full-screen management page currently presented, if any.
+    @State private var activePage: PagePresentation?
     @FocusState private var inputFocused: Bool
-    /// A transient confirmation banner shown after a copy-out main action runs —
-    /// the "lightweight confirmation" snippets need since copying is silent.
     @State private var copyConfirmation: String?
-    /// Identifies the most recent copy so its dismiss timer is the only one that
-    /// clears the banner — rapid copies coalesce instead of cutting each other
-    /// short.
     @State private var copyToken = UUID()
 
-    /// Tracks the active keyboard so the matcher weights adjacent-key typos for
-    /// the layout the user is actually typing on (ADR 0005).
     @State private var keyboardLayout = KeyboardLayoutModel()
-
-    /// The silent `hasStrings` metadata check behind the Clipboard prefill chip
-    /// (ADR 0002). Carries no clipboard content — only whether text is present.
     @State private var clipboard = ClipboardPrefillModel()
 
     private var engine: SearchEngine {
-        let storedLinks = quicklinks.map { link in
-            Action.quicklink(
+        let storedLinks: [Action] = quicklinks.compactMap { link in
+            guard let url = URL(string: link.urlString) else { return nil }
+            return Action.quicklink(
                 id: link.persistentModelID.hashValue.description,
                 title: link.title,
                 aliases: link.alias.map { [$0] } ?? [],
-                template: link.urlString,
-                isFallback: link.isFallback
+                url: url
+            )
+        }
+        let storedFallbackQueries: [Action] = fallbackQueries.compactMap { query in
+            Action.fallbackQuery(
+                id: query.id,
+                title: query.title,
+                aliases: query.alias.map { [$0] } ?? [],
+                template: query.urlString
             )
         }
         let storedSnippets = snippets.map { snippet in
@@ -79,33 +86,26 @@ struct RootView: View {
         }
         return SearchEngine(
             providers: [
-                // The Dynamic Calculator + unit-conversion Provider: when the
-                // query parses as math or a conversion it injects a boosted top
-                // result whose main action copies the answer (issue #8).
+                // The Dynamic Calculator + unit-conversion Provider.
                 CalculatorProvider(),
-                IndexedProvider.builtIns(webSearchTemplate: engineTemplate),
+                // The built-in management command rows (Settings, Quicklinks,
+                // Fallbacks) — no default links, no privileged web search.
+                IndexedProvider.builtIns(),
                 IndexedProvider(catalog: storedLinks),
-                // Stored Snippets plus the always-present "New Snippet" Fallback —
-                // typing then picking it opens the editor seeded with the text.
+                IndexedProvider(catalog: storedFallbackQueries),
                 IndexedProvider(catalog: storedSnippets + [.newSnippet()]),
-                // Stored Notes plus the always-present "New Note" Fallback — the
-                // brain-dump that opens the editor seeded with the typed text.
                 IndexedProvider(catalog: storedNotes + [.newNote()]),
-                // The library commands: filterable main-list rows that open the
-                // full Snippet / Note list pages, in place of chrome buttons.
+                // The Notes / Snippets library command rows.
                 IndexedProvider(catalog: [.openNotesLibrary(), .openSnippetsLibrary()]),
             ],
             layout: keyboardLayout.layout,
             favorites: signals.favorites,
-            frecency: signals.frecency
+            frecency: signals.frecency,
+            fallbackOrder: fallbacks.resolvedOrder(for: fallbackQueries.map(\.id)),
+            disabledFallbacks: fallbacks.disabled
         )
     }
 
-    /// The stable Action id derived from a stored Note's identity, used both when
-    /// indexing the Note and when resolving an `openNote(id:)` outcome back to the
-    /// StoredNote to present. Built on the note's persisted, collision-free `id`
-    /// (a UUID) — namespaced with a `note.` prefix to keep it distinct from other
-    /// providers' Action ids in the shared index.
     private static func noteActionID(_ note: StoredNote) -> String {
         "note.\(note.id)"
     }
@@ -114,8 +114,6 @@ struct RootView: View {
         query.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
     }
 
-    /// The content-free decision (QuickieCore) on whether to offer the paste
-    /// chip: only on Home, and only when the silent metadata check found text.
     private var clipboardPrefill: ClipboardPrefill {
         ClipboardPrefill(
             clipboardHasText: clipboard.clipboardHasText,
@@ -125,16 +123,12 @@ struct RootView: View {
     }
 
     var body: some View {
+        let engine = self.engine
+        let highlighted = isHome ? nil : engine.highlighted(for: query)
+
         ZStack {
-            // A quiet, adaptive backdrop for the Liquid Glass chrome to refract
-            // (ADR 0010): iOS can't show the wallpaper, so the glass needs its own
-            // calm base with a little depth — not a flat fill, not a busy one.
             QuietBackdrop()
 
-            // The Home / Result list fills the whole screen so its bottom-anchored
-            // rows scroll *under* the floating input, where the Liquid Glass
-            // refracts them (ADR 0010) — rather than a flow layout that walls the
-            // input off behind an opaque strip the results can't pass.
             Group {
                 if isHome {
                     HomeView(
@@ -153,21 +147,10 @@ struct RootView: View {
                 }
             }
 
-            // Quiet affordances into the user's libraries — Notes, Snippets, and
-            // Quicklink management — sharing one top-trailing row so none
-            // competes with the typing fast path nor overlaps the others.
-            libraryButtons
-
             if let copyConfirmation {
                 CopyConfirmationBanner(text: copyConfirmation)
             }
         }
-        // The input — and the launch-time paste chip just above it — float in the
-        // bottom safe area, so the result list scrolls behind the glass instead of
-        // being walled off. Attached to the whole screen (not the Home/Result list
-        // that swaps as the query changes) so the field keeps its identity and
-        // focus across that swap. The chip is offered only on Home with text on the
-        // clipboard (ADR 0002); typing withdraws it and tapping it retires it.
         .safeAreaInset(edge: .bottom, spacing: 0) {
             VStack(spacing: 0) {
                 if clipboardPrefill.isChipOffered {
@@ -176,13 +159,22 @@ struct RootView: View {
                         clipboard.markUsed()
                     }
                 }
-                InputBar(query: $query, focused: $inputFocused)
+                InputBar(
+                    query: $query,
+                    focused: $inputFocused,
+                    returnKey: highlighted?.returnKeyLabel ?? ReturnKeyLabel.none,
+                    onSubmit: { if let highlighted { run(highlighted) } }
+                )
             }
         }
-        // Auto-focus on launch, keyboard up — the core promise (ADR 0012).
+        // Run the Quicklink / Fallback query data migration once on launch and
+        // seed the default web-search Fallback query (ADR 0013), then auto-focus.
+        .task {
+            QuickieStore.migrateToFallbackQueries(in: modelContext)
+        }
         .onAppear { inputFocused = true }
-        // The one RootView sheet: a note opened for reading, a seeded compose
-        // editor, or a library list page — all reached from the result list.
+        .preferredColorScheme(Appearance(stored: appearanceRaw).colorScheme)
+        // A note opened for reading or a seeded compose editor.
         .sheet(item: $activeSheet) { sheet in
             switch sheet {
             case .readNote(let note):
@@ -191,50 +183,22 @@ struct RootView: View {
                 NoteEditorView(seed: seed.text)
             case .composeSnippet(let seed):
                 SnippetEditorView(seed: seed.text)
-            case .notesLibrary:
-                NoteManagerView()
-            case .snippetsLibrary:
-                SnippetManagerView()
             }
         }
-    }
-
-    /// The top-trailing settings button — a single Liquid Glass toolbar control
-    /// for Quicklink management and the default search engine. The Notes and
-    /// Snippet libraries are no longer chrome buttons: they're reached as "All
-    /// Notes" / "All Snippets" rows in the result list, alongside everything else.
-    private var libraryButtons: some View {
-        VStack {
-            GlassEffectContainer(spacing: 8) {
-                HStack(spacing: 8) {
-                    Spacer()
-                    Button {
-                        showingManage = true
-                    } label: {
-                        // Pad around the icon so the glass circle has room to
-                        // breathe — the button grows, the glyph stays the same size.
-                        Image(systemName: "slider.horizontal.3")
-                            .font(.title3)
-                            .padding(8)
-                    }
-                    .buttonStyle(.glass)
-                    .buttonBorderShape(.circle)
-                    .accessibilityIdentifier("manage-quicklinks")
-                    .accessibilityLabel("Manage Quicklinks")
-                    .sheet(isPresented: $showingManage) {
-                        ManageQuicklinksView(engineTemplate: $engineTemplate)
-                    }
-                }
+        // The management pages — each full-screen with its own dismiss.
+        .fullScreenCover(item: $activePage) { presentation in
+            switch presentation.page {
+            case .settings: SettingsView()
+            case .quicklinks: QuicklinksView()
+            case .fallbacks: FallbacksView(store: fallbacks)
+            case .notes: NoteManagerView()
+            case .snippets: SnippetManagerView()
             }
-            Spacer()
         }
-        .padding(.horizontal, 12)
-        .padding(.top, 4)
     }
 
     /// Runs a row's main action and performs its outcome at the platform edge.
-    /// Selecting an Action records a frecency event (issue #9 AC #2), so the
-    /// chosen row climbs the next Home Frecency list and Results ranking.
+    /// Selecting an Action records a frecency event (issue #9 AC #2).
     private func run(_ action: Action) {
         signals.record(action.id)
         switch action.run(input: query) {
@@ -244,39 +208,27 @@ struct RootView: View {
             UIPasteboard.general.string = text
             flashConfirmation("Copied")
         case .openNote(let id):
-            // A note's main action opens it for reading — resolve the id back to
-            // the stored note and present the reader/editor. If the note was
-            // deleted after the list was indexed the lookup misses; flash a
-            // confirmation rather than letting the tap do nothing silently.
             if let note = notes.first(where: { Self.noteActionID($0) == id }) {
                 activeSheet = .readNote(note)
             } else {
                 flashConfirmation("Note not found")
             }
         case .composeNote(let seed):
-            // "New Note": open the editor seeded with the typed text. The text now
-            // lives in the editor, so clear the input back to Home behind the sheet.
             activeSheet = .composeNote(ComposeSeed(text: seed))
             query = ""
         case .composeSnippet(let seed):
-            // "New Snippet": same, into the snippet editor.
             activeSheet = .composeSnippet(ComposeSeed(text: seed))
             query = ""
-        case .openLibrary(let library):
-            switch library {
-            case .notes: activeSheet = .notesLibrary
-            case .snippets: activeSheet = .snippetsLibrary
-            }
+        case .openPage(let page):
+            // Opening a management page clears the query back to Home behind the
+            // full-screen cover, so dismissing returns to a clean launcher.
+            activePage = PagePresentation(page: page)
+            query = ""
         case .none:
             break
         }
     }
 
-    /// Flashes a lightweight confirmation banner, then clears it after a beat.
-    /// Each flash stamps a fresh token; only the latest flash's timer clears the
-    /// banner, so two confirmations in quick succession keep it up for the full
-    /// beat after the most recent one rather than the first. Used by the silent
-    /// copy-out ("Copied") and the rare "Note not found" miss.
     private func flashConfirmation(_ message: String) {
         let token = UUID()
         copyToken = token
@@ -296,31 +248,30 @@ private struct ComposeSeed: Identifiable {
     let text: String
 }
 
-/// The single RootView-level sheet, as an Identifiable enum so one `.sheet(item:)`
-/// can present any of them without colliding on SwiftUI's one-sheet-per-view rule.
+/// The note-reader / seeded-compose sheet, as an Identifiable enum so one
+/// `.sheet(item:)` can present any of them.
 private enum ActiveSheet: Identifiable {
     case readNote(StoredNote)
     case composeNote(ComposeSeed)
     case composeSnippet(ComposeSeed)
-    case notesLibrary
-    case snippetsLibrary
 
     var id: String {
         switch self {
         case .readNote(let note): return "read-\(note.id)"
         case .composeNote(let seed): return "compose-note-\(seed.id)"
         case .composeSnippet(let seed): return "compose-snippet-\(seed.id)"
-        case .notesLibrary: return "notes-library"
-        case .snippetsLibrary: return "snippets-library"
         }
     }
 }
 
+/// Wraps a `ManagementPage` so one `.fullScreenCover(item:)` can present any of
+/// the five management pages.
+private struct PagePresentation: Identifiable {
+    let page: ManagementPage
+    var id: String { "\(page)" }
+}
+
 /// The quiet adaptive backdrop the Liquid Glass chrome floats over (ADR 0010).
-/// Built from system colors so it follows light/dark automatically: a soft
-/// top-to-bottom gradient with a faint accent glow pooled at the bottom, near the
-/// input, giving the glass capsules something with depth to refract — calm enough
-/// never to compete with the result text.
 private struct QuietBackdrop: View {
     var body: some View {
         LinearGradient(

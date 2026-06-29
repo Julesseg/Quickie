@@ -13,12 +13,13 @@ extension ActionKind {
     var symbol: String {
         switch self {
         case .quicklink: return "link"
-        case .webSearch: return "magnifyingglass"
+        case .fallbackQuery: return "magnifyingglass"
         case .snippet: return "doc.on.clipboard"
         case .note: return "note.text"
         case .newNote: return "square.and.pencil"
         case .newSnippet: return "rectangle.and.pencil.and.ellipsis"
         case .calculator: return "function"
+        case .settings: return "gearshape"
         }
     }
 
@@ -26,12 +27,28 @@ extension ActionKind {
     var tint: Color {
         switch self {
         case .quicklink: return .blue
-        case .webSearch: return .indigo
+        case .fallbackQuery: return .indigo
         case .snippet: return .teal
         case .note: return .orange
         case .newNote: return .pink
         case .newSnippet: return .purple
         case .calculator: return .green
+        case .settings: return .gray
+        }
+    }
+}
+
+extension ReturnKeyLabel {
+    /// The SwiftUI `SubmitLabel` closest to this Core intent (CONTEXT.md →
+    /// Highlighted result): the Return key reads `.search` for a web query, `.go`
+    /// for a link, `.done` for a self-contained capture/copy. `.none` (Home, no
+    /// highlight) falls back to a neutral `.go`.
+    var submitLabel: SubmitLabel {
+        switch self {
+        case .search: return .search
+        case .go: return .go
+        case .done: return .done
+        case .none: return .go
         }
     }
 }
@@ -45,7 +62,7 @@ extension MainAction {
         case .copyToClipboard: return "doc.on.doc"
         case .openNote: return "book"
         case .compose: return "square.and.pencil"
-        case .openLibrary: return "chevron.right"
+        case .openPage: return "chevron.right"
         case .none: return nil
         }
     }

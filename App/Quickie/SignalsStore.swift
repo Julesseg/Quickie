@@ -50,15 +50,29 @@ final class SignalsStore {
         favorites.contains(id)
     }
 
-    /// Pins an unpinned Action (appending to the end of the row) or unpins a
-    /// pinned one (issue #9 AC #1), then persists.
+    /// The Favorites cap (CONTEXT.md → Favorite): the 2×2 grid holds at most four,
+    /// so a fifth pin is refused until one is unpinned.
+    static let maxFavorites = 4
+
+    /// Pins an unpinned Action (appending to the end) or unpins a pinned one
+    /// (issue #9 AC #1), then persists. Pinning a fifth Favorite is **refused** —
+    /// the grid is capped at four (CONTEXT.md → Favorite) — leaving the list
+    /// unchanged until the user unpins one.
     func toggleFavorite(_ id: String) {
         if let index = favorites.firstIndex(of: id) {
             favorites.remove(at: index)
         } else {
+            guard favorites.count < Self.maxFavorites else { return }
             favorites.append(id)
         }
         defaults.set(favorites, forKey: Self.favoritesKey)
+    }
+
+    /// Whether `id` can be pinned right now — false once the cap is reached (and
+    /// the Action isn't already pinned). Lets the UI explain a refused fifth pin
+    /// rather than silently ignoring the gesture.
+    func canFavorite(_ id: String) -> Bool {
+        isFavorite(id) || favorites.count < Self.maxFavorites
     }
 
     /// Records that the user selected `id` now (issue #9 AC #2), then persists.

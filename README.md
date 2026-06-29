@@ -101,23 +101,25 @@ The UI behaviors run only in Xcode/simulator. Verify:
 
 - [ ] App builds and runs on an iOS 26 simulator
 - [ ] Launch drops straight into the bottom input with the keyboard up (auto-focus)
-- [ ] Typing `git` / `apple` / `wiki` filters and ranks the built-in Actions
+- [ ] Typing `settings` / `quicklinks` / `fallbacks` surfaces the management command rows
 - [ ] The Result list is reversed/bottom-anchored — best match nearest the input
+- [ ] `results[0]` is distinctly highlighted; pressing Return runs its main action
 - [ ] Tapping a result runs its main action (opens the URL)
-- [ ] Clearing the query shows the minimal Home placeholder
+- [ ] Clearing the query shows Home — the Favorites grid over the Recent list
 
-## Manual QA checklist (issue #5 acceptance criteria)
+## Manual QA checklist (issue #36 — UI redesign)
 
-Quicklinks + the web-search Fallback. The CRUD UI lives behind the manage
-button (top-trailing `slider.horizontal.3`); the loop's logic is covered by
-`QuickieCore`'s tests.
+Quicklinks are static-only; templated, query-consuming links are **Fallback
+queries** managed on the Fallbacks page (ADR 0013). The loop's logic is covered
+by `QuickieCore`'s tests.
 
-- [ ] Create / edit / delete a Quicklink (name, URL template, optional alias) — it persists across launches
-- [ ] A zero-placeholder Quicklink (e.g. `https://apple.com`) opens directly when run
-- [ ] A `{placeholder}` Quicklink takes the typed text and substitutes it into the URL
-- [ ] The built-in web-search Fallback appears in the bottom region for any non-matching query and searches the typed text
-- [ ] Flagging a placeholder-Quicklink as a Fallback pins it in the bottom region too
-- [ ] Editing the default search-engine template changes what the web-search Fallback opens
+- [ ] Quicklinks page: create / edit / delete a static Quicklink (name, URL, optional alias); a `{placeholder}` URL is rejected
+- [ ] Fallbacks page: one list of Fallback queries + New Note + New Snippet; reorderable with a persisted order
+- [ ] Per-row disable hides a fallback from results without deleting it; only Fallback queries can be deleted (New Note/Snippet are permanent)
+- [ ] Web search exists as a default-seeded, deletable Fallback query and searches the typed text
+- [ ] Settings, Quicklinks, Fallbacks, All Notes, All Snippets each open full-screen from a typed command row (no gear button)
+- [ ] Settings → Appearance (Light/Dark/System) persists and applies app-wide
+- [ ] Home shows a 2×2 Favorites grid (max 4) over a blur band; a fifth pin is refused
 
 ## Status
 

@@ -2,20 +2,16 @@ import SwiftUI
 import SwiftData
 import QuickieCore
 
-/// The minimal manage surface for issue #5: create / edit / delete user
-/// Quicklinks (name, URL template, optional alias, Fallback flag) and edit the
-/// default search engine template. Deliberately plain — the polished settings
-/// UX lands in a later slice; this exists so the M1 acceptance criteria are
-/// reachable from the running app. The loop's logic is tested in QuickieCore;
-/// this view is thin plumbing over the SwiftData store (ADR 0006).
-struct ManageQuicklinksView: View {
+/// The Quicklinks management page (CONTEXT.md → Quicklink, Management page; ADR
+/// 0013): create / edit / delete user **static** Quicklinks (name, URL, optional
+/// alias). A Quicklink opens directly — it carries no `{placeholder}` and
+/// consumes no typed text, so the editor *rejects* a templated URL (that is a
+/// Fallback query, managed on the Fallbacks page). Reached as the typed "Quicklinks"
+/// command row and presented full-screen. Quickie ships no default Quicklinks.
+struct QuicklinksView: View {
     @Environment(\.modelContext) private var modelContext
     @Environment(\.dismiss) private var dismiss
     @Query(sort: \StoredQuicklink.createdAt) private var quicklinks: [StoredQuicklink]
-
-    /// The editable default search engine (issue #5 AC #6) — owned by RootView's
-    /// app storage, edited here.
-    @Binding var engineTemplate: String
 
     @State private var editing: StoredQuicklink?
     @State private var creatingNew = false
@@ -23,17 +19,6 @@ struct ManageQuicklinksView: View {
     var body: some View {
         NavigationStack {
             List {
-                Section {
-                    TextField("https://…/search?q={query}", text: $engineTemplate)
-                        .textInputAutocapitalization(.never)
-                        .autocorrectionDisabled()
-                        .accessibilityIdentifier("engine-template-field")
-                } header: {
-                    Text("Default search engine")
-                } footer: {
-                    Text("The web-search Fallback uses this template. {query} is replaced by what you type.")
-                }
-
                 Section("Quicklinks") {
                     if quicklinks.isEmpty {
                         Text("No Quicklinks yet")
@@ -48,6 +33,8 @@ struct ManageQuicklinksView: View {
                         .buttonStyle(.plain)
                     }
                     .onDelete(perform: delete)
+                } footer: {
+                    Text("A Quicklink opens a fixed URL. For a search that consumes what you type, add a Fallback query on the Fallbacks page.")
                 }
             }
             .navigationTitle("Quicklinks")
@@ -85,24 +72,14 @@ struct ManageQuicklinksView: View {
     }
 }
 
-/// One row in the manage list: name, the template, and badges for alias /
-/// Fallback so the user can tell at a glance how the Quicklink behaves.
+/// One row in the Quicklinks list: name and its static URL.
 private struct QuicklinkRow: View {
     let link: StoredQuicklink
 
     var body: some View {
         VStack(alignment: .leading, spacing: 2) {
-            HStack(spacing: 6) {
-                Text(link.title)
-                    .font(.body)
-                if link.isFallback {
-                    Text("Fallback")
-                        .font(.caption2)
-                        .padding(.horizontal, 6)
-                        .padding(.vertical, 1)
-                        .background(.tint.opacity(0.2), in: Capsule())
-                }
-            }
+            Text(link.title)
+                .font(.body)
             Text(link.urlString)
                 .font(.caption)
                 .foregroundStyle(.secondary)
@@ -118,22 +95,15 @@ struct QuicklinkDraft {
     var title: String = ""
     var urlString: String = ""
     var alias: String = ""
-    var isFallback: Bool = false
 
     func makeModel() -> StoredQuicklink {
-        StoredQuicklink(
-            title: trimmedTitle,
-            urlString: trimmedURL,
-            alias: normalizedAlias,
-            isFallback: effectiveFallback
-        )
+        StoredQuicklink(title: trimmedTitle, urlString: trimmedURL, alias: normalizedAlias)
     }
 
     func apply(to model: StoredQuicklink) {
         model.title = trimmedTitle
         model.urlString = trimmedURL
         model.alias = normalizedAlias
-        model.isFallback = effectiveFallback
     }
 
     private var trimmedTitle: String { title.trimmingCharacters(in: .whitespacesAndNewlines) }
@@ -143,18 +113,11 @@ struct QuicklinkDraft {
         let trimmed = alias.trimmingCharacters(in: .whitespacesAndNewlines)
         return trimmed.isEmpty ? nil : trimmed
     }
-
-    /// Only a *placeholder*-Quicklink can be a Fallback (CONTEXT.md): a static
-    /// link flagged as one would pin a row that ignores the typed text, so the
-    /// flag is dropped when the template has no placeholder.
-    private var effectiveFallback: Bool {
-        isFallback && Action.templateHasPlaceholder(trimmedURL)
-    }
 }
 
-/// The create/edit form. One screen for both: `link == nil` creates, otherwise
-/// it pre-fills from the existing Quicklink. Saving hands a `QuicklinkDraft`
-/// back to the caller, which decides whether to insert or mutate.
+/// The create/edit form for a static Quicklink. One screen for both: `link == nil`
+/// creates, otherwise it pre-fills from the existing Quicklink. A templated URL
+/// (one with a `{placeholder}`) is rejected — that belongs on the Fallbacks page.
 struct QuicklinkEditorView: View {
     @Environment(\.dismiss) private var dismiss
 
@@ -170,8 +133,7 @@ struct QuicklinkEditorView: View {
             _draft = State(initialValue: QuicklinkDraft(
                 title: link.title,
                 urlString: link.urlString,
-                alias: link.alias ?? "",
-                isFallback: link.isFallback
+                alias: link.alias ?? ""
             ))
         } else {
             _draft = State(initialValue: QuicklinkDraft())
@@ -179,12 +141,13 @@ struct QuicklinkEditorView: View {
     }
 
     private var hasPlaceholder: Bool {
-        Action.templateHasPlaceholder(draft.urlString)
+        Action.templateContainsPlaceholder(draft.urlString)
     }
 
     private var canSave: Bool {
         !draft.title.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
             && !draft.urlString.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+            && !hasPlaceholder
     }
 
     var body: some View {
@@ -195,30 +158,23 @@ struct QuicklinkEditorView: View {
                         .accessibilityIdentifier("quicklink-title-field")
                 }
                 Section {
-                    TextField("https://github.com/search?q={query}", text: $draft.urlString)
+                    TextField("https://github.com", text: $draft.urlString)
                         .textInputAutocapitalization(.never)
                         .autocorrectionDisabled()
                         .accessibilityIdentifier("quicklink-url-field")
                 } header: {
-                    Text("URL template")
+                    Text("URL")
                 } footer: {
                     Text(hasPlaceholder
-                         ? "Takes your typed text as its Argument (replaces {…})."
-                         : "Opens directly — no placeholder, so it ignores typed text.")
+                         ? "A Quicklink can't contain a {placeholder}. Add it as a Fallback query instead."
+                         : "Opens directly. Static link only — no typed text.")
+                    .foregroundStyle(hasPlaceholder ? AnyShapeStyle(.red) : AnyShapeStyle(.secondary))
                 }
                 Section("Alias (optional)") {
                     TextField("git", text: $draft.alias)
                         .textInputAutocapitalization(.never)
                         .autocorrectionDisabled()
                         .accessibilityIdentifier("quicklink-alias-field")
-                }
-                if hasPlaceholder {
-                    Section {
-                        Toggle("Pin as Fallback", isOn: $draft.isFallback)
-                            .accessibilityIdentifier("quicklink-fallback-toggle")
-                    } footer: {
-                        Text("A Fallback always appears in the bottom region, consuming whatever you type.")
-                    }
                 }
             }
             .navigationTitle(link == nil ? "New Quicklink" : "Edit Quicklink")

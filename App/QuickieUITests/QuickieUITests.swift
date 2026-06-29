@@ -22,8 +22,10 @@ final class QuickieUITests: XCTestCase {
     }
 
     /// The input auto-focuses on launch, so text typed *without tapping* lands
-    /// in it — and the matching built-in Action appears. A strong, non-flaky
-    /// proxy for "keyboard up, input focused" (ADR 0012).
+    /// in it — and the matching built-in command row appears. Quickie ships no
+    /// default Quicklinks (ADR 0013), so we match the always-present "Settings"
+    /// command row. A strong, non-flaky proxy for "keyboard up, input focused"
+    /// (ADR 0012).
     @MainActor
     func testInputAutoFocusesOnLaunch() throws {
         let app = launchApp()
@@ -32,9 +34,9 @@ final class QuickieUITests: XCTestCase {
         XCTAssertTrue(input.waitForExistence(timeout: 10), "bottom input should exist on launch")
 
         // No tap: if auto-focus worked, this text goes straight into the field.
-        app.typeText("git")
+        app.typeText("settings")
         XCTAssertTrue(
-            app.buttons["builtin.github"].waitForExistence(timeout: 5),
+            app.buttons["builtin.settings"].waitForExistence(timeout: 5),
             "typing without tapping should filter results, proving the input auto-focused"
         )
     }
@@ -62,20 +64,22 @@ final class QuickieUITests: XCTestCase {
         let input = app.textFields["search-input"]
         XCTAssertTrue(input.waitForExistence(timeout: 10))
         input.tap()
-        input.typeText("git")
+        input.typeText("settings")
 
-        let row = app.buttons["builtin.github"]
-        XCTAssertTrue(row.waitForExistence(timeout: 5), "typing 'git' surfaces Open GitHub")
+        let row = app.buttons["builtin.settings"]
+        XCTAssertTrue(row.waitForExistence(timeout: 5), "typing 'settings' surfaces the Settings command")
         XCTAssertTrue(row.isHittable, "the result row is an interactive, tappable control")
 
         row.tap()
         XCTAssertNotEqual(app.state, .notRunning, "running a main action should not crash the app")
     }
 
-    /// Pinning an Action as a Favorite via its long-press menu makes it appear as
-    /// a Home shortcut once the query clears — covering pin (AC #1) and Home being
-    /// restored when the input empties (AC #5). Pinning, unlike tapping, doesn't
-    /// run the Action, so the test stays in-app (no Safari hand-off to race).
+    /// Pinning an Action as a Favorite via its long-press menu makes it appear in
+    /// the Home Favorites grid once the query clears — covering pin (AC #1) and
+    /// Home being restored when the input empties. Pinning, unlike tapping,
+    /// doesn't run the Action, so the test stays in-app (no hand-off to race). We
+    /// pin the always-present "Settings" command row (Quickie ships no default
+    /// Quicklinks — ADR 0013).
     @MainActor
     func testPinningAnActionSurfacesItOnHome() throws {
         let app = launchApp()
@@ -83,10 +87,10 @@ final class QuickieUITests: XCTestCase {
         let input = app.textFields["search-input"]
         XCTAssertTrue(input.waitForExistence(timeout: 10))
         input.tap()
-        input.typeText("git")
+        input.typeText("settings")
 
-        let row = app.buttons["builtin.github"]
-        XCTAssertTrue(row.waitForExistence(timeout: 5), "typing 'git' surfaces Open GitHub")
+        let row = app.buttons["builtin.settings"]
+        XCTAssertTrue(row.waitForExistence(timeout: 5), "typing 'settings' surfaces the Settings command")
 
         // Long-press opens the Pin/Unpin context menu, then pin it.
         row.press(forDuration: 1.2)
@@ -102,7 +106,7 @@ final class QuickieUITests: XCTestCase {
         XCTAssertTrue(pin.waitForNonExistence(timeout: 5), "the Pin menu should dismiss after pinning")
         XCTAssertTrue(input.waitForHittable(timeout: 5), "the input should be tappable once the menu dismisses")
 
-        // Clear the query — Home returns, now with the pinned Favorite shortcut.
+        // Clear the query — Home returns, now with the pinned Favorite card.
         // Delete the field's current contents rather than a hard-coded count so
         // the clear doesn't silently under-delete if the query ever changes.
         input.tap()
@@ -110,8 +114,8 @@ final class QuickieUITests: XCTestCase {
         input.typeText(String(repeating: XCUIKeyboardKey.delete.rawValue, count: typed.count))
 
         XCTAssertTrue(
-            app.buttons["favorite.builtin.github"].waitForExistence(timeout: 5),
-            "the pinned Action should appear as a Favorite shortcut on Home"
+            app.buttons["favorite.builtin.settings"].waitForExistence(timeout: 5),
+            "the pinned Action should appear as a Favorite card on Home"
         )
     }
 }
