@@ -203,6 +203,18 @@ struct RootView: View {
             // the root, never on app backgrounding mid-page.
             .navigationDestination(for: ManagementPage.self) {
                 destinationView(for: $0)
+                    // The launcher's input is focused — the keyboard is up — at
+                    // the instant a page is pushed, and removing the input (the
+                    // `path.isEmpty` inset above) drops the keyboard *while* the
+                    // page slides in. A `List`-based page (Fallbacks, Quicklinks,
+                    // Notes, Snippets) reserves keyboard-avoidance inset at push
+                    // time and then animates it away as the keyboard descends —
+                    // the white band that slides down off-screen. Settings is a
+                    // `Form` and never showed it. None of these pages hosts a text
+                    // field directly (editing is in sheets), so ignoring the
+                    // keyboard's bottom inset here is purely cosmetic: it stops the
+                    // page from tracking the dismissing keyboard, killing the band.
+                    .ignoresSafeArea(.keyboard, edges: .bottom)
                     .onDisappear { if path.isEmpty { refocusInput() } }
             }
             // Run the Quicklink / Fallback query data migration once on launch and
