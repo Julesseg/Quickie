@@ -17,23 +17,23 @@ struct ActionPresentationTests {
         #expect(snippet.mainAction == .copyToClipboard)
     }
 
-    @Test("a web-search Fallback is a distinct provider kind from a plain Quicklink")
-    func webSearchKindIsDistinctFromQuicklink() {
+    @Test("a Fallback query is a distinct provider kind from a plain Quicklink")
+    func fallbackQueryKindIsDistinctFromQuicklink() {
         // Both open the browser, so the leading badge can only tell them apart by
         // provider identity, not by what they do.
-        let search = Action.webSearch()
-        let link = Action.quicklink(id: "q1", title: "GitHub", template: "https://github.com")
-        #expect(search.kind == .webSearch)
+        let search = Action.webSearchFallback()
+        let link = Action.quicklink(id: "q1", title: "GitHub", url: URL(string: "https://github.com")!)
+        #expect(search.kind == .fallbackQuery)
         #expect(link.kind == .quicklink)
     }
 
     @Test("each main action reads off the row's real outcome")
     func mainActionFollowsOutcome() {
-        #expect(Action.quicklink(id: "q", title: "GitHub", template: "https://github.com").mainAction == .openInBrowser)
+        #expect(Action.quicklink(id: "q", title: "GitHub", url: URL(string: "https://github.com")!).mainAction == .openInBrowser)
         #expect(Action.note(id: "n", title: "Idea").mainAction == .openNote)
         #expect(Action.newNote().mainAction == .compose)
         #expect(Action.newSnippet().mainAction == .compose)
-        #expect(Action.openNotesLibrary().mainAction == .openLibrary)
+        #expect(Action.openNotesLibrary().mainAction == .openPage)
     }
 
     @Test("provider kind and main action are independent axes")
@@ -57,11 +57,15 @@ struct ActionPresentationTests {
         #expect(action.run(input: "Hello from Quickie") == .composeSnippet(seed: "Hello from Quickie"))
     }
 
-    @Test("the library commands open their list pages")
-    func libraryCommandsOpenPages() {
-        #expect(Action.openNotesLibrary().run() == .openLibrary(.notes))
-        #expect(Action.openSnippetsLibrary().run() == .openLibrary(.snippets))
+    @Test("the management commands open their full-screen pages")
+    func managementCommandsOpenPages() {
+        #expect(Action.openNotesLibrary().run() == .openPage(.notes))
+        #expect(Action.openSnippetsLibrary().run() == .openPage(.snippets))
+        #expect(Action.openSettings().run() == .openPage(.settings))
+        #expect(Action.openQuicklinksPage().run() == .openPage(.quicklinks))
+        #expect(Action.openFallbacksPage().run() == .openPage(.fallbacks))
         // Commands, not Fallbacks — they match by name and don't ride the bottom.
         #expect(Action.openNotesLibrary().isFallback == false)
+        #expect(Action.openSettings().isFallback == false)
     }
 }

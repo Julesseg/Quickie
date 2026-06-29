@@ -9,7 +9,7 @@ import Testing
 struct HomeTests {
 
     private func link(_ id: String, _ title: String) -> Action {
-        .staticLink(id: id, title: title, url: URL(string: "https://\(id).example")!)
+        .quicklink(id: id, title: title, url: URL(string: "https://\(id).example")!)
     }
 
     @Test("Home lists the pinned Favorites in pin order")
@@ -57,7 +57,7 @@ struct HomeTests {
         var frecency = Frecency()
         frecency.record("builtin.web-search", at: now)
         let engine = SearchEngine(
-            providers: [IndexedProvider(catalog: [.webSearch()])],
+            providers: [IndexedProvider(catalog: [.webSearchFallback()])],
             favorites: ["builtin.web-search"],
             frecency: frecency,
             now: now

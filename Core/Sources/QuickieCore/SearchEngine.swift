@@ -31,6 +31,15 @@ public struct SearchEngine {
     /// time each time it rebuilds the engine.
     private let now: Date
 
+    /// The user's explicit Fallback list order, most-important-first (CONTEXT.md
+    /// → Fallback list): fallback ids whose position decides where each rides in
+    /// the bottom region. A `[String: Int]` rank map for O(1) lookup; a fallback
+    /// absent from it sorts after every ordered one, deterministically.
+    private let fallbackRank: [String: Int]
+    /// Fallback ids the user has **disabled** (CONTEXT.md → Fallback list): kept
+    /// in the list but never surfaced in results.
+    private let disabledFallbacks: Set<String>
+
     /// The boost a Favorite adds to its match score. Tuned to reorder *within* a
     /// match tier (e.g. float a pinned exact match above an unpinned one)
     /// without lifting a weak match over a clean exact/prefix one — the tiers,
@@ -54,7 +63,9 @@ public struct SearchEngine {
         layout: KeyboardLayout = .qwerty,
         favorites: [String] = [],
         frecency: Frecency = Frecency(),
-        now: Date = Date()
+        now: Date = Date(),
+        fallbackOrder: [String] = [],
+        disabledFallbacks: Set<String> = []
     ) {
         self.providers = providers
         self.layout = layout
@@ -62,6 +73,10 @@ public struct SearchEngine {
         self.favorites = Set(favorites)
         self.frecency = frecency
         self.now = now
+        var rank: [String: Int] = [:]
+        for (index, id) in fallbackOrder.enumerated() { rank[id] = index }
+        self.fallbackRank = rank
+        self.disabledFallbacks = disabledFallbacks
     }
 
     /// The ranked Result list for `query`, best match first. An empty or
@@ -84,7 +99,9 @@ public struct SearchEngine {
             let weight: Double = provider.weight
             for action in provider.candidates(for: trimmed) {
                 if action.isFallback {
-                    fallbacks.append(action)
+                    // A disabled fallback is kept in the user's list but never
+                    // surfaced in results (CONTEXT.md → Fallback list).
+                    if !disabledFallbacks.contains(action.id) { fallbacks.append(action) }
                 } else if provider.kind == .dynamic {
                     // Dynamic results skip name-matching — the Provider already
                     // decided they apply (Provider.swift: "dynamic candidates
@@ -99,9 +116,19 @@ public struct SearchEngine {
         }
 
         ranked.sort(by: rank)
-        fallbacks.sort { $0.title != $1.title ? $0.title < $1.title : $0.id < $1.id }
+        fallbacks.sort(by: orderFallbacks)
 
         return boosted + ranked.map(\.action) + fallbacks
+    }
+
+    /// The highlighted result for `query` — the single best row, `results[0]`,
+    /// rendered nearest the input and the thumb (CONTEXT.md → Highlighted result).
+    /// Pressing Enter runs exactly this row's main action; an empty/whitespace
+    /// query returns `nil`, which is the no-op signal — on Home, Enter does
+    /// nothing. A thin read over `results(for:)` so the selection rule lives in
+    /// one place and can't drift from the list.
+    public func highlighted(for query: String) -> Action? {
+        results(for: query).first
     }
 
     /// The two sections of the empty-query Home state (CONTEXT.md → Home): the
@@ -168,6 +195,25 @@ public struct SearchEngine {
         if lhs.blended != rhs.blended { return lhs.blended > rhs.blended }
         if lhs.action.title != rhs.action.title { return lhs.action.title < rhs.action.title }
         return lhs.action.id < rhs.action.id
+    }
+
+    /// Orders the bottom fallback region by the user's explicit list order, read
+    /// most-important-first (CONTEXT.md → Fallback list): a fallback's rank in the
+    /// list places it nearest the ranked matches (the thumb). A fallback the user
+    /// hasn't ordered yet (e.g. a freshly seeded one) sorts after every ordered
+    /// one, then by title/id so the result list never reshuffles between runs.
+    private func orderFallbacks(_ lhs: Action, _ rhs: Action) -> Bool {
+        let lRank = fallbackRank[lhs.id]
+        let rRank = fallbackRank[rhs.id]
+        if lRank != rRank {
+            switch (lRank, rRank) {
+            case let (l?, r?): return l < r
+            case (_?, nil): return true   // ordered before unordered
+            case (nil, _?): return false
+            case (nil, nil): break
+            }
+        }
+        return lhs.title != rhs.title ? lhs.title < rhs.title : lhs.id < rhs.id
     }
 
     /// The best match score across an Action's title and its aliases — a query

@@ -10,7 +10,7 @@ struct ActionTests {
 
     @Test("a static link's main action opens its URL")
     func staticLinkOpensURL() {
-        let github = Action.staticLink(
+        let github = Action.quicklink(
             id: "github",
             title: "Open GitHub",
             url: URL(string: "https://github.com")!
@@ -20,7 +20,7 @@ struct ActionTests {
 
     @Test("a static link declares url output and consumes no input")
     func staticLinkTypedContent() {
-        let github = Action.staticLink(
+        let github = Action.quicklink(
             id: "github",
             title: "Open GitHub",
             url: URL(string: "https://github.com")!
@@ -29,25 +29,25 @@ struct ActionTests {
         #expect(github.inputTypes.isEmpty)
     }
 
-    @Test("a placeholder link fills the typed text into its template")
-    func placeholderLinkConsumesInput() {
-        let search = Action.placeholderLink(
+    @Test("a Fallback query fills the typed text into its template")
+    func fallbackQueryConsumesInput() {
+        let search = Action.fallbackQuery(
             id: "web-search",
             title: "Search the web",
             template: "https://duckduckgo.com/?q={query}"
         )
-        #expect(search.run(input: "swift testing")
+        #expect(search?.run(input: "swift testing")
                 == .openURL(URL(string: "https://duckduckgo.com/?q=swift%20testing")!))
     }
 
-    @Test("a placeholder link declares text input and url output")
-    func placeholderLinkTypedContent() {
-        let search = Action.placeholderLink(
+    @Test("a Fallback query declares text input and url output")
+    func fallbackQueryTypedContent() {
+        let search = Action.fallbackQuery(
             id: "web-search",
             title: "Search the web",
             template: "https://duckduckgo.com/?q={query}"
         )
-        #expect(search.inputTypes == [.text])
-        #expect(search.outputType == .url)
+        #expect(search?.inputTypes == [.text])
+        #expect(search?.outputType == .url)
     }
 }

@@ -4,40 +4,39 @@ import Testing
 
 // A Fallback Action is one flagged to always appear in the Result list and
 // consume the user's literal typed text as its payload (CONTEXT.md → Fallback
-// Action). The built-in web-search is the canonical one, and *any*
-// placeholder-Quicklink can be flagged. These tests pin the flag itself and the
-// SearchEngine behavior it drives: fallbacks are pinned in the bottom region,
-// present for any non-empty query, fed the raw query text.
+// Action). The default web-search Fallback query is the canonical one. These
+// tests pin the flag itself and the SearchEngine behaviour it drives: fallbacks
+// are pinned in the bottom region, present for any non-empty query, fed the raw
+// query text.
 struct FallbackTests {
 
-    @Test("an Action is not a Fallback unless flagged")
+    @Test("a static Quicklink is not a Fallback")
     func notFallbackByDefault() {
-        let link = Action.quicklink(id: "a", title: "Apple", template: "https://apple.com")
+        let link = Action.quicklink(id: "a", title: "Apple", url: URL(string: "https://apple.com")!)
         #expect(link.isFallback == false)
     }
 
-    @Test("any placeholder-Quicklink can be flagged a Fallback")
-    func placeholderCanBeFlagged() {
-        let search = Action.quicklink(
+    @Test("a Fallback query is flagged a Fallback")
+    func fallbackQueryIsFlagged() {
+        let search = Action.fallbackQuery(
             id: "ddg",
             title: "Search the web",
-            template: "https://duckduckgo.com/?q={query}",
-            isFallback: true
+            template: "https://duckduckgo.com/?q={query}"
         )
-        #expect(search.isFallback)
+        #expect(search?.isFallback == true)
     }
 
-    // A SearchEngine wired like the app: a couple of name-matchable links plus a
-    // web-search Fallback that consumes whatever the user typed.
+    // A SearchEngine wired like the app: a couple of name-matchable static links
+    // plus a web-search Fallback query that consumes whatever the user typed.
     private func engine() -> SearchEngine {
         SearchEngine(providers: [
             IndexedProvider(catalog: [
-                .quicklink(id: "apple", title: "Open Apple", template: "https://apple.com"),
-                .quicklink(id: "github", title: "Open GitHub", aliases: ["git"], template: "https://github.com"),
-                .quicklink(
+                .quicklink(id: "apple", title: "Open Apple", url: URL(string: "https://apple.com")!),
+                .quicklink(id: "github", title: "Open GitHub", aliases: ["git"], url: URL(string: "https://github.com")!),
+                .fallbackQuery(
                     id: "web-search", title: "Search the web",
-                    template: "https://duckduckgo.com/?q={query}", isFallback: true
-                ),
+                    template: "https://duckduckgo.com/?q={query}"
+                )!,
             ])
         ])
     }
@@ -79,9 +78,9 @@ struct FallbackTests {
         #expect(engine().results(for: "   ").isEmpty)
     }
 
-    @Test("the built-in web-search Fallback uses the default engine")
+    @Test("the default web-search Fallback query uses the default engine")
     func webSearchDefaultEngine() {
-        let search = Action.webSearch()
+        let search = Action.webSearchFallback()
         #expect(search.isFallback)
         #expect(search.run(input: "swift")
                 == .openURL(URL(string: "https://duckduckgo.com/?q=swift")!))
@@ -89,7 +88,7 @@ struct FallbackTests {
 
     @Test("the default search engine is editable — it's just the template")
     func webSearchEngineIsEditable() {
-        let google = Action.webSearch(template: "https://www.google.com/search?q={query}")
+        let google = Action.webSearchFallback(template: "https://www.google.com/search?q={query}")
         #expect(google.isFallback)
         #expect(google.run(input: "swift")
                 == .openURL(URL(string: "https://www.google.com/search?q=swift")!))

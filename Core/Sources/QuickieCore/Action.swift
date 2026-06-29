@@ -22,15 +22,21 @@ public enum ActionOutcome: Equatable, Sendable {
     /// Snippet): the "New Snippet" Fallback, the snippet counterpart to
     /// `composeNote`.
     case composeSnippet(seed: String)
-    /// Open one of the library list pages (CONTEXT.md → Snippet / Note): the
-    /// main-list command that surfaces the full Snippet or Note library, which
-    /// otherwise lives only as filtered result rows.
-    case openLibrary(Library)
+    /// Open one of the full-screen management pages (CONTEXT.md → Management
+    /// page): the typed-to command that surfaces Settings or a library/Fallbacks
+    /// list, which otherwise lives only as a filtered result row. Replaces the
+    /// old chrome buttons and the combined manage sheet.
+    case openPage(ManagementPage)
     case none
 }
 
-/// Which library list page an `openLibrary` outcome opens.
-public enum Library: Equatable, Sendable {
+/// Which full-screen management page an `openPage` outcome opens (CONTEXT.md →
+/// Management page). Each is reached as a typed command row, never from chrome,
+/// and presents full-screen with its own dismiss affordance.
+public enum ManagementPage: Equatable, Sendable {
+    case settings
+    case quicklinks
+    case fallbacks
     case notes
     case snippets
 }
@@ -41,12 +47,18 @@ public enum Library: Equatable, Sendable {
 /// from `mainAction`, which is what tapping it *does*.
 public enum ActionKind: Equatable, Sendable {
     case quicklink
-    case webSearch
+    /// A Fallback query (ADR 0013): a templated, query-consuming Fallback Action.
+    /// Web search is the default-seeded one — no longer a privileged built-in.
+    case fallbackQuery
     case snippet
     case note
     case newNote
     case newSnippet
     case calculator
+    /// A management command row that opens a full-screen page (Settings,
+    /// Quicklinks, Fallbacks). The Notes/Snippets library commands keep their
+    /// `.note`/`.snippet` kind so they read as part of those libraries.
+    case settings
 }
 
 /// What tapping a row *does*, as a coarse classification of its `ActionOutcome`
@@ -59,8 +71,9 @@ public enum MainAction: Equatable, Sendable {
     case openNote
     /// Open an editor to compose a new Note or Snippet from the typed text.
     case compose
-    /// Open a library list page (all Notes / all Snippets).
-    case openLibrary
+    /// Open a full-screen management page (Settings, Quicklinks, Fallbacks, all
+    /// Notes, all Snippets).
+    case openPage
     case none
 }
 
@@ -112,8 +125,8 @@ public struct Action: Identifiable, Sendable {
     }
 
     /// Runs the main action. `input` is the raw typed text for Actions that
-    /// consume it (Fallbacks/placeholder-Quicklinks); self-contained Actions
-    /// ignore it.
+    /// consume it (Fallback queries and the New Note/New Snippet Fallbacks);
+    /// self-contained Actions (static Quicklinks, Snippets, Notes) ignore it.
     public func run(input: String? = nil) -> ActionOutcome {
         effect(input)
     }
@@ -128,54 +141,67 @@ public struct Action: Identifiable, Sendable {
         case .copyText: return .copyToClipboard
         case .openNote: return .openNote
         case .composeNote, .composeSnippet: return .compose
-        case .openLibrary: return .openLibrary
+        case .openPage: return .openPage
+        case .none: return .none
+        }
+    }
+
+    /// The closest system Return-key submit label for running this Action from
+    /// the highlighted row (CONTEXT.md → Highlighted result): a Fallback query
+    /// reads as `.search`, a link as `.go`, and self-contained captures/copies as
+    /// `.done`. Platform-agnostic — the app maps it to a SwiftUI `SubmitLabel`.
+    /// The outcome *case* is stable regardless of input, so it is read with none.
+    public var returnKeyLabel: ReturnKeyLabel {
+        switch run() {
+        case .openURL: return isFallback ? .search : .go
+        case .copyText, .composeNote, .composeSnippet: return .done
+        case .openNote, .openPage: return .go
         case .none: return .none
         }
     }
 }
 
+/// The closest system Return-key submit label for the highlighted result's main
+/// action (CONTEXT.md → Highlighted result). A Core enum so the loop can decide
+/// the Enter intent without importing SwiftUI; the app maps each case to the
+/// matching `SubmitLabel`.
+public enum ReturnKeyLabel: Equatable, Sendable {
+    case search
+    case go
+    case done
+    case none
+}
+
 extension Action {
-    /// A Quicklink built from a single stored URL *template* (CONTEXT.md →
-    /// Quicklink). The one field drives both shapes: a template with a
-    /// `{placeholder}` token takes the typed text as its Argument and
-    /// substitutes it (consuming `.text`); a template with none opens directly
-    /// (consuming nothing). This is the auto-detecting model the SwiftData store
-    /// persists and the manage UI edits — no static/placeholder mode toggle.
+    /// A Quicklink (CONTEXT.md → Quicklink; ADR 0013): a *static* URL that opens
+    /// directly, consuming no typed text and carrying no `{placeholder}`. It
+    /// matches by name like any other Action. The query-consuming behaviour has
+    /// moved out to `fallbackQuery`, so this type now has exactly one shape — no
+    /// auto-detection, no Fallback flag. Quickie ships no default Quicklinks; the
+    /// app builds these from the user's stored static links.
     public static func quicklink(
         id: String,
-        kind: ActionKind = .quicklink,
         title: String,
         subtitle: String? = nil,
         aliases: [String] = [],
-        template: String,
-        isFallback: Bool = false
+        url: URL
     ) -> Action {
-        let hasPlaceholder = templateHasPlaceholder(template)
-        return Action(
+        Action(
             id: id,
-            kind: kind,
+            kind: .quicklink,
             title: title,
             subtitle: subtitle,
             aliases: aliases,
-            inputTypes: hasPlaceholder ? [.text] : [],
-            outputType: .url,
-            isFallback: isFallback
-        ) { input in
-            fill(template: template, with: input)
-        }
+            inputTypes: [],
+            outputType: .url
+        ) { _ in .openURL(url) }
     }
 
-    /// True when `template` carries at least one `{placeholder}` token — the
-    /// signal that the Quicklink takes an Argument rather than opening directly.
-    /// Exposed so the app's editor can mirror the same static-vs-placeholder
-    /// detection the factory uses (issue #5).
-    public static func templateHasPlaceholder(_ template: String) -> Bool {
-        template.range(of: "\\{[^}]+\\}", options: .regularExpression) != nil
-    }
-
-    /// Substitutes the typed text into every `{placeholder}` token (M1's single
-    /// Argument fills them all), percent-encoding it for the query string. A
-    /// template with no placeholder ignores `input` and opens as stored.
+    /// Substitutes the typed text into every `{placeholder}` token of a Fallback
+    /// query's template (M1's single Argument fills them all), percent-encoding it
+    /// for the query string. Only `fallbackQuery` reaches here, and it is built
+    /// only from a placeholder-bearing template, so there is always a token to
+    /// fill.
     ///
     /// The substitution is *literal*: each `{…}` token is matched, then replaced
     /// with the encoded text as a plain string. We never feed the typed text to
@@ -199,65 +225,41 @@ extension Action {
         return .openURL(url)
     }
 
-    /// A static Quicklink: a fixed URL that opens directly, consuming no input
-    /// (CONTEXT.md → Quicklink with no placeholder). A convenience over
-    /// `quicklink` for callers that already hold a parsed `URL` (the built-in
-    /// Indexed Provider). A placeholder-free URL routes through the same
-    /// substitution path, so it simply opens as stored.
-    public static func staticLink(
+    /// A Fallback query (CONTEXT.md → Fallback query; ADR 0013): a URL template
+    /// that **requires** a `{placeholder}` and consumes the typed text as its
+    /// query. Returns `nil` when `template` carries no placeholder — the type's
+    /// defining invariant, so a static link can never masquerade as one. It is a
+    /// Fallback Action: always surfaced, pinned to the bottom region, fed the raw
+    /// typed text. Web search is just a default-seeded instance of this.
+    public static func fallbackQuery(
         id: String,
         title: String,
         subtitle: String? = nil,
         aliases: [String] = [],
-        url: URL
-    ) -> Action {
-        quicklink(
+        template: String
+    ) -> Action? {
+        guard templateContainsPlaceholder(template) else { return nil }
+        return Action(
             id: id,
+            kind: .fallbackQuery,
             title: title,
             subtitle: subtitle,
             aliases: aliases,
-            template: url.absoluteString
-        )
-    }
-
-    /// The built-in web-search Fallback (CONTEXT.md → Fallback Action): a
-    /// placeholder-Quicklink, flagged a Fallback, that consumes the raw typed
-    /// text. The search engine *is* the template, so swapping engines is just
-    /// passing a different one — "the default search engine is editable." The
-    /// app persists the chosen template and passes it here.
-    public static func webSearch(
-        template: String = "https://duckduckgo.com/?q={query}"
-    ) -> Action {
-        quicklink(
-            id: "builtin.web-search",
-            kind: .webSearch,
-            title: "Search the web",
-            aliases: ["search", "google", "ddg"],
-            template: template,
+            inputTypes: [.text],
+            outputType: .url,
             isFallback: true
-        )
+        ) { input in
+            fill(template: template, with: input)
+        }
     }
 
-    /// A placeholder-Quicklink: a URL template with a `{placeholder}` token the
-    /// typed text fills (CONTEXT.md → Quicklink, Fallback Action). A thin alias
-    /// over `quicklink` for call sites that read better naming the placeholder
-    /// intent explicitly; both share one substitution path.
-    public static func placeholderLink(
-        id: String,
-        title: String,
-        subtitle: String? = nil,
-        aliases: [String] = [],
-        template: String,
-        isFallback: Bool = false
-    ) -> Action {
-        quicklink(
-            id: id,
-            title: title,
-            subtitle: subtitle,
-            aliases: aliases,
-            template: template,
-            isFallback: isFallback
-        )
+    /// True when `template` carries at least one real `{placeholder}` token —
+    /// the validation both editors use (a Quicklink rejects one, a Fallback query
+    /// requires one) and the invariant `fallbackQuery` enforces. An empty `{}`
+    /// pair is not a placeholder. Unlike the removed `templateHasPlaceholder`,
+    /// this never switches an Action's behaviour — the type does that now.
+    public static func templateContainsPlaceholder(_ template: String) -> Bool {
+        template.range(of: "\\{[^}]+\\}", options: .regularExpression) != nil
     }
 
     /// A Snippet: saved, reusable text whose main action is **Copy**
@@ -332,8 +334,8 @@ extension Action {
     }
 
     /// The "All Notes" command (CONTEXT.md → Note): a built-in main-list Action
-    /// that opens the Note library list page. Surfaces the full library as a
-    /// filterable, selectable row rather than a chrome button, so browsing notes
+    /// that opens the Note library page full-screen. Surfaces the full library as
+    /// a filterable, selectable row rather than a chrome button, so browsing notes
     /// lives in the same loop as everything else.
     public static func openNotesLibrary() -> Action {
         Action(
@@ -343,11 +345,11 @@ extension Action {
             aliases: ["notes", "note library", "browse notes"],
             inputTypes: [],
             outputType: .text
-        ) { _ in .openLibrary(.notes) }
+        ) { _ in .openPage(.notes) }
     }
 
     /// The "All Snippets" command (CONTEXT.md → Snippet): the snippet counterpart
-    /// to `openNotesLibrary`, opening the Snippet library list page.
+    /// to `openNotesLibrary`, opening the Snippet library page full-screen.
     public static func openSnippetsLibrary() -> Action {
         Action(
             id: "builtin.snippets-library",
@@ -356,6 +358,47 @@ extension Action {
             aliases: ["snippets", "snippet library", "browse snippets"],
             inputTypes: [],
             outputType: .text
-        ) { _ in .openLibrary(.snippets) }
+        ) { _ in .openPage(.snippets) }
+    }
+
+    /// The "Settings" command (CONTEXT.md → Settings, Management page): a typed-to
+    /// command row that opens the full-screen Settings page (Appearance) in place
+    /// of the old top-right gear button.
+    public static func openSettings() -> Action {
+        Action(
+            id: "builtin.settings",
+            kind: .settings,
+            title: "Settings",
+            aliases: ["preferences", "appearance", "theme"],
+            inputTypes: [],
+            outputType: .text
+        ) { _ in .openPage(.settings) }
+    }
+
+    /// The "Quicklinks" command (CONTEXT.md → Quicklink, Management page): opens
+    /// the full-screen Quicklinks management page (static links only).
+    public static func openQuicklinksPage() -> Action {
+        Action(
+            id: "builtin.quicklinks-page",
+            kind: .quicklink,
+            title: "Quicklinks",
+            aliases: ["links", "manage quicklinks", "bookmarks"],
+            inputTypes: [],
+            outputType: .text
+        ) { _ in .openPage(.quicklinks) }
+    }
+
+    /// The "Fallbacks" command (CONTEXT.md → Fallback list, Management page):
+    /// opens the unified, reorderable Fallbacks page (Fallback queries + New Note
+    /// + New Snippet).
+    public static func openFallbacksPage() -> Action {
+        Action(
+            id: "builtin.fallbacks-page",
+            kind: .fallbackQuery,
+            title: "Fallbacks",
+            aliases: ["fallback", "search engines", "manage fallbacks"],
+            inputTypes: [],
+            outputType: .text
+        ) { _ in .openPage(.fallbacks) }
     }
 }

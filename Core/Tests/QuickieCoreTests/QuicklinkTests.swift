@@ -2,71 +2,45 @@ import Foundation
 import Testing
 @testable import QuickieCore
 
-// A Quicklink is a stored URL *template* with zero or more `{placeholder}`
-// tokens (CONTEXT.md → Quicklink). The same stored field drives both shapes:
-// no placeholder → opens directly; a placeholder → takes the typed text as its
-// Argument. These tests pin that one-field, auto-detecting behavior — the model
-// the SwiftData store persists and the manage UI edits.
+// A Quicklink is now a *static* URL only (CONTEXT.md → Quicklink; ADR 0013): it
+// opens directly, consumes no typed text, and carries no `{placeholder}`. The
+// query-consuming behaviour has moved to `fallbackQuery`. These tests pin the
+// single-shape Quicklink and the validation that keeps a placeholder out of one.
 struct QuicklinkTests {
 
-    @Test("a template with no placeholder opens its URL directly")
-    func staticTemplateOpensDirectly() {
+    @Test("a Quicklink opens its static URL directly")
+    func opensDirectly() {
         let link = Action.quicklink(
             id: "apple",
             title: "Open Apple",
-            template: "https://apple.com"
+            url: URL(string: "https://apple.com")!
         )
         #expect(link.run() == .openURL(URL(string: "https://apple.com")!))
     }
 
-    @Test("a template with a placeholder fills the typed text as its Argument")
-    func placeholderTemplateFillsTypedText() {
-        let link = Action.quicklink(
-            id: "gh-search",
-            title: "Search GitHub",
-            template: "https://github.com/search?q={query}"
-        )
-        #expect(link.run(input: "swift testing")
-                == .openURL(URL(string: "https://github.com/search?q=swift%20testing")!))
+    @Test("a Quicklink consumes no typed text")
+    func consumesNoInput() {
+        let link = Action.quicklink(id: "a", title: "Apple", url: URL(string: "https://apple.com")!)
+        #expect(link.inputTypes.isEmpty)
+        // Even handed input, a static link ignores it and opens as stored.
+        #expect(link.run(input: "ignored") == .openURL(URL(string: "https://apple.com")!))
     }
 
-    @Test("any placeholder name is detected, not just {query}")
-    func anyPlaceholderNameWorks() {
-        let link = Action.quicklink(
-            id: "dict",
-            title: "Define",
-            template: "https://example.com/define/{term}"
-        )
-        #expect(link.inputTypes == [.text])
-        #expect(link.run(input: "ephemeral")
-                == .openURL(URL(string: "https://example.com/define/ephemeral")!))
+    @Test("a Quicklink is never a Fallback")
+    func neverFallback() {
+        let link = Action.quicklink(id: "a", title: "Apple", url: URL(string: "https://apple.com")!)
+        #expect(link.isFallback == false)
+        #expect(link.kind == .quicklink)
     }
 
-    @Test("a static template declares no input; a placeholder declares text")
-    func templateTypedContent() {
-        let staticLink = Action.quicklink(id: "a", title: "Apple", template: "https://apple.com")
-        let placeholder = Action.quicklink(id: "s", title: "Search", template: "https://q/?x={q}")
-        #expect(staticLink.inputTypes.isEmpty)
-        #expect(placeholder.inputTypes == [.text])
-    }
-
-    @Test("typed text is substituted literally, not as a regex template")
-    func substitutionIsLiteral() {
-        // '$' survives `.urlQueryAllowed` encoding, so the substitution must not
-        // read "$5" as a (non-existent) capture-group reference and drop it.
-        let link = Action.quicklink(
-            id: "s", title: "Search", template: "https://example.com/?q={query}"
-        )
-        #expect(link.run(input: "$5 menu")
-                == .openURL(URL(string: "https://example.com/?q=$5%20menu")!))
-    }
-
-    @Test("placeholder detection drives the static-vs-Argument decision")
+    @Test("placeholder detection rejects a templated URL from the Quicklinks editor")
     func placeholderDetection() {
-        #expect(Action.templateHasPlaceholder("https://github.com/search?q={query}"))
-        #expect(Action.templateHasPlaceholder("https://example.com/{term}/page"))
-        #expect(Action.templateHasPlaceholder("https://apple.com") == false)
+        // The Quicklinks editor uses this to reject a `{placeholder}` (a Quicklink
+        // is static); the Fallbacks editor uses it to *require* one.
+        #expect(Action.templateContainsPlaceholder("https://github.com/search?q={query}"))
+        #expect(Action.templateContainsPlaceholder("https://example.com/{term}/page"))
+        #expect(Action.templateContainsPlaceholder("https://apple.com") == false)
         // An empty brace pair isn't a real placeholder token.
-        #expect(Action.templateHasPlaceholder("https://x.com/{}") == false)
+        #expect(Action.templateContainsPlaceholder("https://x.com/{}") == false)
     }
 }

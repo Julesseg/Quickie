@@ -17,8 +17,8 @@ struct IndexedProviderTests {
     @Test("an indexed provider offers its whole catalog as candidates")
     func offersWholeCatalog() {
         let catalog = [
-            Action.staticLink(id: "a", title: "Open Apple", url: URL(string: "https://apple.com")!),
-            Action.staticLink(id: "g", title: "Open GitHub", url: URL(string: "https://github.com")!),
+            Action.quicklink(id: "a", title: "Open Apple", url: URL(string: "https://apple.com")!),
+            Action.quicklink(id: "g", title: "Open GitHub", url: URL(string: "https://github.com")!),
         ]
         let provider = IndexedProvider(catalog: catalog)
         // Indexed providers don't filter by query — the SearchEngine matches
@@ -27,26 +27,22 @@ struct IndexedProviderTests {
         #expect(provider.candidates(for: "").map(\.id) == ["a", "g"])
     }
 
-    @Test("the built-in provider supplies several actions")
-    func builtInsSupplyActions() {
-        let provider = IndexedProvider.builtIns()
-        #expect(provider.candidates(for: "").count >= 3)
+    @Test("the built-in provider supplies the management command rows")
+    func builtInsSupplyCommands() {
+        // Quickie ships no default Quicklinks and no privileged web search (ADR
+        // 0013); the built-in indexed catalog is the typed-to management commands.
+        let ids = IndexedProvider.builtIns().candidates(for: "").map(\.id)
+        #expect(ids.contains("builtin.settings"))
+        #expect(ids.contains("builtin.quicklinks-page"))
+        #expect(ids.contains("builtin.fallbacks-page"))
     }
 
-    @Test("the built-ins ship a web-search Fallback")
-    func builtInsShipWebSearchFallback() {
-        // The one Fallback the skeleton ships, so any typed text always has a
-        // home (CONTEXT.md → Fallback Action; issue #5).
-        let fallbacks = IndexedProvider.builtIns().candidates(for: "").filter(\.isFallback)
-        #expect(fallbacks.contains { $0.id == "builtin.web-search" })
-    }
-
-    @Test("the built-in web-search engine is configurable")
-    func builtInsAcceptCustomEngine() {
-        // The app passes the user's persisted engine template here (AC #6).
-        let provider = IndexedProvider.builtIns(webSearchTemplate: "https://www.google.com/search?q={query}")
-        let search = provider.candidates(for: "").first { $0.id == "builtin.web-search" }!
-        #expect(search.run(input: "swift")
-                == .openURL(URL(string: "https://www.google.com/search?q=swift")!))
+    @Test("the built-ins ship no Fallbacks and no Quicklinks")
+    func builtInsShipNoFallbacksOrLinks() {
+        let actions = IndexedProvider.builtIns().candidates(for: "")
+        // The default web-search Fallback query is seeded into the store as
+        // ordinary data, not shipped here; the built-ins are command rows only.
+        #expect(actions.allSatisfy { !$0.isFallback })
+        #expect(actions.allSatisfy { $0.kind != .quicklink || $0.id == "builtin.quicklinks-page" })
     }
 }

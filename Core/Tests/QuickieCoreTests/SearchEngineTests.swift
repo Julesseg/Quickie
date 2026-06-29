@@ -10,9 +10,9 @@ struct SearchEngineTests {
     private func engine() -> SearchEngine {
         SearchEngine(providers: [
             IndexedProvider(catalog: [
-                .staticLink(id: "github", title: "Open GitHub", aliases: ["git"], url: URL(string: "https://github.com")!),
-                .staticLink(id: "apple", title: "Open Apple", url: URL(string: "https://apple.com")!),
-                .staticLink(id: "wikipedia", title: "Open Wikipedia", aliases: ["wiki"], url: URL(string: "https://wikipedia.org")!),
+                .quicklink(id: "github", title: "Open GitHub", aliases: ["git"], url: URL(string: "https://github.com")!),
+                .quicklink(id: "apple", title: "Open Apple", url: URL(string: "https://apple.com")!),
+                .quicklink(id: "wikipedia", title: "Open Wikipedia", aliases: ["wiki"], url: URL(string: "https://wikipedia.org")!),
             ])
         ])
     }
@@ -58,8 +58,8 @@ struct SearchEngineTests {
     @Test("results merge across multiple providers")
     func mergesProviders() {
         let engine = SearchEngine(providers: [
-            IndexedProvider(catalog: [.staticLink(id: "a", title: "Alpha", url: URL(string: "https://a.example")!)]),
-            IndexedProvider(catalog: [.staticLink(id: "b", title: "Alphabet", url: URL(string: "https://b.example")!)]),
+            IndexedProvider(catalog: [.quicklink(id: "a", title: "Alpha", url: URL(string: "https://a.example")!)]),
+            IndexedProvider(catalog: [.quicklink(id: "b", title: "Alphabet", url: URL(string: "https://b.example")!)]),
         ])
         #expect(Set(engine.results(for: "alpha").map(\.id)) == ["a", "b"])
     }
@@ -76,7 +76,7 @@ struct SearchEngineTests {
     func honorsConfiguredLayout() {
         let engine = SearchEngine(
             providers: [IndexedProvider(catalog: [
-                .staticLink(id: "zoom", title: "Zoom", url: URL(string: "https://zoom.us")!),
+                .quicklink(id: "zoom", title: "Zoom", url: URL(string: "https://zoom.us")!),
             ])],
             layout: .azerty
         )
@@ -108,7 +108,7 @@ struct SearchEngineTests {
         // for the query.
         let engine = SearchEngine(providers: [
             IndexedProvider(catalog: [
-                .staticLink(id: "github", title: "Open GitHub", url: URL(string: "https://github.com")!),
+                .quicklink(id: "github", title: "Open GitHub", url: URL(string: "https://github.com")!),
             ]),
             AlwaysProvider(),
         ])
@@ -124,7 +124,7 @@ struct SearchEngineTests {
         // already decided it applies.
         let engine = SearchEngine(providers: [
             IndexedProvider(catalog: [
-                .staticLink(id: "github", title: "Open GitHub", url: URL(string: "https://github.com")!),
+                .quicklink(id: "github", title: "Open GitHub", url: URL(string: "https://github.com")!),
             ]),
             AlwaysProvider(),
         ])
