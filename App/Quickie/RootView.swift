@@ -181,6 +181,17 @@ struct RootView: View {
         }
         // Auto-focus on launch, keyboard up — the core promise (ADR 0012).
         .onAppear { inputFocused = true }
+        // Re-arm focus when a full-screen page closes. Presenting a page
+        // (Settings, All Notes, All Snippets, a note reader, a compose editor)
+        // drops the keyboard, and the system doesn't restore first-responder on
+        // return — so the input would come back unfocused, breaking the
+        // zero-tap promise the moment the user leaves and comes back. Watch the
+        // "any page presented" flag and refocus the instant it flips back to
+        // false. (Comparing the optional to `nil` keeps this Equatable without
+        // forcing `ActiveSheet` to be.)
+        .onChange(of: activeSheet == nil && !showingManage) { _, noPagePresented in
+            if noPagePresented { inputFocused = true }
+        }
         // The one RootView sheet: a note opened for reading, a seeded compose
         // editor, or a library list page — all reached from the result list.
         .sheet(item: $activeSheet) { sheet in

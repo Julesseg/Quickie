@@ -72,6 +72,41 @@ final class QuickieUITests: XCTestCase {
         XCTAssertNotEqual(app.state, .notRunning, "running a main action should not crash the app")
     }
 
+    /// Returning from a full-screen page (here the "All Notes" library) re-arms
+    /// the input's focus, so text typed *without tapping* once back lands in the
+    /// field. Presenting a page drops the keyboard and the system doesn't restore
+    /// first-responder on return — this proves the app does (ADR 0012, the zero-tap
+    /// promise must survive leaving and coming back).
+    @MainActor
+    func testInputRefocusesAfterReturningFromPage() throws {
+        let app = launchApp()
+
+        let input = app.textFields["search-input"]
+        XCTAssertTrue(input.waitForExistence(timeout: 10))
+        input.tap()
+        input.typeText("all notes")
+
+        let allNotes = app.buttons.matching(
+            NSPredicate(format: "label CONTAINS[c] %@", "All Notes")
+        ).firstMatch
+        XCTAssertTrue(allNotes.waitForExistence(timeout: 5), "the All Notes command should surface as a result row")
+        allNotes.tap()
+
+        // The library page is up; dismiss it back to the input.
+        XCTAssertTrue(app.buttons["note-add"].waitForExistence(timeout: 10),
+                      "selecting All Notes should open the Note library list page")
+        app.buttons["Done"].tap()
+
+        // Back at the input. No tap: if focus was re-armed, this text goes straight
+        // into the field — a strong, non-flaky proxy for "keyboard up, input focused".
+        XCTAssertTrue(input.waitForExistence(timeout: 10))
+        app.typeText(" sentinel")
+        XCTAssertTrue(
+            ((input.value as? String) ?? "").contains("sentinel"),
+            "typing after returning from a page should land in the re-focused input"
+        )
+    }
+
     /// Pinning an Action as a Favorite via its long-press menu makes it appear as
     /// a Home shortcut once the query clears — covering pin (AC #1) and Home being
     /// restored when the input empties (AC #5). Pinning, unlike tapping, doesn't
