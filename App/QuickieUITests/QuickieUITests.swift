@@ -115,11 +115,14 @@ final class QuickieUITests: XCTestCase {
                       "the input should be tappable once the Pin menu dismisses")
 
         // Clear the query — Home returns, now with the pinned Favorite card.
-        // Delete the field's current contents rather than a hard-coded count so
-        // the clear doesn't silently under-delete if the query ever changes.
+        // Delete a generous *fixed* number of characters rather than counting
+        // `input.value`: under CI load the field's value can momentarily report
+        // empty, and a count-based clear then under-deletes and leaves the query
+        // intact (Home never returns). Over-deleting an already-empty field is a
+        // harmless no-op, so a fixed count comfortably above any test query is the
+        // robust choice.
         input.tap()
-        let typed = (input.value as? String) ?? ""
-        input.typeText(String(repeating: XCUIKeyboardKey.delete.rawValue, count: typed.count))
+        input.typeText(String(repeating: XCUIKeyboardKey.delete.rawValue, count: 24))
 
         XCTAssertTrue(
             app.buttons["favorite.builtin.settings"].waitForExistence(timeout: 10),
