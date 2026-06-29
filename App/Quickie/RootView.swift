@@ -52,6 +52,10 @@ struct RootView: View {
     /// and supports the system edge-swipe back, rather than rising as a sheet.
     @State private var path: [ManagementPage] = []
     @FocusState private var inputFocused: Bool
+    /// Whether the one-time launch auto-focus has happened, so returning to the
+    /// launcher from a pushed page doesn't re-grab focus mid-transition (which
+    /// stranded the field behind the keyboard).
+    @State private var didAutoFocus = false
     @State private var copyConfirmation: String?
     @State private var copyToken = UUID()
 
@@ -156,6 +160,27 @@ struct RootView: View {
                     CopyConfirmationBanner(text: copyConfirmation)
                 }
             }
+            // The input floats in the bottom safe area, with the launch-time paste
+            // chip above it. Kept *inside* the launcher's content so the reversed
+            // result list reserves space for it — the best match sits just above
+            // the input rather than behind it — and the keyboard lifts it. (Pushed
+            // pages replace this content, so they never show the input.)
+            .safeAreaInset(edge: .bottom, spacing: 0) {
+                VStack(spacing: 0) {
+                    if clipboardPrefill.isChipOffered {
+                        ClipboardPasteChip { text in
+                            query = text
+                            clipboard.markUsed()
+                        }
+                    }
+                    InputBar(
+                        query: $query,
+                        focused: $inputFocused,
+                        returnKey: highlighted?.returnKeyLabel ?? ReturnKeyLabel.none,
+                        onSubmit: { if let highlighted { run(highlighted) } }
+                    )
+                }
+            }
             // The launcher itself wears no navigation bar — it is the root; the
             // management pages push *on top* of it, sliding in from the right with
             // the system edge-swipe back.
@@ -179,35 +204,22 @@ struct RootView: View {
                 }
             }
         }
-        // The input floats in the bottom safe area of the *whole* screen — kept on
-        // the top-level view (outside the NavigationStack) so its keyboard
-        // avoidance stays stable across page push/pop; nesting it inside the stack
-        // left the field stranded behind the keyboard after a pop. It shows only on
-        // the launcher (no pushed page), so pages get the full height.
-        .safeAreaInset(edge: .bottom, spacing: 0) {
-            if path.isEmpty {
-                VStack(spacing: 0) {
-                    if clipboardPrefill.isChipOffered {
-                        ClipboardPasteChip { text in
-                            query = text
-                            clipboard.markUsed()
-                        }
-                    }
-                    InputBar(
-                        query: $query,
-                        focused: $inputFocused,
-                        returnKey: highlighted?.returnKeyLabel ?? ReturnKeyLabel.none,
-                        onSubmit: { if let highlighted { run(highlighted) } }
-                    )
-                }
+        // Auto-focus the input *once* on launch (the zero-wall promise, ADR 0012).
+        // Guarded so it doesn't re-fire when the launcher reappears after a page
+        // pops — re-grabbing focus mid-transition is what stranded the field
+        // behind the keyboard.
+        .onAppear {
+            if !didAutoFocus {
+                inputFocused = true
+                didAutoFocus = true
             }
         }
-        // Auto-focus on launch (the zero-wall promise, ADR 0012), and keep focus in
-        // step with navigation: drop it when a page is pushed so the keyboard
-        // doesn't linger, restore it when the launcher returns.
-        .onAppear { inputFocused = true }
+        // Drop focus when a page is pushed so the keyboard doesn't linger; on
+        // return we deliberately leave it unfocused (no keyboard) — the field sits
+        // correctly above the home indicator, and a tap re-shows the keyboard
+        // cleanly, sidestepping the post-transition layout race entirely.
         .onChange(of: path.isEmpty) { _, atRoot in
-            inputFocused = atRoot
+            if !atRoot { inputFocused = false }
         }
         .preferredColorScheme(Appearance(stored: appearanceRaw).colorScheme)
     }
