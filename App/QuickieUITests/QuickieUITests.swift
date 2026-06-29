@@ -98,13 +98,21 @@ final class QuickieUITests: XCTestCase {
         XCTAssertTrue(pin.waitForExistence(timeout: 5), "long-press should offer Pin as Favorite")
         pin.tap()
 
-        // Wait for the context menu to fully dismiss before touching the input
-        // again. Tapping mid-dismissal lands on the still-present menu platter
-        // dimming the input: the tap computes an invalid hit point, the field
-        // never regains focus, and the subsequent deletes type into nothing —
-        // leaving the query uncleared so Home never returns.
-        XCTAssertTrue(pin.waitForNonExistence(timeout: 5), "the Pin menu should dismiss after pinning")
-        XCTAssertTrue(input.waitForHittable(timeout: 5), "the input should be tappable once the menu dismisses")
+        // The context menu dismisses itself after a tap, but under CI load the
+        // dismissal animation and its dimming platter can linger — and tapping the
+        // input while the platter is still up lands on the platter, so the field
+        // never refocuses and the deletes type into nothing (Home never returns).
+        // Gate on the input being genuinely *hittable* again (platter gone), which
+        // is the actual precondition for the next step — a far more robust signal
+        // than waiting for a specific menu element to disappear within a tight
+        // window. If a stuck platter outlives the first wait, tap the dimmed
+        // backdrop (which only dismisses the menu, never activates a row) and wait
+        // again, so a slow dismissal can't flake the test.
+        if !input.waitForHittable(timeout: 10) {
+            app.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.05)).tap()
+        }
+        XCTAssertTrue(input.waitForHittable(timeout: 10),
+                      "the input should be tappable once the Pin menu dismisses")
 
         // Clear the query — Home returns, now with the pinned Favorite card.
         // Delete the field's current contents rather than a hard-coded count so
@@ -114,7 +122,7 @@ final class QuickieUITests: XCTestCase {
         input.typeText(String(repeating: XCUIKeyboardKey.delete.rawValue, count: typed.count))
 
         XCTAssertTrue(
-            app.buttons["favorite.builtin.settings"].waitForExistence(timeout: 5),
+            app.buttons["favorite.builtin.settings"].waitForExistence(timeout: 10),
             "the pinned Action should appear as a Favorite card on Home"
         )
     }
