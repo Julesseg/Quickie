@@ -33,7 +33,7 @@ public enum ActionOutcome: Equatable, Sendable {
 /// Which full-screen management page an `openPage` outcome opens (CONTEXT.md →
 /// Management page). Each is reached as a typed command row, never from chrome,
 /// and presents full-screen with its own dismiss affordance.
-public enum ManagementPage: Equatable, Sendable {
+public enum ManagementPage: Equatable, Hashable, Sendable {
     case settings
     case quicklinks
     case fallbacks

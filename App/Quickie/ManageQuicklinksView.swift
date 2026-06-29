@@ -10,59 +10,55 @@ import QuickieCore
 /// command row and presented full-screen. Quickie ships no default Quicklinks.
 struct QuicklinksView: View {
     @Environment(\.modelContext) private var modelContext
-    @Environment(\.dismiss) private var dismiss
     @Query(sort: \StoredQuicklink.createdAt) private var quicklinks: [StoredQuicklink]
 
     @State private var editing: StoredQuicklink?
     @State private var creatingNew = false
 
+    // Pushed onto the launcher's navigation stack — the system back chevron and
+    // edge-swipe handle dismissal, so this view adds no stack or Done button.
     var body: some View {
-        NavigationStack {
-            List {
-                Section {
-                    if quicklinks.isEmpty {
-                        Text("No Quicklinks yet")
-                            .foregroundStyle(.secondary)
-                    }
-                    ForEach(quicklinks) { link in
-                        Button {
-                            editing = link
-                        } label: {
-                            QuicklinkRow(link: link)
-                        }
-                        .buttonStyle(.plain)
-                    }
-                    .onDelete(perform: delete)
-                } header: {
-                    Text("Quicklinks")
-                } footer: {
-                    Text("A Quicklink opens a fixed URL. For a search that consumes what you type, add a Fallback query on the Fallbacks page.")
+        List {
+            Section {
+                if quicklinks.isEmpty {
+                    Text("No Quicklinks yet")
+                        .foregroundStyle(.secondary)
                 }
-            }
-            .navigationTitle("Quicklinks")
-            .toolbar {
-                ToolbarItem(placement: .topBarLeading) {
-                    Button("Done") { dismiss() }
-                }
-                ToolbarItem(placement: .topBarTrailing) {
+                ForEach(quicklinks) { link in
                     Button {
-                        creatingNew = true
+                        editing = link
                     } label: {
-                        Image(systemName: "plus")
+                        QuicklinkRow(link: link)
                     }
-                    .accessibilityIdentifier("add-quicklink")
-                    .accessibilityLabel("Add Quicklink")
+                    .buttonStyle(.plain)
                 }
+                .onDelete(perform: delete)
+            } header: {
+                Text("Quicklinks")
+            } footer: {
+                Text("A Quicklink opens a fixed URL. For a search that consumes what you type, add a Fallback query on the Fallbacks page.")
             }
-            .sheet(isPresented: $creatingNew) {
-                QuicklinkEditorView(link: nil) { draft in
-                    modelContext.insert(draft.makeModel())
+        }
+        .navigationTitle("Quicklinks")
+        .toolbar {
+            ToolbarItem(placement: .topBarTrailing) {
+                Button {
+                    creatingNew = true
+                } label: {
+                    Image(systemName: "plus")
                 }
+                .accessibilityIdentifier("add-quicklink")
+                .accessibilityLabel("Add Quicklink")
             }
-            .sheet(item: $editing) { link in
-                QuicklinkEditorView(link: link) { draft in
-                    draft.apply(to: link)
-                }
+        }
+        .sheet(isPresented: $creatingNew) {
+            QuicklinkEditorView(link: nil) { draft in
+                modelContext.insert(draft.makeModel())
+            }
+        }
+        .sheet(item: $editing) { link in
+            QuicklinkEditorView(link: link) { draft in
+                draft.apply(to: link)
             }
         }
     }

@@ -3,14 +3,13 @@ import SwiftData
 
 /// The Note library: create, list, open/read, edit, append, and delete the
 /// captured free-text thoughts that surface in the Result list (issue #7). Like
-/// the Snippet library it is a plain, conventional SwiftData list behind a sheet
-/// — the launcher's magic is the input loop and the instant "New Note" capture;
+/// the Snippet library it is a plain, conventional SwiftData list on a pushed
+/// page — the launcher's magic is the input loop and the instant "New Note" capture;
 /// managing notes afterwards is ordinary CRUD that never competes with the
 /// zero-wall launch (ADR 0012). Notes are ordered most-recently-touched first so
 /// the active brain-dump is always on top.
 struct NoteManagerView: View {
     @Environment(\.modelContext) private var context
-    @Environment(\.dismiss) private var dismiss
 
     @Query(sort: \StoredNote.updatedAt, order: .reverse) private var notes: [StoredNote]
 
@@ -32,51 +31,48 @@ struct NoteManagerView: View {
         }
     }
 
+    // Pushed onto the launcher's navigation stack — the back chevron and
+    // edge-swipe handle dismissal, so this view adds no stack or Done button.
     var body: some View {
-        NavigationStack {
-            Group {
-                if notes.isEmpty {
-                    ContentUnavailableView(
-                        "No notes yet",
-                        systemImage: "note.text",
-                        description: Text("Capture a thought — type it and pick “New Note”, or add one here — then reopen it to read or add more.")
-                    )
-                } else {
-                    List {
-                        ForEach(notes) { note in
-                            Button {
-                                editorTarget = .open(note)
-                            } label: {
-                                NoteRow(note: note)
-                            }
-                            .buttonStyle(.plain)
-                            .accessibilityIdentifier("note-row-\(note.title)")
+        Group {
+            if notes.isEmpty {
+                ContentUnavailableView(
+                    "No notes yet",
+                    systemImage: "note.text",
+                    description: Text("Capture a thought — type it and pick “New Note”, or add one here — then reopen it to read or add more.")
+                )
+            } else {
+                List {
+                    ForEach(notes) { note in
+                        Button {
+                            editorTarget = .open(note)
+                        } label: {
+                            NoteRow(note: note)
                         }
-                        .onDelete(perform: delete)
+                        .buttonStyle(.plain)
+                        .accessibilityIdentifier("note-row-\(note.title)")
                     }
+                    .onDelete(perform: delete)
                 }
             }
-            .navigationTitle("Notes")
-            .toolbar {
-                ToolbarItem(placement: .topBarTrailing) {
-                    Button {
-                        editorTarget = .new
-                    } label: {
-                        Image(systemName: "plus")
-                    }
-                    .accessibilityIdentifier("note-add")
+        }
+        .navigationTitle("Notes")
+        .toolbar {
+            ToolbarItem(placement: .topBarTrailing) {
+                Button {
+                    editorTarget = .new
+                } label: {
+                    Image(systemName: "plus")
                 }
-                ToolbarItem(placement: .topBarLeading) {
-                    Button("Done") { dismiss() }
-                }
+                .accessibilityIdentifier("note-add")
             }
-            .sheet(item: $editorTarget) { target in
-                switch target {
-                case .new:
-                    NoteEditorView(note: nil)
-                case .open(let note):
-                    NoteEditorView(note: note)
-                }
+        }
+        .sheet(item: $editorTarget) { target in
+            switch target {
+            case .new:
+                NoteEditorView(note: nil)
+            case .open(let note):
+                NoteEditorView(note: note)
             }
         }
     }

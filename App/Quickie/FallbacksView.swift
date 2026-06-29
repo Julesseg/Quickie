@@ -11,7 +11,6 @@ import QuickieCore
 /// as the typed "Fallbacks" command row and presented full-screen.
 struct FallbacksView: View {
     @Environment(\.modelContext) private var modelContext
-    @Environment(\.dismiss) private var dismiss
     @Query(sort: \StoredFallbackQuery.createdAt) private var queries: [StoredFallbackQuery]
 
     let store: FallbacksStore
@@ -33,10 +32,10 @@ struct FallbacksView: View {
         }
     }
 
+    // Pushed onto the launcher's navigation stack — no own stack or Done button.
     var body: some View {
-        NavigationStack {
-            List {
-                Section {
+        List {
+            Section {
                     ForEach(rows) { row in
                         FallbackRowView(
                             row: row,
@@ -56,9 +55,6 @@ struct FallbacksView: View {
             }
             .navigationTitle("Fallbacks")
             .toolbar {
-                ToolbarItem(placement: .topBarLeading) {
-                    Button("Done") { dismiss() }
-                }
                 ToolbarItemGroup(placement: .topBarTrailing) {
                     EditButton()
                     Button {
@@ -80,7 +76,6 @@ struct FallbacksView: View {
                     draft.apply(to: query)
                 }
             }
-        }
     }
 
     /// Persists a reorder. We reconcile first so the saved order covers every

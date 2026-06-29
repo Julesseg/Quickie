@@ -4,11 +4,10 @@ import SwiftData
 /// The Snippet library: create, list, edit, and delete the reusable copy-out
 /// text that surfaces in the Result list (issue #6, acceptance criterion #1).
 /// Deliberately a plain, conventional SwiftData list — the launcher's magic is
-/// the input loop; managing snippets is ordinary CRUD that lives behind a sheet
+/// the input loop; managing snippets is ordinary CRUD on a pushed page
 /// so it never competes with the zero-wall launch (ADR 0012).
 struct SnippetManagerView: View {
     @Environment(\.modelContext) private var context
-    @Environment(\.dismiss) private var dismiss
 
     @Query(sort: \StoredSnippet.createdAt, order: .reverse) private var snippets: [StoredSnippet]
 
@@ -30,51 +29,48 @@ struct SnippetManagerView: View {
         }
     }
 
+    // Pushed onto the launcher's navigation stack — the back chevron and
+    // edge-swipe handle dismissal, so this view adds no stack or Done button.
     var body: some View {
-        NavigationStack {
-            Group {
-                if snippets.isEmpty {
-                    ContentUnavailableView(
-                        "No snippets yet",
-                        systemImage: "doc.on.clipboard",
-                        description: Text("Save reusable text — an address, a canned reply — and copy it from the result list.")
-                    )
-                } else {
-                    List {
-                        ForEach(snippets) { snippet in
-                            Button {
-                                editorTarget = .edit(snippet)
-                            } label: {
-                                SnippetRow(snippet: snippet)
-                            }
-                            .buttonStyle(.plain)
-                            .accessibilityIdentifier("snippet-row-\(snippet.title)")
+        Group {
+            if snippets.isEmpty {
+                ContentUnavailableView(
+                    "No snippets yet",
+                    systemImage: "doc.on.clipboard",
+                    description: Text("Save reusable text — an address, a canned reply — and copy it from the result list.")
+                )
+            } else {
+                List {
+                    ForEach(snippets) { snippet in
+                        Button {
+                            editorTarget = .edit(snippet)
+                        } label: {
+                            SnippetRow(snippet: snippet)
                         }
-                        .onDelete(perform: delete)
+                        .buttonStyle(.plain)
+                        .accessibilityIdentifier("snippet-row-\(snippet.title)")
                     }
+                    .onDelete(perform: delete)
                 }
             }
-            .navigationTitle("Snippets")
-            .toolbar {
-                ToolbarItem(placement: .topBarTrailing) {
-                    Button {
-                        editorTarget = .new
-                    } label: {
-                        Image(systemName: "plus")
-                    }
-                    .accessibilityIdentifier("snippet-add")
+        }
+        .navigationTitle("Snippets")
+        .toolbar {
+            ToolbarItem(placement: .topBarTrailing) {
+                Button {
+                    editorTarget = .new
+                } label: {
+                    Image(systemName: "plus")
                 }
-                ToolbarItem(placement: .topBarLeading) {
-                    Button("Done") { dismiss() }
-                }
+                .accessibilityIdentifier("snippet-add")
             }
-            .sheet(item: $editorTarget) { target in
-                switch target {
-                case .new:
-                    SnippetEditorView(snippet: nil)
-                case .edit(let snippet):
-                    SnippetEditorView(snippet: snippet)
-                }
+        }
+        .sheet(item: $editorTarget) { target in
+            switch target {
+            case .new:
+                SnippetEditorView(snippet: nil)
+            case .edit(let snippet):
+                SnippetEditorView(snippet: snippet)
             }
         }
     }

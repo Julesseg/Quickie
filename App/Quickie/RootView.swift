@@ -45,10 +45,12 @@ struct RootView: View {
 
     @State private var query = ""
     /// A note opened for reading or a seeded compose editor — presented as a
-    /// sheet, distinct from the full-screen management pages.
+    /// sheet, distinct from the pushed management pages.
     @State private var activeSheet: ActiveSheet?
-    /// The full-screen management page currently presented, if any.
-    @State private var activePage: PagePresentation?
+    /// The navigation stack of pushed management pages (CONTEXT.md → Management
+    /// page): each is *pushed* from the launcher so it slides in from the right
+    /// and supports the system edge-swipe back, rather than rising as a sheet.
+    @State private var path: [ManagementPage] = []
     @FocusState private var inputFocused: Bool
     @State private var copyConfirmation: String?
     @State private var copyToken = UUID()
@@ -126,76 +128,88 @@ struct RootView: View {
         let engine = self.engine
         let highlighted = isHome ? nil : engine.highlighted(for: query)
 
-        ZStack {
-            QuietBackdrop()
+        NavigationStack(path: $path) {
+            ZStack {
+                QuietBackdrop()
 
-            Group {
-                if isHome {
-                    HomeView(
-                        content: engine.home(),
-                        onRun: run,
-                        isFavorite: { signals.isFavorite($0.id) },
-                        canFavorite: { signals.canFavorite($0.id) },
-                        onToggleFavorite: { signals.toggleFavorite($0.id) }
-                    )
-                } else {
-                    ResultListView(
-                        results: engine.results(for: query),
-                        onRun: run,
-                        isFavorite: { signals.isFavorite($0.id) },
-                        canFavorite: { signals.canFavorite($0.id) },
-                        onToggleFavorite: { signals.toggleFavorite($0.id) }
-                    )
-                }
-            }
-
-            if let copyConfirmation {
-                CopyConfirmationBanner(text: copyConfirmation)
-            }
-        }
-        .safeAreaInset(edge: .bottom, spacing: 0) {
-            VStack(spacing: 0) {
-                if clipboardPrefill.isChipOffered {
-                    ClipboardPasteChip { text in
-                        query = text
-                        clipboard.markUsed()
+                Group {
+                    if isHome {
+                        HomeView(
+                            content: engine.home(),
+                            onRun: run,
+                            isFavorite: { signals.isFavorite($0.id) },
+                            canFavorite: { signals.canFavorite($0.id) },
+                            onToggleFavorite: { signals.toggleFavorite($0.id) }
+                        )
+                    } else {
+                        ResultListView(
+                            results: engine.results(for: query),
+                            onRun: run,
+                            isFavorite: { signals.isFavorite($0.id) },
+                            canFavorite: { signals.canFavorite($0.id) },
+                            onToggleFavorite: { signals.toggleFavorite($0.id) }
+                        )
                     }
                 }
-                InputBar(
-                    query: $query,
-                    focused: $inputFocused,
-                    returnKey: highlighted?.returnKeyLabel ?? ReturnKeyLabel.none,
-                    onSubmit: { if let highlighted { run(highlighted) } }
-                )
+
+                if let copyConfirmation {
+                    CopyConfirmationBanner(text: copyConfirmation)
+                }
+            }
+            .safeAreaInset(edge: .bottom, spacing: 0) {
+                VStack(spacing: 0) {
+                    if clipboardPrefill.isChipOffered {
+                        ClipboardPasteChip { text in
+                            query = text
+                            clipboard.markUsed()
+                        }
+                    }
+                    InputBar(
+                        query: $query,
+                        focused: $inputFocused,
+                        returnKey: highlighted?.returnKeyLabel ?? ReturnKeyLabel.none,
+                        onSubmit: { if let highlighted { run(highlighted) } }
+                    )
+                }
+            }
+            // The launcher itself wears no navigation bar — it is the root; the
+            // management pages push *on top* of it, sliding in from the right with
+            // the system edge-swipe back.
+            .toolbar(.hidden, for: .navigationBar)
+            .navigationDestination(for: ManagementPage.self) { destinationView(for: $0) }
+            // Run the Quicklink / Fallback query data migration once on launch and
+            // seed the default web-search Fallback query (ADR 0013), then auto-focus.
+            .task {
+                QuickieStore.migrateToFallbackQueries(in: modelContext)
+            }
+            .onAppear { inputFocused = true }
+            // A note opened for reading or a seeded compose editor stays a sheet —
+            // a quick modal task, distinct from the pushed management pages.
+            .sheet(item: $activeSheet) { sheet in
+                switch sheet {
+                case .readNote(let note):
+                    NoteEditorView(note: note)
+                case .composeNote(let seed):
+                    NoteEditorView(seed: seed.text)
+                case .composeSnippet(let seed):
+                    SnippetEditorView(seed: seed.text)
+                }
             }
         }
-        // Run the Quicklink / Fallback query data migration once on launch and
-        // seed the default web-search Fallback query (ADR 0013), then auto-focus.
-        .task {
-            QuickieStore.migrateToFallbackQueries(in: modelContext)
-        }
-        .onAppear { inputFocused = true }
         .preferredColorScheme(Appearance(stored: appearanceRaw).colorScheme)
-        // A note opened for reading or a seeded compose editor.
-        .sheet(item: $activeSheet) { sheet in
-            switch sheet {
-            case .readNote(let note):
-                NoteEditorView(note: note)
-            case .composeNote(let seed):
-                NoteEditorView(seed: seed.text)
-            case .composeSnippet(let seed):
-                SnippetEditorView(seed: seed.text)
-            }
-        }
-        // The management pages — each full-screen with its own dismiss.
-        .fullScreenCover(item: $activePage) { presentation in
-            switch presentation.page {
-            case .settings: SettingsView()
-            case .quicklinks: QuicklinksView()
-            case .fallbacks: FallbacksView(store: fallbacks)
-            case .notes: NoteManagerView()
-            case .snippets: SnippetManagerView()
-            }
+    }
+
+    /// The pushed view for a management page (CONTEXT.md → Management page). Each
+    /// relies on the launcher's `NavigationStack` for its bar and back affordance,
+    /// so none wraps itself in another stack.
+    @ViewBuilder
+    private func destinationView(for page: ManagementPage) -> some View {
+        switch page {
+        case .settings: SettingsView()
+        case .quicklinks: QuicklinksView()
+        case .fallbacks: FallbacksView(store: fallbacks)
+        case .notes: NoteManagerView()
+        case .snippets: SnippetManagerView()
         }
     }
 
@@ -221,10 +235,11 @@ struct RootView: View {
         case .composeSnippet(let seed):
             activeSheet = .composeSnippet(ComposeSeed(text: seed))
             query = ""
-        case .openPage(let page):
-            // Opening a management page clears the query back to Home behind the
-            // full-screen cover, so dismissing returns to a clean launcher.
-            activePage = PagePresentation(page: page)
+        case .openPage(let destination):
+            // Push the management page so it slides in from the right with
+            // edge-swipe back, and clear the query so popping returns to a clean
+            // launcher rather than a stale result list.
+            path.append(destination)
             query = ""
         case .none:
             break
@@ -264,13 +279,6 @@ private enum ActiveSheet: Identifiable {
         case .composeSnippet(let seed): return "compose-snippet-\(seed.id)"
         }
     }
-}
-
-/// Wraps a `ManagementPage` so one `.fullScreenCover(item:)` can present any of
-/// the five management pages.
-private struct PagePresentation: Identifiable {
-    let page: ManagementPage
-    var id: String { "\(page)" }
 }
 
 /// The quiet adaptive backdrop the Liquid Glass chrome floats over (ADR 0010).
