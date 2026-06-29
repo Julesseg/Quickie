@@ -135,6 +135,7 @@ struct RootView: View {
                         content: engine.home(),
                         onRun: run,
                         isFavorite: { signals.isFavorite($0.id) },
+                        canFavorite: { signals.canFavorite($0.id) },
                         onToggleFavorite: { signals.toggleFavorite($0.id) }
                     )
                 } else {
@@ -142,6 +143,7 @@ struct RootView: View {
                         results: engine.results(for: query),
                         onRun: run,
                         isFavorite: { signals.isFavorite($0.id) },
+                        canFavorite: { signals.canFavorite($0.id) },
                         onToggleFavorite: { signals.toggleFavorite($0.id) }
                     )
                 }

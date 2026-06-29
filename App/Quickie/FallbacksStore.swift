@@ -42,7 +42,10 @@ final class FallbacksStore {
     }
 
     static func launch() -> FallbacksStore {
-        if ProcessInfo.processInfo.arguments.contains("-uitest-reset-signals") {
+        // Honors the same UI-test reset flag as SignalsStore (shared constant), so
+        // a test asking for a clean launcher also gets a clean Fallback list —
+        // order and disabled set reset alongside Favorites/Frecency.
+        if ProcessInfo.processInfo.arguments.contains(SignalsStore.uitestResetArgument) {
             let defaults = SignalsStore.sharedDefaults
             defaults.removeObject(forKey: orderKey)
             defaults.removeObject(forKey: disabledKey)

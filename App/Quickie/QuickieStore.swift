@@ -230,7 +230,16 @@ enum QuickieStore {
             ))
         }
 
-        try? context.save()
-        defaults.set(true, forKey: migrationFlagKey)
+        // Only record the migration as done once the save actually persists. If
+        // it throws, leave the flag unset so the migration retries next launch —
+        // otherwise the inserted Fallback queries and deleted placeholder
+        // Quicklinks would be lost with no way to recover (the guard would skip
+        // the retry forever).
+        do {
+            try context.save()
+            defaults.set(true, forKey: migrationFlagKey)
+        } catch {
+            // Save failed; migration will retry on the next launch.
+        }
     }
 }

@@ -9,6 +9,7 @@ struct HomeView: View {
     let content: SearchEngine.HomeContent
     let onRun: (Action) -> Void
     let isFavorite: (Action) -> Bool
+    var canFavorite: (Action) -> Bool = { _ in true }
     let onToggleFavorite: (Action) -> Void
 
     /// At most four Favorites fill the 2×2 grid (CONTEXT.md → Favorites grid);
@@ -108,7 +109,10 @@ struct HomeView: View {
                 }
                 .buttonStyle(.plain)
                 .accessibilityIdentifier(action.id)
-                .favoriteContextMenu(isFavorite: isFavorite(action)) { onToggleFavorite(action) }
+                .favoriteContextMenu(
+                    isFavorite: isFavorite(action),
+                    canPin: canFavorite(action)
+                ) { onToggleFavorite(action) }
             }
         }
     }

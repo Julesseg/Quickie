@@ -14,6 +14,8 @@ struct ResultListView: View {
     let onRun: (Action) -> Void
     /// Whether a row's Action is pinned — drives its Pin/Unpin menu label.
     let isFavorite: (Action) -> Bool
+    /// Whether a row can still be pinned (false once the Favorites cap is hit).
+    var canFavorite: (Action) -> Bool = { _ in true }
     /// Toggles a row's Favorite pin (issue #9 AC #1).
     let onToggleFavorite: (Action) -> Void
 
@@ -44,6 +46,7 @@ struct ResultListView: View {
                         .accessibilityIdentifier(action.id)
                         .favoriteContextMenu(
                             isFavorite: isFavorite(action),
+                            canPin: canFavorite(action),
                             toggle: { onToggleFavorite(action) }
                         )
                         .transition(rowMotion.insertionTransition)
@@ -133,13 +136,25 @@ extension View {
     /// long-press context menu keeps pinning out of the typing fast path; it is
     /// distinct from the deferred *secondary actions* long-press (ADR 0008),
     /// which operates on a result's content rather than its place in the index.
-    func favoriteContextMenu(isFavorite: Bool, toggle: @escaping () -> Void) -> some View {
+    ///
+    /// `canPin` reflects the Favorites cap (CONTEXT.md → Favorite): when the grid
+    /// is full, the "Pin as Favorite" item is disabled with a hint rather than
+    /// silently swallowing the gesture — Unpin is always available.
+    func favoriteContextMenu(
+        isFavorite: Bool,
+        canPin: Bool = true,
+        toggle: @escaping () -> Void
+    ) -> some View {
         contextMenu {
             Button {
                 toggle()
             } label: {
                 Label(isFavorite ? "Unpin Favorite" : "Pin as Favorite",
                       systemImage: isFavorite ? "star.slash" : "star")
+            }
+            .disabled(!isFavorite && !canPin)
+            if !isFavorite && !canPin {
+                Text("Favorites are full (max \(SignalsStore.maxFavorites)). Unpin one first.")
             }
         }
     }

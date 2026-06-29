@@ -37,12 +37,14 @@ struct IndexedProviderTests {
         #expect(ids.contains("builtin.fallbacks-page"))
     }
 
-    @Test("the built-ins ship no Fallbacks and no Quicklinks")
+    @Test("the built-ins ship no Fallbacks and wear command badges, not data ones")
     func builtInsShipNoFallbacksOrLinks() {
         let actions = IndexedProvider.builtIns().candidates(for: "")
         // The default web-search Fallback query is seeded into the store as
         // ordinary data, not shipped here; the built-ins are command rows only.
         #expect(actions.allSatisfy { !$0.isFallback })
-        #expect(actions.allSatisfy { $0.kind != .quicklink || $0.id == "builtin.quicklinks-page" })
+        // A command row never wears a data kind — so the "Quicklinks" command
+        // can't be mistaken for a user's Quicklink, nor "Fallbacks" for a query.
+        #expect(actions.allSatisfy { $0.kind == .settings || $0.kind == .managementPage })
     }
 }

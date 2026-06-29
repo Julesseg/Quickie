@@ -55,10 +55,14 @@ public enum ActionKind: Equatable, Sendable {
     case newNote
     case newSnippet
     case calculator
-    /// A management command row that opens a full-screen page (Settings,
-    /// Quicklinks, Fallbacks). The Notes/Snippets library commands keep their
-    /// `.note`/`.snippet` kind so they read as part of those libraries.
+    /// The Settings command row (gearshape) — distinct from the data it has none
+    /// of, so it reads as its own thing.
     case settings
+    /// A management command row that opens a library/management page it does not
+    /// itself belong to — Quicklinks and Fallbacks. A dedicated kind so a command
+    /// row never wears the same badge as the data rows it governs (a Quicklinks
+    /// command vs a user's Quicklinks, a Fallbacks command vs a Fallback query).
+    case managementPage
 }
 
 /// What tapping a row *does*, as a coarse classification of its `ActionOutcome`
@@ -380,7 +384,7 @@ extension Action {
     public static func openQuicklinksPage() -> Action {
         Action(
             id: "builtin.quicklinks-page",
-            kind: .quicklink,
+            kind: .managementPage,
             title: "Quicklinks",
             aliases: ["links", "manage quicklinks", "bookmarks"],
             inputTypes: [],
@@ -394,7 +398,7 @@ extension Action {
     public static func openFallbacksPage() -> Action {
         Action(
             id: "builtin.fallbacks-page",
-            kind: .fallbackQuery,
+            kind: .managementPage,
             title: "Fallbacks",
             aliases: ["fallback", "search engines", "manage fallbacks"],
             inputTypes: [],

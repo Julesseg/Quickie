@@ -25,6 +25,13 @@ final class SignalsStore {
     private static let favoritesKey = "signals.favorites"
     private static let frecencyKey = "signals.frecency"
 
+    /// The launch argument that resets persisted launcher signals to a clean
+    /// slate under UI testing. Shared so every store that honors it names the same
+    /// flag — note its reach is broad: it clears Favorites/Frecency **and** the
+    /// Fallback list order/disabled set (see `FallbacksStore.launch`), so a test
+    /// that passes it gets a fully reset launcher, not just reset Favorites.
+    static let uitestResetArgument = "-uitest-reset-signals"
+
     init(defaults: UserDefaults = SignalsStore.sharedDefaults) {
         self.defaults = defaults
         self.favorites = defaults.stringArray(forKey: Self.favoritesKey) ?? []
@@ -37,7 +44,7 @@ final class SignalsStore {
     /// test tapping a row would record frecency that a later "empty Home"
     /// assertion would then trip over.
     static func launch() -> SignalsStore {
-        if ProcessInfo.processInfo.arguments.contains("-uitest-reset-signals") {
+        if ProcessInfo.processInfo.arguments.contains(uitestResetArgument) {
             let defaults = sharedDefaults
             defaults.removeObject(forKey: favoritesKey)
             defaults.removeObject(forKey: frecencyKey)
