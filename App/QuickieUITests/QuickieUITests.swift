@@ -132,24 +132,43 @@ final class QuickieUITests: XCTestCase {
         let row = app.buttons["builtin.settings"]
         XCTAssertTrue(row.waitForExistence(timeout: 5), "typing 'settings' surfaces the Settings command")
 
-        // Long-press opens the Pin/Unpin context menu, then pin it.
-        row.press(forDuration: 1.2)
-        let pin = app.buttons["Pin as Favorite"]
-        XCTAssertTrue(pin.waitForExistence(timeout: 5), "long-press should offer Pin as Favorite")
-        pin.tap()
+        // Pin via the long-press menu, *verifying the toggle actually took*. On
+        // the CI simulator a context-menu item's tap is sometimes synthesized
+        // without firing its SwiftUI action (the menu is presented in a separate
+        // remote view), so a single tap can silently no-op — leaving the launcher
+        // on the empty Home with nothing pinned. Reopen the menu and retry until
+        // it flips to "Unpin Favorite", which only appears once the pin is
+        // recorded, rather than assuming one tap landed.
+        let pinItem = app.buttons["Pin as Favorite"]
+        let unpinItem = app.buttons["Unpin Favorite"]
+        // Tapping the dimmed backdrop only dismisses the menu — it never activates
+        // a row — so it's safe for both clearing a stray platter and closing the
+        // menu we opened just to check state.
+        let backdrop = app.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.05))
+        var pinned = false
+        for _ in 0..<5 {
+            row.press(forDuration: 1.2)
+            if unpinItem.waitForExistence(timeout: 3) {
+                pinned = true          // the menu flipped — the pin is recorded
+                backdrop.tap()         // dismiss the menu we opened to verify
+                break
+            }
+            if pinItem.waitForExistence(timeout: 3) {
+                pinItem.tap()          // attempt the pin (also dismisses the menu)
+            } else {
+                backdrop.tap()         // menu never opened — clear any stray platter
+            }
+            // Let the menu/platter settle so the next long-press lands cleanly.
+            _ = input.waitForHittable(timeout: 10)
+        }
+        XCTAssertTrue(pinned,
+                      "pinning via the long-press menu should register (the menu should flip to Unpin Favorite)")
 
-        // The context menu dismisses itself after a tap, but under CI load the
-        // dismissal animation and its dimming platter can linger — and tapping the
-        // input while the platter is still up lands on the platter, so the field
-        // never refocuses and the deletes type into nothing (Home never returns).
-        // Gate on the input being genuinely *hittable* again (platter gone), which
-        // is the actual precondition for the next step — a far more robust signal
-        // than waiting for a specific menu element to disappear within a tight
-        // window. If a stuck platter outlives the first wait, tap the dimmed
-        // backdrop (which only dismisses the menu, never activates a row) and wait
-        // again, so a slow dismissal can't flake the test.
+        // The menu is dismissed; wait for the input to be genuinely hittable
+        // (platter gone) before clearing, and nudge the backdrop once if a slow
+        // dismissal lingers under CI load.
         if !input.waitForHittable(timeout: 10) {
-            app.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.05)).tap()
+            backdrop.tap()
         }
         XCTAssertTrue(input.waitForHittable(timeout: 10),
                       "the input should be tappable once the Pin menu dismisses")
