@@ -196,16 +196,13 @@ struct RootView: View {
             // drops the keyboard; SwiftUI doesn't restore it on return, and
             // focusing *during* the pop is cancelled by the in-flight transition
             // (and a no-op if the FocusState still reads `true`). So once the
-            // launcher is back, toggle focus off and — after the pop settles —
-            // on again, which reliably lifts the keyboard. This extends the
-            // zero-wall promise (ADR 0012) to the return trip.
+            // launcher is back, re-arm focus just past the pop, which reliably
+            // lifts the keyboard. This extends the zero-wall promise (ADR 0012)
+            // to the return trip. The pop has no completion callback, so the
+            // delay is timed to just clear the slide-back animation.
             .onChange(of: path.isEmpty) { _, launcherReturned in
                 guard launcherReturned else { return }
-                inputFocused = false
-                Task { @MainActor in
-                    try? await Task.sleep(for: .milliseconds(550))
-                    inputFocused = true
-                }
+                refocusInput(after: .milliseconds(400))
             }
             // The launcher itself wears no navigation bar — it is the root; the
             // management pages push *on top* of it, sliding in from the right with
@@ -219,7 +216,11 @@ struct RootView: View {
             }
             // A note opened for reading or a seeded compose editor stays a sheet —
             // a quick modal task, distinct from the pushed management pages.
-            .sheet(item: $activeSheet) { sheet in
+            // Dismissing a sheet also drops the keyboard, so re-arm focus on
+            // return. `onDismiss` fires *after* the dismiss animation finishes,
+            // so unlike the pushed-page pop this needs only a brief settle —
+            // the keyboard comes back almost immediately.
+            .sheet(item: $activeSheet, onDismiss: { refocusInput(after: .milliseconds(120)) }) { sheet in
                 switch sheet {
                 case .readNote(let note):
                     NoteEditorView(note: note)
@@ -244,6 +245,21 @@ struct RootView: View {
         case .fallbacks: FallbacksView(store: fallbacks)
         case .notes: NoteManagerView()
         case .snippets: SnippetManagerView()
+        }
+    }
+
+    /// Re-arms focus on the launcher input after a page or sheet closes and the
+    /// keyboard has dropped. Toggling off first makes the on-set a real state
+    /// change — re-assigning `true` to a `FocusState` that already reads `true`
+    /// lifts nothing. The `delay` lets the dismiss animation settle before the
+    /// on-set, so the focus isn't cancelled mid-transition: longer for a pushed
+    /// page (no completion callback, timed past the slide-back), brief for a
+    /// sheet (called from `onDismiss`, already past the animation).
+    private func refocusInput(after delay: Duration) {
+        inputFocused = false
+        Task { @MainActor in
+            try? await Task.sleep(for: delay)
+            inputFocused = true
         }
     }
 
