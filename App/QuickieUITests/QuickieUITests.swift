@@ -154,18 +154,29 @@ final class QuickieUITests: XCTestCase {
         XCTAssertTrue(input.waitForHittable(timeout: 10),
                       "the input should be tappable once the Pin menu dismisses")
 
-        // Clear the query — Home returns, now with the pinned Favorite card.
-        // Delete a generous *fixed* number of characters rather than counting
-        // `input.value`: under CI load the field's value can momentarily report
-        // empty, and a count-based clear then under-deletes and leaves the query
-        // intact (Home never returns). Over-deleting an already-empty field is a
-        // harmless no-op, so a fixed count comfortably above any test query is the
-        // robust choice.
-        input.tap()
-        input.typeText(String(repeating: XCUIKeyboardKey.delete.rawValue, count: 24))
+        // Clear the query so Home returns with the pinned Favorite card. Right
+        // after the context menu dismisses, the input's focus and the keyboard can
+        // both lag under CI load: a single blind round of deletes can land on a
+        // not-yet-focused field (or before the keyboard is up) and clear nothing,
+        // leaving the query intact and Home away — the historical flake, asserted
+        // on one best-effort attempt. Instead re-focus and re-clear in a loop,
+        // polling for the pinned card and stopping the instant Home returns. Each
+        // round waits for the keyboard before typing so the deletes can't be
+        // swallowed, then deletes a generous *fixed* count: the cursor sits at the
+        // end of the short query (so backspaces consume it) and over-deleting an
+        // already-empty field is a harmless no-op, so a count comfortably above any
+        // test query is the robust choice — more reliable than counting
+        // `input.value`, which can momentarily report empty under load.
+        let favoriteCard = app.buttons["favorite.builtin.settings"]
+        for _ in 0..<5 where !favoriteCard.exists {
+            input.tap()
+            guard app.keyboards.firstMatch.waitForExistence(timeout: 5) else { continue }
+            input.typeText(String(repeating: XCUIKeyboardKey.delete.rawValue, count: 24))
+            _ = favoriteCard.waitForExistence(timeout: 3)
+        }
 
         XCTAssertTrue(
-            app.buttons["favorite.builtin.settings"].waitForExistence(timeout: 10),
+            favoriteCard.exists,
             "the pinned Action should appear as a Favorite card on Home"
         )
     }
