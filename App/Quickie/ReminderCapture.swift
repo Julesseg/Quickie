@@ -83,6 +83,9 @@ final class ReminderCaptureModel {
 
     var actionTitle: String { session?.actionTitle ?? "" }
     var pills: [ArgumentValue] { session?.pills ?? [] }
+    /// Every breadcrumb step, shown from the start (issue #37): the top bar renders
+    /// each as a glass crumb with its value or label and highlights the current one.
+    var steps: [BreadcrumbStep] { session?.steps ?? [] }
     var currentArgument: Argument? { session?.current }
     /// The Return-key label for the current step — `.done` on the final Argument
     /// (the auto-create), `.next` otherwise.
@@ -363,23 +366,19 @@ private struct DateStep: View {
     }
 }
 
-// MARK: - Bottom capture bar (breadcrumb + morph control)
+// MARK: - Bottom capture bar (the morph control)
 
-/// The bottom region while capturing: the breadcrumb of filled pills above the
-/// control for the current step — the keyboard for text/choice, a commit button
-/// for the date, or the inline "Enable in Settings" affordance on denial.
+/// The bottom region while capturing: the control for the current step — the
+/// keyboard for text/choice, a commit button for the date, or the inline "Enable
+/// in Settings" affordance on denial. The breadcrumb itself rides up top now
+/// (`ReminderBreadcrumbBar`), so this bar is purely the morphing input.
 struct ReminderCaptureBar: View {
     @Bindable var model: ReminderCaptureModel
 
     var body: some View {
-        VStack(spacing: 10) {
-            if model.isCapturing {
-                Breadcrumb(model: model)
-            }
-            control
-        }
-        .padding(.horizontal, 12)
-        .padding(.vertical, 10)
+        control
+            .padding(.horizontal, 12)
+            .padding(.vertical, 10)
     }
 
     @ViewBuilder
@@ -431,52 +430,163 @@ struct ReminderCaptureBar: View {
     }
 }
 
-/// The horizontal breadcrumb: the Action title, the filled pills (tap to
-/// re-edit), and a dashed placeholder for the step being collected.
-private struct Breadcrumb: View {
+// MARK: - Top breadcrumb bar
+
+/// The breadcrumb that rides the top of the screen while capturing: the Action
+/// name above a full-width row of glass crumbs — one per step, all shown from the
+/// start. Its background is a progressive blur that fades downward, so the content
+/// (the choice list / date picker) slides under it.
+struct ReminderBreadcrumbBar: View {
     @Bindable var model: ReminderCaptureModel
 
     var body: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Text(model.actionTitle)
+                .font(.headline)
+                .accessibilityAddTraits(.isHeader)
+            BreadcrumbSteps(model: model)
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(.horizontal, 16)
+        .padding(.top, 6)
+        .padding(.bottom, 16)
+        .background(ProgressiveBlur().ignoresSafeArea(edges: .top))
+    }
+}
+
+/// The scrolling flex row of step crumbs. Each step takes an equal share of the
+/// width — the current one a little more — and the whole row scrolls once that
+/// share would dip below `minStepWidth`, so every crumb stays legible no matter
+/// how many steps an Action declares.
+private struct BreadcrumbSteps: View {
+    @Bindable var model: ReminderCaptureModel
+
+    /// Measured width of the scroll viewport, which the equal-share maths divides up.
+    @State private var containerWidth: CGFloat = 0
+
+    private let rowSpacing: CGFloat = 6
+    private let chevronWidth: CGFloat = 12
+    private let minStepWidth: CGFloat = 92
+    /// The current crumb's share, weighted a touch above the others so it reads as
+    /// selected without dominating.
+    private let currentWeight: CGFloat = 1.35
+
+    var body: some View {
+        let steps = model.steps
         ScrollView(.horizontal, showsIndicators: false) {
-            HStack(spacing: 6) {
-                crumb(model.actionTitle, weight: .semibold)
-
-                ForEach(Array(model.pills.enumerated()), id: \.offset) { index, value in
-                    Button {
-                        model.editPill(at: index)
-                    } label: {
-                        crumb(pillText(value), interactive: true)
-                    }
-                    .buttonStyle(.plain)
-                    .accessibilityIdentifier("pill-\(index)")
-                }
-
-                if let label = model.currentArgument?.label {
-                    Text(label)
-                        .font(.subheadline)
-                        .foregroundStyle(.secondary)
-                        .padding(.horizontal, 12)
-                        .padding(.vertical, 7)
-                        .overlay {
-                            Capsule().strokeBorder(
-                                .secondary.opacity(0.4),
-                                style: StrokeStyle(lineWidth: 1, dash: [4])
-                            )
+            GlassEffectContainer(spacing: rowSpacing) {
+                HStack(spacing: rowSpacing) {
+                    ForEach(steps) { step in
+                        StepCrumb(
+                            step: step,
+                            width: width(for: step, in: steps),
+                            onEdit: { model.editPill(at: step.index) }
+                        )
+                        if step.index < steps.count - 1 {
+                            Image(systemName: "chevron.right")
+                                .font(.caption.weight(.semibold))
+                                .foregroundStyle(.secondary)
+                                .frame(width: chevronWidth)
                         }
+                    }
                 }
             }
-            .padding(.horizontal, 4)
         }
-        .defaultScrollAnchor(.trailing)
+        .onGeometryChange(for: CGFloat.self) { $0.size.width } action: { containerWidth = $0 }
     }
 
-    private func crumb(_ text: String, weight: Font.Weight = .regular, interactive: Bool = false) -> some View {
-        Text(text)
-            .font(.subheadline.weight(weight))
-            .lineLimit(1)
-            .padding(.horizontal, 12)
-            .padding(.vertical, 7)
-            .glassEffect(interactive ? .regular.interactive() : .regular, in: Capsule())
+    /// Each step's width. When the steps fit, every crumb gets its weighted share
+    /// of the space left after the chevrons — equal, but the current one a little
+    /// wider — so the shares sum to the full width and the row fills it edge to
+    /// edge. Once that share would dip below `minStepWidth` (too many steps), every
+    /// crumb falls back to its minimum and the row overflows into a scroll instead.
+    private func width(for step: BreadcrumbStep, in steps: [BreadcrumbStep]) -> CGFloat {
+        let weight = step.isCurrent ? currentWeight : 1
+        guard containerWidth > 0, !steps.isEmpty else { return minStepWidth * weight }
+        let chevrons = CGFloat(steps.count - 1) * (chevronWidth + rowSpacing * 2)
+        let available = max(0, containerWidth - chevrons)
+        let totalWeight = steps.reduce(CGFloat(0)) { $0 + ($1.isCurrent ? currentWeight : 1) }
+        let unit = available / totalWeight
+        // The narrowest crumb is a non-current one (weight 1); if even that clears
+        // the floor the whole row fits, so honour the exact shares.
+        return unit >= minStepWidth ? unit * weight : minStepWidth * weight
+    }
+}
+
+/// One breadcrumb crumb: a Liquid Glass rounded rectangle showing the step's
+/// label and its committed value (word-wrapped), highlighted when it is the
+/// current step and tappable to re-edit once it carries a value.
+private struct StepCrumb: View {
+    let step: BreadcrumbStep
+    let width: CGFloat
+    var onEdit: () -> Void
+
+    private var shape: RoundedRectangle { RoundedRectangle(cornerRadius: 16, style: .continuous) }
+
+    var body: some View {
+        if step.value != nil {
+            Button(action: onEdit) { content }
+                .buttonStyle(.plain)
+                .accessibilityIdentifier("pill-\(step.index)")
+        } else {
+            content
+                .accessibilityIdentifier("step-\(step.index)")
+        }
+    }
+
+    private var content: some View {
+        VStack(alignment: .leading, spacing: 3) {
+            Text(step.label)
+                .font(.caption2.weight(.semibold))
+                .textCase(.uppercase)
+                .foregroundStyle(.secondary)
+                .lineLimit(1)
+            Text(valueText)
+                .font(.subheadline.weight(step.isCurrent ? .semibold : .regular))
+                .foregroundStyle(step.value == nil ? .tertiary : .primary)
+                .fixedSize(horizontal: false, vertical: true)
+                .frame(maxWidth: .infinity, alignment: .leading)
+        }
+        .padding(.horizontal, 12)
+        .padding(.vertical, 9)
+        .frame(width: width, alignment: .leading)
+        .glassEffect(step.value != nil ? .regular.interactive() : .regular, in: shape)
+        .overlay {
+            if step.isCurrent {
+                shape
+                    .fill(Color.accentColor.opacity(0.12))
+                    .overlay { shape.strokeBorder(Color.accentColor.opacity(0.5), lineWidth: 1) }
+                    .allowsHitTesting(false)
+            }
+        }
+        .contentShape(shape)
+    }
+
+    /// The crumb's value line: the committed value, or an em dash while the step is
+    /// still waiting on input.
+    private var valueText: String {
+        step.value.map(pillText) ?? "—"
+    }
+}
+
+/// A material that fades from solid at the top to clear at the bottom — the
+/// progressive blur the top breadcrumb floats on, so content reads through it
+/// near the row and is cleanly blurred up under the status area.
+private struct ProgressiveBlur: View {
+    var body: some View {
+        Rectangle()
+            .fill(.regularMaterial)
+            .mask(
+                LinearGradient(
+                    stops: [
+                        .init(color: .black, location: 0),
+                        .init(color: .black, location: 0.6),
+                        .init(color: .clear, location: 1),
+                    ],
+                    startPoint: .top,
+                    endPoint: .bottom
+                )
+            )
     }
 }
 

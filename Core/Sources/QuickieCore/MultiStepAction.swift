@@ -37,6 +37,22 @@ public struct MultiStepAction {
         index == action.arguments.count - 1
     }
 
+    /// Every step of the Action in order — the whole breadcrumb, all crumbs shown
+    /// from the start (issue #37): each carries its `label`, its committed `value`
+    /// (`nil` while still unfilled), and whether the cursor is currently collecting
+    /// it. Re-editing keeps the later pills' values intact while moving `isCurrent`
+    /// back to the tapped step.
+    public var steps: [BreadcrumbStep] {
+        action.arguments.enumerated().map { offset, argument in
+            BreadcrumbStep(
+                index: offset,
+                label: argument.label,
+                value: offset < pills.count ? pills[offset] : nil,
+                isCurrent: offset == index
+            )
+        }
+    }
+
     /// Seals `value` into the current Argument's pill and advances. Returns
     /// `.collecting` while Arguments remain, or `.completed` with the Action's
     /// outcome once the final Argument is filled — the auto-create, no confirm step.
@@ -96,6 +112,30 @@ public struct MultiStepAction {
             }
             .sorted { $0.score != $1.score ? $0.score > $1.score : $0.option.label < $1.option.label }
             .map(\.option)
+    }
+}
+
+/// One crumb in the breadcrumb as the UI renders it (issue #37): an Argument
+/// shown from the start, carrying its committed `value` (`nil` until collected)
+/// and whether the input is currently collecting it. The reusable view-model the
+/// app maps to a glass crumb, so the pixels never reach into the engine's order.
+public struct BreadcrumbStep: Identifiable, Equatable, Sendable {
+    /// The Argument's position, and the crumb's stable identity.
+    public let index: Int
+    /// The Argument's display label — the crumb's caption / placeholder prompt.
+    public let label: String
+    /// The committed value, or `nil` while this step is still unfilled.
+    public let value: ArgumentValue?
+    /// Whether the cursor currently sits on this step (the highlighted crumb).
+    public let isCurrent: Bool
+
+    public var id: Int { index }
+
+    public init(index: Int, label: String, value: ArgumentValue?, isCurrent: Bool) {
+        self.index = index
+        self.label = label
+        self.value = value
+        self.isCurrent = isCurrent
     }
 }
 

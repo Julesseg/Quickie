@@ -183,6 +183,15 @@ struct RootView: View {
                     CopyConfirmationBanner(text: copyConfirmation)
                 }
             }
+            // The capture breadcrumb rides the top with a progressive blur, the
+            // content sliding under it (issue #37). Shown only at the root and only
+            // while a session is collecting — the primer/denial affordances have no
+            // steps and live solely in the bottom bar.
+            .overlay(alignment: .top) {
+                if path.isEmpty && reminderCapture.isCapturing {
+                    ReminderBreadcrumbBar(model: reminderCapture)
+                }
+            }
             // The input floats in the bottom safe area, with the paste button to
             // its right. Kept *inside* the launcher's content so the reversed
             // result list reserves space for it — the best match sits just above

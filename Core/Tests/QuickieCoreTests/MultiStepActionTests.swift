@@ -117,6 +117,34 @@ struct MultiStepActionTests {
         #expect(session.backspaceOnEmpty() == .abandoned)
     }
 
+    @Test("steps exposes every Argument from the start with its value and the cursor")
+    func stepsShowAllFromStart() {
+        let action = sample() // First, Second, Third
+        var session = MultiStepAction(action: action)
+
+        // All three crumbs are visible immediately, none filled, the first current.
+        #expect(session.steps.map(\.label) == ["First", "Second", "Third"])
+        #expect(session.steps.map(\.value) == [nil, nil, nil])
+        #expect(session.steps.map(\.isCurrent) == [true, false, false])
+
+        _ = session.commit(.text("a"))
+
+        // The first crumb now carries its value; the cursor has advanced.
+        #expect(session.steps.map(\.value) == [.text("a"), nil, nil])
+        #expect(session.steps.map(\.isCurrent) == [false, true, false])
+    }
+
+    @Test("re-editing marks the tapped step current while the later pills still show")
+    func stepsDuringReedit() {
+        var session = MultiStepAction(action: sample())
+        _ = session.commit(.text("a"))
+        _ = session.commit(.text("b")) // collecting the third step
+        session.editPill(at: 0)
+
+        #expect(session.steps.map(\.isCurrent) == [true, false, false])
+        #expect(session.steps.map(\.value) == [.text("a"), .text("b"), nil])
+    }
+
     @Test("a choice step filters and ranks its options with the matcher")
     func choiceOptionsFilterAndRank() {
         let lists = [
