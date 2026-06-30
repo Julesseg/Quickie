@@ -1,4 +1,5 @@
 import SwiftUI
+import UIKit
 import QuickieCore
 
 /// The empty-query Home state (CONTEXT.md → Home): a 2×2 **Favorites grid** (at
@@ -72,13 +73,14 @@ struct HomeView: View {
             }
             .padding(.horizontal, 16)
         }
-        .padding(.top, 12)
         .padding(.bottom, 16)
         .frame(maxWidth: .infinity)
         // The progressive-blur band: a soft material that fades out at its lower
         // edge so the Recent list dissolves under it rather than meeting a hard
-        // line (CONTEXT.md → Home; ADR 0010).
-        .background {
+        // line (CONTEXT.md → Home; ADR 0010). It bleeds into the status bar as one
+        // cohesive frame (`statusBarBleed`) so it slides as a single block with the
+        // rest of Home rather than leaving its status-bar band anchored behind.
+        .statusBarBleed(topPadding: 12) {
             Rectangle()
                 .fill(.ultraThinMaterial)
                 .mask {
@@ -91,7 +93,6 @@ struct HomeView: View {
                         startPoint: .top, endPoint: .bottom
                     )
                 }
-                .ignoresSafeArea(edges: .top)
         }
     }
 
@@ -161,5 +162,46 @@ struct HomePlaceholder: View {
             Spacer()
         }
         .frame(maxWidth: .infinity)
+    }
+}
+
+// MARK: - Status-bar bleed
+
+extension View {
+    /// Lets a top-anchored bar span the status bar as **one cohesive frame**: it
+    /// reserves the top safe-area height as the bar's own top padding (so its
+    /// content still sits clear of the status bar), paints `background` behind the
+    /// whole bar, then ignores the top safe area. Because the bar's frame now spans
+    /// from the screen edge down, a `.move(edge: .top)` / `.move(edge: .bottom)`
+    /// transition slides it as a single block — rather than bleeding only the
+    /// background and leaving that status-bar band anchored behind while the rest
+    /// of the content moves (which reads as a half-clip, or a band that won't move).
+    func statusBarBleed<Background: View>(
+        topPadding: CGFloat,
+        @ViewBuilder background: () -> Background
+    ) -> some View {
+        modifier(StatusBarBleed(topPadding: topPadding, background: background()))
+    }
+}
+
+private struct StatusBarBleed<Background: View>: ViewModifier {
+    var topPadding: CGFloat
+    var background: Background
+
+    func body(content: Content) -> some View {
+        content
+            .padding(.top, topInset + topPadding)
+            .background(background)
+            .ignoresSafeArea(edges: .top)
+    }
+
+    /// The window's top safe-area inset. Read from UIKit because the bar ignores
+    /// the top safe area to span the full height — so its own geometry would report
+    /// zero — yet must still reserve that height to clear the status bar. Static per
+    /// orientation, and `body` re-evaluates on rotation.
+    private var topInset: CGFloat {
+        UIApplication.shared.connectedScenes
+            .compactMap { $0 as? UIWindowScene }
+            .first?.keyWindow?.safeAreaInsets.top ?? 0
     }
 }

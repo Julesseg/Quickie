@@ -455,26 +455,11 @@ struct ReminderBreadcrumbBar: View {
         }
         .frame(maxWidth: .infinity, alignment: .leading)
         .padding(.horizontal, 16)
-        // Reserve the status-bar height as the bar's *own* top padding, then let
-        // the whole bar (blur included) ignore the top safe area — so its frame
-        // spans from the screen edge down as one block. Bleeding only the
-        // background (the old approach) left the bar's frame starting at the
-        // safe-area top, so the slide-out's `.move(edge: .top)` cleared only that
-        // top and abandoned the status-bar band mid-slide, reading as a half-clip.
-        .padding(.top, topSafeAreaInset + 6)
         .padding(.bottom, 16)
-        .background(ProgressiveBlur())
-        .ignoresSafeArea(edges: .top)
-    }
-
-    /// The window's top safe-area inset. Read from UIKit because the bar ignores
-    /// the top safe area to span the full height — so its own geometry no longer
-    /// reports the inset — yet must still reserve that height to sit clear of the
-    /// status bar. Static per orientation, and `body` re-evaluates on rotation.
-    private var topSafeAreaInset: CGFloat {
-        UIApplication.shared.connectedScenes
-            .compactMap { $0 as? UIWindowScene }
-            .first?.keyWindow?.safeAreaInsets.top ?? 0
+        // Span the status bar as one cohesive frame so the bar slides in and out
+        // as a single block; bleeding only the background left the status-bar band
+        // anchored behind during the slide, reading as a half-clip (`statusBarBleed`).
+        .statusBarBleed(topPadding: 6) { ProgressiveBlur() }
     }
 }
 

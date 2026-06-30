@@ -394,15 +394,21 @@ struct RootView: View {
         perform(action.run(input: query))
     }
 
-    /// Begins the New Reminder capture (issue #37): drop the search keyboard and
-    /// hand off to the capture model, which resolves EventKit permission (primer →
-    /// system dialog) just-in-time before the breadcrumb starts (ADR 0012). The
-    /// query is cleared once the capture actually becomes active (see the
-    /// `isActive` `onChange`), not here — clearing it synchronously while the
-    /// authorized session is still resolving on the actor would flash an empty
-    /// Home for a frame before the capture slides in.
+    /// Begins the New Reminder capture (issue #37): hand off to the capture model,
+    /// which resolves EventKit permission (primer → system dialog) just-in-time
+    /// before the breadcrumb starts (ADR 0012).
+    ///
+    /// The search field deliberately keeps first responder — the keyboard stays
+    /// put — so when the title step's field appears it takes focus seamlessly
+    /// instead of the keyboard dropping and springing back. Removing the search
+    /// field as the capture takes over resets `inputFocused` to false on its own,
+    /// so the return-trip `onAppear` refocus still fires as a real false→true.
+    ///
+    /// The query is cleared once the capture becomes active (the `isActive`
+    /// `onChange`), not here — clearing it synchronously while the authorized
+    /// session is still resolving on the actor would flash an empty Home for a
+    /// frame before the capture slides in.
     private func startReminderCapture() {
-        inputFocused = false
         reminderCapture.start(
             settings: ReminderSettings(
                 askDate: reminderAskDate,
