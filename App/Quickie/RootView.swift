@@ -59,8 +59,10 @@ struct RootView: View {
     /// and supports the system edge-swipe back, rather than rising as a sheet.
     @State private var path: [ManagementPage] = []
     @FocusState private var inputFocused: Bool
-    @State private var copyConfirmation: String?
-    @State private var copyToken = UUID()
+    /// The brief, non-blocking confirmation toast (issue #37): a copy-out, or the
+    /// tappable "Reminder added" that opens the reminder in the Reminders app.
+    @State private var toast: Toast?
+    @State private var toastToken = UUID()
 
     @State private var keyboardLayout = KeyboardLayoutModel()
     @State private var clipboard = ClipboardPrefillModel()
@@ -179,8 +181,8 @@ struct RootView: View {
                     }
                 }
 
-                if let copyConfirmation {
-                    CopyConfirmationBanner(text: copyConfirmation)
+                if let toast {
+                    ConfirmationToast(toast: toast) { openToast(toast) }
                 }
             }
             // The capture breadcrumb rides the top with a progressive blur, the
@@ -256,7 +258,15 @@ struct RootView: View {
             // Flash the brief confirmation a completed capture reports (issue #37),
             // the same non-blocking acknowledgement as a copy-out.
             .onChange(of: reminderCapture.confirmation) { _, new in
-                if let new { flashConfirmation(new.message) }
+                guard let new else { return }
+                // A successful add carries a deep link: show a tappable, longer-
+                // lived toast with a trailing open glyph; a failure is a plain,
+                // brief acknowledgement.
+                flashConfirmation(
+                    new.message,
+                    systemImage: new.openURL == nil ? nil : "arrow.up.right",
+                    openURL: new.openURL
+                )
             }
             // Re-arm focus off the popped page's `onDisappear` — it fires when the
             // pop animation completes, the moment the launcher is back and its
@@ -409,15 +419,28 @@ struct RootView: View {
         }
     }
 
-    private func flashConfirmation(_ message: String) {
-        let token = UUID()
-        copyToken = token
-        withAnimation { copyConfirmation = message }
+    /// Flashes a brief, non-blocking toast acknowledging a silent outcome. A toast
+    /// carrying an `openURL` is tappable and lingers longer (so there is time to
+    /// tap it), with `systemImage` trailing the text as the open affordance; a
+    /// plain one fades after a beat.
+    private func flashConfirmation(_ message: String, systemImage: String? = nil, openURL url: URL? = nil) {
+        let new = Toast(message: message, systemImage: systemImage, openURL: url)
+        toastToken = new.id
+        withAnimation { toast = new }
+        let lifetime: Duration = url == nil ? .seconds(1.6) : .seconds(4)
         Task {
-            try? await Task.sleep(for: .seconds(1.4))
-            guard copyToken == token else { return }
-            withAnimation { copyConfirmation = nil }
+            try? await Task.sleep(for: lifetime)
+            guard toastToken == new.id else { return }
+            withAnimation { toast = nil }
         }
+    }
+
+    /// Taps through a tappable toast to the reminder it points at, opening it in
+    /// the Reminders app (issue #37), and dismisses the toast.
+    private func openToast(_ toast: Toast) {
+        guard let url = toast.openURL else { return }
+        openURL(url)
+        withAnimation { self.toast = nil }
     }
 }
 
@@ -464,23 +487,50 @@ private struct QuietBackdrop: View {
     }
 }
 
-/// The lightweight "Copied" confirmation: a brief, non-blocking banner that
-/// acknowledges a silent copy-out without stealing focus from the input.
-private struct CopyConfirmationBanner: View {
-    let text: String
+/// A brief, non-blocking confirmation shown at the bottom (issue #37): a silent
+/// acknowledgement that never steals focus. A copy-out is plain text; the
+/// "Reminder added" toast carries a deep link in `openURL`, so it becomes
+/// tappable and shows a trailing `systemImage` as the open affordance.
+private struct Toast {
+    let id = UUID()
+    let message: String
+    var systemImage: String?
+    var openURL: URL?
+}
+
+/// Renders a `Toast` as a glass capsule. Only a tappable toast (one with an
+/// `openURL`) intercepts touches; a plain one lets them fall through to the
+/// launcher beneath, so an acknowledgement never blocks the next keystroke.
+private struct ConfirmationToast: View {
+    let toast: Toast
+    var onTap: () -> Void
+
+    private var isTappable: Bool { toast.openURL != nil }
 
     var body: some View {
         VStack {
             Spacer()
-            Text(text)
-                .font(.callout.weight(.medium))
-                .padding(.horizontal, 16)
-                .padding(.vertical, 10)
-                .glassEffect(.regular, in: Capsule())
-                .padding(.bottom, 90)
-                .accessibilityIdentifier("copy-confirmation")
+            HStack(spacing: 8) {
+                Text(toast.message)
+                    .font(.callout.weight(.medium))
+                if let image = toast.systemImage {
+                    Image(systemName: image)
+                        .font(.callout.weight(.semibold))
+                        .foregroundStyle(.tint)
+                }
+            }
+            .padding(.horizontal, 16)
+            .padding(.vertical, 10)
+            .glassEffect(isTappable ? .regular.interactive() : .regular, in: Capsule())
+            .contentShape(Capsule())
+            .onTapGesture { onTap() }
+            // Only the tappable reminder toast grabs touches; a plain copy toast
+            // stays transparent to taps so it never blocks the input beneath it.
+            .allowsHitTesting(isTappable)
+            .accessibilityIdentifier(isTappable ? "reminder-confirmation" : "copy-confirmation")
+            .accessibilityAddTraits(isTappable ? .isButton : [])
+            .padding(.bottom, 90)
         }
         .transition(.opacity)
-        .allowsHitTesting(false)
     }
 }

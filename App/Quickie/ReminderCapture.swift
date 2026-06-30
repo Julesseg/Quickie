@@ -73,6 +73,9 @@ final class ReminderCaptureModel {
     struct Confirmation: Equatable {
         let id = UUID()
         let message: String
+        /// A deep link to the created reminder, so the toast can tap through to it
+        /// in the Reminders app; `nil` on failure (nothing to open).
+        var openURL: URL?
     }
 
     /// Whether a capture is in progress (the center area shows its control).
@@ -217,8 +220,8 @@ final class ReminderCaptureModel {
     private func perform(_ outcome: ActionOutcome) async {
         guard case .createReminder(let draft) = outcome else { return }
         do {
-            try await service.create(draft)
-            confirmation = Confirmation(message: "Reminder added")
+            let link = try await service.create(draft)
+            confirmation = Confirmation(message: "Reminder added", openURL: link)
         } catch {
             confirmation = Confirmation(message: "Couldn't add reminder")
         }
@@ -460,6 +463,9 @@ struct ReminderBreadcrumbBar: View {
 /// how many steps an Action declares.
 private struct BreadcrumbSteps: View {
     @Bindable var model: ReminderCaptureModel
+    /// Honour the system Reduce Motion setting (ADR 0010 motion budget): the width
+    /// change between steps snaps instead of gliding.
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     /// Measured width of the scroll viewport, which the equal-share maths divides up.
     @State private var containerWidth: CGFloat = 0
@@ -490,6 +496,12 @@ private struct BreadcrumbSteps: View {
                         }
                     }
                 }
+                // Breathing room so each crumb's glass shadow renders inside the
+                // scroll viewport rather than being clipped at the top and bottom.
+                .padding(.vertical, 10)
+                // Glide the crumbs between their old and new widths as the cursor
+                // advances, instead of snapping (degraded under Reduce Motion).
+                .animation(reduceMotion ? nil : .smooth, value: steps)
             }
         }
         .onGeometryChange(for: CGFloat.self) { $0.size.width } action: { containerWidth = $0 }

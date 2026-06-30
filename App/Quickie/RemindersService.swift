@@ -59,8 +59,10 @@ actor RemindersService {
     /// Performs a pure `ReminderDraft` against EventKit (CONTEXT.md → Reminder): a
     /// timed due date gets the full components *and* an absolute alarm so it
     /// notifies; a date-only due date gets day components with **no** alarm. A
-    /// `nil` `listID` routes to the system default reminders list.
-    func create(_ draft: ReminderDraft) throws {
+    /// `nil` `listID` routes to the system default reminders list. Returns a deep
+    /// link to the saved reminder so the confirmation toast can tap through to it.
+    @discardableResult
+    func create(_ draft: ReminderDraft) throws -> URL? {
         let reminder = EKReminder(eventStore: store)
         reminder.title = draft.title
         reminder.calendar = calendar(for: draft.listID)
@@ -76,6 +78,20 @@ actor RemindersService {
         }
 
         try store.save(reminder, commit: true)
+        return Self.deepLink(for: reminder)
+    }
+
+    /// A best-effort deep link to the saved reminder in the Reminders app. The
+    /// `x-apple-reminderkit://REMCDReminder/<id>` scheme is the de-facto way to
+    /// open a specific reminder — undocumented, so it is not guaranteed, but the
+    /// scheme itself is registered, so a tap that can't resolve the id still lands
+    /// in Reminders rather than failing.
+    private static func deepLink(for reminder: EKReminder) -> URL? {
+        let id = reminder.calendarItemIdentifier
+        guard !id.isEmpty,
+              let encoded = id.addingPercentEncoding(withAllowedCharacters: .urlPathAllowed)
+        else { return URL(string: "x-apple-reminderkit://") }
+        return URL(string: "x-apple-reminderkit://REMCDReminder/\(encoded)")
     }
 
     /// The target list for a draft: the chosen list when it still exists, else the
