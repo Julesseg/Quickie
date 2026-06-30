@@ -13,12 +13,13 @@ extension Appearance {
     }
 }
 
-/// The Settings page (CONTEXT.md → Settings): a full-screen management page that
-/// holds a single control — **Appearance** (Light / Dark / System, defaulting to
-/// System), persisted and applied app-wide. Reached by typing to surface the
-/// "Settings" command row, not from chrome; it is pushed onto the launcher's
-/// navigation stack, so it slides in from the right and dismisses via the back
-/// chevron or the system edge-swipe.
+/// The Settings page (CONTEXT.md → Settings): a full-screen management page holding
+/// **Appearance** (Light / Dark / System, defaulting to System, applied app-wide)
+/// and an **Actions** section — a row per configurable capture Action that pushes
+/// its own per-Action panel (New Event today; issue #38). Reached by typing to
+/// surface the "Settings" command row, not from chrome; it is pushed onto the
+/// launcher's navigation stack, so it slides in from the right and its panels push
+/// onto the same stack, dismissing via the back chevron or the system edge-swipe.
 struct SettingsView: View {
     /// The persisted appearance preference, stored by its `Appearance` raw value
     /// and read back through the Core type (System → no forced scheme). Shared
@@ -55,6 +56,20 @@ struct SettingsView: View {
                 Text("Appearance")
             } footer: {
                 Text("Applies to the whole app. System follows your device.")
+            }
+
+            // Per-Action settings (CONTEXT.md → Settings, Quick capture): each
+            // configurable capture Action gets a row that pushes its own panel onto
+            // the launcher's stack. New Event is the first (issue #38).
+            Section {
+                NavigationLink {
+                    EventSettingsView()
+                } label: {
+                    Label("New Event", systemImage: "calendar")
+                }
+                .accessibilityIdentifier("settings-action-new-event")
+            } header: {
+                Text("Actions")
             }
         }
         .navigationTitle("Settings")

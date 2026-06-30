@@ -57,7 +57,12 @@ extension Action {
             arguments.append(Argument(label: "Due Date", contentType: .date))
         }
         if case .ask = list {
-            arguments.append(Argument(label: "List", contentType: .text, options: lists))
+            arguments.append(Argument(
+                label: "List",
+                contentType: .text,
+                options: lists,
+                optionSymbol: "list.bullet"
+            ))
         }
 
         return Action(
@@ -89,24 +94,5 @@ extension Action {
             hasTime: due?.hasTime ?? false,
             listID: listID
         )
-    }
-}
-
-private extension Array where Element == ArgumentValue {
-    var firstText: String? {
-        for case .text(let s) in self { return s }
-        return nil
-    }
-
-    var firstChoiceID: String? {
-        for case .choice(let option) in self { return option.id }
-        return nil
-    }
-
-    /// The first picked date and whether it included a time — the alarm signal: a
-    /// timed due date notifies, a date-only one does not.
-    var firstDate: (date: Date, hasTime: Bool)? {
-        for case .date(let date, let hasTime) in self { return (date, hasTime) }
-        return nil
     }
 }

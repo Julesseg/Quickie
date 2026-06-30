@@ -46,6 +46,12 @@ struct ActionPresentationTests {
         #expect(Action.newReminder(askDate: false, list: .ask, lists: [
             ChoiceOption(id: "work", label: "Work"),
         ]).mainAction == .compose)
+
+        // New Event is the same story: it produces nothing until its breadcrumb is
+        // collected, so both the silent (`createEvent`) and editor (`composeEvent`)
+        // outcomes classify as compose — the row wears the compose pencil either way.
+        #expect(Action.newEvent().mainAction == .compose)
+        #expect(Action.newEvent(editor: true).mainAction == .compose)
     }
 
     @Test("provider kind and main action are independent axes")

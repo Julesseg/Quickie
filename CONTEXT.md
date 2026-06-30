@@ -21,7 +21,7 @@ The single, reversed (bottom-anchored, best match nearest the input/thumb) list 
 _Avoid_: Results, suggestions, search results
 
 **Settings**:
-The app's preferences page, reached like any capability — by typing to surface a "Settings" command row, not via chrome (the old top-right gear button is gone). For now it holds a single control: **Appearance** (Light / Dark / System, defaulting to System, applied app-wide). It holds *only* settings — Quicklinks, Fallbacks, Notes, and Snippets each live on their own page.
+The app's preferences page, reached like any capability — by typing to surface a "Settings" command row, not via chrome (the old top-right gear button is gone). It holds **Appearance** (Light / Dark / System, defaulting to System, applied app-wide) and an **Actions** section — a row per configurable capture Action that pushes its own per-Action panel (New Event today: ask-which-calendar and silent-vs-editor). It holds *only* settings — Quicklinks, Fallbacks, Notes, and Snippets each live on their own page.
 _Avoid_: Preferences sheet, manage screen (Settings is not where you manage content)
 
 **Management page**:

@@ -39,8 +39,10 @@ protocol Capture: Sendable {
 
     /// Performs a completed outcome at the platform edge and returns the
     /// confirmation to flash — the same defer-to-the-edge boundary as the rest of
-    /// the app (the Core never touches EventKit or the pasteboard).
-    func perform(_ outcome: ActionOutcome) async -> CaptureConfirmation
+    /// the app (the Core never touches EventKit or the pasteboard). Returns `nil`
+    /// when the outcome carries its own feedback and needs no toast — the New Event
+    /// editor mode, whose handoff to the system event editor *is* the confirmation.
+    func perform(_ outcome: ActionOutcome) async -> CaptureConfirmation?
 
     /// The wording for the primer and denial affordances, so the generic bar can
     /// render them without knowing which permission it is gating.
@@ -126,6 +128,10 @@ final class CaptureModel {
     /// each as a glass crumb with its value or label and highlights the current one.
     var steps: [BreadcrumbStep] { session?.steps ?? [] }
     var currentArgument: Argument? { session?.current }
+    /// The glyph each choice option row shows for the current step (issue #38): the
+    /// step's declared `optionSymbol` — a calendar for an event's calendars, a bullet
+    /// for a reminder's lists — falling back to a list bullet when it declares none.
+    var choiceSymbol: String { currentArgument?.optionSymbol ?? "list.bullet" }
     /// The Return-key label for the current step — `.done` on the final Argument
     /// (the auto-create), `.next` otherwise.
     var returnKey: UIReturnKeyType { (session?.isFinalStep ?? false) ? .done : .next }
@@ -315,6 +321,7 @@ private struct ChoiceList: View {
     var body: some View {
         let options = model.choiceOptions()
         let bestID = options.first?.id
+        let symbol = model.choiceSymbol
         ScrollView {
             GlassEffectContainer(spacing: 6) {
                 VStack(spacing: 6) {
@@ -322,7 +329,7 @@ private struct ChoiceList: View {
                         Button {
                             model.commitChoice(option)
                         } label: {
-                            ChoiceRow(label: option.label, isHighlighted: option.id == bestID)
+                            ChoiceRow(label: option.label, symbol: symbol, isHighlighted: option.id == bestID)
                         }
                         .buttonStyle(.plain)
                         .accessibilityIdentifier("choice-\(option.id)")
@@ -339,11 +346,13 @@ private struct ChoiceList: View {
 /// match reads as the default.
 private struct ChoiceRow: View {
     let label: String
+    /// The leading glyph, declared by the choice step (a calendar, a list bullet…).
+    let symbol: String
     var isHighlighted: Bool
 
     var body: some View {
         HStack(spacing: 12) {
-            Image(systemName: "list.bullet")
+            Image(systemName: symbol)
                 .foregroundStyle(.secondary)
             Text(label)
                 .font(.body)
