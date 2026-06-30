@@ -42,10 +42,12 @@ struct RootView: View {
     @AppStorage(ReminderSettings.askListKey) private var reminderAskList = true
     @AppStorage(ReminderSettings.defaultListIDKey) private var reminderDefaultListID = ""
 
-    /// New Event settings, persisted with working defaults (ADR 0012) so the capture
-    /// is fully functional before any Settings UI exists (issue #38): route to the
-    /// system default calendar (no calendar step) and create silently.
-    @AppStorage(EventSettings.askCalendarKey) private var eventAskCalendar = false
+    /// New Event settings, persisted with working defaults (ADR 0012) and tuned from
+    /// Settings → Actions → New Event (issue #38): ask which calendar each capture,
+    /// and create silently (vs. opening the pre-filled system event editor). The
+    /// `@AppStorage` defaults must match `EventSettingsView`'s so the first read
+    /// before any write agrees.
+    @AppStorage(EventSettings.askCalendarKey) private var eventAskCalendar = true
     @AppStorage(EventSettings.defaultCalendarIDKey) private var eventDefaultCalendarID = ""
     @AppStorage(EventSettings.editorKey) private var eventUseEditor = false
 

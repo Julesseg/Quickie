@@ -18,11 +18,11 @@ struct EventSettings {
     static let defaultCalendarIDKey = "event.defaultCalendarID"
     static let editorKey = "event.editor"
 
-    /// Ask for the target calendar every capture (default **OFF** → events route to
-    /// `defaultCalendarID`, empty meaning the system default calendar); ON makes the
-    /// calendar the third breadcrumb step, fuzzy-found over the user's calendars. The
-    /// working default routes to the system default calendar (issue #38).
-    var askCalendar: Bool = false
+    /// Ask for the target calendar every capture (default **ON** → the calendar is
+    /// the third breadcrumb step, fuzzy-found over the user's calendars); OFF routes
+    /// silently to `defaultCalendarID`, empty meaning the system default calendar.
+    /// Configurable from Settings → Actions → New Event (issue #38).
+    var askCalendar: Bool = true
     /// The preset calendar's identifier; empty means the system default calendar.
     var defaultCalendarID: String = ""
     /// Open the pre-filled system event editor for final review instead of writing
