@@ -455,9 +455,26 @@ struct ReminderBreadcrumbBar: View {
         }
         .frame(maxWidth: .infinity, alignment: .leading)
         .padding(.horizontal, 16)
-        .padding(.top, 6)
+        // Reserve the status-bar height as the bar's *own* top padding, then let
+        // the whole bar (blur included) ignore the top safe area — so its frame
+        // spans from the screen edge down as one block. Bleeding only the
+        // background (the old approach) left the bar's frame starting at the
+        // safe-area top, so the slide-out's `.move(edge: .top)` cleared only that
+        // top and abandoned the status-bar band mid-slide, reading as a half-clip.
+        .padding(.top, topSafeAreaInset + 6)
         .padding(.bottom, 16)
-        .background(ProgressiveBlur().ignoresSafeArea(edges: .top))
+        .background(ProgressiveBlur())
+        .ignoresSafeArea(edges: .top)
+    }
+
+    /// The window's top safe-area inset. Read from UIKit because the bar ignores
+    /// the top safe area to span the full height — so its own geometry no longer
+    /// reports the inset — yet must still reserve that height to sit clear of the
+    /// status bar. Static per orientation, and `body` re-evaluates on rotation.
+    private var topSafeAreaInset: CGFloat {
+        UIApplication.shared.connectedScenes
+            .compactMap { $0 as? UIWindowScene }
+            .first?.keyWindow?.safeAreaInsets.top ?? 0
     }
 }
 
@@ -528,13 +545,19 @@ private struct BreadcrumbSteps: View {
                     }
                 }
             }
-            // Breathing room so each crumb's glass shadow renders inside the scroll
-            // viewport rather than being clipped at the top and bottom.
+            // Breathing room around the crumbs so their glass shadows have space to
+            // fall rather than crowding the title above and the content below.
             .padding(.vertical, 10)
             // Glide the crumbs between their old and new widths as the cursor
             // advances (degraded to no animation under Reduce Motion).
             .animation(reduceMotion ? nil : .snappy, value: steps)
         }
+        // A ScrollView clips to its viewport, which sheared off the crumbs' glass
+        // shadows (most visibly along the bottom edge). The steps fit without
+        // scrolling in practice, so disabling the clip lets the shadows render in
+        // full; only a genuine overflow would scroll, and then off-screen crumbs
+        // simply aren't clipped — an acceptable trade for un-clipped shadows.
+        .scrollClipDisabled()
         .onGeometryChange(for: CGFloat.self) { $0.size.width } action: { containerWidth = $0 }
     }
 
