@@ -168,8 +168,15 @@ public struct Action: Identifiable, Sendable {
     /// outcome (issue #11). The outcome *case* is stable regardless of the typed
     /// input for every current Action, so this is read with no input and the
     /// glyph always matches what a tap performs.
+    ///
+    /// A multi-step capture (New Reminder) produces its outcome only from the
+    /// Arguments it collects, so its plain `run()` is the placeholder `.none`; it
+    /// is classified from the multi-step outcome instead (the case is stable
+    /// regardless of the values, the same way the single-step case is stable
+    /// regardless of input), so the row wears the glyph of what it ultimately does.
     public var mainAction: MainAction {
-        switch run() {
+        let outcome = arguments.isEmpty ? run() : run(arguments: [])
+        switch outcome {
         case .openURL: return .openInBrowser
         case .copyText: return .copyToClipboard
         case .openNote: return .openNote

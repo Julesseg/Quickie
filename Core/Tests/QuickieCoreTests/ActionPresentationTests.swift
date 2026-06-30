@@ -36,6 +36,18 @@ struct ActionPresentationTests {
         #expect(Action.openNotesLibrary().mainAction == .openPage)
     }
 
+    @Test("a multi-step capture's glyph reads its final outcome, not its empty effect")
+    func multiStepMainActionFollowsFinalOutcome() {
+        // New Reminder collects its Arguments before producing anything, so its
+        // plain `run()` is the placeholder `.none`; the trailing glyph must still
+        // read the capture's real outcome (`createReminder` → compose), so the row
+        // wears the same compose pencil as New Note rather than no glyph at all.
+        #expect(Action.newReminder().mainAction == .compose)
+        #expect(Action.newReminder(askDate: false, list: .ask, lists: [
+            ChoiceOption(id: "work", label: "Work"),
+        ]).mainAction == .compose)
+    }
+
     @Test("provider kind and main action are independent axes")
     func kindAndMainActionAreIndependent() {
         // A calculator result and a snippet both *copy* (same main action) but are
