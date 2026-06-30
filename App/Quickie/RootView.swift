@@ -67,9 +67,11 @@ struct RootView: View {
     @State private var keyboardLayout = KeyboardLayoutModel()
     @State private var clipboard = ClipboardPrefillModel()
 
-    /// The active New Reminder capture (issue #37): when capturing, the breadcrumb
-    /// owns the bottom input and the morphing control replaces the result list.
-    @State private var reminderCapture = ReminderCaptureModel()
+    /// The active quick capture (issue #37): when capturing, the breadcrumb owns
+    /// the bottom input and the morphing control replaces the result list. Generic
+    /// over the capture kind — New Reminder today — via the `Capture` recipe handed
+    /// to `start`.
+    @State private var capture = CaptureModel()
 
     /// Honour the system Reduce Motion setting: it gates the paste button's morph
     /// so the glass snaps in/out instead of interpolating (ADR 0010 motion budget).
@@ -164,12 +166,12 @@ struct RootView: View {
                 QuietBackdrop()
 
                 Group {
-                    if reminderCapture.isCapturing {
+                    if capture.isCapturing {
                         // A capture in flight replaces the result list with its
                         // morphing control (the fuzzy choice list or date picker).
                         // It fades in while the browse list it replaces slides out
                         // the bottom, toward the keyboard (issue #37).
-                        ReminderCaptureContent(model: reminderCapture)
+                        CaptureContent(model: capture)
                             .transition(.opacity)
                     } else if isHome {
                         HomeView(
@@ -201,8 +203,8 @@ struct RootView: View {
             // while a session is collecting — the primer/denial affordances have no
             // steps and live solely in the bottom bar.
             .overlay(alignment: .top) {
-                if path.isEmpty && reminderCapture.isCapturing {
-                    ReminderBreadcrumbBar(model: reminderCapture)
+                if path.isEmpty && capture.isCapturing {
+                    CaptureBreadcrumbBar(model: capture)
                         .transition(captureMotion.edgeTransition(from: .top))
                 }
             }
@@ -211,7 +213,7 @@ struct RootView: View {
             // the top, and the reverse on finishing or cancelling. Scoped to the
             // `isCapturing` flip so ordinary Home↔Results swaps stay instant; the
             // motion (and its Reduce-Motion crossfade) comes from the tested budget.
-            .animation(captureMotion.animation, value: reminderCapture.isCapturing)
+            .animation(captureMotion.animation, value: capture.isCapturing)
             // The input floats in the bottom safe area, with the paste button to
             // its right. Kept *inside* the launcher's content so the reversed
             // result list reserves space for it — the best match sits just above
@@ -231,12 +233,12 @@ struct RootView: View {
             // keyboard).
             .safeAreaInset(edge: .bottom, spacing: 0) {
                 if path.isEmpty {
-                    if reminderCapture.isActive {
+                    if capture.isActive {
                         // A capture (or its denial affordance) owns the bottom
                         // region: the breadcrumb + the morphing input replace the
                         // search field and paste chip (issue #37).
                         GlassEffectContainer(spacing: 8) {
-                            ReminderCaptureBar(model: reminderCapture)
+                            CaptureBar(model: capture)
                         }
                     } else {
                         GlassEffectContainer(spacing: 8) {
@@ -279,12 +281,12 @@ struct RootView: View {
             // blinking to an empty Home first; for the primer/denial affordances it
             // fires on the tap, clearing the stale results behind them. Returning
             // from a capture then lands on a clean Home (issue #37).
-            .onChange(of: reminderCapture.isActive) { _, active in
+            .onChange(of: capture.isActive) { _, active in
                 if active { query = "" }
             }
             // Flash the brief confirmation a completed capture reports (issue #37),
             // the same non-blocking acknowledgement as a copy-out.
-            .onChange(of: reminderCapture.confirmation) { _, new in
+            .onChange(of: capture.confirmation) { _, new in
                 guard let new else { return }
                 // A successful add carries a deep link: show a tappable, longer-
                 // lived toast with a trailing open glyph; a failure is a plain,
@@ -296,13 +298,13 @@ struct RootView: View {
                 )
             }
             // A tactile beat the moment a capture validates (issue #37), paired with
-            // the confirmation toast: a success notification when the reminder lands
-            // (it carries a deep link), an error buzz when the write failed. Driven
-            // by the same `confirmation` value, whose fresh id makes back-to-back
-            // captures each register as a distinct trigger.
-            .sensoryFeedback(trigger: reminderCapture.confirmation) { _, confirmation in
+            // the confirmation toast: a success notification when the record lands,
+            // an error buzz when the write failed. Driven by the same `confirmation`
+            // value, whose fresh id makes back-to-back captures each register as a
+            // distinct trigger.
+            .sensoryFeedback(trigger: capture.confirmation) { _, confirmation in
                 guard let confirmation else { return nil }
-                return confirmation.openURL == nil ? .error : .success
+                return confirmation.isError ? .error : .success
             }
             // Re-arm focus off the popped page's `onDisappear` — it fires when the
             // pop animation completes, the moment the launcher is back and its
@@ -418,11 +420,13 @@ struct RootView: View {
     /// session is still resolving on the actor would flash an empty Home for a
     /// frame before the capture slides in.
     private func startReminderCapture() {
-        reminderCapture.start(
-            settings: ReminderSettings(
-                askDate: reminderAskDate,
-                askList: reminderAskList,
-                defaultListID: reminderDefaultListID
+        capture.start(
+            ReminderCapture(
+                settings: ReminderSettings(
+                    askDate: reminderAskDate,
+                    askList: reminderAskList,
+                    defaultListID: reminderDefaultListID
+                )
             ),
             layout: keyboardLayout.layout
         )
