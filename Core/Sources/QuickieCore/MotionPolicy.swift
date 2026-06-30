@@ -6,6 +6,10 @@ public enum MotionMoment: Sendable {
     case rowInsert
     case rowReorder
     case inputFocus
+    /// Entering or leaving a multi-step capture (issue #37): the browse list
+    /// slides out toward the keyboard while the breadcrumb slides in from the top
+    /// — a deliberate, whole-screen change rather than a keystroke-adjacent nudge.
+    case captureTransition
 }
 
 /// How a `MotionMoment` should move: a subtle, fast spring, or a plain crossfade.
@@ -38,6 +42,10 @@ public struct MotionPolicy: Sendable {
             // The moment closest to a keystroke — kept the snappiest so the field
             // never feels like it lags the typing.
             return .spring(response: 0.2, dampingFraction: 0.9)
+        case .captureTransition:
+            // A whole-screen change, so the most deliberate of the budget — still
+            // fast, and barely overshooting so a large surface settles cleanly.
+            return .spring(response: 0.35, dampingFraction: 0.9)
         }
     }
 }

@@ -141,6 +141,12 @@ struct RootView: View {
         query.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
     }
 
+    /// How entering/leaving a capture moves (ADR 0010 budget): a deliberate spring
+    /// when motion is allowed, a brief crossfade under Reduce Motion.
+    private var captureMotion: MotionStyle {
+        MotionPolicy(reduceMotion: reduceMotion).style(for: .captureTransition)
+    }
+
     private var clipboardPrefill: ClipboardPrefill {
         ClipboardPrefill(
             clipboardHasText: clipboard.clipboardHasText,
@@ -161,7 +167,10 @@ struct RootView: View {
                     if reminderCapture.isCapturing {
                         // A capture in flight replaces the result list with its
                         // morphing control (the fuzzy choice list or date picker).
+                        // It fades in while the browse list it replaces slides out
+                        // the bottom, toward the keyboard (issue #37).
                         ReminderCaptureContent(model: reminderCapture)
+                            .transition(.opacity)
                     } else if isHome {
                         HomeView(
                             content: engine.home(),
@@ -170,6 +179,7 @@ struct RootView: View {
                             canFavorite: { signals.canFavorite($0.id) },
                             onToggleFavorite: { signals.toggleFavorite($0.id) }
                         )
+                        .transition(captureMotion.edgeTransition(from: .bottom))
                     } else {
                         ResultListView(
                             results: engine.results(for: query),
@@ -178,6 +188,7 @@ struct RootView: View {
                             canFavorite: { signals.canFavorite($0.id) },
                             onToggleFavorite: { signals.toggleFavorite($0.id) }
                         )
+                        .transition(captureMotion.edgeTransition(from: .bottom))
                     }
                 }
 
@@ -192,8 +203,15 @@ struct RootView: View {
             .overlay(alignment: .top) {
                 if path.isEmpty && reminderCapture.isCapturing {
                     ReminderBreadcrumbBar(model: reminderCapture)
+                        .transition(captureMotion.edgeTransition(from: .top))
                 }
             }
+            // Glide the whole capture in and out as one gesture (issue #37): the
+            // browse list slides out the bottom while the breadcrumb slides in from
+            // the top, and the reverse on finishing or cancelling. Scoped to the
+            // `isCapturing` flip so ordinary Home↔Results swaps stay instant; the
+            // motion (and its Reduce-Motion crossfade) comes from the tested budget.
+            .animation(captureMotion.animation, value: reminderCapture.isCapturing)
             // The input floats in the bottom safe area, with the paste button to
             // its right. Kept *inside* the launcher's content so the reversed
             // result list reserves space for it — the best match sits just above
@@ -255,6 +273,15 @@ struct RootView: View {
             // management pages push *on top* of it, sliding in from the right with
             // the system edge-swipe back.
             .toolbar(.hidden, for: .navigationBar)
+            // Clear the search query the moment a capture takes over the screen —
+            // for the authorized path this coincides with the session starting, so
+            // the browse list slides straight out into the capture rather than
+            // blinking to an empty Home first; for the primer/denial affordances it
+            // fires on the tap, clearing the stale results behind them. Returning
+            // from a capture then lands on a clean Home (issue #37).
+            .onChange(of: reminderCapture.isActive) { _, active in
+                if active { query = "" }
+            }
             // Flash the brief confirmation a completed capture reports (issue #37),
             // the same non-blocking acknowledgement as a copy-out.
             .onChange(of: reminderCapture.confirmation) { _, new in
@@ -367,12 +394,14 @@ struct RootView: View {
         perform(action.run(input: query))
     }
 
-    /// Begins the New Reminder capture (issue #37): clear the query, drop the
-    /// search keyboard, and hand off to the capture model, which resolves EventKit
-    /// permission (primer → system dialog) just-in-time before the breadcrumb
-    /// starts (ADR 0012).
+    /// Begins the New Reminder capture (issue #37): drop the search keyboard and
+    /// hand off to the capture model, which resolves EventKit permission (primer →
+    /// system dialog) just-in-time before the breadcrumb starts (ADR 0012). The
+    /// query is cleared once the capture actually becomes active (see the
+    /// `isActive` `onChange`), not here — clearing it synchronously while the
+    /// authorized session is still resolving on the actor would flash an empty
+    /// Home for a frame before the capture slides in.
     private func startReminderCapture() {
-        query = ""
         inputFocused = false
         reminderCapture.start(
             settings: ReminderSettings(

@@ -444,9 +444,13 @@ struct ReminderBreadcrumbBar: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
-            Text(model.actionTitle)
-                .font(.headline)
-                .accessibilityAddTraits(.isHeader)
+            HStack(spacing: 8) {
+                Text(model.actionTitle)
+                    .font(.headline)
+                    .accessibilityAddTraits(.isHeader)
+                Spacer(minLength: 8)
+                CancelButton { model.cancel() }
+            }
             BreadcrumbSteps(model: model)
         }
         .frame(maxWidth: .infinity, alignment: .leading)
@@ -454,6 +458,28 @@ struct ReminderBreadcrumbBar: View {
         .padding(.top, 6)
         .padding(.bottom, 16)
         .background(ProgressiveBlur().ignoresSafeArea(edges: .top))
+    }
+}
+
+/// The × that abandons the whole capture and returns to the main search input
+/// (issue #37): the single get-me-out affordance for an in-flight session, where
+/// backspace only pops one pill at a time. A glass circle that mirrors the
+/// paste button's footprint so the top chrome reads as one Liquid Glass family.
+private struct CancelButton: View {
+    var action: () -> Void
+
+    var body: some View {
+        Button(action: action) {
+            Image(systemName: "xmark")
+                .font(.subheadline.weight(.semibold))
+                .foregroundStyle(.secondary)
+                .frame(width: 32, height: 32)
+                .glassEffect(.regular.interactive(), in: Circle())
+        }
+        .buttonStyle(.plain)
+        .contentShape(Circle())
+        .accessibilityLabel("Cancel")
+        .accessibilityIdentifier("capture-cancel")
     }
 }
 
