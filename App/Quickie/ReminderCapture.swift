@@ -21,9 +21,10 @@ struct ReminderSettings {
 
     /// Ask for a due date (default ON); OFF skips the date step.
     var askDate: Bool = true
-    /// Ask for the target list every capture; OFF routes to `defaultListID`
-    /// (default OFF → the system default reminders list).
-    var askList: Bool = false
+    /// Ask for the target list every capture (default ON → the list is the third
+    /// breadcrumb step, fuzzy-found over the user's lists); OFF routes silently to
+    /// `defaultListID` (empty → the system default reminders list).
+    var askList: Bool = true
     /// The preset list's identifier; empty means the system default reminders list.
     var defaultListID: String = ""
 

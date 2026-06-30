@@ -39,7 +39,7 @@ struct RootView: View {
     /// capture is fully functional before any Settings UI exists (issue #37): ask
     /// for a due date, and either ask for the list or route to a default one.
     @AppStorage(ReminderSettings.askDateKey) private var reminderAskDate = true
-    @AppStorage(ReminderSettings.askListKey) private var reminderAskList = false
+    @AppStorage(ReminderSettings.askListKey) private var reminderAskList = true
     @AppStorage(ReminderSettings.defaultListIDKey) private var reminderDefaultListID = ""
 
     /// The user's ranking signals — pinned Favorites and Frecency of past
