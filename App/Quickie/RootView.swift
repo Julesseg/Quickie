@@ -372,10 +372,7 @@ struct RootView: View {
             // New Event's editor mode (issue #38): the pre-filled system event editor
             // the user reviews instead of a silent write. Dismissing it (save, cancel,
             // or delete) re-arms the launcher's focus, like the compose sheets.
-            .sheet(
-                item: Binding(get: { eventEditor.request }, set: { eventEditor.request = $0 }),
-                onDismiss: { refocusInput() }
-            ) { request in
+            .sheet(item: $eventEditor.request, onDismiss: { refocusInput() }) { request in
                 EventEditorView(draft: request.draft) { eventEditor.request = nil }
                     .ignoresSafeArea()
             }
