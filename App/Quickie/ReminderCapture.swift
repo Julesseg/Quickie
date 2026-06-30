@@ -469,6 +469,9 @@ private struct BreadcrumbSteps: View {
 
     /// Measured width of the scroll viewport, which the equal-share maths divides up.
     @State private var containerWidth: CGFloat = 0
+    /// Shares the current-step highlight across crumbs so it slides from one to the
+    /// next (matched geometry) instead of popping off and on as the cursor moves.
+    @Namespace private var highlight
 
     private let rowSpacing: CGFloat = 6
     private let chevronWidth: CGFloat = 12
@@ -486,6 +489,7 @@ private struct BreadcrumbSteps: View {
                         StepCrumb(
                             step: step,
                             width: width(for: step, in: steps),
+                            highlight: highlight,
                             onEdit: { model.editPill(at: step.index) }
                         )
                         if step.index < steps.count - 1 {
@@ -531,6 +535,8 @@ private struct BreadcrumbSteps: View {
 private struct StepCrumb: View {
     let step: BreadcrumbStep
     let width: CGFloat
+    /// The shared namespace the current-step highlight slides within.
+    let highlight: Namespace.ID
     var onEdit: () -> Void
 
     private var shape: RoundedRectangle { RoundedRectangle(cornerRadius: 16, style: .continuous) }
@@ -568,6 +574,9 @@ private struct StepCrumb: View {
                 shape
                     .fill(Color.accentColor.opacity(0.12))
                     .overlay { shape.strokeBorder(Color.accentColor.opacity(0.5), lineWidth: 1) }
+                    // One highlight, shared by id, so it glides to the new current
+                    // crumb under the same animation that resizes the row.
+                    .matchedGeometryEffect(id: "current-step", in: highlight)
                     .allowsHitTesting(false)
             }
         }
