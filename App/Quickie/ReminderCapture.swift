@@ -486,9 +486,12 @@ private struct BreadcrumbSteps: View {
             // the width tracks the chevron exactly.
             HStack(spacing: rowSpacing) {
                 ForEach(steps) { step in
+                    let display = displayValue(for: step)
                     StepCrumb(
                         step: step,
                         width: width(for: step, in: steps),
+                        displayText: display.text,
+                        isPlaceholder: display.isPlaceholder,
                         onEdit: { model.editPill(at: step.index) }
                     )
                     if step.index < steps.count - 1 {
@@ -503,10 +506,29 @@ private struct BreadcrumbSteps: View {
             // viewport rather than being clipped at the top and bottom.
             .padding(.vertical, 10)
             // Glide the crumbs between their old and new widths as the cursor
-            // advances, instead of snapping (degraded under Reduce Motion).
-            .animation(reduceMotion ? nil : .smooth, value: steps)
+            // advances (degraded to no animation under Reduce Motion).
+            .animation(reduceMotion ? nil : .snappy, value: steps)
         }
         .onGeometryChange(for: CGFloat.self) { $0.size.width } action: { containerWidth = $0 }
+    }
+
+    /// What a crumb shows: the **live** input for the current step — the typed
+    /// text or the picked date, updating as the user works — the committed value
+    /// for a sealed step, or a placeholder dash while a later step waits its turn.
+    private func displayValue(for step: BreadcrumbStep) -> (text: String, isPlaceholder: Bool) {
+        if step.isCurrent {
+            if case .datePicker = model.currentArgument?.inputMethod {
+                // A date always has a value (defaults to now), so it shows straight
+                // away and changes live as the picker moves.
+                return (pillText(.date(model.pickedDate, hasTime: model.includeTime)), false)
+            }
+            let typed = model.stepText.trimmingCharacters(in: .whitespacesAndNewlines)
+            return typed.isEmpty ? ("—", true) : (typed, false)
+        }
+        if let value = step.value {
+            return (pillText(value), false)
+        }
+        return ("—", true)
     }
 
     /// Each step's width. When the steps fit, every crumb gets its weighted share
@@ -533,6 +555,10 @@ private struct BreadcrumbSteps: View {
 private struct StepCrumb: View {
     let step: BreadcrumbStep
     let width: CGFloat
+    /// The text to show — the live input, the committed value, or a placeholder.
+    let displayText: String
+    /// Whether `displayText` is a placeholder (dimmed) rather than a real value.
+    let isPlaceholder: Bool
     var onEdit: () -> Void
 
     private var shape: RoundedRectangle { RoundedRectangle(cornerRadius: 16, style: .continuous) }
@@ -564,9 +590,9 @@ private struct StepCrumb: View {
                 .textCase(.uppercase)
                 .foregroundStyle(.secondary)
                 .lineLimit(1)
-            Text(valueText)
+            Text(displayText)
                 .font(.subheadline.weight(step.isCurrent ? .semibold : .regular))
-                .foregroundStyle(step.value == nil ? .tertiary : .primary)
+                .foregroundStyle(isPlaceholder ? .tertiary : .primary)
                 .fixedSize(horizontal: false, vertical: true)
                 .frame(maxWidth: .infinity, alignment: .leading)
         }
@@ -575,12 +601,6 @@ private struct StepCrumb: View {
         .frame(width: width, alignment: .leading)
         .glassEffect(glass, in: shape)
         .contentShape(shape)
-    }
-
-    /// The crumb's value line: the committed value, or an em dash while the step is
-    /// still waiting on input.
-    private var valueText: String {
-        step.value.map(pillText) ?? "—"
     }
 }
 
