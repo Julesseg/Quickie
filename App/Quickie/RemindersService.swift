@@ -5,14 +5,19 @@ import QuickieCore
 /// permission, the user's reminder lists as `ChoiceOption`s, and performing a
 /// pure `ReminderDraft`. Kept entirely at the app boundary so `QuickieCore` never
 /// imports EventKit — the same defer-to-the-edge pattern as the pasteboard.
-@MainActor
-final class RemindersService {
+///
+/// An `actor` so the unbounded `EKEventStore.save` (an iCloud sync hiccup can
+/// stall it) runs off the main thread, and the non-`Sendable` `EKEventStore`/
+/// `EKReminder` stay confined to one isolation domain. The authorization-status
+/// reads are `nonisolated` — they touch only the process-wide status, not the
+/// store — so the capture's just-in-time branch can check them synchronously.
+actor RemindersService {
     private let store = EKEventStore()
 
     /// Whether the user has refused access, so the capture can't proceed and the
     /// Action becomes an inline "Enable in Settings" affordance (ADR 0012). A
     /// not-yet-asked status is *not* denied — it is the cue to prime and request.
-    var isDenied: Bool {
+    nonisolated var isDenied: Bool {
         switch EKEventStore.authorizationStatus(for: .reminder) {
         case .denied, .restricted: return true
         default: return false
@@ -21,7 +26,7 @@ final class RemindersService {
 
     /// Whether access is already granted, so the capture can start straight away
     /// with no primer or system dialog.
-    var isAuthorized: Bool {
+    nonisolated var isAuthorized: Bool {
         switch EKEventStore.authorizationStatus(for: .reminder) {
         case .fullAccess, .authorized: return true
         default: return false

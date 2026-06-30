@@ -185,6 +185,10 @@ public struct Action: Identifiable, Sendable {
     /// `.done`. Platform-agnostic — the app maps it to a SwiftUI `SubmitLabel`.
     /// The outcome *case* is stable regardless of input, so it is read with none.
     public var returnKeyLabel: ReturnKeyLabel {
+        // A multi-step Action begins its breadcrumb capture rather than performing
+        // an outcome, so its label comes from having Arguments, not from `run()`
+        // (whose plain outcome is `.none`): Enter on the highlighted row starts it.
+        if !arguments.isEmpty { return .go }
         switch run() {
         case .openURL: return isFallback ? .search : .go
         case .copyText, .composeNote, .composeSnippet, .createReminder: return .done

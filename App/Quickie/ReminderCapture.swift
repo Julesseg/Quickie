@@ -53,6 +53,11 @@ final class ReminderCaptureModel {
     private(set) var priming = false
     private var pendingSettings: ReminderSettings?
 
+    /// The active keyboard layout, so the list step's fuzzy matching weights
+    /// adjacent-key typos for the user's real layout — consistent with the Result
+    /// list (the Core defaults to QWERTY when this isn't threaded through).
+    private var layout: KeyboardLayout = .qwerty
+
     /// The current text/choice step's typed text.
     var stepText = ""
     /// The current date step's picked values.
@@ -87,13 +92,14 @@ final class ReminderCaptureModel {
     /// any data entry (ADR 0012). Already-granted starts the session straight away;
     /// already-refused shows the inline affordance; an undetermined status shows a
     /// one-line primer first, then `confirmPrimer` triggers the system dialog.
-    func start(settings: ReminderSettings) {
+    func start(settings: ReminderSettings, layout: KeyboardLayout) {
         denied = false
         priming = false
+        self.layout = layout
         if service.isDenied {
             denied = true
         } else if service.isAuthorized {
-            beginSession(settings: settings)
+            Task { await beginSession(settings: settings) }
         } else {
             pendingSettings = settings
             priming = true
@@ -110,7 +116,7 @@ final class ReminderCaptureModel {
             denied = true
             return
         }
-        beginSession(settings: settings)
+        await beginSession(settings: settings)
     }
 
     /// Abandons the capture and returns to normal search.
@@ -122,20 +128,22 @@ final class ReminderCaptureModel {
         resetInputs()
     }
 
-    private func beginSession(settings: ReminderSettings) {
+    private func beginSession(settings: ReminderSettings) async {
+        let lists = await service.reminderLists()
         let action = Action.newReminder(
             askDate: settings.askDate,
             list: settings.listSelection,
-            lists: service.reminderLists()
+            lists: lists
         )
         resetInputs()
         session = MultiStepAction(action: action)
     }
 
     /// The current choice step's options, fuzzy-filtered by the typed text and
-    /// ranked best-first (the app renders them reversed, best nearest the thumb).
+    /// ranked best-first (the app renders them reversed, best nearest the thumb),
+    /// weighting typos for the active keyboard layout.
     func choiceOptions() -> [ChoiceOption] {
-        session?.options(matching: stepText) ?? []
+        session?.options(matching: stepText, layout: layout) ?? []
     }
 
     /// Commits the current text step; ignores an empty title.
@@ -197,16 +205,16 @@ final class ReminderCaptureModel {
             resetInputs()
         case .completed(let outcome):
             cancel()
-            perform(outcome)
+            Task { await perform(outcome) }
         case .abandoned:
             cancel()
         }
     }
 
-    private func perform(_ outcome: ActionOutcome) {
+    private func perform(_ outcome: ActionOutcome) async {
         guard case .createReminder(let draft) = outcome else { return }
         do {
-            try service.create(draft)
+            try await service.create(draft)
             confirmation = Confirmation(message: "Reminder added")
         } catch {
             confirmation = Confirmation(message: "Couldn't add reminder")

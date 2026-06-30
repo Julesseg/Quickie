@@ -355,11 +355,14 @@ struct RootView: View {
     private func startReminderCapture() {
         query = ""
         inputFocused = false
-        reminderCapture.start(settings: ReminderSettings(
-            askDate: reminderAskDate,
-            askList: reminderAskList,
-            defaultListID: reminderDefaultListID
-        ))
+        reminderCapture.start(
+            settings: ReminderSettings(
+                askDate: reminderAskDate,
+                askList: reminderAskList,
+                defaultListID: reminderDefaultListID
+            ),
+            layout: keyboardLayout.layout
+        )
     }
 
     /// Performs a single-step Action's outcome at the platform edge.
