@@ -62,7 +62,12 @@ extension Action {
             Argument(label: "Start", contentType: .date),
         ]
         if case .ask = calendar {
-            arguments.append(Argument(label: "Calendar", contentType: .text, options: calendars))
+            arguments.append(Argument(
+                label: "Calendar",
+                contentType: .text,
+                options: calendars,
+                optionSymbol: "calendar"
+            ))
         }
 
         return Action(

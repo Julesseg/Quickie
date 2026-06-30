@@ -44,11 +44,22 @@ public struct Argument: Equatable, Sendable {
     public let contentType: ContentType
     /// The fixed option set for a choice Argument; empty for keyboard/date slots.
     public let options: [ChoiceOption]
+    /// The glyph each of this choice step's option rows shows — a reminder list's
+    /// bullet, an event calendar's calendar (issue #38). Carried here so the icon is
+    /// declared with the step rather than hard-coded in the view; `nil` for non-choice
+    /// steps, and the app falls back to a sensible default when a choice step omits it.
+    public let optionSymbol: String?
 
-    public init(label: String, contentType: ContentType, options: [ChoiceOption] = []) {
+    public init(
+        label: String,
+        contentType: ContentType,
+        options: [ChoiceOption] = [],
+        optionSymbol: String? = nil
+    ) {
         self.label = label
         self.contentType = contentType
         self.options = options
+        self.optionSymbol = optionSymbol
     }
 
     /// Which control the input region presents for this Argument (ADR 0013): a

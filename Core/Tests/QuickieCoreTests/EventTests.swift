@@ -30,6 +30,14 @@ struct EventTests {
         #expect(args[2].inputMethod == .choice(calendars))
     }
 
+    @Test("the Calendar step carries a calendar option symbol for its choice rows")
+    func calendarStepCarriesCalendarSymbol() {
+        let action = Action.newEvent(calendar: .ask, calendars: calendars)
+        // The choice step declares the glyph each option row shows, so the app
+        // renders calendars with a calendar — not the reminder list's bullet.
+        #expect(action.arguments[2].optionSymbol == "calendar")
+    }
+
     @Test("collected values resolve to a createEvent outcome with title and chosen calendar")
     func resolvesToCreateEvent() {
         let action = Action.newEvent(calendar: .ask, calendars: calendars)

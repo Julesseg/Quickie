@@ -57,7 +57,12 @@ extension Action {
             arguments.append(Argument(label: "Due Date", contentType: .date))
         }
         if case .ask = list {
-            arguments.append(Argument(label: "List", contentType: .text, options: lists))
+            arguments.append(Argument(
+                label: "List",
+                contentType: .text,
+                options: lists,
+                optionSymbol: "list.bullet"
+            ))
         }
 
         return Action(
