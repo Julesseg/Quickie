@@ -480,29 +480,31 @@ private struct BreadcrumbSteps: View {
     var body: some View {
         let steps = model.steps
         ScrollView(.horizontal, showsIndicators: false) {
-            GlassEffectContainer(spacing: rowSpacing) {
-                HStack(spacing: rowSpacing) {
-                    ForEach(steps) { step in
-                        StepCrumb(
-                            step: step,
-                            width: width(for: step, in: steps),
-                            onEdit: { model.editPill(at: step.index) }
-                        )
-                        if step.index < steps.count - 1 {
-                            Image(systemName: "chevron.right")
-                                .font(.caption.weight(.semibold))
-                                .foregroundStyle(.secondary)
-                                .frame(width: chevronWidth)
-                        }
+            // No GlassEffectContainer: its fluid morph resizes the glass on its
+            // own slower curve, so the step width visibly lagged the chevron (which
+            // is plain layout). Standalone glass redraws at its frame each tick, so
+            // the width tracks the chevron exactly.
+            HStack(spacing: rowSpacing) {
+                ForEach(steps) { step in
+                    StepCrumb(
+                        step: step,
+                        width: width(for: step, in: steps),
+                        onEdit: { model.editPill(at: step.index) }
+                    )
+                    if step.index < steps.count - 1 {
+                        Image(systemName: "chevron.right")
+                            .font(.caption.weight(.semibold))
+                            .foregroundStyle(.secondary)
+                            .frame(width: chevronWidth)
                     }
                 }
-                // Breathing room so each crumb's glass shadow renders inside the
-                // scroll viewport rather than being clipped at the top and bottom.
-                .padding(.vertical, 10)
-                // Glide the crumbs between their old and new widths as the cursor
-                // advances, instead of snapping (degraded under Reduce Motion).
-                .animation(reduceMotion ? nil : .smooth, value: steps)
             }
+            // Breathing room so each crumb's glass shadow renders inside the scroll
+            // viewport rather than being clipped at the top and bottom.
+            .padding(.vertical, 10)
+            // Glide the crumbs between their old and new widths as the cursor
+            // advances, instead of snapping (degraded under Reduce Motion).
+            .animation(reduceMotion ? nil : .smooth, value: steps)
         }
         .onGeometryChange(for: CGFloat.self) { $0.size.width } action: { containerWidth = $0 }
     }
@@ -540,7 +542,7 @@ private struct StepCrumb: View {
     /// cursor moves — rather than a separate layer. Filled crumbs are interactive
     /// so a tap to re-edit reads as pressable.
     private var glass: Glass {
-        let base: Glass = step.isCurrent ? .regular.tint(.accentColor) : .regular
+        let base: Glass = step.isCurrent ? .regular.tint(.accentColor.opacity(0.4)) : .regular
         return step.value != nil ? base.interactive() : base
     }
 
