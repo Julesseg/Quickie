@@ -35,6 +35,13 @@ struct RootView: View {
     /// System, applied to the whole app via `preferredColorScheme`.
     @AppStorage("appearance") private var appearanceRaw = Appearance.default.rawValue
 
+    /// New Reminder settings, persisted with working defaults (ADR 0012) so the
+    /// capture is fully functional before any Settings UI exists (issue #37): ask
+    /// for a due date, and either ask for the list or route to a default one.
+    @AppStorage(ReminderSettings.askDateKey) private var reminderAskDate = true
+    @AppStorage(ReminderSettings.askListKey) private var reminderAskList = false
+    @AppStorage(ReminderSettings.defaultListIDKey) private var reminderDefaultListID = ""
+
     /// The user's ranking signals — pinned Favorites and Frecency of past
     /// selections — persisted across launches (issue #9).
     @State private var signals = SignalsStore.launch()
@@ -57,6 +64,10 @@ struct RootView: View {
 
     @State private var keyboardLayout = KeyboardLayoutModel()
     @State private var clipboard = ClipboardPrefillModel()
+
+    /// The active New Reminder capture (issue #37): when capturing, the breadcrumb
+    /// owns the bottom input and the morphing control replaces the result list.
+    @State private var reminderCapture = ReminderCaptureModel()
 
     /// Honour the system Reduce Motion setting: it gates the paste button's morph
     /// so the glass snaps in/out instead of interpolating (ADR 0010 motion budget).
@@ -107,6 +118,10 @@ struct RootView: View {
                 IndexedProvider(catalog: storedNotes + [.newNote()]),
                 // The Notes / Snippets library command rows.
                 IndexedProvider(catalog: [.openNotesLibrary(), .openSnippetsLibrary()]),
+                // The New Reminder quick capture (issue #37). This indexed
+                // instance is only for matching by name; activating it rebuilds a
+                // configured Action from the user's reminder lists + settings.
+                IndexedProvider(catalog: [.newReminder()]),
             ],
             layout: keyboardLayout.layout,
             favorites: signals.favorites,
@@ -141,7 +156,11 @@ struct RootView: View {
                 QuietBackdrop()
 
                 Group {
-                    if isHome {
+                    if reminderCapture.isCapturing {
+                        // A capture in flight replaces the result list with its
+                        // morphing control (the fuzzy choice list or date picker).
+                        ReminderCaptureContent(model: reminderCapture)
+                    } else if isHome {
                         HomeView(
                             content: engine.home(),
                             onRun: run,
@@ -183,39 +202,53 @@ struct RootView: View {
             // keyboard).
             .safeAreaInset(edge: .bottom, spacing: 0) {
                 if path.isEmpty {
-                    GlassEffectContainer(spacing: 8) {
-                        HStack(spacing: 8) {
-                            InputBar(
-                                query: $query,
-                                focused: $inputFocused,
-                                returnKey: highlighted?.returnKeyLabel ?? ReturnKeyLabel.none,
-                                onSubmit: { if let highlighted { run(highlighted) } },
-                                glassNamespace: glassNamespace
-                            )
-                            if clipboardPrefill.isChipOffered {
-                                ClipboardPasteButton(glassNamespace: glassNamespace) { text in
-                                    query = text
-                                    clipboard.markUsed()
+                    if reminderCapture.isActive {
+                        // A capture (or its denial affordance) owns the bottom
+                        // region: the breadcrumb + the morphing input replace the
+                        // search field and paste chip (issue #37).
+                        GlassEffectContainer(spacing: 8) {
+                            ReminderCaptureBar(model: reminderCapture)
+                        }
+                    } else {
+                        GlassEffectContainer(spacing: 8) {
+                            HStack(spacing: 8) {
+                                InputBar(
+                                    query: $query,
+                                    focused: $inputFocused,
+                                    returnKey: highlighted?.returnKeyLabel ?? ReturnKeyLabel.none,
+                                    onSubmit: { if let highlighted { run(highlighted) } },
+                                    glassNamespace: glassNamespace
+                                )
+                                if clipboardPrefill.isChipOffered {
+                                    ClipboardPasteButton(glassNamespace: glassNamespace) { text in
+                                        query = text
+                                        clipboard.markUsed()
+                                    }
                                 }
                             }
+                            .padding(.horizontal, 12)
+                            .padding(.vertical, 10)
                         }
-                        .padding(.horizontal, 12)
-                        .padding(.vertical, 10)
+                        // Morph the button in/out as the offer changes — degraded to a
+                        // snap under Reduce Motion (ADR 0010 motion budget).
+                        .animation(reduceMotion ? nil : .smooth, value: clipboardPrefill.isChipOffered)
+                        // Auto-focus on launch (the zero-wall promise, ADR 0012).
+                        // Return-from-a-page focus is re-armed off the popped page's
+                        // `onDisappear` (see the navigationDestination below) — a real
+                        // event at pop completion, not a guessed delay.
+                        .onAppear { inputFocused = true }
                     }
-                    // Morph the button in/out as the offer changes — degraded to a
-                    // snap under Reduce Motion (ADR 0010 motion budget).
-                    .animation(reduceMotion ? nil : .smooth, value: clipboardPrefill.isChipOffered)
-                    // Auto-focus on launch (the zero-wall promise, ADR 0012).
-                    // Return-from-a-page focus is re-armed off the popped page's
-                    // `onDisappear` (see the navigationDestination below) — a real
-                    // event at pop completion, not a guessed delay.
-                    .onAppear { inputFocused = true }
                 }
             }
             // The launcher itself wears no navigation bar — it is the root; the
             // management pages push *on top* of it, sliding in from the right with
             // the system edge-swipe back.
             .toolbar(.hidden, for: .navigationBar)
+            // Flash the brief confirmation a completed capture reports (issue #37),
+            // the same non-blocking acknowledgement as a copy-out.
+            .onChange(of: reminderCapture.confirmation) { _, new in
+                if let new { flashConfirmation(new.message) }
+            }
             // Re-arm focus off the popped page's `onDisappear` — it fires when the
             // pop animation completes, the moment the launcher is back and its
             // input (re-added the instant `path` emptied) is fully laid out and
@@ -302,11 +335,36 @@ struct RootView: View {
         }
     }
 
-    /// Runs a row's main action and performs its outcome at the platform edge.
-    /// Selecting an Action records a frecency event (issue #9 AC #2).
+    /// Runs a row's main action. A multi-step capture (New Reminder) begins its
+    /// breadcrumb instead of performing an outcome straight away; everything else
+    /// performs its `ActionOutcome` at the platform edge. Selecting an Action
+    /// records a frecency event (issue #9 AC #2).
     private func run(_ action: Action) {
         signals.record(action.id)
-        switch action.run(input: query) {
+        if action.kind == .reminder {
+            startReminderCapture()
+            return
+        }
+        perform(action.run(input: query))
+    }
+
+    /// Begins the New Reminder capture (issue #37): clear the query, drop the
+    /// search keyboard, and hand off to the capture model, which resolves EventKit
+    /// permission (primer → system dialog) just-in-time before the breadcrumb
+    /// starts (ADR 0012).
+    private func startReminderCapture() {
+        query = ""
+        inputFocused = false
+        reminderCapture.start(settings: ReminderSettings(
+            askDate: reminderAskDate,
+            askList: reminderAskList,
+            defaultListID: reminderDefaultListID
+        ))
+    }
+
+    /// Performs a single-step Action's outcome at the platform edge.
+    private func perform(_ outcome: ActionOutcome) {
+        switch outcome {
         case .openURL(let url):
             openURL(url)
         case .copyText(let text):
@@ -330,6 +388,10 @@ struct RootView: View {
             // launcher rather than a stale result list.
             path.append(destination)
             query = ""
+        case .createReminder:
+            // Reminder creation flows through the capture model on the final
+            // commit, never a direct `run(input:)`, so there is nothing to do here.
+            break
         case .none:
             break
         }

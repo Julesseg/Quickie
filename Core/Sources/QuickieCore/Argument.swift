@@ -1,0 +1,64 @@
+import Foundation
+
+/// One option in a `choice` Argument's fixed set (issue #37) — e.g. a user's
+/// EventKit reminder list. The Core carries only an opaque `id` plus the `label`
+/// shown and matched; the app maps its domain objects (an `EKCalendar`) to these
+/// and resolves the chosen `id` back when performing the outcome.
+public struct ChoiceOption: Identifiable, Equatable, Sendable {
+    public let id: String
+    public let label: String
+
+    public init(id: String, label: String) {
+        self.id = id
+        self.label = label
+    }
+}
+
+/// A value committed for an Argument — what a sealed breadcrumb pill carries
+/// (issue #37). Each case is the result of one input method: free `text`, a
+/// picked `date` (with whether the user included a time, which decides a
+/// reminder's alarm), or a selected `choice` option.
+public enum ArgumentValue: Equatable, Sendable {
+    case text(String)
+    case date(Date, hasTime: Bool)
+    case choice(ChoiceOption)
+}
+
+/// The control the single bottom input morphs into for an Argument (CONTEXT.md →
+/// Input method; ADR 0013). Derived from the Argument's content type and option
+/// set so the control can never drift from the data: a fixed option set is always
+/// a fuzzy `choice`, a `date` is the in-place picker, everything else the keyboard.
+public enum InputMethod: Equatable, Sendable {
+    case keyboard
+    case datePicker
+    case choice([ChoiceOption])
+}
+
+/// One ordered, typed slot a multi-step Action collects through the breadcrumb
+/// (CONTEXT.md → Argument). It declares a display `label` (the pill prompt) and a
+/// `contentType`; a `choice` slot additionally carries its fixed `options`. The
+/// `inputMethod` is computed, never stored, so it stays in lock-step with the
+/// declaration.
+public struct Argument: Equatable, Sendable {
+    public let label: String
+    public let contentType: ContentType
+    /// The fixed option set for a choice Argument; empty for keyboard/date slots.
+    public let options: [ChoiceOption]
+
+    public init(label: String, contentType: ContentType, options: [ChoiceOption] = []) {
+        self.label = label
+        self.contentType = contentType
+        self.options = options
+    }
+
+    /// Which control the input region presents for this Argument (ADR 0013): a
+    /// fixed option set is a fuzzy choice, a `date` is the picker, anything else
+    /// is the keyboard.
+    public var inputMethod: InputMethod {
+        if !options.isEmpty { return .choice(options) }
+        switch contentType {
+        case .date: return .datePicker
+        default: return .keyboard
+        }
+    }
+}
