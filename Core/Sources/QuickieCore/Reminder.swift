@@ -91,22 +91,3 @@ extension Action {
         )
     }
 }
-
-private extension Array where Element == ArgumentValue {
-    var firstText: String? {
-        for case .text(let s) in self { return s }
-        return nil
-    }
-
-    var firstChoiceID: String? {
-        for case .choice(let option) in self { return option.id }
-        return nil
-    }
-
-    /// The first picked date and whether it included a time — the alarm signal: a
-    /// timed due date notifies, a date-only one does not.
-    var firstDate: (date: Date, hasTime: Bool)? {
-        for case .date(let date, let hasTime) in self { return (date, hasTime) }
-        return nil
-    }
-}

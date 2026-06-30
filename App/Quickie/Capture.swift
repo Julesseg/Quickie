@@ -39,8 +39,10 @@ protocol Capture: Sendable {
 
     /// Performs a completed outcome at the platform edge and returns the
     /// confirmation to flash — the same defer-to-the-edge boundary as the rest of
-    /// the app (the Core never touches EventKit or the pasteboard).
-    func perform(_ outcome: ActionOutcome) async -> CaptureConfirmation
+    /// the app (the Core never touches EventKit or the pasteboard). Returns `nil`
+    /// when the outcome carries its own feedback and needs no toast — the New Event
+    /// editor mode, whose handoff to the system event editor *is* the confirmation.
+    func perform(_ outcome: ActionOutcome) async -> CaptureConfirmation?
 
     /// The wording for the primer and denial affordances, so the generic bar can
     /// render them without knowing which permission it is gating.

@@ -33,6 +33,17 @@ public enum ActionOutcome: Equatable, Sendable {
     /// defer-to-the-edge pattern as `copyText` and `openNote`, keeping the capture
     /// loop testable and EventKit-free.
     case createReminder(ReminderDraft)
+    /// Create an EventKit calendar event from a fully-collected New Event capture
+    /// in **silent** mode (CONTEXT.md → Event; issue #38). The core carries only the
+    /// pure `EventDraft`; the app writes it to EventKit directly — the silent-default
+    /// counterpart to `createReminder`.
+    case createEvent(EventDraft)
+    /// Hand a fully-collected New Event capture to the system event editor in
+    /// **editor** mode (CONTEXT.md → Event; issue #38): the app pre-fills an
+    /// `EKEventEditViewController` from the `EventDraft` for final review and native
+    /// fields (alerts, invitees, recurrence) instead of writing silently — the
+    /// event counterpart to `composeNote`/`composeSnippet`'s "open editor, confirm".
+    case composeEvent(EventDraft)
     case none
 }
 
@@ -61,10 +72,14 @@ public enum ActionKind: Equatable, Sendable {
     case newNote
     case newSnippet
     case calculator
-    /// A quick-capture that writes to EventKit — New Reminder (issue #37), and
-    /// later New Event. Collects its fields through the breadcrumb and creates the
-    /// record without leaving Quickie (CONTEXT.md → Quick capture).
+    /// A quick-capture that writes a reminder to EventKit — New Reminder (issue
+    /// #37). Collects its fields through the breadcrumb and creates the record
+    /// without leaving Quickie (CONTEXT.md → Quick capture).
     case reminder
+    /// A quick-capture that writes a calendar event to EventKit — New Event (issue
+    /// #38). Its own kind so the row wears a calendar badge, not the reminder's
+    /// checklist, and the launcher routes its activation to the event capture.
+    case event
     /// The Settings command row (gearshape) — distinct from the data it has none
     /// of, so it reads as its own thing.
     case settings
@@ -180,7 +195,7 @@ public struct Action: Identifiable, Sendable {
         case .openURL: return .openInBrowser
         case .copyText: return .copyToClipboard
         case .openNote: return .openNote
-        case .composeNote, .composeSnippet, .createReminder: return .compose
+        case .composeNote, .composeSnippet, .createReminder, .createEvent, .composeEvent: return .compose
         case .openPage: return .openPage
         case .none: return .none
         }
@@ -198,7 +213,7 @@ public struct Action: Identifiable, Sendable {
         if !arguments.isEmpty { return .go }
         switch run() {
         case .openURL: return isFallback ? .search : .go
-        case .copyText, .composeNote, .composeSnippet, .createReminder: return .done
+        case .copyText, .composeNote, .composeSnippet, .createReminder, .createEvent, .composeEvent: return .done
         case .openNote, .openPage: return .go
         case .none: return .none
         }

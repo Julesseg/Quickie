@@ -20,6 +20,7 @@ extension ActionKind {
         case .newSnippet: return "rectangle.and.pencil.and.ellipsis"
         case .calculator: return "function"
         case .reminder: return "checklist"
+        case .event: return "calendar"
         case .settings: return "gearshape"
         case .managementPage: return "slider.horizontal.3"
         }
@@ -36,6 +37,7 @@ extension ActionKind {
         case .newSnippet: return .purple
         case .calculator: return .green
         case .reminder: return .red
+        case .event: return .cyan
         case .settings: return .gray
         case .managementPage: return .gray
         }

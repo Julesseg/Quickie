@@ -42,6 +42,13 @@ struct RootView: View {
     @AppStorage(ReminderSettings.askListKey) private var reminderAskList = true
     @AppStorage(ReminderSettings.defaultListIDKey) private var reminderDefaultListID = ""
 
+    /// New Event settings, persisted with working defaults (ADR 0012) so the capture
+    /// is fully functional before any Settings UI exists (issue #38): route to the
+    /// system default calendar (no calendar step) and create silently.
+    @AppStorage(EventSettings.askCalendarKey) private var eventAskCalendar = false
+    @AppStorage(EventSettings.defaultCalendarIDKey) private var eventDefaultCalendarID = ""
+    @AppStorage(EventSettings.editorKey) private var eventUseEditor = false
+
     /// The user's ranking signals — pinned Favorites and Frecency of past
     /// selections — persisted across launches (issue #9).
     @State private var signals = SignalsStore.launch()
@@ -72,6 +79,10 @@ struct RootView: View {
     /// over the capture kind — New Reminder today — via the `Capture` recipe handed
     /// to `start`.
     @State private var capture = CaptureModel()
+
+    /// The New Event editor-mode presenter (issue #38): editor mode hands the
+    /// collected draft here, and its `request` drives the system event editor sheet.
+    @State private var eventEditor = EventEditorPresenter()
 
     /// Honour the system Reduce Motion setting: it gates the paste button's morph
     /// so the glass snaps in/out instead of interpolating (ADR 0010 motion budget).
@@ -126,6 +137,10 @@ struct RootView: View {
                 // instance is only for matching by name; activating it rebuilds a
                 // configured Action from the user's reminder lists + settings.
                 IndexedProvider(catalog: [.newReminder()]),
+                // The New Event quick capture (issue #38). Like New Reminder, this
+                // indexed instance is only for matching by name; activating it
+                // rebuilds a configured Action from the user's calendars + settings.
+                IndexedProvider(catalog: [.newEvent()]),
             ],
             layout: keyboardLayout.layout,
             favorites: signals.favorites,
@@ -354,6 +369,16 @@ struct RootView: View {
                     SnippetEditorView(seed: seed.text)
                 }
             }
+            // New Event's editor mode (issue #38): the pre-filled system event editor
+            // the user reviews instead of a silent write. Dismissing it (save, cancel,
+            // or delete) re-arms the launcher's focus, like the compose sheets.
+            .sheet(
+                item: Binding(get: { eventEditor.request }, set: { eventEditor.request = $0 }),
+                onDismiss: { refocusInput() }
+            ) { request in
+                EventEditorView(draft: request.draft) { eventEditor.request = nil }
+                    .ignoresSafeArea()
+            }
         }
         .preferredColorScheme(Appearance(stored: appearanceRaw).colorScheme)
     }
@@ -402,6 +427,10 @@ struct RootView: View {
             startReminderCapture()
             return
         }
+        if action.kind == .event {
+            startEventCapture()
+            return
+        }
         perform(action.run(input: query))
     }
 
@@ -427,6 +456,26 @@ struct RootView: View {
                     askList: reminderAskList,
                     defaultListID: reminderDefaultListID
                 )
+            ),
+            layout: keyboardLayout.layout
+        )
+    }
+
+    /// Begins the New Event capture (issue #38): hand off to the same capture model
+    /// New Reminder uses, configured with an `EventCapture` recipe. The recipe
+    /// resolves EventKit calendar permission (primer → system dialog) just-in-time
+    /// before the breadcrumb starts (ADR 0012), and routes editor mode through the
+    /// shared `eventEditor` presenter. The search field keeps first responder for the
+    /// same seamless keyboard hand-off as the reminder capture.
+    private func startEventCapture() {
+        capture.start(
+            EventCapture(
+                settings: EventSettings(
+                    askCalendar: eventAskCalendar,
+                    defaultCalendarID: eventDefaultCalendarID,
+                    useEditor: eventUseEditor
+                ),
+                presenter: eventEditor
             ),
             layout: keyboardLayout.layout
         )
@@ -458,9 +507,10 @@ struct RootView: View {
             // launcher rather than a stale result list.
             path.append(destination)
             query = ""
-        case .createReminder:
-            // Reminder creation flows through the capture model on the final
-            // commit, never a direct `run(input:)`, so there is nothing to do here.
+        case .createReminder, .createEvent, .composeEvent:
+            // Reminder and event creation (silent or editor handoff) flow through
+            // the capture model on the final commit, never a direct `run(input:)`,
+            // so there is nothing to do here.
             break
         case .none:
             break

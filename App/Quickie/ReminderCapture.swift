@@ -79,7 +79,7 @@ struct ReminderCapture: Capture {
     /// reporting the tappable "Reminder added" confirmation (carrying the deep
     /// link) or an error acknowledgement. A non-`createReminder` outcome can't
     /// arise from this capture, so it is treated as a failure.
-    func perform(_ outcome: ActionOutcome) async -> CaptureConfirmation {
+    func perform(_ outcome: ActionOutcome) async -> CaptureConfirmation? {
         guard case .createReminder(let draft) = outcome else {
             return CaptureConfirmation(message: "Couldn't add reminder", isError: true)
         }

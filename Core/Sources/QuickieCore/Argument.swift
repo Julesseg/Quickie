@@ -62,3 +62,27 @@ public struct Argument: Equatable, Sendable {
         }
     }
 }
+
+/// Reads a collected breadcrumb's values back out by kind (issue #37/#38) — what a
+/// quick-capture's draft builder uses to pull each field. Reading by kind rather
+/// than position keeps a capture robust to the steps a setting skips: a fixed
+/// list/calendar drops the choice step, an off due-date drops the date step, and
+/// the remaining values still resolve to the right field.
+extension Array where Element == ArgumentValue {
+    var firstText: String? {
+        for case .text(let s) in self { return s }
+        return nil
+    }
+
+    var firstChoiceID: String? {
+        for case .choice(let option) in self { return option.id }
+        return nil
+    }
+
+    /// The first picked date and whether it included a time — the signal a capture
+    /// reads to branch (a reminder's alarm, an event's timed-vs-all-day duration).
+    var firstDate: (date: Date, hasTime: Bool)? {
+        for case .date(let date, let hasTime) in self { return (date, hasTime) }
+        return nil
+    }
+}
