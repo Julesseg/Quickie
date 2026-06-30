@@ -10,4 +10,8 @@ public enum ContentType: Equatable, Sendable {
     case url
     case number
     case file
+    /// A calendar date, optionally with a time-of-day (issue #37). As an Argument
+    /// its input method is the in-place graphical date picker (ADR 0013), and a
+    /// future Dynamic Provider could produce one from a detected date.
+    case date
 }

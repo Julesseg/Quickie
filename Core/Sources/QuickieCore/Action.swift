@@ -27,6 +27,12 @@ public enum ActionOutcome: Equatable, Sendable {
     /// list, which otherwise lives only as a filtered result row. Replaces the
     /// old chrome buttons and the combined manage sheet.
     case openPage(ManagementPage)
+    /// Create an EventKit reminder from a fully-collected New Reminder capture
+    /// (CONTEXT.md → Reminder; issue #37). The core carries only the pure
+    /// `ReminderDraft`; the app layer performs it against EventKit — the same
+    /// defer-to-the-edge pattern as `copyText` and `openNote`, keeping the capture
+    /// loop testable and EventKit-free.
+    case createReminder(ReminderDraft)
     case none
 }
 
@@ -55,6 +61,10 @@ public enum ActionKind: Equatable, Sendable {
     case newNote
     case newSnippet
     case calculator
+    /// A quick-capture that writes to EventKit — New Reminder (issue #37), and
+    /// later New Event. Collects its fields through the breadcrumb and creates the
+    /// record without leaving Quickie (CONTEXT.md → Quick capture).
+    case reminder
     /// The Settings command row (gearshape) — distinct from the data it has none
     /// of, so it reads as its own thing.
     case settings
@@ -103,8 +113,16 @@ public struct Action: Identifiable, Sendable {
     /// pinned in the bottom fallback region, consuming the raw typed text rather
     /// than matching by name (CONTEXT.md → Fallback Action).
     public let isFallback: Bool
+    /// The ordered, typed Arguments this Action collects through the breadcrumb
+    /// before it runs (CONTEXT.md → Argument; issue #37). Empty for a single-step
+    /// Action that runs straight from the typed text.
+    public let arguments: [Argument]
 
     private let effect: @Sendable (String?) -> ActionOutcome
+    /// How collected Argument values become an outcome (issue #37) — the
+    /// final-commit auto-create. Defaults to the single-string `effect` so a
+    /// single-step Action needs no multi-step effect; `newReminder` supplies one.
+    private let multiStepEffect: @Sendable ([ArgumentValue]) -> ActionOutcome
 
     public init(
         id: String,
@@ -115,7 +133,9 @@ public struct Action: Identifiable, Sendable {
         inputTypes: [ContentType] = [],
         outputType: ContentType,
         isFallback: Bool = false,
-        effect: @escaping @Sendable (String?) -> ActionOutcome
+        arguments: [Argument] = [],
+        effect: @escaping @Sendable (String?) -> ActionOutcome,
+        multiStepEffect: (@Sendable ([ArgumentValue]) -> ActionOutcome)? = nil
     ) {
         self.id = id
         self.kind = kind
@@ -125,7 +145,16 @@ public struct Action: Identifiable, Sendable {
         self.inputTypes = inputTypes
         self.outputType = outputType
         self.isFallback = isFallback
+        self.arguments = arguments
         self.effect = effect
+        self.multiStepEffect = multiStepEffect ?? { _ in effect(nil) }
+    }
+
+    /// Resolves a multi-step Action's collected Argument values into its outcome
+    /// (issue #37) — what the engine returns on the final commit. Single-step
+    /// Actions have no Arguments and never reach here.
+    public func run(arguments values: [ArgumentValue]) -> ActionOutcome {
+        multiStepEffect(values)
     }
 
     /// Runs the main action. `input` is the raw typed text for Actions that
@@ -139,12 +168,19 @@ public struct Action: Identifiable, Sendable {
     /// outcome (issue #11). The outcome *case* is stable regardless of the typed
     /// input for every current Action, so this is read with no input and the
     /// glyph always matches what a tap performs.
+    ///
+    /// A multi-step capture (New Reminder) produces its outcome only from the
+    /// Arguments it collects, so its plain `run()` is the placeholder `.none`; it
+    /// is classified from the multi-step outcome instead (the case is stable
+    /// regardless of the values, the same way the single-step case is stable
+    /// regardless of input), so the row wears the glyph of what it ultimately does.
     public var mainAction: MainAction {
-        switch run() {
+        let outcome = arguments.isEmpty ? run() : run(arguments: [])
+        switch outcome {
         case .openURL: return .openInBrowser
         case .copyText: return .copyToClipboard
         case .openNote: return .openNote
-        case .composeNote, .composeSnippet: return .compose
+        case .composeNote, .composeSnippet, .createReminder: return .compose
         case .openPage: return .openPage
         case .none: return .none
         }
@@ -156,9 +192,13 @@ public struct Action: Identifiable, Sendable {
     /// `.done`. Platform-agnostic — the app maps it to a SwiftUI `SubmitLabel`.
     /// The outcome *case* is stable regardless of input, so it is read with none.
     public var returnKeyLabel: ReturnKeyLabel {
+        // A multi-step Action begins its breadcrumb capture rather than performing
+        // an outcome, so its label comes from having Arguments, not from `run()`
+        // (whose plain outcome is `.none`): Enter on the highlighted row starts it.
+        if !arguments.isEmpty { return .go }
         switch run() {
         case .openURL: return isFallback ? .search : .go
-        case .copyText, .composeNote, .composeSnippet: return .done
+        case .copyText, .composeNote, .composeSnippet, .createReminder: return .done
         case .openNote, .openPage: return .go
         case .none: return .none
         }

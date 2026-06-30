@@ -51,4 +51,12 @@ struct HighlightedResultTests {
         #expect(Action.snippet(id: "s", title: "Reply", body: "hi").returnKeyLabel == .done)
         #expect(Action.newNote().returnKeyLabel == .done)
     }
+
+    @Test("a multi-step capture row reads as .go — Enter begins the capture")
+    func goLabelForMultiStepCapture() {
+        // New Reminder collects Arguments through the breadcrumb; its plain `run()`
+        // outcome is `.none`, so the label must come from its having Arguments, not
+        // the outcome — Enter on the highlighted row starts the capture.
+        #expect(Action.newReminder().returnKeyLabel == .go)
+    }
 }

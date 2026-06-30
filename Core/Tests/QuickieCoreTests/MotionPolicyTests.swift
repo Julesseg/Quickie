@@ -41,8 +41,22 @@ struct MotionPolicyTests {
         #expect(focus < row)
     }
 
+    @Test("a capture transition is at least as deliberate as a row settling")
+    func captureTransitionIsAtLeastAsDeliberateAsARow() {
+        // Entering/leaving a capture moves the whole screen, so it reads as a more
+        // deliberate gesture than a single row sliding into the ranking — but it
+        // stays inside the same tight budget (asserted by `springsStayWithinBudget`).
+        let policy = MotionPolicy(reduceMotion: false)
+        guard case .spring(let capture, _) = policy.style(for: .captureTransition),
+              case .spring(let row, _) = policy.style(for: .rowInsert) else {
+            Issue.record("expected springs when motion is allowed")
+            return
+        }
+        #expect(capture >= row)
+    }
+
     @Test("every animated moment degrades to a fade under Reduce Motion",
-          arguments: [MotionMoment.rowInsert, .rowReorder, .inputFocus])
+          arguments: [MotionMoment.rowInsert, .rowReorder, .inputFocus, .captureTransition])
     func allMomentsFadeUnderReduceMotion(_ moment: MotionMoment) {
         let policy = MotionPolicy(reduceMotion: true)
         guard case .fade = policy.style(for: moment) else {
@@ -52,7 +66,7 @@ struct MotionPolicyTests {
     }
 
     @Test("springs stay within the tight budget — fast and barely bouncing",
-          arguments: [MotionMoment.rowInsert, .rowReorder, .inputFocus])
+          arguments: [MotionMoment.rowInsert, .rowReorder, .inputFocus, .captureTransition])
     func springsStayWithinBudget(_ moment: MotionMoment) {
         // ADR 0010's "tight animation budget": subtle and fast. A long response or
         // an under-damped, bouncy spring would read as sluggish next to the typing.

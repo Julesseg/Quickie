@@ -18,15 +18,19 @@ extension MotionStyle {
         }
     }
 
-    /// The transition that pairs with this style. A spring slides a row in from
-    /// the bottom edge (toward the input/thumb) while fading; the Reduce Motion
-    /// fade drops the movement entirely.
-    var insertionTransition: AnyTransition {
+    /// The transition for a view entering from `edge` (and leaving back toward it)
+    /// under this style: a directional slide while fading for a spring, the bare
+    /// crossfade for the Reduce Motion degradation — movement dropped entirely.
+    func edgeTransition(from edge: Edge) -> AnyTransition {
         switch self {
         case .spring:
-            return .move(edge: .bottom).combined(with: .opacity)
+            return .move(edge: edge).combined(with: .opacity)
         case .fade:
             return .opacity
         }
     }
+
+    /// The transition that pairs with this style for a result row: it slides in
+    /// from the bottom edge (toward the input/thumb) while fading.
+    var insertionTransition: AnyTransition { edgeTransition(from: .bottom) }
 }
