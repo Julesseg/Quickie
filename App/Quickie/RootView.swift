@@ -295,6 +295,15 @@ struct RootView: View {
                     openURL: new.openURL
                 )
             }
+            // A tactile beat the moment a capture validates (issue #37), paired with
+            // the confirmation toast: a success notification when the reminder lands
+            // (it carries a deep link), an error buzz when the write failed. Driven
+            // by the same `confirmation` value, whose fresh id makes back-to-back
+            // captures each register as a distinct trigger.
+            .sensoryFeedback(trigger: reminderCapture.confirmation) { _, confirmation in
+                guard let confirmation else { return nil }
+                return confirmation.openURL == nil ? .error : .success
+            }
             // Re-arm focus off the popped page's `onDisappear` — it fires when the
             // pop animation completes, the moment the launcher is back and its
             // input (re-added the instant `path` emptied) is fully laid out and
