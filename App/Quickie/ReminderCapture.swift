@@ -347,40 +347,34 @@ private struct ChoiceRow: View {
 private struct DateStep: View {
     @Bindable var model: ReminderCaptureModel
 
-    /// The settled height of the graphical month grid (measured the same in
-    /// date-only and date+time modes), pinned so the picker can't shrink on the
-    /// first tap.
-    private static let calendarHeight: CGFloat = 350
+    /// The settled height of the month grid, pinned with a hard constraint so the
+    /// picker can never use its unstable taller intrinsic height. Date-only is just
+    /// the calendar (constant across 5- and 6-row months); date+time adds the inline
+    /// time row beneath it, so that mode needs the extra band.
+    private static let dateHeight: CGFloat = 350
+    private static let dateTimeHeight: CGFloat = 400
+
+    private var pickerHeight: CGFloat { model.includeTime ? Self.dateTimeHeight : Self.dateHeight }
 
     var body: some View {
         VStack {
             Spacer(minLength: 0)
             VStack(spacing: 12) {
-                DatePicker(
-                    "Due date",
-                    selection: $model.pickedDate,
-                    displayedComponents: model.includeTime ? [.date, .hourAndMinute] : [.date]
+                // A `UIDatePicker` pinned to a fixed height rather than SwiftUI's
+                // `DatePicker(.graphical)`. The SwiftUI picker over-reports its
+                // height until its first selection change, so the calendar rows
+                // visibly shrank the first time you tapped a day — and any later
+                // relayout (the capture's slide-in settling) could bounce it back,
+                // making it jump again on a subsequent tap. A hard UIKit height
+                // constraint forces the settled layout from the first frame, so the
+                // grid never moves. The height steps up when a time is included (an
+                // explicit toggle, so its resize reads as intentional).
+                InlineDatePicker(
+                    date: $model.pickedDate,
+                    includeTime: model.includeTime,
+                    height: pickerHeight
                 )
-                .datePickerStyle(.graphical)
-                .labelsHidden()
-                // Pin the month grid to its settled height. Left to size itself the
-                // graphical picker over-estimates its height on first layout and then
-                // snaps ~25pt shorter the first time you tap a day — the calendar
-                // "lines" visibly shrinking. A fixed height keeps the surrounding card
-                // and the commit button from moving; the no-op re-publish below makes
-                // the grid itself commit that compact layout up front.
-                .frame(height: Self.calendarHeight)
-                .onAppear {
-                    // The graphical picker reports a too-tall `intrinsicContentSize`
-                    // until its first selection *change*, so the calendar rows visibly
-                    // tighten the first time you tap a day. Nudge the selection by a
-                    // single second on the next runloop: that counts as a change and
-                    // triggers the relayout up front, yet keeps the same calendar day
-                    // and the same date-only breadcrumb, so nothing visibly moves.
-                    DispatchQueue.main.async {
-                        model.pickedDate = model.pickedDate.addingTimeInterval(1)
-                    }
-                }
+                .frame(height: pickerHeight)
 
                 Toggle("Include a time", isOn: $model.includeTime)
                     .font(.subheadline)
@@ -390,6 +384,62 @@ private struct DateStep: View {
             .glassEffect(.regular, in: RoundedRectangle(cornerRadius: 24, style: .continuous))
             .padding(.horizontal, 16)
         }
+    }
+}
+
+/// The in-place month-grid date picker, a `UIDatePicker` in `.inline` style with a
+/// hard height constraint (CONTEXT.md → Input method). SwiftUI's
+/// `DatePicker(.graphical)` over-reports its `intrinsicContentSize` until its first
+/// selection change, so its calendar rows visibly tightened the first time you
+/// tapped a day; pinning a `UIDatePicker` to its settled height with a required
+/// constraint forces that layout from the start, so the grid never jumps. The
+/// pinned height tracks the mode — date-only vs the taller date+time — and the
+/// constraint is updated in place when it changes.
+private struct InlineDatePicker: UIViewRepresentable {
+    @Binding var date: Date
+    var includeTime: Bool
+    /// The fixed height to pin the picker to — its settled height for the current
+    /// mode (date-only, or the taller date+time with its inline time row).
+    var height: CGFloat
+
+    func makeUIView(context: Context) -> UIDatePicker {
+        let picker = UIDatePicker()
+        picker.preferredDatePickerStyle = .inline
+        picker.datePickerMode = includeTime ? .dateAndTime : .date
+        picker.date = date
+        picker.addTarget(
+            context.coordinator,
+            action: #selector(Coordinator.changed(_:)),
+            for: .valueChanged
+        )
+        // The hard constraint that overrides the unstable intrinsic height; its
+        // constant is updated in `updateUIView` when the mode (and so the height)
+        // changes.
+        let pinned = picker.heightAnchor.constraint(equalToConstant: height)
+        pinned.priority = .required
+        pinned.isActive = true
+        context.coordinator.heightConstraint = pinned
+        picker.setContentHuggingPriority(.required, for: .vertical)
+        return picker
+    }
+
+    func updateUIView(_ picker: UIDatePicker, context: Context) {
+        let mode: UIDatePicker.Mode = includeTime ? .dateAndTime : .date
+        if picker.datePickerMode != mode { picker.datePickerMode = mode }
+        if picker.date != date { picker.date = date }
+        if context.coordinator.heightConstraint?.constant != height {
+            context.coordinator.heightConstraint?.constant = height
+        }
+        context.coordinator.onChange = { date = $0 }
+    }
+
+    func makeCoordinator() -> Coordinator { Coordinator { date = $0 } }
+
+    final class Coordinator: NSObject {
+        var onChange: (Date) -> Void
+        var heightConstraint: NSLayoutConstraint?
+        init(_ onChange: @escaping (Date) -> Void) { self.onChange = onChange }
+        @objc func changed(_ picker: UIDatePicker) { onChange(picker.date) }
     }
 }
 
