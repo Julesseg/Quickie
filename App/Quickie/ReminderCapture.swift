@@ -347,6 +347,11 @@ private struct ChoiceRow: View {
 private struct DateStep: View {
     @Bindable var model: ReminderCaptureModel
 
+    /// The settled height of the graphical month grid (measured the same in
+    /// date-only and date+time modes), pinned so the picker can't shrink on the
+    /// first tap.
+    private static let calendarHeight: CGFloat = 350
+
     var body: some View {
         VStack {
             Spacer(minLength: 0)
@@ -358,6 +363,24 @@ private struct DateStep: View {
                 )
                 .datePickerStyle(.graphical)
                 .labelsHidden()
+                // Pin the month grid to its settled height. Left to size itself the
+                // graphical picker over-estimates its height on first layout and then
+                // snaps ~25pt shorter the first time you tap a day — the calendar
+                // "lines" visibly shrinking. A fixed height keeps the surrounding card
+                // and the commit button from moving; the no-op re-publish below makes
+                // the grid itself commit that compact layout up front.
+                .frame(height: Self.calendarHeight)
+                .onAppear {
+                    // The graphical picker reports a too-tall `intrinsicContentSize`
+                    // until its first selection *change*, so the calendar rows visibly
+                    // tighten the first time you tap a day. Nudge the selection by a
+                    // single second on the next runloop: that counts as a change and
+                    // triggers the relayout up front, yet keeps the same calendar day
+                    // and the same date-only breadcrumb, so nothing visibly moves.
+                    DispatchQueue.main.async {
+                        model.pickedDate = model.pickedDate.addingTimeInterval(1)
+                    }
+                }
 
                 Toggle("Include a time", isOn: $model.includeTime)
                     .font(.subheadline)
@@ -548,17 +571,29 @@ private struct BreadcrumbSteps: View {
     }
 
     /// What a crumb shows: the **live** input for the current step — the typed
-    /// text or the picked date, updating as the user works — the committed value
-    /// for a sealed step, or a placeholder dash while a later step waits its turn.
+    /// text, the picked date, or the choice Enter would commit, updating as the
+    /// user works — the committed value for a sealed step, or a placeholder dash
+    /// while a later step waits its turn.
     private func displayValue(for step: BreadcrumbStep) -> (text: String, isPlaceholder: Bool) {
         if step.isCurrent {
-            if case .datePicker = model.currentArgument?.inputMethod {
+            switch model.currentArgument?.inputMethod {
+            case .datePicker:
                 // A date always has a value (defaults to now), so it shows straight
                 // away and changes live as the picker moves.
                 return (pillText(.date(model.pickedDate, hasTime: model.includeTime)), false)
+            case .choice:
+                // Preview the option Enter will commit — the best (highlighted)
+                // match — rather than the raw filter text, so the crumb always
+                // reads as the value about to be sealed. Empty only when nothing
+                // matches the filter.
+                if let best = model.choiceOptions().first {
+                    return (best.label, false)
+                }
+                return ("—", true)
+            default:
+                let typed = model.stepText.trimmingCharacters(in: .whitespacesAndNewlines)
+                return typed.isEmpty ? ("—", true) : (typed, false)
             }
-            let typed = model.stepText.trimmingCharacters(in: .whitespacesAndNewlines)
-            return typed.isEmpty ? ("—", true) : (typed, false)
         }
         if let value = step.value {
             return (pillText(value), false)
