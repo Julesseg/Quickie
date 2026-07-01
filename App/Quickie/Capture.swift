@@ -26,7 +26,7 @@ import QuickieCore
 protocol Capture: Sendable {
     /// The just-in-time access state, checked the instant the capture is activated
     /// and before any data entry (ADR 0012). A capture with no permission
-    /// requirement (a Quickie-stored Note) is always `.ready`.
+    /// requirement (a Quickie-stored Pile entry) is always `.ready`.
     var access: CaptureAccess { get }
 
     /// Requests access just-in-time after the user accepts the primer; returns

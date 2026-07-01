@@ -4,11 +4,12 @@ import QuickieCore
 
 /// The unified **Fallbacks** page (CONTEXT.md → Fallback list; ADR 0013): one
 /// user-ordered list of every Fallback Action — Fallback queries plus the two
-/// permanent built-ins, New Note and New Snippet. It reads most-important-first
-/// (top = nearest the input/thumb in results). Rows can be reordered, each can be
-/// **disabled** (kept in the list, hidden from results), and only Fallback queries
-/// can be deleted — New Note and New Snippet are permanent (disable-only). Reached
-/// as the typed "Fallbacks" command row and presented full-screen.
+/// permanent built-ins, Save for later and New Snippet. It reads
+/// most-important-first (top = nearest the input/thumb in results). Rows can be
+/// reordered, each can be **disabled** (kept in the list, hidden from results),
+/// and only Fallback queries can be deleted — Save for later and New Snippet are
+/// permanent (disable-only). Reached as the typed "Fallbacks" command row and
+/// presented full-screen.
 struct FallbacksView: View {
     @Environment(\.modelContext) private var modelContext
     @Query(sort: \StoredFallbackQuery.createdAt) private var queries: [StoredFallbackQuery]
@@ -25,7 +26,7 @@ struct FallbacksView: View {
         return store.resolvedOrder(for: queries.map(\.id)).compactMap { id in
             if let query = byID[id] { return .query(query) }
             switch id {
-            case FallbacksStore.newNoteID: return .builtin(id: id, title: "New Note")
+            case FallbacksStore.saveForLaterID: return .builtin(id: id, title: "Save for later")
             case FallbacksStore.newSnippetID: return .builtin(id: id, title: "New Snippet")
             default: return nil
             }
@@ -43,14 +44,14 @@ struct FallbacksView: View {
                             onToggleDisabled: { store.toggleDisabled(row.id) },
                             onEdit: { if case let .query(q) = row { editing = q } }
                         )
-                        // Built-ins (New Note / New Snippet) are permanent —
-                        // only Fallback queries can be deleted.
+                        // Built-ins (Save for later / New Snippet) are permanent
+                        // — only Fallback queries can be deleted.
                         .deleteDisabled(!row.isQuery)
                     }
                     .onMove(perform: move)
                     .onDelete(perform: delete)
                 } footer: {
-                    Text("Top is most important — nearest the input in results. Disable to hide a fallback without removing it. Tap Edit to reorder. New Note and New Snippet can't be deleted.")
+                    Text("Top is most important — nearest the input in results. Disable to hide a fallback without removing it. Tap Edit to reorder. Save for later and New Snippet can't be deleted.")
                 }
             }
             .navigationTitle("Fallbacks")
@@ -86,8 +87,9 @@ struct FallbacksView: View {
         store.setOrder(ids)
     }
 
-    /// Deletes only Fallback queries — New Note / New Snippet refuse deletion
-    /// (CONTEXT.md → Fallback list). A swipe over a built-in row is a no-op.
+    /// Deletes only Fallback queries — Save for later / New Snippet refuse
+    /// deletion (CONTEXT.md → Fallback list). A swipe over a built-in row is a
+    /// no-op.
     private func delete(_ offsets: IndexSet) {
         let current = rows
         for index in offsets {
@@ -99,7 +101,7 @@ struct FallbacksView: View {
 }
 
 /// One entry in the Fallback list: a deletable Fallback query, or a permanent
-/// built-in (New Note / New Snippet).
+/// built-in (Save for later / New Snippet).
 enum FallbackRow: Identifiable {
     case query(StoredFallbackQuery)
     case builtin(id: String, title: String)

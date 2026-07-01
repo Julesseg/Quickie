@@ -15,9 +15,9 @@ extension ActionKind {
         case .quicklink: return "link"
         case .fallbackQuery: return "magnifyingglass"
         case .snippet: return "doc.on.clipboard"
-        case .note: return "note.text"
+        case .pile: return "tray.full"
         case .shortcut: return "square.stack.3d.up"
-        case .newNote: return "square.and.pencil"
+        case .saveForLater: return "tray.and.arrow.down"
         case .newSnippet: return "rectangle.and.pencil.and.ellipsis"
         case .calculator: return "function"
         case .reminder: return "checklist"
@@ -35,9 +35,9 @@ extension ActionKind {
         case .quicklink: return .blue
         case .fallbackQuery: return .indigo
         case .snippet: return .teal
-        case .note: return .orange
+        case .pile: return .orange
         case .shortcut: return .indigo
-        case .newNote: return .pink
+        case .saveForLater: return .pink
         case .newSnippet: return .purple
         case .calculator: return .green
         case .reminder: return .red
@@ -72,7 +72,10 @@ extension MainAction {
         switch self {
         case .openInBrowser: return "arrow.up.right"
         case .copyToClipboard: return "doc.on.doc"
-        case .openNote: return "book"
+        // Staging puts the saved text back into the input — the insert glyph.
+        case .stage: return "text.insert"
+        // The silent capture drops the text into the Pile's tray.
+        case .saveToPile: return "tray.and.arrow.down"
         case .compose: return "square.and.pencil"
         case .openPage: return "chevron.right"
         case .openFile: return "arrow.up.forward.app"
@@ -104,7 +107,7 @@ struct ProviderBadge: View {
 }
 
 /// The trailing main-action glyph: a plain symbol, no background, pushed to the
-/// far right, signalling what a tap does (open in browser, copy, read…).
+/// far right, signalling what a tap does (open in browser, copy, stage…).
 struct MainActionGlyph: View {
     let mainAction: MainAction
 
