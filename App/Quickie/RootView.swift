@@ -1,6 +1,7 @@
 import SwiftUI
 import SwiftData
 import UIKit
+import Combine
 import QuickieCore
 
 /// The whole screen, and the whole loop made visible: a bottom auto-focused
@@ -105,6 +106,14 @@ struct RootView: View {
     /// tappable "Reminder added" that opens the reminder in the Reminders app.
     @State private var toast: Toast?
     @State private var toastToken = UUID()
+    /// The **held** keyboard height that lifts the bottom bar (issue #58). We drive
+    /// the lift manually — SwiftUI's automatic keyboard avoidance is disabled on the
+    /// launcher (`.ignoresSafeArea(.keyboard)`) — and only ever grow this to a real
+    /// software-keyboard height, never resetting it when the keyboard hides. So when
+    /// a row's long-press context menu resigns first responder and drops the keyboard
+    /// (a system behaviour with no public override), the layout stays frozen instead
+    /// of collapsing the safe area and jerking the reversed result list downward.
+    @State private var lockedKeyboardInset: CGFloat = 0
 
     @State private var keyboardLayout = KeyboardLayoutModel()
     @State private var clipboard = ClipboardPrefillModel()
@@ -204,6 +213,18 @@ struct RootView: View {
 
     private var isHome: Bool {
         query.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+    }
+
+    /// The bottom safe-area (home-indicator) inset, read from the active window. The
+    /// keyboard's reported overlap is measured from the screen bottom, but the bar
+    /// already sits above the home indicator, so we subtract this to avoid lifting it
+    /// one home-indicator's-worth too high.
+    private var bottomSafeAreaInset: CGFloat {
+        UIApplication.shared.connectedScenes
+            .compactMap { $0 as? UIWindowScene }
+            .flatMap { $0.windows }
+            .first { $0.isKeyWindow }?
+            .safeAreaInsets.bottom ?? 0
     }
 
     /// How entering/leaving a capture moves (ADR 0010 budget): a deliberate spring
@@ -320,6 +341,11 @@ struct RootView: View {
             // never took (and a mid-transition refocus that stranded it behind the
             // keyboard).
             .safeAreaInset(edge: .bottom, spacing: 0) {
+                // Lift the bar by the *held* keyboard height rather than letting the
+                // system track the live keyboard, so a transient dismissal (a
+                // context menu) doesn't reflow the content. Only at the root — a
+                // pushed page removes the bar, so it must reserve no phantom inset.
+                Group {
                 if path.isEmpty {
                     if capture.isActive {
                         // A capture (or its denial affordance) owns the bottom
@@ -363,6 +389,28 @@ struct RootView: View {
                         .onAppear { inputFocused = true }
                     }
                 }
+                }
+                // Reserve the held keyboard height so the bar floats where the
+                // keyboard's top is — and stays there when the keyboard drops. Zero
+                // when a page is pushed (the bar is gone), so no phantom inset.
+                .padding(.bottom, path.isEmpty ? lockedKeyboardInset : 0)
+                .animation(.easeOut(duration: 0.25), value: lockedKeyboardInset)
+            }
+            // Drive the bar lift ourselves: turn off SwiftUI's automatic keyboard
+            // avoidance for the launcher so the live keyboard never moves the layout
+            // (the pushed pages set this on themselves; this covers the root + its
+            // bottom inset). `lockedKeyboardInset` supplies the lift instead.
+            .ignoresSafeArea(.keyboard, edges: .bottom)
+            // Capture the software-keyboard height as it appears and **hold** it: on
+            // hide the end frame reads off-screen (overlap 0), which the threshold
+            // ignores, so the inset stays put across a context menu's transient
+            // dismissal. Only a real keyboard (not a hardware-keyboard accessory bar)
+            // clears the threshold.
+            .onReceive(NotificationCenter.default.publisher(for: UIResponder.keyboardWillChangeFrameNotification)) { note in
+                guard let endFrame = note.userInfo?[UIResponder.keyboardFrameEndUserInfoKey] as? CGRect else { return }
+                let overlap = UIScreen.main.bounds.height - endFrame.minY
+                guard overlap > 120 else { return }
+                lockedKeyboardInset = max(0, overlap - bottomSafeAreaInset)
             }
             // The launcher itself wears no navigation bar — it is the root; the
             // management pages push *on top* of it, sliding in from the right with
