@@ -57,6 +57,15 @@ public enum ActionOutcome: Equatable, Sendable {
     /// breadcrumb) rather than a chrome flip. It commits no value: it is a live
     /// scoped filter, not an Argument slot.
     case enterFileSearch
+    /// Run one of the user's iOS Shortcuts by name via x-callback-url (CONTEXT.md →
+    /// Shortcut Action; issue #46). The core carries only the shortcut's `name` and
+    /// the optional `input` collected through the breadcrumb — never a URL. The app
+    /// builds the `shortcuts://x-callback-url/run-shortcut` open (with the
+    /// `quickie://` success/error/cancel callbacks) at the platform edge, the same
+    /// defer-to-the-edge pattern as `openURL`. The returned output does *not* ride
+    /// here: it comes back through the inbound `quickie://shortcut-result` route and
+    /// is reinjected as the new query (`ShortcutRun`).
+    case runShortcut(name: String, input: String?)
     case none
 }
 
@@ -143,6 +152,9 @@ public enum MainAction: Equatable, Sendable {
     /// Enter the Search Files context — the "Search Files" command's tap scopes the
     /// input to the file index (CONTEXT.md → Search Files context; ADR 0014).
     case searchFiles
+    /// Run one of the user's iOS Shortcuts by name (CONTEXT.md → Shortcut Action;
+    /// issue #46): the app hands off to the Shortcuts app via x-callback-url.
+    case runShortcut
     case none
 }
 
@@ -239,6 +251,7 @@ public struct Action: Identifiable, Sendable {
         case .openPage: return .openPage
         case .openFile: return .openFile
         case .enterFileSearch: return .searchFiles
+        case .runShortcut: return .runShortcut
         case .none: return .none
         }
     }
@@ -256,7 +269,7 @@ public struct Action: Identifiable, Sendable {
         switch run() {
         case .openURL: return isFallback ? .search : .go
         case .copyText, .composeNote, .composeSnippet, .createReminder, .createEvent, .composeEvent: return .done
-        case .openNote, .openPage, .openFile, .enterFileSearch: return .go
+        case .openNote, .openPage, .openFile, .enterFileSearch, .runShortcut: return .go
         case .none: return .none
         }
     }
@@ -434,23 +447,32 @@ extension Action {
         ) { input in .composeSnippet(seed: input ?? "") }
     }
 
-    /// A Shortcut Action (CONTEXT.md → Shortcut Action; issue #45): runs one of
+    /// A Shortcut Action (CONTEXT.md → Shortcut Action; issue #45, #46): runs one of
     /// the user's iOS Shortcuts by name. Registered solely by the Sync Shortcut
-    /// import (ADR 0007) and matched by name like a Quicklink or Snippet. This
-    /// slice lands only up to "searchable/rankable", so the Action is deliberately
-    /// **inert** — its outcome is `.none`; the x-callback-url trigger is the next
-    /// slice. `acceptsInput` is carried for that future trigger (whether to offer
-    /// an input Argument) but changes nothing here. The id is derived from the
-    /// case-folded name — the shortcut's stable identity — so a pinned Favorite or
-    /// its Frecency stays attached across launches and re-syncs.
+    /// import (ADR 0007) and matched by name like a Quicklink or Snippet. The id is
+    /// derived from the case-folded name — the shortcut's stable identity — so a
+    /// pinned Favorite or its Frecency stays attached across launches and re-syncs.
+    ///
+    /// `acceptsInput` decides the run shape (issue #46). Off (the import default):
+    /// the row fires immediately with no input — its outcome is
+    /// `.runShortcut(name:, input: nil)`. On: it declares **one optional `text`
+    /// Argument** and runs through the breadcrumb (`MultiStepAction`), passing the
+    /// collected value as the shortcut's input. Either way the outcome carries only
+    /// the name (and input); the app performs the x-callback-url open at the edge.
     public static func shortcut(name: String, acceptsInput: Bool = false) -> Action {
-        Action(
+        let arguments = acceptsInput ? [Argument(label: "Input", contentType: .text)] : []
+        return Action(
             id: "shortcut.\(name.lowercased())",
             kind: .shortcut,
             title: name,
-            inputTypes: [],
-            outputType: .text
-        ) { _ in .none }
+            // A shortcut that accepts input consumes text; one that doesn't is
+            // self-contained (matches by name, consumes no typed text).
+            inputTypes: acceptsInput ? [.text] : [],
+            outputType: .text,
+            arguments: arguments,
+            effect: { _ in .runShortcut(name: name, input: nil) },
+            multiStepEffect: { values in .runShortcut(name: name, input: values.firstText) }
+        )
     }
 
     /// The "All Notes" command (CONTEXT.md → Note): a built-in main-list Action

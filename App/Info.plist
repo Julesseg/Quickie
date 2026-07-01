@@ -7,8 +7,9 @@
 	  Xcode merges the generated keys and every INFOPLIST_KEY_* build setting on
 	  top of this file at build time (the supported "generated plist + custom keys"
 	  pattern). This file carries only what the generator can't express: the
-	  quickie:// custom URL scheme (issue #45; ADR 0007), the inbound route the Sync
-	  Shortcut returns names on and the next slice's shortcut-result route ride.
+	  quickie:// custom URL scheme (issue #45, #46; ADR 0007): the inbound route the
+	  Sync Shortcut returns names on (import) and the run callbacks a triggered
+	  Shortcut Action comes back on (shortcut-result / -error / -cancel) all ride it.
 	-->
 	<key>CFBundleURLTypes</key>
 	<array>
