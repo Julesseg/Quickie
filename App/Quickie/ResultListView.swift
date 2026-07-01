@@ -18,6 +18,14 @@ struct ResultListView: View {
     var canFavorite: (Action) -> Bool = { _ in true }
     /// Toggles a row's Favorite pin (issue #9 AC #1).
     let onToggleFavorite: (Action) -> Void
+    /// Runs a one-shot secondary action (Copy / Share / Reveal in Files) on a
+    /// row's content (CONTEXT.md → Secondary action; ADR 0017). The App resolves
+    /// the content at the edge and performs the verb.
+    var onSecondaryAction: (Action, SecondaryActionKind) -> Void = { _, _ in }
+    /// Reports whether the list is mid-drag, so the launcher can tell an intentional
+    /// swipe-dismiss (issue #64 — drop the bar) from a context-menu keyboard
+    /// dismissal (issue #58 — hold the layout in place).
+    var onScrollActive: (Bool) -> Void = { _ in }
 
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
@@ -44,11 +52,18 @@ struct ResultListView: View {
                         }
                         .buttonStyle(.plain)
                         .accessibilityIdentifier(action.id)
-                        .favoriteContextMenu(
+                        .resultContextMenu(
+                            secondaryActions: secondaryActions(for: action.content),
+                            onSecondaryAction: { onSecondaryAction(action, $0) },
                             isFavorite: isFavorite(action),
                             canPin: canFavorite(action),
                             toggle: { onToggleFavorite(action) }
-                        )
+                        ) {
+                            // The lifted preview: a copy of this row, so the
+                            // long-pressed result detaches as a floating card.
+                            ActionRow(action: action)
+                                .frame(maxWidth: .infinity)
+                        }
                         .transition(rowMotion.insertionTransition)
                     }
                 }
@@ -64,6 +79,14 @@ struct ResultListView: View {
         // bottom, and the query + results are preserved — no custom gesture, just
         // the system scroll-dismiss so more results become visible.
         .scrollDismissesKeyboard(.interactively)
+        // Report drag state so the launcher can tell this swipe-dismiss (drop the
+        // bar) from a context-menu keyboard dismissal (hold the layout in place).
+        // Only an active drag counts — *not* `.tracking`, the finger-down-but-still
+        // state a long-press sits in, which must read as "not scrolling" so the
+        // context menu freezes the layout.
+        .onScrollPhaseChange { _, phase in
+            onScrollActive(phase == .interacting || phase == .decelerating)
+        }
     }
 }
 
@@ -150,20 +173,49 @@ private struct EnterHint: View {
 }
 
 extension View {
-    /// The Pin/Unpin affordance shared by every row that can be favorited. A
-    /// long-press context menu keeps pinning out of the typing fast path; it is
-    /// distinct from the deferred *secondary actions* long-press (ADR 0008),
-    /// which operates on a result's content rather than its place in the index.
+    /// A row's long-press menu: its eligible **secondary actions** (Copy / Share /
+    /// Reveal in Files, keyed by the result's content — CONTEXT.md → Secondary
+    /// action; ADR 0017) combined with the **Pin/Unpin** item, in **one** menu on
+    /// **one** gesture. A content-less row (command / capture / shortcut) passes an
+    /// empty `secondaryActions`, so it shows only Pin/Unpin, exactly as before — no
+    /// dead items, a verb appears only when it can run.
     ///
     /// `canPin` reflects the Favorites cap (CONTEXT.md → Favorite): when the grid
     /// is full, the "Pin as Favorite" item is disabled with a hint rather than
     /// silently swallowing the gesture — Unpin is always available.
-    func favoriteContextMenu(
+    ///
+    /// `preview` supplies the **lifted preview** (`contextMenu(menuItems:preview:)`):
+    /// the system renders it as a detached card floating over a dimmed backdrop, so
+    /// the long-pressed row visibly separates from the list. Without it the default
+    /// in-place highlight barely reads against the translucent Liquid Glass rows —
+    /// the lifted snapshot looks like the resting row. Each caller passes its own
+    /// row (an `ActionRow`, or a `FavoriteCard` for the grid) so the preview matches
+    /// what was pressed.
+    func resultContextMenu<Preview: View>(
+        secondaryActions: [SecondaryActionKind] = [],
+        onSecondaryAction: @escaping (SecondaryActionKind) -> Void = { _ in },
         isFavorite: Bool,
         canPin: Bool = true,
-        toggle: @escaping () -> Void
+        toggle: @escaping () -> Void,
+        @ViewBuilder preview: () -> Preview
     ) -> some View {
         contextMenu {
+            ForEach(secondaryActions, id: \.self) { kind in
+                Button {
+                    onSecondaryAction(kind)
+                } label: {
+                    Label(kind.menuTitle, systemImage: kind.menuSymbol)
+                }
+                // No explicit accessibilityIdentifier: it would override the
+                // label-based lookup XCUITest uses (`app.buttons["Copy"]`), just as
+                // the Pin item is found by its "Pin as Favorite" label. The verb's
+                // menu title *is* its stable identifier.
+            }
+            // A visual break between the content verbs and the pin affordance, only
+            // when there are content verbs to separate.
+            if !secondaryActions.isEmpty {
+                Divider()
+            }
             Button {
                 toggle()
             } label: {
@@ -174,6 +226,31 @@ extension View {
             if !isFavorite && !canPin {
                 Text("Favorites are full (max \(SignalsStore.maxFavorites)). Unpin one first.")
             }
+        } preview: {
+            preview()
+        }
+    }
+}
+
+/// The App-side presentation of a `SecondaryActionKind` (CONTEXT.md → Secondary
+/// action): its menu label and SF Symbol. The label doubles as the button's
+/// accessibility identifier (no explicit one is set), so UI tests find it by
+/// title. Core owns the *eligibility* verb; how it reads in the menu is a view
+/// concern.
+extension SecondaryActionKind {
+    var menuTitle: String {
+        switch self {
+        case .copy: return "Copy"
+        case .share: return "Share"
+        case .revealInFiles: return "Reveal in Files"
+        }
+    }
+
+    var menuSymbol: String {
+        switch self {
+        case .copy: return "doc.on.doc"
+        case .share: return "square.and.arrow.up"
+        case .revealInFiles: return "folder"
         }
     }
 }

@@ -12,6 +12,12 @@ struct HomeView: View {
     let isFavorite: (Action) -> Bool
     var canFavorite: (Action) -> Bool = { _ in true }
     let onToggleFavorite: (Action) -> Void
+    /// Runs a one-shot secondary action on a Home row's content (Copy / Share /
+    /// Reveal in Files) — the same long-press menu the Result list uses (ADR 0017).
+    var onSecondaryAction: (Action, SecondaryActionKind) -> Void = { _, _ in }
+    /// Reports whether the Recent list is mid-drag, so the launcher tells a
+    /// swipe-dismiss (issue #64) from a context-menu dismissal (issue #58).
+    var onScrollActive: (Bool) -> Void = { _ in }
 
     /// At most four Favorites fill the 2×2 grid (CONTEXT.md → Favorites grid);
     /// extras (which the cap should already prevent) are never shown.
@@ -46,6 +52,12 @@ struct HomeView: View {
                 // (issue #64), the same native scroll-dismiss as the Result list —
                 // the bar drops and nothing clears.
                 .scrollDismissesKeyboard(.interactively)
+                // Report drag state so a swipe-dismiss (drop the bar) is told apart
+                // from a context-menu dismissal (hold the layout). Only an active
+                // drag counts, not `.tracking` (a long-press's finger-down state).
+                .onScrollPhaseChange { _, phase in
+                    onScrollActive(phase == .interacting || phase == .decelerating)
+                }
 
                 if !gridFavorites.isEmpty {
                     favoritesGrid
@@ -72,7 +84,16 @@ struct HomeView: View {
                     }
                     .buttonStyle(.plain)
                     .accessibilityIdentifier("favorite.\(action.id)")
-                    .favoriteContextMenu(isFavorite: true) { onToggleFavorite(action) }
+                    .resultContextMenu(
+                        secondaryActions: secondaryActions(for: action.content),
+                        onSecondaryAction: { onSecondaryAction(action, $0) },
+                        isFavorite: true,
+                        toggle: { onToggleFavorite(action) }
+                    ) {
+                        // Lift a copy of the pressed Favorite card as the detached
+                        // preview.
+                        FavoriteCard(action: action)
+                    }
                 }
             }
             .padding(.horizontal, 16)
@@ -114,10 +135,17 @@ struct HomeView: View {
                 }
                 .buttonStyle(.plain)
                 .accessibilityIdentifier(action.id)
-                .favoriteContextMenu(
+                .resultContextMenu(
+                    secondaryActions: secondaryActions(for: action.content),
+                    onSecondaryAction: { onSecondaryAction(action, $0) },
                     isFavorite: isFavorite(action),
-                    canPin: canFavorite(action)
-                ) { onToggleFavorite(action) }
+                    canPin: canFavorite(action),
+                    toggle: { onToggleFavorite(action) }
+                ) {
+                    // Lift a copy of the pressed Recent row as the detached preview.
+                    ActionRow(action: action)
+                        .frame(maxWidth: .infinity)
+                }
             }
         }
     }

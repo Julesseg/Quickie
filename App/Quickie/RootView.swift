@@ -1,6 +1,7 @@
 import SwiftUI
 import SwiftData
 import UIKit
+import Combine
 import QuickieCore
 
 /// The whole screen, and the whole loop made visible: a bottom auto-focused
@@ -92,6 +93,10 @@ struct RootView: View {
     /// A note opened for reading or a seeded compose editor — presented as a
     /// sheet, distinct from the pushed management pages.
     @State private var activeSheet: ActiveSheet?
+    /// A pending **Share** secondary action (CONTEXT.md → Secondary action; ADR
+    /// 0017): the resolved item(s) handed to the iOS share sheet, plus — for a file
+    /// — the live security-scoped access held open until the sheet dismisses.
+    @State private var shareRequest: ShareRequest?
     /// The navigation stack of pushed management pages (CONTEXT.md → Management
     /// page): each is *pushed* from the launcher so it slides in from the right
     /// and supports the system edge-swipe back, rather than rising as a sheet.
@@ -101,6 +106,19 @@ struct RootView: View {
     /// tappable "Reminder added" that opens the reminder in the Reminders app.
     @State private var toast: Toast?
     @State private var toastToken = UUID()
+    /// The **held** keyboard height that lifts the bottom bar (issue #58). We drive
+    /// the lift manually — SwiftUI's automatic keyboard avoidance is disabled on the
+    /// launcher (`.ignoresSafeArea(.keyboard)`) — and only ever grow this to a real
+    /// software-keyboard height, never resetting it when the keyboard hides. So when
+    /// a row's long-press context menu resigns first responder and drops the keyboard
+    /// (a system behaviour with no public override), the layout stays frozen instead
+    /// of collapsing the safe area and jerking the reversed result list downward.
+    @State private var lockedKeyboardInset: CGFloat = 0
+    /// Whether a result/Recent list is mid-drag (issue #58 × #64): the signal that
+    /// tells a keyboard dismissal apart. A dismissal *while* scrolling is the
+    /// intentional swipe (#64) — let the bar drop; one while still is the context
+    /// menu resigning first responder — hold the inset so nothing reflows.
+    @State private var listScrolling = false
 
     @State private var keyboardLayout = KeyboardLayoutModel()
     @State private var clipboard = ClipboardPrefillModel()
@@ -202,6 +220,18 @@ struct RootView: View {
         query.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
     }
 
+    /// The bottom safe-area (home-indicator) inset, read from the active window. The
+    /// keyboard's reported overlap is measured from the screen bottom, but the bar
+    /// already sits above the home indicator, so we subtract this to avoid lifting it
+    /// one home-indicator's-worth too high.
+    private var bottomSafeAreaInset: CGFloat {
+        UIApplication.shared.connectedScenes
+            .compactMap { $0 as? UIWindowScene }
+            .flatMap { $0.windows }
+            .first { $0.isKeyWindow }?
+            .safeAreaInsets.bottom ?? 0
+    }
+
     /// How entering/leaving a capture moves (ADR 0010 budget): a deliberate spring
     /// when motion is allowed, a brief crossfade under Reduce Motion.
     private var captureMotion: MotionStyle {
@@ -253,7 +283,9 @@ struct RootView: View {
                             onRun: run,
                             isFavorite: { signals.isFavorite($0.id) },
                             canFavorite: { signals.canFavorite($0.id) },
-                            onToggleFavorite: { signals.toggleFavorite($0.id) }
+                            onToggleFavorite: { signals.toggleFavorite($0.id) },
+                            onSecondaryAction: performSecondary,
+                            onScrollActive: { listScrolling = $0 }
                         )
                         .transition(captureMotion.edgeTransition(from: .bottom))
                     } else {
@@ -262,7 +294,9 @@ struct RootView: View {
                             onRun: run,
                             isFavorite: { signals.isFavorite($0.id) },
                             canFavorite: { signals.canFavorite($0.id) },
-                            onToggleFavorite: { signals.toggleFavorite($0.id) }
+                            onToggleFavorite: { signals.toggleFavorite($0.id) },
+                            onSecondaryAction: performSecondary,
+                            onScrollActive: { listScrolling = $0 }
                         )
                         .transition(captureMotion.edgeTransition(from: .bottom))
                     }
@@ -314,6 +348,11 @@ struct RootView: View {
             // never took (and a mid-transition refocus that stranded it behind the
             // keyboard).
             .safeAreaInset(edge: .bottom, spacing: 0) {
+                // Lift the bar by the *held* keyboard height rather than letting the
+                // system track the live keyboard, so a transient dismissal (a
+                // context menu) doesn't reflow the content. Only at the root — a
+                // pushed page removes the bar, so it must reserve no phantom inset.
+                Group {
                 if path.isEmpty {
                     if capture.isActive {
                         // A capture (or its denial affordance) owns the bottom
@@ -356,6 +395,41 @@ struct RootView: View {
                         // event at pop completion, not a guessed delay.
                         .onAppear { inputFocused = true }
                     }
+                }
+                }
+                // Reserve the held keyboard height so the bar floats where the
+                // keyboard's top is — and stays there when the keyboard drops. Zero
+                // when a page is pushed (the bar is gone), so no phantom inset.
+                .padding(.bottom, path.isEmpty ? lockedKeyboardInset : 0)
+                .animation(.easeOut(duration: 0.25), value: lockedKeyboardInset)
+                // Kill keyboard avoidance on the bar *itself*: the outer
+                // `.ignoresSafeArea(.keyboard)` leaves a small residual lift on
+                // `.safeAreaInset` content, which released on a context-menu dismiss
+                // and dropped the list by ~half a row. Our held inset is the only
+                // thing that should position the bar.
+                .ignoresSafeArea(.keyboard, edges: .bottom)
+            }
+            // Drive the bar lift ourselves: turn off SwiftUI's automatic keyboard
+            // avoidance for the launcher so the live keyboard never moves the layout
+            // (the pushed pages set this on themselves; this covers the root + its
+            // bottom inset). `lockedKeyboardInset` supplies the lift instead.
+            .ignoresSafeArea(.keyboard, edges: .bottom)
+            // Reconcile the held inset with the two ways the keyboard leaves:
+            //  • **Showing** (a real keyboard, overlap over the threshold — not a
+            //    hardware-keyboard accessory bar): lift the bar to sit on it.
+            //  • **Hiding while the list is being dragged**: an intentional
+            //    swipe-dismiss (issue #64) — release the inset so the bar drops and
+            //    more results show.
+            //  • **Hiding while *not* scrolling**: the context menu resigned first
+            //    responder — **hold** the inset so the long-press doesn't reflow the
+            //    list. This is the whole point of driving the lift ourselves.
+            .onReceive(NotificationCenter.default.publisher(for: UIResponder.keyboardWillChangeFrameNotification)) { note in
+                guard let endFrame = note.userInfo?[UIResponder.keyboardFrameEndUserInfoKey] as? CGRect else { return }
+                let overlap = UIScreen.main.bounds.height - endFrame.minY
+                if overlap > 120 {
+                    lockedKeyboardInset = max(0, overlap - bottomSafeAreaInset)
+                } else if listScrolling {
+                    lockedKeyboardInset = 0
                 }
             }
             // The launcher itself wears no navigation bar — it is the root; the
@@ -481,6 +555,17 @@ struct RootView: View {
                     // content's `onDisappear` — not the sheet's `onDismiss`, which
                     // fires after SwiftUI has already cleared the `item` binding.
                     .onDisappear { indexedFolders.endFileAccess(request.access) }
+            }
+            // The iOS share sheet for a **Share** secondary action (ADR 0017). A
+            // file share holds the security-scoped access open while sharing and
+            // releases it when the sheet goes away — the same start/stop bracket as
+            // the QuickLook preview; a text/url/note share carries no access.
+            .sheet(item: $shareRequest, onDismiss: { refocusInput() }) { request in
+                ShareSheet(items: request.items)
+                    .ignoresSafeArea()
+                    .onDisappear {
+                        if let access = request.fileAccess { indexedFolders.endFileAccess(access) }
+                    }
             }
         }
         .preferredColorScheme(Appearance(stored: appearanceRaw).colorScheme)
@@ -663,6 +748,106 @@ struct RootView: View {
         }
     }
 
+    /// Performs a one-shot **secondary action** on a row's content (CONTEXT.md →
+    /// Secondary action; ADR 0017). Core decides *which* verbs a row's content is
+    /// eligible for; the App resolves the content **at the edge** and runs the verb
+    /// — the same defer-to-the-edge pattern as the main-action outcomes. Only
+    /// content-bearing rows reach here (a `.none` row offers no such menu item), so
+    /// a resolution that comes back empty is a stale reference, not a dead item.
+    private func performSecondary(_ action: Action, _ kind: SecondaryActionKind) {
+        switch kind {
+        case .copy:
+            guard let text = copyableText(for: action) else {
+                flashConfirmation("Nothing to copy")
+                return
+            }
+            UIPasteboard.general.string = text
+            flashConfirmation("Copied")
+        case .share:
+            presentShare(for: action)
+        case .revealInFiles:
+            revealInFiles(action)
+        }
+    }
+
+    /// Resolves a row's content to the text a **Copy** puts on the pasteboard (ADR
+    /// 0017): the snippet text / calculator number straight off its copy outcome,
+    /// the URL string, a Note body fetched from the store by id, or a file's
+    /// resolved path (under a security-scoped bracket). Returns `nil` only when a
+    /// reference no longer resolves.
+    private func copyableText(for action: Action) -> String? {
+        switch action.content {
+        case .text, .number:
+            // Resolve against the current query so an input-consuming row (a
+            // Fallback query) copies the URL it would actually open; self-contained
+            // rows (Snippet, Calculator) ignore the input.
+            if case .copyText(let text) = action.run(input: query) { return text }
+            return nil
+        case .url:
+            if case .openURL(let url) = action.run(input: query) { return url.absoluteString }
+            return nil
+        case .noteBody(let id):
+            return notes.first(where: { Self.noteActionID($0) == id })?.body
+        case .file(let bookmarkID, let relativePath):
+            guard let access = indexedFolders.beginFileAccess(bookmarkID: bookmarkID, relativePath: relativePath) else {
+                return nil
+            }
+            defer { indexedFolders.endFileAccess(access) }
+            return access.fileURL.path
+        case .none:
+            return nil
+        }
+    }
+
+    /// Hands a row's content to the iOS **Share** sheet (ADR 0017): a URL is shared
+    /// as a `URL` (so the sheet offers link actions), text/number/Note-body as a
+    /// string, and a file as its resolved URL — holding the security-scoped access
+    /// open until the sheet dismisses (`shareRequest.fileAccess`).
+    private func presentShare(for action: Action) {
+        switch action.content {
+        case .text, .number:
+            if case .copyText(let text) = action.run(input: query) { shareRequest = ShareRequest(items: [text]) }
+        case .url:
+            if case .openURL(let url) = action.run(input: query) { shareRequest = ShareRequest(items: [url]) }
+        case .noteBody(let id):
+            if let body = notes.first(where: { Self.noteActionID($0) == id })?.body {
+                shareRequest = ShareRequest(items: [body])
+            } else {
+                flashConfirmation("Note not found")
+            }
+        case .file(let bookmarkID, let relativePath):
+            if let access = indexedFolders.beginFileAccess(bookmarkID: bookmarkID, relativePath: relativePath) {
+                shareRequest = ShareRequest(items: [access.fileURL], fileAccess: access)
+            } else {
+                flashConfirmation("File not found")
+            }
+        case .none:
+            break
+        }
+    }
+
+    /// **Reveal in Files** (ADR 0017): resolves the file's security-scoped bookmark
+    /// and opens its location in the Files app via the `shareddocuments://` scheme.
+    /// Only a `.file` row offers this verb, so anything else is a no-op.
+    private func revealInFiles(_ action: Action) {
+        guard case .file(let bookmarkID, let relativePath) = action.content,
+              let access = indexedFolders.beginFileAccess(bookmarkID: bookmarkID, relativePath: relativePath) else {
+            flashConfirmation("File not found")
+            return
+        }
+        defer { indexedFolders.endFileAccess(access) }
+        // Open the Files app at the file's location via the `shareddocuments://`
+        // scheme. Percent-encode the path so spaces and other characters in a
+        // filename don't break the URL and silently fail to open.
+        let path = access.fileURL.path
+        let encoded = path.addingPercentEncoding(withAllowedCharacters: .urlPathAllowed) ?? path
+        if let url = URL(string: "shareddocuments://" + encoded) {
+            openURL(url)
+        } else {
+            flashConfirmation("Can't reveal file")
+        }
+    }
+
     /// Leaves the Search Files context back to normal results (ADR 0014): the ×, or
     /// a future dismiss gesture. Clears the scoped filter so the launcher lands on a
     /// clean Home; the bottom input stayed mounted throughout, so focus persists.
@@ -723,6 +908,30 @@ struct RootView: View {
 private struct ComposeSeed: Identifiable {
     let id = UUID()
     let text: String
+}
+
+/// A pending **Share** secondary action (CONTEXT.md → Secondary action; ADR 0017):
+/// the resolved activity items handed to `UIActivityViewController`, plus a fresh
+/// identity so each share drives a distinct `.sheet(item:)`. A file share also
+/// carries the live `FileAccess`, held open while sharing and released when the
+/// sheet dismisses; a text/url/note share leaves it `nil`.
+private struct ShareRequest: Identifiable {
+    let id = UUID()
+    let items: [Any]
+    var fileAccess: FileAccess?
+}
+
+/// Presents the iOS share sheet (`UIActivityViewController`) for a **Share**
+/// secondary action — the App edge that performs the verb Core only declared
+/// eligible (ADR 0017).
+private struct ShareSheet: UIViewControllerRepresentable {
+    let items: [Any]
+
+    func makeUIViewController(context: Context) -> UIActivityViewController {
+        UIActivityViewController(activityItems: items, applicationActivities: nil)
+    }
+
+    func updateUIViewController(_ controller: UIActivityViewController, context: Context) {}
 }
 
 /// The note-reader / seeded-compose sheet, as an Identifiable enum so one

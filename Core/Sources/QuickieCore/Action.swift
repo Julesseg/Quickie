@@ -184,6 +184,14 @@ public struct Action: Identifiable, Sendable {
     /// before it runs (CONTEXT.md → Argument; issue #37). Empty for a single-step
     /// Action that runs straight from the typed text.
     public let arguments: [Argument]
+    /// The concrete value/reference this row carries (CONTEXT.md → Result content;
+    /// ADR 0017): a **declared** property, distinct from `mainAction`, that the
+    /// long-press menu keys its secondary actions off. Encodes presence *and*
+    /// value, so a text-bearing Snippet (`.text`) is told apart from a text-*typed*
+    /// command (`.none`). Declared per factory rather than derived from the
+    /// outcome, because the outcome alone is ambiguous — a Calculator copies text
+    /// yet reads as `.number`, and an inert Shortcut has a `.none` outcome.
+    public let content: ResultContent
 
     private let effect: @Sendable (String?) -> ActionOutcome
     /// How collected Argument values become an outcome (issue #37) — the
@@ -201,6 +209,7 @@ public struct Action: Identifiable, Sendable {
         outputType: ContentType,
         isFallback: Bool = false,
         arguments: [Argument] = [],
+        content: ResultContent? = nil,
         effect: @escaping @Sendable (String?) -> ActionOutcome,
         multiStepEffect: (@Sendable ([ArgumentValue]) -> ActionOutcome)? = nil
     ) {
@@ -213,8 +222,35 @@ public struct Action: Identifiable, Sendable {
         self.outputType = outputType
         self.isFallback = isFallback
         self.arguments = arguments
+        // Content is a declared property (ADR 0017). Factories that carry a value
+        // pass it explicitly; when omitted it defaults to a derive-from-outcome
+        // helper so a content-bearing Action never silently reads as `.none` —
+        // the one factory the derivation can't get right (Calculator → `.number`)
+        // overrides it.
+        self.content = content ?? Action.derivedContent(from: effect(nil))
         self.effect = effect
         self.multiStepEffect = multiStepEffect ?? { _ in effect(nil) }
+    }
+
+    /// The default `ResultContent` for an outcome, used when a factory does not
+    /// declare one (ADR 0017). Terminal outcomes with no carried value read as
+    /// `.none`, so a command / capture / shortcut row exposes no secondary
+    /// actions. This is a *default*, not the source of truth: `content` is a
+    /// declared, stored property a factory can override (e.g. Calculator).
+    private static func derivedContent(from outcome: ActionOutcome) -> ResultContent {
+        switch outcome {
+        case .openURL:
+            return .url
+        case .copyText:
+            return .text
+        case .openNote(let id):
+            return .noteBody(id: id)
+        case .openFile(let bookmarkID, let relativePath):
+            return .file(bookmarkID: bookmarkID, relativePath: relativePath)
+        case .composeNote, .composeSnippet, .openPage, .createReminder,
+             .createEvent, .composeEvent, .enterFileSearch, .runShortcut, .none:
+            return .none
+        }
     }
 
     /// Resolves a multi-step Action's collected Argument values into its outcome
