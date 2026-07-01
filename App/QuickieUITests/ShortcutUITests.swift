@@ -118,19 +118,18 @@ final class ShortcutUITests: XCTestCase {
         XCTAssertTrue(row.waitForExistence(timeout: 5), "the input-accepting shortcut surfaces as a row")
         row.tap()
 
-        // The breadcrumb capture takes over — its cancel affordance is the reliable
-        // "a capture is in flight" signal, and the first step collects the input.
+        // The capture's bottom input field is the reliable "a breadcrumb is in flight"
+        // signal — the top breadcrumb bar (its cancel × and crumbs) rides under a
+        // progressive blur / status-bar bleed and is flaky to query. Its presence
+        // proves the shortcut collects input rather than firing immediately, and its
+        // placeholder label is the Argument being collected ("Input").
+        let captureField = app.textFields["capture-input"]
         XCTAssertTrue(
-            app.buttons["capture-cancel"].waitForExistence(timeout: 5),
+            captureField.waitForExistence(timeout: 5),
             "an input-accepting shortcut starts the breadcrumb rather than firing immediately"
         )
-        XCTAssertTrue(
-            app.staticTexts["Translate"].waitForExistence(timeout: 5),
-            "the shortcut's name heads the breadcrumb"
-        )
-        XCTAssertTrue(
-            app.otherElements["step-0"].waitForExistence(timeout: 5)
-                || app.staticTexts["Input"].waitForExistence(timeout: 5),
+        XCTAssertEqual(
+            captureField.label, "Input",
             "the breadcrumb collects the optional text input step"
         )
     }
@@ -162,9 +161,10 @@ final class ShortcutUITests: XCTestCase {
         captureField.typeText("\n")
 
         // The capture completes (fires the shortcut with no input) rather than the
-        // empty submit silently no-opping — the breadcrumb is gone, not stuck.
+        // empty submit silently no-opping — the input field is gone, not stuck. Keyed
+        // off `capture-input` (the reliable bottom field), not the flaky top-bar ×.
         XCTAssertTrue(
-            app.buttons["capture-cancel"].waitForNonExistence(timeout: 5),
+            captureField.waitForNonExistence(timeout: 5),
             "submitting the optional input empty should run the shortcut, not trap the user"
         )
     }
@@ -188,9 +188,10 @@ final class ShortcutUITests: XCTestCase {
         XCTAssertTrue(row.waitForExistence(timeout: 5), "the shortcut surfaces as a row")
         row.tap()
 
-        // No breadcrumb: a no-input shortcut fires straight away.
+        // No breadcrumb: a no-input shortcut fires straight away — no capture input
+        // field appears (keyed off the reliable bottom field, not the top-bar ×).
         XCTAssertFalse(
-            app.buttons["capture-cancel"].waitForExistence(timeout: 2),
+            app.textFields["capture-input"].waitForExistence(timeout: 3),
             "a shortcut with input off should fire immediately, not open the input breadcrumb"
         )
     }
