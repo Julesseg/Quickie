@@ -42,6 +42,10 @@ struct HomeView: View {
                     .padding(.top, gridFavorites.isEmpty ? 0 : 168)
                 }
                 .defaultScrollAnchor(.bottom)
+                // Swiping down the Recent list dismisses the keyboard interactively
+                // (issue #64), the same native scroll-dismiss as the Result list —
+                // the bar drops and nothing clears.
+                .scrollDismissesKeyboard(.interactively)
 
                 if !gridFavorites.isEmpty {
                     favoritesGrid
