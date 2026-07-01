@@ -460,7 +460,10 @@ extension Action {
     /// collected value as the shortcut's input. Either way the outcome carries only
     /// the name (and input); the app performs the x-callback-url open at the edge.
     public static func shortcut(name: String, acceptsInput: Bool = false) -> Action {
-        let arguments = acceptsInput ? [Argument(label: "Input", contentType: .text)] : []
+        // The input Argument is **optional** (issue #46): the user can submit it empty
+        // and still run the shortcut, so the breadcrumb never traps someone who has
+        // nothing to type.
+        let arguments = acceptsInput ? [Argument(label: "Input", contentType: .text, isOptional: true)] : []
         return Action(
             id: "shortcut.\(name.lowercased())",
             kind: .shortcut,
@@ -471,7 +474,13 @@ extension Action {
             outputType: .text,
             arguments: arguments,
             effect: { _ in .runShortcut(name: name, input: nil) },
-            multiStepEffect: { values in .runShortcut(name: name, input: values.firstText) }
+            // An empty (or whitespace-only) collected value reads as **no input** —
+            // the same as an `acceptsInput`-off run — rather than an empty-string
+            // input, so an unfilled optional step and a no-input shortcut behave alike.
+            multiStepEffect: { values in
+                let text = values.firstText?.trimmingCharacters(in: .whitespacesAndNewlines)
+                return .runShortcut(name: name, input: (text?.isEmpty ?? true) ? nil : text)
+            }
         )
     }
 

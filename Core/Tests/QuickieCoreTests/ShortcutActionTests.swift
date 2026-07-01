@@ -34,14 +34,16 @@ struct ShortcutActionTests {
         #expect(action.inputTypes.isEmpty)
     }
 
-    @Test("an input-accepting Shortcut Action collects one text Argument")
-    func acceptsInputDeclaresOneTextArgument() {
+    @Test("an input-accepting Shortcut Action collects one optional text Argument")
+    func acceptsInputDeclaresOneOptionalTextArgument() {
         // With `acceptsInput` on (set on the Shortcuts page in #45), the shortcut
-        // declares one `text` Argument and runs through the breadcrumb (issue #46);
-        // matched by name, it is still not a Fallback.
+        // declares one **optional** `text` Argument and runs through the breadcrumb
+        // (issue #46) — optional so the user can submit it empty and still run the
+        // shortcut. Matched by name, it is still not a Fallback.
         let action = Action.shortcut(name: "Translate", acceptsInput: true)
         #expect(action.arguments.count == 1)
         #expect(action.arguments.first?.contentType == .text)
+        #expect(action.arguments.first?.isOptional == true)
         #expect(action.isFallback == false)
     }
 
@@ -55,13 +57,14 @@ struct ShortcutActionTests {
         #expect(step == .completed(.runShortcut(name: "Translate", input: "bonjour")))
     }
 
-    @Test("its input is optional — committing nothing still runs the shortcut")
-    func acceptsInputIsOptional() {
+    @Test("submitting the optional input empty runs the shortcut with no input")
+    func acceptsInputEmptyRunsWithNoInput() {
         // The `text` Argument is optional (issue #46): a user who provides no text
-        // still fires the shortcut, just with empty input rather than being blocked.
+        // still fires the shortcut. An empty submission reads as **no input** (nil),
+        // the same as an `acceptsInput`-off shortcut — not an empty-string input.
         let action = Action.shortcut(name: "Translate", acceptsInput: true)
         var run = MultiStepAction(action: action)
-        #expect(run.commit(.text("")) == .completed(.runShortcut(name: "Translate", input: "")))
+        #expect(run.commit(.text("")) == .completed(.runShortcut(name: "Translate", input: nil)))
     }
 
     @Test("a Shortcut Action's tap reads as running the shortcut")

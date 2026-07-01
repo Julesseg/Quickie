@@ -135,6 +135,40 @@ final class ShortcutUITests: XCTestCase {
         )
     }
 
+    /// The input Argument is **optional** (issue #46): a user with nothing to type
+    /// can submit the step empty and the shortcut still runs, rather than being
+    /// trapped in the breadcrumb. Pressing Return on the empty capture field completes
+    /// the capture (fires the shortcut and dismisses the breadcrumb) — the escape the
+    /// generic `commitText` empty-guard would otherwise deny.
+    @MainActor
+    func testInputAcceptingShortcutCanRunWithEmptyInput() throws {
+        let app = launchAppWithInput(seed: "Translate")
+
+        let input = app.textFields["search-input"]
+        XCTAssertTrue(input.waitForExistence(timeout: 30))
+        input.tap()
+        input.typeText("translate")
+
+        let row = app.buttons.matching(
+            NSPredicate(format: "label CONTAINS[c] %@", "Translate")
+        ).firstMatch
+        XCTAssertTrue(row.waitForExistence(timeout: 5))
+        row.tap()
+
+        // The capture field auto-focuses; submit it empty via Return.
+        let captureField = app.textFields["capture-input"]
+        XCTAssertTrue(captureField.waitForExistence(timeout: 5), "the input breadcrumb starts")
+        captureField.tap()
+        captureField.typeText("\n")
+
+        // The capture completes (fires the shortcut with no input) rather than the
+        // empty submit silently no-opping — the breadcrumb is gone, not stuck.
+        XCTAssertTrue(
+            app.buttons["capture-cancel"].waitForNonExistence(timeout: 5),
+            "submitting the optional input empty should run the shortcut, not trap the user"
+        )
+    }
+
     /// A Shortcut Action with `acceptsInput` **off** fires immediately (issue #46 AC
     /// #1): tapping it hands off via x-callback-url with no input — it must not start
     /// the input breadcrumb. The hand-off leaves the app (or no-ops in a simulator
