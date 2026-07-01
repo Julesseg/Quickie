@@ -580,7 +580,7 @@ struct RootView: View {
         case .settings: SettingsView()
         case .quicklinks: QuicklinksView()
         case .fallbacks: FallbacksView(store: fallbacks)
-        case .pile: PileView()
+        case .pile: PileView(onStage: stage)
         case .snippets: SnippetManagerView()
         case .indexedFolders: IndexedFoldersView(store: indexedFolders)
         case .shortcuts: ShortcutsView(store: shortcuts)
@@ -706,15 +706,8 @@ struct RootView: View {
             }
             query = ""
         case .stagePileEntry(let id):
-            // Stage the entry (CONTEXT.md → Stage): replace the input query with
-            // its saved text — the matcher re-runs off the query change, the same
-            // reinjection move as a Shortcut result — then remove it from the
-            // Pile: staging consumes it. The user is left "typing" the deferred
-            // query and decides what to do with it next.
             if let entry = pileEntries.first(where: { Self.pileActionID($0) == id }) {
-                let text = entry.text
-                modelContext.delete(entry)
-                query = text
+                stage(entry)
             } else {
                 flashConfirmation("Not in the Pile")
             }
@@ -860,6 +853,21 @@ struct RootView: View {
         } else {
             flashConfirmation("Can't reveal file")
         }
+    }
+
+    /// Stages a Pile entry (CONTEXT.md → Stage), from either of its surfaces —
+    /// its result row or its Pile-page row: replace the input query with the
+    /// saved text (the matcher re-runs off the query change, the same
+    /// reinjection move as a Shortcut result) and remove the entry from the
+    /// Pile — staging consumes it. Clearing `path` pops the Pile page when
+    /// staging starts there (a no-op from a result row, where the launcher is
+    /// already on top), and the popped page's `onDisappear` re-arms focus, so
+    /// either way the user lands "typing" the deferred query.
+    private func stage(_ entry: StoredPileEntry) {
+        let text = entry.text
+        modelContext.delete(entry)
+        query = text
+        path = []
     }
 
     /// Leaves the Search Files context back to normal results (ADR 0014): the ×, or
