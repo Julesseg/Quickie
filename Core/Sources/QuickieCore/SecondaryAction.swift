@@ -7,15 +7,17 @@
 ///
 /// Either an inline value the App reads off the Action's own outcome (`.text`,
 /// `.url`, `.number`) or an edge-resolved reference the App dereferences on
-/// demand (a Note body by id, a file by bookmark + relative path). A command,
-/// capture, or Shortcut row has **`.none`** — no content — which is what makes
-/// it ineligible for secondary actions regardless of its content type.
+/// demand (a Pile entry's text by id, a file by bookmark + relative path). A
+/// command, capture, or Shortcut row has **`.none`** — no content — which is
+/// what makes it ineligible for secondary actions regardless of its content
+/// type.
 public enum ResultContent: Equatable, Hashable, Sendable {
     case text
     case url
     case number
-    /// A Note's body, resolved from the store by the Note's id at the edge.
-    case noteBody(id: String)
+    /// A Pile entry's text, resolved from the store by the entry's id at the
+    /// edge (CONTEXT.md → Pile; ADR 0018).
+    case pileEntry(id: String)
     /// A file, resolved from its Indexed-Folder bookmark + relative path at the
     /// edge — never a filesystem URL in Core (ADR 0015).
     case file(bookmarkID: String, relativePath: String)
@@ -24,8 +26,8 @@ public enum ResultContent: Equatable, Hashable, Sendable {
 
 /// A one-shot verb a long-press menu offers for a result's content (ADR 0017).
 /// A bare verb enum — Core decides *eligibility*; the App owns every execution
-/// and edge-resolution (a Note body in the store, a file behind a bookmark), so
-/// even Copy cannot run in Core. Deliberately narrow this slice: the universal
+/// and edge-resolution (a Pile entry's text in the store, a file behind a
+/// bookmark), so even Copy cannot run in Core. Deliberately narrow this slice: the universal
 /// `copy`/`share` plus `revealInFiles` on a file. Multi-step per-type verbs
 /// (Make-Reminder, Convert, …) are deferred to a later breadcrumb-seeding slice,
 /// where `secondaryActions(for:)` is the extension point.
@@ -46,7 +48,7 @@ public func secondaryActions(for content: ResultContent) -> [SecondaryActionKind
         return []
     case .file:
         return [.copy, .share, .revealInFiles]
-    case .text, .url, .number, .noteBody:
+    case .text, .url, .number, .pileEntry:
         return [.copy, .share]
     }
 }
