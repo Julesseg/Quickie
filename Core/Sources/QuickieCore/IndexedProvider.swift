@@ -48,11 +48,15 @@ extension IndexedProvider {
             .openFallbacksPage(),
             .openIndexedFoldersPage(),
             .searchFiles(),
-            // The dynamic injectors' Settings command rows (ADR 0019; issue #66):
-            // Calculator and File Search never had a typed management row, so the
-            // hub adds one here — every provider is reachable by typing its name.
+            // The Settings command rows of the providers that never had a typed
+            // management row (ADR 0019; issue #66): the dynamic injectors
+            // (Calculator, File Search) and the capture providers (Events,
+            // Reminders — whose "New …" rows start captures, not pages). With
+            // these, every provider is reachable by typing its name.
             .openCalculatorPage(),
             .openFileSearchPage(),
+            .openEventsPage(),
+            .openRemindersPage(),
         ])
     }
 }

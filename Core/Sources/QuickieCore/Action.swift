@@ -637,6 +637,37 @@ extension Action {
         ) { _ in .openPage(.settings(panel: .fileSearch)) }
     }
 
+    /// The "Events" command (CONTEXT.md → Settings command row; ADR 0019): the
+    /// Events capture provider's typed row, deeplinking to its page under the
+    /// hub. Distinct from "New Event", which *starts a capture* rather than
+    /// opening a page — so the capture provider, like the dynamic injectors,
+    /// never had a typed route to its settings until this row.
+    public static func openEventsPage() -> Action {
+        Action(
+            id: "builtin.events-page",
+            kind: .managementPage,
+            title: "Events",
+            aliases: ["event settings", "calendar settings"],
+            inputTypes: [],
+            outputType: .text
+        ) { _ in .openPage(.settings(panel: .events)) }
+    }
+
+    /// The "Reminders" command (CONTEXT.md → Settings command row; ADR 0019):
+    /// the Reminders capture provider's typed row, deeplinking to its page under
+    /// the hub — the reminder counterpart to `openEventsPage`, distinct from the
+    /// "New Reminder" capture row.
+    public static func openRemindersPage() -> Action {
+        Action(
+            id: "builtin.reminders-page",
+            kind: .managementPage,
+            title: "Reminders",
+            aliases: ["reminder settings"],
+            inputTypes: [],
+            outputType: .text
+        ) { _ in .openPage(.settings(panel: .reminders)) }
+    }
+
     /// A file surfaced by File Search (CONTEXT.md → File Search; ADR 0015): a row
     /// whose main action opens the file. It carries **only** the file's
     /// Indexed-Folder `bookmarkID` and its `relativePath` within that folder — never

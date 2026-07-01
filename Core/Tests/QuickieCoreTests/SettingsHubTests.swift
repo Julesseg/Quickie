@@ -60,6 +60,24 @@ struct SettingsHubTests {
         #expect(fileSearch.run() == .openPage(.settings(panel: .fileSearch)))
     }
 
+    @Test("the capture providers gain a typed settings command row too")
+    func captureProvidersGainASettingsCommandRow() {
+        // Events and Reminders are in the same never-had-one boat as the
+        // dynamic injectors: their typed rows ("New Event", "New Reminder")
+        // *start captures*, they don't open pages. ADR 0019 says every provider
+        // surfaces one Settings command row, so they get their own — distinct
+        // from the capture rows, which stay untouched.
+        let events = Action.openEventsPage()
+        #expect(events.title == "Events")
+        #expect(events.kind == .managementPage)
+        #expect(events.run() == .openPage(.settings(panel: .events)))
+
+        let reminders = Action.openRemindersPage()
+        #expect(reminders.title == "Reminders")
+        #expect(reminders.kind == .managementPage)
+        #expect(reminders.run() == .openPage(.settings(panel: .reminders)))
+    }
+
     @Test("typing a dynamic injector's name surfaces its settings command row")
     func typingAnInjectorNameSurfacesItsRow() {
         // The rows ride the built-in indexed catalog, so the whole loop works:
@@ -69,6 +87,11 @@ struct SettingsHubTests {
         let engine = SearchEngine(providers: [CalculatorProvider(), IndexedProvider.builtIns()])
         #expect(engine.results(for: "calculator").map(\.id).contains("builtin.calculator-page"))
         #expect(engine.results(for: "file search").map(\.id).contains("builtin.file-search-page"))
+        // The capture providers' rows ride the same catalog, so typing their
+        // names reaches their pages too — alongside, not instead of, the "New
+        // Event"/"New Reminder" capture rows the app indexes separately.
+        #expect(engine.results(for: "events").map(\.id).contains("builtin.events-page"))
+        #expect(engine.results(for: "reminders").map(\.id).contains("builtin.reminders-page"))
     }
 
     @Test("typing a provider name and pressing Enter deeplinks to its page")
