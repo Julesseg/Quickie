@@ -23,6 +23,9 @@ final class ClipboardPrefillUITests: XCTestCase {
         UIPasteboard.general.string = "https://example.com"
 
         let app = XCUIApplication()
+        // Reset the persisted app-level toggles (issue #65): a prior test that
+        // flipped Clipboard prefill off would otherwise suppress the chip here.
+        app.launchArguments += ["-uitest-reset-signals"]
         app.launch()
 
         XCTAssertTrue(
@@ -36,6 +39,9 @@ final class ClipboardPrefillUITests: XCTestCase {
         UIPasteboard.general.items = []
 
         let app = XCUIApplication()
+        // Same clean slate as above — and a cleared Frecency keeps Home on the
+        // placeholder this test waits for.
+        app.launchArguments += ["-uitest-reset-signals"]
         app.launch()
 
         // Wait for Home to be up before asserting the chip's absence, so we're

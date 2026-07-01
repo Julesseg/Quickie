@@ -12,6 +12,11 @@ import QuickieCore
 /// app's bundle ID in your Apple Developer account.
 enum AppGroup {
     static let identifier = "group.com.julesseguin.quickie"
+
+    /// The shared App Group `UserDefaults`, falling back to `.standard` when the
+    /// group isn't provisioned — the same degrade-gracefully posture as the
+    /// SwiftData store, so preferences work on an unentitled build too.
+    static let defaults = UserDefaults(suiteName: identifier) ?? .standard
 }
 
 /// A user-saved Quicklink: a stored *static* URL that opens directly (CONTEXT.md

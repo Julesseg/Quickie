@@ -128,10 +128,7 @@ final class SignalsStore {
         return decoded
     }
 
-    /// The App Group `UserDefaults`, falling back to `.standard` when the group
-    /// isn't provisioned — the same degrade-gracefully posture as the SwiftData
-    /// store (QuickieStore), so signals work on an unentitled build too.
-    static var sharedDefaults: UserDefaults {
-        UserDefaults(suiteName: AppGroup.identifier) ?? .standard
-    }
+    /// The shared App Group `UserDefaults` (see `AppGroup.defaults`), kept as a
+    /// named alias because "the signals' store" is what this class's callers mean.
+    static var sharedDefaults: UserDefaults { AppGroup.defaults }
 }
