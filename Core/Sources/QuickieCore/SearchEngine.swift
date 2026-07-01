@@ -151,14 +151,21 @@ public struct SearchEngine {
     /// signals (issue #9 AC #1, #2). Only **Indexed**, non-Fallback Actions are
     /// eligible: Home is the enumerable catalog of things to pin and reuse, not
     /// the query-driven Dynamic results or the raw-text Fallbacks.
-    public func home() -> HomeContent {
+    ///
+    /// - Parameter showRecents: the app-level **Show Recents** toggle
+    ///   (CONTEXT.md → Settings; issue #65), default on. Off empties the Frecency
+    ///   "Recent" section while leaving Favorites untouched — the signals keep
+    ///   recording and ranking; only the Home surface is hidden.
+    public func home(showRecents: Bool = true) -> HomeContent {
         let byId = indexedActionsByID()
 
         let favorites: [Action] = favoriteOrder.compactMap { byId[$0] }
 
         var frecent: [Action] = []
-        for id in frecency.ranked(now: now) where !self.favorites.contains(id) {
-            if let action = byId[id] { frecent.append(action) }
+        if showRecents {
+            for id in frecency.ranked(now: now) where !self.favorites.contains(id) {
+                if let action = byId[id] { frecent.append(action) }
+            }
         }
 
         return HomeContent(favorites: favorites, frecent: frecent)
