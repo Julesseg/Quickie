@@ -414,21 +414,27 @@ struct RootView: View {
             // (the pushed pages set this on themselves; this covers the root + its
             // bottom inset). `lockedKeyboardInset` supplies the lift instead.
             .ignoresSafeArea(.keyboard, edges: .bottom)
-            // Reconcile the held inset with the two ways the keyboard leaves:
+            // Reconcile the held inset with the ways the keyboard leaves:
             //  • **Showing** (a real keyboard, overlap over the threshold — not a
             //    hardware-keyboard accessory bar): lift the bar to sit on it.
             //  • **Hiding while the list is being dragged**: an intentional
             //    swipe-dismiss (issue #64) — release the inset so the bar drops and
             //    more results show.
-            //  • **Hiding while *not* scrolling**: the context menu resigned first
-            //    responder — **hold** the inset so the long-press doesn't reflow the
-            //    list. This is the whole point of driving the lift ourselves.
+            //  • **Hiding while a capture shows a keyboard-less control** (the date
+            //    step's picker + commit button, the primer/denial affordances): the
+            //    text field was *removed* for the whole step, so the keyboard is
+            //    structurally gone — release the inset so the control takes the
+            //    keyboard's space rather than floating above a dead band.
+            //  • **Hiding while *not* scrolling** otherwise: the context menu
+            //    resigned first responder — **hold** the inset so the long-press
+            //    doesn't reflow the list. This is the whole point of driving the
+            //    lift ourselves.
             .onReceive(NotificationCenter.default.publisher(for: UIResponder.keyboardWillChangeFrameNotification)) { note in
                 guard let endFrame = note.userInfo?[UIResponder.keyboardFrameEndUserInfoKey] as? CGRect else { return }
                 let overlap = UIScreen.main.bounds.height - endFrame.minY
                 if overlap > 120 {
                     lockedKeyboardInset = max(0, overlap - bottomSafeAreaInset)
-                } else if listScrolling {
+                } else if listScrolling || capture.usesKeyboardlessControl {
                     lockedKeyboardInset = 0
                 }
             }
@@ -646,6 +652,13 @@ struct RootView: View {
     /// session is still resolving on the actor would flash an empty Home for a
     /// frame before the capture slides in.
     private func startReminderCapture() {
+        // The `-uitest-stub-reminders` seam: the same breadcrumb driven end-to-end
+        // with only the EventKit edge stubbed, because XCUITest cannot pre-grant
+        // the Reminders permission dialog (see `UITestReminderCapture`).
+        if UITestReminderCapture.isRequested {
+            capture.start(UITestReminderCapture(), layout: keyboardLayout.layout)
+            return
+        }
         capture.start(
             ReminderCapture(
                 settings: ReminderSettings(
