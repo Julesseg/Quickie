@@ -56,7 +56,12 @@ public struct CalculatorProvider: Provider {
             title: title,
             subtitle: subtitle,
             inputTypes: [],
-            outputType: .number
+            outputType: .number,
+            // Declared `.number` content (ADR 0017), *not* derived from the
+            // copy-text outcome: the answer reads as a number even though tapping
+            // it copies text. This is the one factory the derive-from-outcome
+            // default can't get right, so it overrides.
+            content: .number
         ) { _ in .copyText(copy) }
     }
 }

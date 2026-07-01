@@ -12,6 +12,9 @@ struct HomeView: View {
     let isFavorite: (Action) -> Bool
     var canFavorite: (Action) -> Bool = { _ in true }
     let onToggleFavorite: (Action) -> Void
+    /// Runs a one-shot secondary action on a Home row's content (Copy / Share /
+    /// Reveal in Files) — the same long-press menu the Result list uses (ADR 0017).
+    var onSecondaryAction: (Action, SecondaryActionKind) -> Void = { _, _ in }
 
     /// At most four Favorites fill the 2×2 grid (CONTEXT.md → Favorites grid);
     /// extras (which the cap should already prevent) are never shown.
@@ -72,7 +75,12 @@ struct HomeView: View {
                     }
                     .buttonStyle(.plain)
                     .accessibilityIdentifier("favorite.\(action.id)")
-                    .favoriteContextMenu(isFavorite: true) { onToggleFavorite(action) }
+                    .resultContextMenu(
+                        secondaryActions: secondaryActions(for: action.content),
+                        onSecondaryAction: { onSecondaryAction(action, $0) },
+                        isFavorite: true,
+                        toggle: { onToggleFavorite(action) }
+                    )
                 }
             }
             .padding(.horizontal, 16)
@@ -114,10 +122,13 @@ struct HomeView: View {
                 }
                 .buttonStyle(.plain)
                 .accessibilityIdentifier(action.id)
-                .favoriteContextMenu(
+                .resultContextMenu(
+                    secondaryActions: secondaryActions(for: action.content),
+                    onSecondaryAction: { onSecondaryAction(action, $0) },
                     isFavorite: isFavorite(action),
-                    canPin: canFavorite(action)
-                ) { onToggleFavorite(action) }
+                    canPin: canFavorite(action),
+                    toggle: { onToggleFavorite(action) }
+                )
             }
         }
     }

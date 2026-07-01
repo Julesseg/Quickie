@@ -18,6 +18,10 @@ struct ResultListView: View {
     var canFavorite: (Action) -> Bool = { _ in true }
     /// Toggles a row's Favorite pin (issue #9 AC #1).
     let onToggleFavorite: (Action) -> Void
+    /// Runs a one-shot secondary action (Copy / Share / Reveal in Files) on a
+    /// row's content (CONTEXT.md → Secondary action; ADR 0017). The App resolves
+    /// the content at the edge and performs the verb.
+    var onSecondaryAction: (Action, SecondaryActionKind) -> Void = { _, _ in }
 
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
@@ -44,7 +48,9 @@ struct ResultListView: View {
                         }
                         .buttonStyle(.plain)
                         .accessibilityIdentifier(action.id)
-                        .favoriteContextMenu(
+                        .resultContextMenu(
+                            secondaryActions: secondaryActions(for: action.content),
+                            onSecondaryAction: { onSecondaryAction(action, $0) },
                             isFavorite: isFavorite(action),
                             canPin: canFavorite(action),
                             toggle: { onToggleFavorite(action) }
@@ -150,20 +156,37 @@ private struct EnterHint: View {
 }
 
 extension View {
-    /// The Pin/Unpin affordance shared by every row that can be favorited. A
-    /// long-press context menu keeps pinning out of the typing fast path; it is
-    /// distinct from the deferred *secondary actions* long-press (ADR 0008),
-    /// which operates on a result's content rather than its place in the index.
+    /// A row's long-press menu: its eligible **secondary actions** (Copy / Share /
+    /// Reveal in Files, keyed by the result's content — CONTEXT.md → Secondary
+    /// action; ADR 0017) combined with the **Pin/Unpin** item, in **one** menu on
+    /// **one** gesture. A content-less row (command / capture / shortcut) passes an
+    /// empty `secondaryActions`, so it shows only Pin/Unpin, exactly as before — no
+    /// dead items, a verb appears only when it can run.
     ///
     /// `canPin` reflects the Favorites cap (CONTEXT.md → Favorite): when the grid
     /// is full, the "Pin as Favorite" item is disabled with a hint rather than
     /// silently swallowing the gesture — Unpin is always available.
-    func favoriteContextMenu(
+    func resultContextMenu(
+        secondaryActions: [SecondaryActionKind] = [],
+        onSecondaryAction: @escaping (SecondaryActionKind) -> Void = { _ in },
         isFavorite: Bool,
         canPin: Bool = true,
         toggle: @escaping () -> Void
     ) -> some View {
         contextMenu {
+            ForEach(secondaryActions, id: \.self) { kind in
+                Button {
+                    onSecondaryAction(kind)
+                } label: {
+                    Label(kind.menuTitle, systemImage: kind.menuSymbol)
+                }
+                .accessibilityIdentifier("secondary.\(kind.menuIdentifier)")
+            }
+            // A visual break between the content verbs and the pin affordance, only
+            // when there are content verbs to separate.
+            if !secondaryActions.isEmpty {
+                Divider()
+            }
             Button {
                 toggle()
             } label: {
@@ -174,6 +197,35 @@ extension View {
             if !isFavorite && !canPin {
                 Text("Favorites are full (max \(SignalsStore.maxFavorites)). Unpin one first.")
             }
+        }
+    }
+}
+
+/// The App-side presentation of a `SecondaryActionKind` (CONTEXT.md → Secondary
+/// action): its menu label, SF Symbol, and a stable identifier for UI tests.
+/// Core owns the *eligibility* verb; how it reads in the menu is a view concern.
+extension SecondaryActionKind {
+    var menuTitle: String {
+        switch self {
+        case .copy: return "Copy"
+        case .share: return "Share"
+        case .revealInFiles: return "Reveal in Files"
+        }
+    }
+
+    var menuSymbol: String {
+        switch self {
+        case .copy: return "doc.on.doc"
+        case .share: return "square.and.arrow.up"
+        case .revealInFiles: return "folder"
+        }
+    }
+
+    var menuIdentifier: String {
+        switch self {
+        case .copy: return "copy"
+        case .share: return "share"
+        case .revealInFiles: return "reveal"
         }
     }
 }
