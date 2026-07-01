@@ -32,18 +32,22 @@ final class ShortcutsStore {
     /// distributed as an `icloud.com/shortcuts/<id>` link, not a bundled file).
     ///
     /// **HITL:** only a human can author and publish the companion Sync Shortcut in
-    /// the Shortcuts app and paste its real share id here — that step can't be done
-    /// from code. Until it is replaced with the published link, the Install control
-    /// is disabled (see `ShortcutsView`) so the app never opens a dead URL. Publish
-    /// the shortcut under the name in `syncShortcutName`, then set this to the real
-    /// `https://www.icloud.com/shortcuts/<id>` link.
-    static let syncShortcutInstallURL: URL? = nil
+    /// the Shortcuts app and supply its real share id — that step can't be done from
+    /// code. It has been published under the name in `syncShortcutName`; this is its
+    /// live link. If it is ever `nil`, the Install control disables itself (see
+    /// `ShortcutsView`) so the app never opens a dead URL.
+    static let syncShortcutInstallURL: URL? = URL(string: "https://www.icloud.com/shortcuts/9abd24840d6b460da0893aea65aa44a0")
 
     /// The launch argument that seeds imported shortcuts under UI testing — a
-    /// newline-delimited name list follows the flag (mirroring `SignalsStore`'s
+    /// **comma**-delimited name list follows the flag (mirroring `SignalsStore`'s
     /// pin hook). It exists because XCUITest can't deliver a custom-scheme URL to
     /// the app, so this drives the *real* import path (`ingest`) to seed the set a
     /// test then asserts the Shortcuts page lists and the Result list surfaces.
+    ///
+    /// Commas, not newlines: a launch argument containing a newline is split into
+    /// separate argv entries by the simulator (only the first name would survive),
+    /// so the hook rejoins the comma-separated names into the newline payload the
+    /// URL scheme really carries before handing it to `ingest`.
     static let uitestSeedArgument = "-uitest-seed-shortcuts"
 
     init(defaults: UserDefaults = SignalsStore.sharedDefaults) {
@@ -62,7 +66,12 @@ final class ShortcutsStore {
         }
         let store = ShortcutsStore()
         if let flag = arguments.firstIndex(of: uitestSeedArgument), flag + 1 < arguments.count {
-            store.ingest(payload: arguments[flag + 1])
+            // Rejoin the comma-separated seed into the newline payload the URL
+            // scheme carries (see `uitestSeedArgument`), then drive the real ingest.
+            let payload = arguments[flag + 1]
+                .split(separator: ",", omittingEmptySubsequences: false)
+                .joined(separator: "\n")
+            store.ingest(payload: payload)
         }
         return store
     }

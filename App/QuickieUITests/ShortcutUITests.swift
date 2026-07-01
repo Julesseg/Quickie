@@ -10,8 +10,10 @@ import XCTest
 ///
 /// XCUITest can't deliver a `quickie://import` URL to the app, so the import is
 /// seeded through the *real* ingest path via the `-uitest-seed-shortcuts` launch
-/// argument (a newline-delimited payload, exactly what the URL scheme carries) —
-/// the same "seed the real path" approach the Favorites pin test uses.
+/// argument (a comma-delimited name list the store rejoins into the newline
+/// payload the URL scheme carries — a launch argument can't hold newlines, the
+/// simulator splits them into separate argv entries) — the same "seed the real
+/// path" approach the Favorites pin test uses.
 final class ShortcutUITests: XCTestCase {
 
     override func setUpWithError() throws {
@@ -32,7 +34,7 @@ final class ShortcutUITests: XCTestCase {
     /// Indexed Provider — the core "my shortcuts show up and are searchable" slice.
     @MainActor
     func testImportedShortcutIsSearchable() throws {
-        let app = launchApp(seed: "Timer\nStart Workout\nQuickie Sync")
+        let app = launchApp(seed: "Timer,Start Workout,Quickie Sync")
 
         let input = app.textFields["search-input"]
         XCTAssertTrue(input.waitForExistence(timeout: 30))
@@ -53,7 +55,7 @@ final class ShortcutUITests: XCTestCase {
     /// Shortcut has self-filtered itself out of the import.
     @MainActor
     func testShortcutsPageListsImportsWithToggleAndSelfFilters() throws {
-        let app = launchApp(seed: "Timer\nStart Workout\nQuickie Sync")
+        let app = launchApp(seed: "Timer,Start Workout,Quickie Sync")
 
         let input = app.textFields["search-input"]
         XCTAssertTrue(input.waitForExistence(timeout: 30))
