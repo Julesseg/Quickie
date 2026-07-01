@@ -129,9 +129,13 @@ final class IndexedFoldersStore {
     func beginFileAccess(bookmarkID: String, relativePath: String) -> FileAccess? {
         guard let grant = grants.first(where: { $0.id == bookmarkID }),
               let folderURL = resolveURL(for: grant) else { return nil }
-        let scoped = folderURL.startAccessingSecurityScopedResource()
+        // A bookmark-resolved folder always needs its scope opened, so a `false`
+        // here means access was refused — fail the same way a missing grant does
+        // (the caller shows "File not found") rather than handing back a handle that
+        // would present a broken, unreadable preview.
+        guard folderURL.startAccessingSecurityScopedResource() else { return nil }
         let fileURL = folderURL.appendingPathComponent(relativePath)
-        return FileAccess(fileURL: fileURL, folderURL: folderURL, scoped: scoped)
+        return FileAccess(fileURL: fileURL, folderURL: folderURL, scoped: true)
     }
 
     /// Releases the security-scoped access `beginFileAccess` opened, once the preview

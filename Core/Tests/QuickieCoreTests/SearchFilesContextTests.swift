@@ -15,6 +15,11 @@ struct SearchFilesContextTests {
         #expect(action.kind == .searchFiles)
         #expect(action.run() == .enterFileSearch)
         #expect(action.mainAction == .searchFiles)
+        // A command row enters a context rather than producing content, so it wears
+        // the neutral `.text` output like every other command — never `.file`, which
+        // would read as a source of file-typed output for a future Argument chain.
+        #expect(action.outputType == .text)
+        #expect(action.inputTypes.isEmpty)
     }
 
     @Test("the Search Files command matches by name and alias")

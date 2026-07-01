@@ -535,7 +535,11 @@ extension Action {
             title: "Search Files",
             aliases: ["files", "find files", "browse files", "file search"],
             inputTypes: [],
-            outputType: .file
+            // `.text` like every other command row (Settings, Quicklinks, Indexed
+            // Folders…): selecting it enters the scoped browsing context, it does not
+            // *produce* a file — so it must not read as a file-typed source for a
+            // future Argument chain (ADR 0011).
+            outputType: .text
         ) { _ in .enterFileSearch }
     }
 
