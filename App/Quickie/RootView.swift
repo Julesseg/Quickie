@@ -402,6 +402,12 @@ struct RootView: View {
                 // when a page is pushed (the bar is gone), so no phantom inset.
                 .padding(.bottom, path.isEmpty ? lockedKeyboardInset : 0)
                 .animation(.easeOut(duration: 0.25), value: lockedKeyboardInset)
+                // Kill keyboard avoidance on the bar *itself*: the outer
+                // `.ignoresSafeArea(.keyboard)` leaves a small residual lift on
+                // `.safeAreaInset` content, which released on a context-menu dismiss
+                // and dropped the list by ~half a row. Our held inset is the only
+                // thing that should position the bar.
+                .ignoresSafeArea(.keyboard, edges: .bottom)
             }
             // Drive the bar lift ourselves: turn off SwiftUI's automatic keyboard
             // avoidance for the launcher so the live keyboard never moves the layout
