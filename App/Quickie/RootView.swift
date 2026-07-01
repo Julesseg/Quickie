@@ -114,6 +114,11 @@ struct RootView: View {
     /// (a system behaviour with no public override), the layout stays frozen instead
     /// of collapsing the safe area and jerking the reversed result list downward.
     @State private var lockedKeyboardInset: CGFloat = 0
+    /// Whether a result/Recent list is mid-drag (issue #58 × #64): the signal that
+    /// tells a keyboard dismissal apart. A dismissal *while* scrolling is the
+    /// intentional swipe (#64) — let the bar drop; one while still is the context
+    /// menu resigning first responder — hold the inset so nothing reflows.
+    @State private var listScrolling = false
 
     @State private var keyboardLayout = KeyboardLayoutModel()
     @State private var clipboard = ClipboardPrefillModel()
@@ -279,7 +284,8 @@ struct RootView: View {
                             isFavorite: { signals.isFavorite($0.id) },
                             canFavorite: { signals.canFavorite($0.id) },
                             onToggleFavorite: { signals.toggleFavorite($0.id) },
-                            onSecondaryAction: performSecondary
+                            onSecondaryAction: performSecondary,
+                            onScrollActive: { listScrolling = $0 }
                         )
                         .transition(captureMotion.edgeTransition(from: .bottom))
                     } else {
@@ -289,7 +295,8 @@ struct RootView: View {
                             isFavorite: { signals.isFavorite($0.id) },
                             canFavorite: { signals.canFavorite($0.id) },
                             onToggleFavorite: { signals.toggleFavorite($0.id) },
-                            onSecondaryAction: performSecondary
+                            onSecondaryAction: performSecondary,
+                            onScrollActive: { listScrolling = $0 }
                         )
                         .transition(captureMotion.edgeTransition(from: .bottom))
                     }
@@ -401,16 +408,23 @@ struct RootView: View {
             // (the pushed pages set this on themselves; this covers the root + its
             // bottom inset). `lockedKeyboardInset` supplies the lift instead.
             .ignoresSafeArea(.keyboard, edges: .bottom)
-            // Capture the software-keyboard height as it appears and **hold** it: on
-            // hide the end frame reads off-screen (overlap 0), which the threshold
-            // ignores, so the inset stays put across a context menu's transient
-            // dismissal. Only a real keyboard (not a hardware-keyboard accessory bar)
-            // clears the threshold.
+            // Reconcile the held inset with the two ways the keyboard leaves:
+            //  • **Showing** (a real keyboard, overlap over the threshold — not a
+            //    hardware-keyboard accessory bar): lift the bar to sit on it.
+            //  • **Hiding while the list is being dragged**: an intentional
+            //    swipe-dismiss (issue #64) — release the inset so the bar drops and
+            //    more results show.
+            //  • **Hiding while *not* scrolling**: the context menu resigned first
+            //    responder — **hold** the inset so the long-press doesn't reflow the
+            //    list. This is the whole point of driving the lift ourselves.
             .onReceive(NotificationCenter.default.publisher(for: UIResponder.keyboardWillChangeFrameNotification)) { note in
                 guard let endFrame = note.userInfo?[UIResponder.keyboardFrameEndUserInfoKey] as? CGRect else { return }
                 let overlap = UIScreen.main.bounds.height - endFrame.minY
-                guard overlap > 120 else { return }
-                lockedKeyboardInset = max(0, overlap - bottomSafeAreaInset)
+                if overlap > 120 {
+                    lockedKeyboardInset = max(0, overlap - bottomSafeAreaInset)
+                } else if listScrolling {
+                    lockedKeyboardInset = 0
+                }
             }
             // The launcher itself wears no navigation bar — it is the root; the
             // management pages push *on top* of it, sliding in from the right with

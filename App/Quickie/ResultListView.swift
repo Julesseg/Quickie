@@ -22,6 +22,10 @@ struct ResultListView: View {
     /// row's content (CONTEXT.md → Secondary action; ADR 0017). The App resolves
     /// the content at the edge and performs the verb.
     var onSecondaryAction: (Action, SecondaryActionKind) -> Void = { _, _ in }
+    /// Reports whether the list is mid-drag, so the launcher can tell an intentional
+    /// swipe-dismiss (issue #64 — drop the bar) from a context-menu keyboard
+    /// dismissal (issue #58 — hold the layout in place).
+    var onScrollActive: (Bool) -> Void = { _ in }
 
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
@@ -75,6 +79,14 @@ struct ResultListView: View {
         // bottom, and the query + results are preserved — no custom gesture, just
         // the system scroll-dismiss so more results become visible.
         .scrollDismissesKeyboard(.interactively)
+        // Report drag state so the launcher can tell this swipe-dismiss (drop the
+        // bar) from a context-menu keyboard dismissal (hold the layout in place).
+        // Only an active drag counts — *not* `.tracking`, the finger-down-but-still
+        // state a long-press sits in, which must read as "not scrolling" so the
+        // context menu freezes the layout.
+        .onScrollPhaseChange { _, phase in
+            onScrollActive(phase == .interacting || phase == .decelerating)
+        }
     }
 }
 
