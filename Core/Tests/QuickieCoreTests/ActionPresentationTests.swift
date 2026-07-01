@@ -34,6 +34,15 @@ struct ActionPresentationTests {
         #expect(Action.newNote().mainAction == .compose)
         #expect(Action.newSnippet().mainAction == .compose)
         #expect(Action.openNotesLibrary().mainAction == .openPage)
+        #expect(Action.file(bookmarkID: "f", relativePath: "a/b.txt").mainAction == .openFile)
+    }
+
+    @Test("a file is its own provider kind and opens on Enter")
+    func fileKindAndReturnKey() {
+        let file = Action.file(bookmarkID: "f", relativePath: "a/report.pdf")
+        #expect(file.kind == .file)
+        // Enter on a highlighted file row opens it — the `.go` submit label.
+        #expect(file.returnKeyLabel == .go)
     }
 
     @Test("a multi-step capture's glyph reads its final outcome, not its empty effect")

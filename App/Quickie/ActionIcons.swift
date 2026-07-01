@@ -22,6 +22,7 @@ extension ActionKind {
         case .reminder: return "checklist"
         case .event: return "calendar"
         case .settings: return "gearshape"
+        case .file: return "doc"
         case .managementPage: return "slider.horizontal.3"
         }
     }
@@ -39,6 +40,7 @@ extension ActionKind {
         case .reminder: return .red
         case .event: return .cyan
         case .settings: return .gray
+        case .file: return .brown
         case .managementPage: return .gray
         }
     }
@@ -69,6 +71,7 @@ extension MainAction {
         case .openNote: return "book"
         case .compose: return "square.and.pencil"
         case .openPage: return "chevron.right"
+        case .openFile: return "arrow.up.forward.app"
         case .none: return nil
         }
     }

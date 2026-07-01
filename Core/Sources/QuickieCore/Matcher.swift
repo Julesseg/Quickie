@@ -21,6 +21,15 @@ import Foundation
 /// on the `score` shape, never on how the number is derived.
 public enum Matcher {
 
+    /// The score at or above which a name match counts as **strong** — an exact or
+    /// prefix match, as opposed to a buried, scattered, or fuzzy one. It is the
+    /// subsequence tier's prefix base (0.80): exact (1.0) and prefix matches clear
+    /// it; everything weaker falls below. Both the `SearchEngine` (for its
+    /// no-boost-crosses-it top tier) and File Search (which surfaces only strong
+    /// filename hits inline, ADR 0015) gate on this one shared value so the two can
+    /// never drift apart.
+    public static let strongMatchThreshold: Double = 0.80
+
     /// Returns a score in `(0, 1]` when `query` matches `candidate`, or `nil`
     /// when it does not. Higher is a better match. An empty query never
     /// matches: the empty-query Home state is owned by the SearchEngine, not

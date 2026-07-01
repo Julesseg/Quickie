@@ -52,6 +52,7 @@ final class IndexedFoldersStore {
         self.fileURL = fileURL
         self.grants = []
         loadAndPrune()
+        seedFilesForTestingIfRequested()
     }
 
     /// Grants access to `url`, minting a security-scoped bookmark and persisting it.
@@ -206,5 +207,36 @@ extension IndexedFoldersStore {
             return false
         }
         return addFolder(dir)
+    }
+
+    /// The File Search seed argument: under UI testing it grants a temporary folder
+    /// containing a known fixture file at launch, so the XCUITest can type the
+    /// filename and prove File Search surfaces it as a ranked Result row — the
+    /// end-to-end acceptance the snapshot builder + `FileSearchProvider` wiring
+    /// exists for (issue #50). Distinct from `-uitest-reset-folders` (clean slate).
+    static let uitestSeedFilesArgument = "-uitest-seed-files"
+
+    /// The fixture filename the seeded folder contains, shared with the XCUITest so
+    /// it can type it and match the resulting row.
+    static let uitestFixtureFileName = "quickie-fixture-report.txt"
+
+    /// Grants a freshly created temporary folder holding a single known fixture file
+    /// when launched with the File Search seed argument, so the snapshot has real
+    /// content to index at launch. No-op outside UI testing, when the flag is absent,
+    /// or when grants already exist (a relaunch keeps the persisted state).
+    private func seedFilesForTestingIfRequested() {
+        let arguments = ProcessInfo.processInfo.arguments
+        guard arguments.contains("--uitesting"),
+              arguments.contains(Self.uitestSeedFilesArgument),
+              grants.isEmpty else { return }
+
+        let dir = FileManager.default.temporaryDirectory
+            .appendingPathComponent("FileSearch-\(UUID().uuidString.prefix(6))", isDirectory: true)
+        guard (try? FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)) != nil else {
+            return
+        }
+        let fixture = dir.appendingPathComponent(Self.uitestFixtureFileName)
+        try? Data("fixture".utf8).write(to: fixture, options: .atomic)
+        addFolder(dir)
     }
 }

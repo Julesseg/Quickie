@@ -44,6 +44,12 @@ public enum ActionOutcome: Equatable, Sendable {
     /// fields (alerts, invitees, recurrence) instead of writing silently — the
     /// event counterpart to `composeNote`/`composeSnippet`'s "open editor, confirm".
     case composeEvent(EventDraft)
+    /// Open a file surfaced by File Search (CONTEXT.md → File Search; ADR 0015).
+    /// The core carries only the file's Indexed-Folder bookmark identity plus its
+    /// relative path within that folder — never a filesystem URL. The app resolves
+    /// the pair to a security-scoped URL under a start/stop bracket and opens it
+    /// (QuickLook / share), the same defer-to-the-edge pattern as `openNote`.
+    case openFile(bookmarkID: String, relativePath: String)
     case none
 }
 
@@ -87,6 +93,10 @@ public enum ActionKind: Equatable, Sendable {
     /// The Settings command row (gearshape) — distinct from the data it has none
     /// of, so it reads as its own thing.
     case settings
+    /// A file surfaced by File Search (CONTEXT.md → File Search; ADR 0015): its own
+    /// kind so a file row wears a document badge, distinct from the Indexed Folders
+    /// management command that governs where files come from.
+    case file
     /// A management command row that opens a library/management page it does not
     /// itself belong to — Quicklinks and Fallbacks. A dedicated kind so a command
     /// row never wears the same badge as the data rows it governs (a Quicklinks
@@ -107,6 +117,9 @@ public enum MainAction: Equatable, Sendable {
     /// Open a full-screen management page (Settings, Quicklinks, Fallbacks, all
     /// Notes, all Snippets).
     case openPage
+    /// Open a file surfaced by File Search — the app resolves its bookmark identity
+    /// to a security-scoped URL and opens it (CONTEXT.md → File Search).
+    case openFile
     case none
 }
 
@@ -201,6 +214,7 @@ public struct Action: Identifiable, Sendable {
         case .openNote: return .openNote
         case .composeNote, .composeSnippet, .createReminder, .createEvent, .composeEvent: return .compose
         case .openPage: return .openPage
+        case .openFile: return .openFile
         case .none: return .none
         }
     }
@@ -218,7 +232,7 @@ public struct Action: Identifiable, Sendable {
         switch run() {
         case .openURL: return isFallback ? .search : .go
         case .copyText, .composeNote, .composeSnippet, .createReminder, .createEvent, .composeEvent: return .done
-        case .openNote, .openPage: return .go
+        case .openNote, .openPage, .openFile: return .go
         case .none: return .none
         }
     }
@@ -463,6 +477,31 @@ extension Action {
             inputTypes: [],
             outputType: .text
         ) { _ in .openPage(.fallbacks) }
+    }
+
+    /// A file surfaced by File Search (CONTEXT.md → File Search; ADR 0015): a row
+    /// whose main action opens the file. It carries **only** the file's
+    /// Indexed-Folder `bookmarkID` and its `relativePath` within that folder — never
+    /// a filesystem URL — so the Core stays pure; the app resolves the pair to a
+    /// security-scoped URL and opens it. The id folds both so the same relative path
+    /// under two granted folders is two distinct rows, and the title (matched
+    /// against the query) is the file's display name, defaulting to the path's last
+    /// component. Self-contained like a Snippet: it consumes no typed text and is
+    /// not a Fallback.
+    public static func file(
+        bookmarkID: String,
+        relativePath: String,
+        displayName: String? = nil
+    ) -> Action {
+        let name = displayName ?? (relativePath as NSString).lastPathComponent
+        return Action(
+            id: "file.\(bookmarkID).\(relativePath)",
+            kind: .file,
+            title: name,
+            subtitle: relativePath,
+            inputTypes: [],
+            outputType: .file
+        ) { _ in .openFile(bookmarkID: bookmarkID, relativePath: relativePath) }
     }
 
     /// The "Indexed Folders" command (CONTEXT.md → Indexed Folder; issue #49):

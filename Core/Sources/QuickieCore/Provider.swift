@@ -1,10 +1,19 @@
-/// Whether a Provider's Actions are a pre-indexed, enumerable set or computed
-/// live per keystroke (ADR 0004). The SearchEngine treats the two differently:
-/// indexed candidates are matched and ranked centrally; dynamic candidates
-/// arrive already query-relevant.
+/// How a Provider's Actions reach the Result list (ADR 0004, ADR 0015). The
+/// SearchEngine treats each kind differently:
+/// - **indexed** — a pre-indexed, enumerable catalog the engine matches and ranks
+///   centrally; also the only kind eligible for Home (Favorites + Frecency).
+/// - **dynamic** (*boosted*-dynamic) — computed live and already query-relevant,
+///   so it floats to the top region unscored (the Calculator: a math answer is
+///   unambiguously the top hit).
+/// - **rankedDynamic** — computed live from the Provider's *own* prefiltered index
+///   (so a large set never floods the central catalog, Home, or Frecency), but its
+///   survivors are name-scored by the `Matcher` and placed in the **ranked** region
+///   by match quality (File Search): an exact command name still outranks a strong
+///   filename hit.
 public enum ProviderKind: Sendable {
     case indexed
     case dynamic
+    case rankedDynamic
 }
 
 /// A source that contributes Actions to the Result list. Every Action

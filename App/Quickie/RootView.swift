@@ -63,6 +63,16 @@ struct RootView: View {
     /// security-scoped bookmarks in a device-local, non-synced store (ADR 0016).
     @State private var indexedFolders = IndexedFoldersStore.launch()
 
+    /// The File Search snapshot (CONTEXT.md → File Search; ADR 0015): a plain
+    /// in-memory filename index rebuilt from the granted folders on launch,
+    /// foreground, and grant change, and served to every keystroke by the pure
+    /// `FileSearchProvider` so the Core never rescans the filesystem.
+    @State private var fileIndex = FileIndexModel()
+
+    /// Drives the snapshot rebuild on foreground (CONTEXT.md → File Search): the
+    /// grants (or the files inside them) may have changed while backgrounded.
+    @Environment(\.scenePhase) private var scenePhase
+
     @State private var query = ""
     /// A note opened for reading or a seeded compose editor — presented as a
     /// sheet, distinct from the pushed management pages.
@@ -130,6 +140,11 @@ struct RootView: View {
             providers: [
                 // The Dynamic Calculator + unit-conversion Provider.
                 CalculatorProvider(),
+                // File Search (CONTEXT.md → File Search; ADR 0015): a ranked-dynamic
+                // Provider serving the current filename snapshot. Its survivors are
+                // scored and ranked by match quality, never boosted to the top, so
+                // an exact command name still outranks a strong filename hit.
+                FileSearchProvider(index: fileIndex.index, layout: keyboardLayout.layout),
                 // The built-in management command rows (Settings, Quicklinks,
                 // Fallbacks) — no default links, no privileged web search.
                 IndexedProvider.builtIns(),
@@ -360,6 +375,17 @@ struct RootView: View {
                 // @Query catalogs are loaded by the time this launch task runs.
                 signals.reconcileFavorites(against: engine.resolvableHomeIDs())
             }
+            // Build the File Search snapshot on launch, then rebuild it whenever the
+            // app returns to the foreground or the Indexed-Folder grants change
+            // (CONTEXT.md → File Search; ADR 0015). Each rebuild walks the granted
+            // folders under a per-folder security-scoped bracket, off the main actor.
+            .task { fileIndex.rebuild(from: indexedFolders) }
+            .onChange(of: scenePhase) { _, phase in
+                if phase == .active { fileIndex.rebuild(from: indexedFolders) }
+            }
+            .onChange(of: indexedFolders.grants) { _, _ in
+                fileIndex.rebuild(from: indexedFolders)
+            }
             // A note opened for reading or a seeded compose editor stays a sheet —
             // a quick modal task, distinct from the pushed management pages.
             // Dismissing a sheet also drops the keyboard, so re-arm focus on
@@ -515,6 +541,12 @@ struct RootView: View {
             // Reminder and event creation (silent or editor handoff) flow through
             // the capture model on the final commit, never a direct `run(input:)`,
             // so there is nothing to do here.
+            break
+        case .openFile:
+            // Resolving the (bookmarkID, relativePath) pair to a security-scoped URL
+            // and presenting it via QuickLook is the next File Search slice (issue
+            // #50 scopes this to matching + ranking; the root-list/QuickLook UI
+            // follows). The file rows already surface, ranked, in the Result list.
             break
         case .none:
             break

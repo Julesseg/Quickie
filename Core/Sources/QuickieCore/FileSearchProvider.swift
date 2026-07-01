@@ -1,0 +1,79 @@
+import Foundation
+
+/// The **ranked-dynamic** Provider for File Search (CONTEXT.md → File Search; ADR
+/// 0015). Unlike an Indexed Provider — whose whole catalog the SearchEngine
+/// enumerates and ranks centrally — File Search **owns its own filename snapshot
+/// and prefilters it itself**, so a set of tens of thousands of filenames never
+/// floods the central catalog, Home, or Frecency.
+///
+/// Its handful of survivors are then scored by the same `Matcher` the rest of the
+/// loop uses and gated two ways so only genuinely strong hits appear inline while
+/// typing a normal query:
+/// - the **strong-match threshold** (`Matcher.strongMatchThreshold`): a buried,
+///   scattered, or fuzzy filename hit is held back (it surfaces only in the
+///   uncapped Search Files context, ADR 0014 — a later slice),
+/// - an **inline cap** (~3 rows): even among strong matches, only the best few
+///   surface while typing.
+///
+/// This is *ranked*-dynamic, not the Calculator's *boosted*-dynamic: the
+/// SearchEngine routes these survivors through name-scoring into the ranked region
+/// rather than floating them to the top, so an exact command name still outranks a
+/// strong filename hit (see `SearchEngine.results`). Every result carries only its
+/// `(bookmarkID, relativePath)` — the Core never touches the filesystem.
+public struct FileSearchProvider: Provider {
+    public let kind: ProviderKind = .rankedDynamic
+
+    /// The in-memory filename snapshot, built by the app under a per-folder
+    /// security-scoped bracket and rebuilt on launch / foreground / grant change.
+    /// Every keystroke is served from this snapshot — never a filesystem rescan.
+    private let index: FilenameIndex
+
+    /// The active keyboard layout, so typo-forgiveness matches the rest of the
+    /// loop; defaults to QWERTY so the Core stays platform-agnostic and testable.
+    private let layout: KeyboardLayout
+
+    /// How many strong file matches may surface inline while typing a normal query
+    /// (~3, ADR 0015). The uncapped Search Files context is a later slice.
+    private let inlineCap: Int
+
+    public init(index: FilenameIndex, layout: KeyboardLayout = .qwerty, inlineCap: Int = 3) {
+        self.index = index
+        self.layout = layout
+        self.inlineCap = inlineCap
+    }
+
+    /// The file Actions for `query`: prefilter the snapshot, score the survivors,
+    /// keep only strong matches, order best-first, and cap the inline count. An
+    /// empty/whitespace query declines cleanly — File Search never adds a spurious
+    /// row, and the empty-query Home state is owned by the SearchEngine.
+    public func candidates(for query: String) -> [Action] {
+        let trimmed = query.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else { return [] }
+
+        let scored: [(entry: FileEntry, score: Double)] = index
+            .prefiltered(for: trimmed)
+            .compactMap { entry in
+                guard let score = Matcher.score(query: trimmed, candidate: entry.displayName, layout: layout),
+                      score >= Matcher.strongMatchThreshold else { return nil }
+                return (entry, score)
+            }
+            .sorted(by: bestFirst)
+
+        return scored.prefix(inlineCap).map { pair in
+            Action.file(
+                bookmarkID: pair.entry.bookmarkID,
+                relativePath: pair.entry.relativePath,
+                displayName: pair.entry.displayName
+            )
+        }
+    }
+
+    /// Orders two scored survivors best-first: higher score wins, then a
+    /// deterministic tie-break on display name and relative path so equal-scoring
+    /// files never reshuffle between runs.
+    private func bestFirst(_ lhs: (entry: FileEntry, score: Double), _ rhs: (entry: FileEntry, score: Double)) -> Bool {
+        if lhs.score != rhs.score { return lhs.score > rhs.score }
+        if lhs.entry.displayName != rhs.entry.displayName { return lhs.entry.displayName < rhs.entry.displayName }
+        return lhs.entry.relativePath < rhs.entry.relativePath
+    }
+}

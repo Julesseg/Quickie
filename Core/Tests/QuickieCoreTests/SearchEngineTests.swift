@@ -130,4 +130,76 @@ struct SearchEngineTests {
         ])
         #expect(engine.results(for: "23*7").map(\.id) == ["dynamic"])
     }
+
+    // MARK: - Ranked-dynamic (File Search, ADR 0015)
+
+    private func engineWithFiles(_ entries: [FileEntry], command: Action) -> SearchEngine {
+        SearchEngine(providers: [
+            IndexedProvider(catalog: [command]),
+            FileSearchProvider(index: FilenameIndex(entries: entries)),
+        ])
+    }
+
+    @Test("a ranked-dynamic file flows into the ranked region, scored — not boosted to the top")
+    func rankedDynamicFileIsScoredNotBoosted() {
+        // Unlike the Calculator, a File Search hit does not float above name
+        // matches (ADR 0015). An exact command name outranks a strong filename hit.
+        let engine = engineWithFiles(
+            [FileEntry(bookmarkID: "f", relativePath: "reports.pdf")],
+            command: .quicklink(id: "reports-cmd", title: "reports", url: URL(string: "https://x.example")!)
+        )
+        let ids = engine.results(for: "reports").map(\.id)
+        // Both surface, but the exact command name is first — the file is ranked
+        // below it, not boosted above it.
+        #expect(ids.first == "reports-cmd")
+        #expect(ids.contains("file.f.reports.pdf"))
+    }
+
+    @Test("a strong file match still outranks a weaker name match by score")
+    func fileOutranksWeakerNameMatchByScore() {
+        // The file is a prefix match (strong); the command is only a buried
+        // substring (weak) — so the file ranks above it. Placement is by score,
+        // not by provider: ranked-dynamic candidates compete on match quality.
+        let engine = engineWithFiles(
+            [FileEntry(bookmarkID: "f", relativePath: "reporter.txt")],
+            command: .quicklink(id: "weak", title: "xreportx", url: URL(string: "https://x.example")!)
+        )
+        let ids = engine.results(for: "report").map(\.id)
+        #expect(ids.first == "file.f.reporter.txt")
+    }
+
+    @Test("files never enter Home — not as Favorites, not in the Frecency list")
+    func filesNeverEnterHome() {
+        let now = Date()
+        var frecency = Frecency()
+        frecency.record("file.f.report.pdf", at: now) // even if a file were "used"
+        let engine = SearchEngine(
+            providers: [
+                IndexedProvider(catalog: [.quicklink(id: "a", title: "Alpha", url: URL(string: "https://a.example")!)]),
+                FileSearchProvider(index: FilenameIndex(entries: [
+                    FileEntry(bookmarkID: "f", relativePath: "report.pdf"),
+                ])),
+            ],
+            favorites: ["file.f.report.pdf"], // even if a file were pinned
+            frecency: frecency,
+            now: now
+        )
+        // A ranked-dynamic provider is not indexed, so its files resolve nowhere on
+        // Home: no Favorite, no Frecency row, and the id reconciles away.
+        #expect(engine.home().favorites.isEmpty)
+        #expect(engine.home().frecent.isEmpty)
+        #expect(engine.resolvableHomeIDs().contains("file.f.report.pdf") == false)
+    }
+
+    @Test("weak file matches are held back from the inline Result list")
+    func weakFileMatchesHeldBackInline() {
+        // The provider gates on the strong-match threshold, so a buried substring
+        // ("port" in "report.pdf") never surfaces inline — only the command matches.
+        let engine = engineWithFiles(
+            [FileEntry(bookmarkID: "f", relativePath: "report.pdf")],
+            command: .quicklink(id: "portal", title: "Portal", url: URL(string: "https://x.example")!)
+        )
+        let ids = engine.results(for: "port").map(\.id)
+        #expect(ids.contains("file.f.report.pdf") == false)
+    }
 }
