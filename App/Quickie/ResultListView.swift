@@ -180,7 +180,10 @@ extension View {
                 } label: {
                     Label(kind.menuTitle, systemImage: kind.menuSymbol)
                 }
-                .accessibilityIdentifier("secondary.\(kind.menuIdentifier)")
+                // No explicit accessibilityIdentifier: it would override the
+                // label-based lookup XCUITest uses (`app.buttons["Copy"]`), just as
+                // the Pin item is found by its "Pin as Favorite" label. The verb's
+                // menu title *is* its stable identifier.
             }
             // A visual break between the content verbs and the pin affordance, only
             // when there are content verbs to separate.
@@ -202,8 +205,10 @@ extension View {
 }
 
 /// The App-side presentation of a `SecondaryActionKind` (CONTEXT.md → Secondary
-/// action): its menu label, SF Symbol, and a stable identifier for UI tests.
-/// Core owns the *eligibility* verb; how it reads in the menu is a view concern.
+/// action): its menu label and SF Symbol. The label doubles as the button's
+/// accessibility identifier (no explicit one is set), so UI tests find it by
+/// title. Core owns the *eligibility* verb; how it reads in the menu is a view
+/// concern.
 extension SecondaryActionKind {
     var menuTitle: String {
         switch self {
@@ -218,14 +223,6 @@ extension SecondaryActionKind {
         case .copy: return "doc.on.doc"
         case .share: return "square.and.arrow.up"
         case .revealInFiles: return "folder"
-        }
-    }
-
-    var menuIdentifier: String {
-        switch self {
-        case .copy: return "copy"
-        case .share: return "share"
-        case .revealInFiles: return "reveal"
         }
     }
 }
