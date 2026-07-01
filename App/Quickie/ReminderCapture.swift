@@ -100,3 +100,45 @@ struct ReminderCapture: Capture {
         )
     }
 }
+
+// MARK: - UI-test seam
+
+/// A UI-test stand-in for the New Reminder capture (`-uitest-stub-reminders`):
+/// the same configured `Action.newReminder` breadcrumb — title, due date, list —
+/// with only the EventKit edge stubbed out (access granted, canned lists, no
+/// write). It exists because XCUITest cannot pre-grant the simulator's Reminders
+/// permission dialog, which otherwise kept the whole capture UI — most
+/// importantly the date step's keyboard-less layout — out of the UI suite.
+struct UITestReminderCapture: Capture {
+    static let launchArgument = "-uitest-stub-reminders"
+
+    /// Whether this run asked for the stub. Gated on `--uitesting` too, so the
+    /// argument alone can never swap the real capture out of a production run.
+    static var isRequested: Bool {
+        let arguments = ProcessInfo.processInfo.arguments
+        return arguments.contains("--uitesting") && arguments.contains(launchArgument)
+    }
+
+    var access: CaptureAccess { .ready }
+
+    func requestAccess() async -> Bool { true }
+
+    func makeAction() async -> Action {
+        .newReminder(
+            askDate: true,
+            list: .ask,
+            lists: [
+                ChoiceOption(id: "uitest.inbox", label: "Inbox"),
+                ChoiceOption(id: "uitest.errands", label: "Errands"),
+            ]
+        )
+    }
+
+    /// No EventKit write — the completed capture is acknowledged with the same
+    /// confirmation the real one flashes, so a test can drive the flow end-to-end.
+    func perform(_ outcome: ActionOutcome) async -> CaptureConfirmation? {
+        CaptureConfirmation(message: "Reminder added")
+    }
+
+    var copy: CaptureCopy { CaptureCopy() }
+}
