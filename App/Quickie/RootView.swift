@@ -8,7 +8,7 @@ import QuickieCore
 /// input, a reversed Result list above it, and tap-to-run. The empty-query state
 /// shows Home — a 2×2 Favorites grid over the Recent list (ADR 0008 / issue #36).
 ///
-/// Management surfaces (Settings, Quicklinks, Fallbacks, All Notes, All Snippets)
+/// Management surfaces (Settings, Quicklinks, Fallbacks, the Pile, All Snippets)
 /// are no longer chrome: each is reached by typing to surface a command row and
 /// presents **full-screen** (ADR 0013 / CONTEXT.md → Management page). The old
 /// top-right gear button and combined manage sheet are gone.
@@ -28,9 +28,10 @@ struct RootView: View {
     /// other capability (issue #6).
     @Query(sort: \StoredSnippet.createdAt) private var snippets: [StoredSnippet]
 
-    /// User Notes feed the same index — read Actions whose main action opens the
-    /// note (issue #7), ranked beside every other capability.
-    @Query(sort: \StoredNote.createdAt) private var notes: [StoredNote]
+    /// Saved Pile entries feed the same index (CONTEXT.md → Pile; ADR 0018) —
+    /// fuzzy-matched over their body text, staged (and consumed) by their main
+    /// action, ranked beside every other capability.
+    @Query(sort: \StoredPileEntry.createdAt) private var pileEntries: [StoredPileEntry]
 
     /// The app-wide appearance preference (CONTEXT.md → Settings): Light / Dark /
     /// System, applied to the whole app via `preferredColorScheme`.
@@ -90,8 +91,8 @@ struct RootView: View {
     /// A file being previewed in QuickLook (issue #51): holds the live
     /// security-scoped access, released when the sheet dismisses.
     @State private var filePreview: FilePreviewRequest?
-    /// A note opened for reading or a seeded compose editor — presented as a
-    /// sheet, distinct from the pushed management pages.
+    /// A seeded compose editor (New Snippet) — presented as a sheet, distinct
+    /// from the pushed management pages.
     @State private var activeSheet: ActiveSheet?
     /// A pending **Share** secondary action (CONTEXT.md → Secondary action; ADR
     /// 0017): the resolved item(s) handed to the iOS share sheet, plus — for a file
@@ -166,8 +167,8 @@ struct RootView: View {
                 body: snippet.body
             )
         }
-        let storedNotes = notes.map { note in
-            Action.note(id: Self.noteActionID(note), title: note.title)
+        let storedPileEntries = pileEntries.map { entry in
+            Action.pileEntry(id: Self.pileActionID(entry), text: entry.text)
         }
         // Imported Shortcut Actions surface by name like Quicklinks/Snippets
         // (issue #45); inert this slice (triggering is the next). `acceptsInput`
@@ -190,11 +191,11 @@ struct RootView: View {
                 IndexedProvider(catalog: storedLinks),
                 IndexedProvider(catalog: storedFallbackQueries),
                 IndexedProvider(catalog: storedSnippets + [.newSnippet()]),
-                IndexedProvider(catalog: storedNotes + [.newNote()]),
+                IndexedProvider(catalog: storedPileEntries + [.saveForLater()]),
                 // Imported Shortcut Actions, matched by name (issue #45).
                 IndexedProvider(catalog: storedShortcuts),
-                // The Notes / Snippets / Shortcuts library command rows.
-                IndexedProvider(catalog: [.openNotesLibrary(), .openSnippetsLibrary(), .openShortcutsPage()]),
+                // The Pile / Snippets / Shortcuts library command rows.
+                IndexedProvider(catalog: [.openPilePage(), .openSnippetsLibrary(), .openShortcutsPage()]),
                 // The New Reminder quick capture (issue #37). This indexed
                 // instance is only for matching by name; activating it rebuilds a
                 // configured Action from the user's reminder lists + settings.
@@ -212,8 +213,8 @@ struct RootView: View {
         )
     }
 
-    private static func noteActionID(_ note: StoredNote) -> String {
-        "note.\(note.id)"
+    private static func pileActionID(_ entry: StoredPileEntry) -> String {
+        "pile.\(entry.id)"
     }
 
     private var isHome: Bool {
@@ -479,7 +480,7 @@ struct RootView: View {
                     // the instant a page is pushed, and removing the input (the
                     // `path.isEmpty` inset above) drops the keyboard *while* the
                     // page slides in. A `List`-based page (Fallbacks, Quicklinks,
-                    // Notes, Snippets) reserves keyboard-avoidance inset at push
+                    // the Pile, Snippets) reserves keyboard-avoidance inset at push
                     // time and then animates it away as the keyboard descends —
                     // the white band that slides down off-screen. Settings is a
                     // `Form` and never showed it. None of these pages hosts a text
@@ -502,6 +503,9 @@ struct RootView: View {
             // seed the default web-search Fallback query (ADR 0013).
             .task {
                 QuickieStore.migrateToFallbackQueries(in: modelContext)
+                // Collapse any stored notes from a pre-Pile build into titleless
+                // Pile entries (ADR 0018).
+                QuickieStore.migrateNotesToPile(in: modelContext)
                 // Prune any pinned Favorite whose Action no longer resolves (a
                 // deleted Snippet/Quicklink, or a stale id from a build that
                 // derived ids from the unstable `persistentModelID.hashValue`) so
@@ -520,17 +524,13 @@ struct RootView: View {
             .onChange(of: indexedFolders.grants) { _, _ in
                 fileIndex.rebuild(from: indexedFolders)
             }
-            // A note opened for reading or a seeded compose editor stays a sheet —
-            // a quick modal task, distinct from the pushed management pages.
-            // Dismissing a sheet also drops the keyboard, so re-arm focus on
-            // return. `onDismiss` is itself the event — it fires *after* the
-            // dismiss animation finishes, so no delay is needed.
+            // A seeded compose editor stays a sheet — a quick modal task,
+            // distinct from the pushed management pages. Dismissing a sheet
+            // also drops the keyboard, so re-arm focus on return. `onDismiss`
+            // is itself the event — it fires *after* the dismiss animation
+            // finishes, so no delay is needed.
             .sheet(item: $activeSheet, onDismiss: { refocusInput() }) { sheet in
                 switch sheet {
-                case .readNote(let note):
-                    NoteEditorView(note: note)
-                case .composeNote(let seed):
-                    NoteEditorView(seed: seed.text)
                 case .composeSnippet(let seed):
                     SnippetEditorView(seed: seed.text)
                 }
@@ -580,7 +580,7 @@ struct RootView: View {
         case .settings: SettingsView()
         case .quicklinks: QuicklinksView()
         case .fallbacks: FallbacksView(store: fallbacks)
-        case .notes: NoteManagerView()
+        case .pile: PileView(onStage: stage)
         case .snippets: SnippetManagerView()
         case .indexedFolders: IndexedFoldersView(store: indexedFolders)
         case .shortcuts: ShortcutsView(store: shortcuts)
@@ -695,15 +695,22 @@ struct RootView: View {
         case .copyText(let text):
             UIPasteboard.general.string = text
             flashConfirmation("Copied")
-        case .openNote(let id):
-            if let note = notes.first(where: { Self.noteActionID($0) == id }) {
-                activeSheet = .readNote(note)
-            } else {
-                flashConfirmation("Note not found")
+        case .saveToPile(let text):
+            // The silent "Save for later" capture (CONTEXT.md → Pile; ADR 0018):
+            // drop the typed text straight into the Pile — no editor, no confirm,
+            // no app switch — clear to Home, and acknowledge like a copy-out.
+            let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
+            if !trimmed.isEmpty {
+                modelContext.insert(StoredPileEntry(text: trimmed))
+                flashConfirmation("Saved for later")
             }
-        case .composeNote(let seed):
-            activeSheet = .composeNote(ComposeSeed(text: seed))
             query = ""
+        case .stagePileEntry(let id):
+            if let entry = pileEntries.first(where: { Self.pileActionID($0) == id }) {
+                stage(entry)
+            } else {
+                flashConfirmation("Not in the Pile")
+            }
         case .composeSnippet(let seed):
             activeSheet = .composeSnippet(ComposeSeed(text: seed))
             query = ""
@@ -772,9 +779,9 @@ struct RootView: View {
 
     /// Resolves a row's content to the text a **Copy** puts on the pasteboard (ADR
     /// 0017): the snippet text / calculator number straight off its copy outcome,
-    /// the URL string, a Note body fetched from the store by id, or a file's
-    /// resolved path (under a security-scoped bracket). Returns `nil` only when a
-    /// reference no longer resolves.
+    /// the URL string, a Pile entry's text fetched from the store by id, or a
+    /// file's resolved path (under a security-scoped bracket). Returns `nil` only
+    /// when a reference no longer resolves.
     private func copyableText(for action: Action) -> String? {
         switch action.content {
         case .text, .number:
@@ -786,8 +793,8 @@ struct RootView: View {
         case .url:
             if case .openURL(let url) = action.run(input: query) { return url.absoluteString }
             return nil
-        case .noteBody(let id):
-            return notes.first(where: { Self.noteActionID($0) == id })?.body
+        case .pileEntry(let id):
+            return pileEntries.first(where: { Self.pileActionID($0) == id })?.text
         case .file(let bookmarkID, let relativePath):
             guard let access = indexedFolders.beginFileAccess(bookmarkID: bookmarkID, relativePath: relativePath) else {
                 return nil
@@ -800,20 +807,20 @@ struct RootView: View {
     }
 
     /// Hands a row's content to the iOS **Share** sheet (ADR 0017): a URL is shared
-    /// as a `URL` (so the sheet offers link actions), text/number/Note-body as a
-    /// string, and a file as its resolved URL — holding the security-scoped access
-    /// open until the sheet dismisses (`shareRequest.fileAccess`).
+    /// as a `URL` (so the sheet offers link actions), text/number/Pile-entry text
+    /// as a string, and a file as its resolved URL — holding the security-scoped
+    /// access open until the sheet dismisses (`shareRequest.fileAccess`).
     private func presentShare(for action: Action) {
         switch action.content {
         case .text, .number:
             if case .copyText(let text) = action.run(input: query) { shareRequest = ShareRequest(items: [text]) }
         case .url:
             if case .openURL(let url) = action.run(input: query) { shareRequest = ShareRequest(items: [url]) }
-        case .noteBody(let id):
-            if let body = notes.first(where: { Self.noteActionID($0) == id })?.body {
-                shareRequest = ShareRequest(items: [body])
+        case .pileEntry(let id):
+            if let text = pileEntries.first(where: { Self.pileActionID($0) == id })?.text {
+                shareRequest = ShareRequest(items: [text])
             } else {
-                flashConfirmation("Note not found")
+                flashConfirmation("Not in the Pile")
             }
         case .file(let bookmarkID, let relativePath):
             if let access = indexedFolders.beginFileAccess(bookmarkID: bookmarkID, relativePath: relativePath) {
@@ -846,6 +853,21 @@ struct RootView: View {
         } else {
             flashConfirmation("Can't reveal file")
         }
+    }
+
+    /// Stages a Pile entry (CONTEXT.md → Stage), from either of its surfaces —
+    /// its result row or its Pile-page row: replace the input query with the
+    /// saved text (the matcher re-runs off the query change, the same
+    /// reinjection move as a Shortcut result) and remove the entry from the
+    /// Pile — staging consumes it. Clearing `path` pops the Pile page when
+    /// staging starts there (a no-op from a result row, where the launcher is
+    /// already on top), and the popped page's `onDisappear` re-arms focus, so
+    /// either way the user lands "typing" the deferred query.
+    private func stage(_ entry: StoredPileEntry) {
+        let text = entry.text
+        modelContext.delete(entry)
+        query = text
+        path = []
     }
 
     /// Leaves the Search Files context back to normal results (ADR 0014): the ×, or
@@ -914,7 +936,7 @@ private struct ComposeSeed: Identifiable {
 /// the resolved activity items handed to `UIActivityViewController`, plus a fresh
 /// identity so each share drives a distinct `.sheet(item:)`. A file share also
 /// carries the live `FileAccess`, held open while sharing and released when the
-/// sheet dismisses; a text/url/note share leaves it `nil`.
+/// sheet dismisses; a text/url/Pile share leaves it `nil`.
 private struct ShareRequest: Identifiable {
     let id = UUID()
     let items: [Any]
@@ -934,17 +956,13 @@ private struct ShareSheet: UIViewControllerRepresentable {
     func updateUIViewController(_ controller: UIActivityViewController, context: Context) {}
 }
 
-/// The note-reader / seeded-compose sheet, as an Identifiable enum so one
-/// `.sheet(item:)` can present any of them.
+/// The seeded-compose sheet (New Snippet), as an Identifiable enum so the one
+/// `.sheet(item:)` presentation point stays in place as sheets come and go.
 private enum ActiveSheet: Identifiable {
-    case readNote(StoredNote)
-    case composeNote(ComposeSeed)
     case composeSnippet(ComposeSeed)
 
     var id: String {
         switch self {
-        case .readNote(let note): return "read-\(note.id)"
-        case .composeNote(let seed): return "compose-note-\(seed.id)"
         case .composeSnippet(let seed): return "compose-snippet-\(seed.id)"
         }
     }

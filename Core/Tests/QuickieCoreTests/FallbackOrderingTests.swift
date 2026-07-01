@@ -10,15 +10,15 @@ import Testing
 // projection without caring how the order is stored.
 struct FallbackOrderingTests {
 
-    // Three fallbacks — two queries plus New Note — wired behind a non-matching
-    // query so the result list is the fallback region alone.
+    // Three fallbacks — two queries plus Save for later — wired behind a
+    // non-matching query so the result list is the fallback region alone.
     private func engine(order: [String] = [], disabled: Set<String> = []) -> SearchEngine {
         SearchEngine(
             providers: [
                 IndexedProvider(catalog: [
                     .fallbackQuery(id: "fb.ddg", title: "Search the web", template: "https://ddg/?q={q}")!,
                     .fallbackQuery(id: "fb.gh", title: "Search GitHub", template: "https://gh/?q={q}")!,
-                    .newNote(),
+                    .saveForLater(),
                 ])
             ],
             fallbackOrder: order,
@@ -30,23 +30,23 @@ struct FallbackOrderingTests {
     func followsUserOrder() {
         // Page order (top = most important) → nearest the thumb among fallbacks →
         // earliest in the fallback region of the results array.
-        let ids = engine(order: ["fb.gh", "builtin.new-note", "fb.ddg"])
+        let ids = engine(order: ["fb.gh", "builtin.save-for-later", "fb.ddg"])
             .results(for: "zxcvbnm").map(\.id)
-        #expect(ids == ["fb.gh", "builtin.new-note", "fb.ddg"])
+        #expect(ids == ["fb.gh", "builtin.save-for-later", "fb.ddg"])
     }
 
     @Test("reordering the list reorders the fallback region")
     func reorderingReorders() {
-        let ids = engine(order: ["fb.ddg", "fb.gh", "builtin.new-note"])
+        let ids = engine(order: ["fb.ddg", "fb.gh", "builtin.save-for-later"])
             .results(for: "zxcvbnm").map(\.id)
-        #expect(ids == ["fb.ddg", "fb.gh", "builtin.new-note"])
+        #expect(ids == ["fb.ddg", "fb.gh", "builtin.save-for-later"])
     }
 
     @Test("a disabled fallback is kept in the list but absent from results")
     func disabledIsHidden() {
-        let ids = engine(order: ["fb.gh", "fb.ddg", "builtin.new-note"], disabled: ["fb.ddg"])
+        let ids = engine(order: ["fb.gh", "fb.ddg", "builtin.save-for-later"], disabled: ["fb.ddg"])
             .results(for: "zxcvbnm").map(\.id)
-        #expect(ids == ["fb.gh", "builtin.new-note"])
+        #expect(ids == ["fb.gh", "builtin.save-for-later"])
     }
 
     @Test("a fallback missing from the order falls to the end, deterministically")
@@ -55,6 +55,6 @@ struct FallbackOrderingTests {
         // stable order so results never reshuffle between runs.
         let ids = engine(order: ["fb.gh"]).results(for: "zxcvbnm").map(\.id)
         #expect(ids.first == "fb.gh")
-        #expect(Set(ids) == ["fb.gh", "fb.ddg", "builtin.new-note"])
+        #expect(Set(ids) == ["fb.gh", "fb.ddg", "builtin.save-for-later"])
     }
 }

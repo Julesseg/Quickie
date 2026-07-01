@@ -16,10 +16,10 @@ struct ResultContentTests {
         #expect(snippet.content == .text)
     }
 
-    @Test("a note declares its body content, keyed by the note's id")
-    func noteContentIsNoteBody() {
-        let note = Action.note(id: "note.42", title: "Groceries")
-        #expect(note.content == .noteBody(id: "note.42"))
+    @Test("a Pile entry declares its text content, keyed by the entry's id")
+    func pileEntryContentIsItsText() {
+        let entry = Action.pileEntry(id: "pile.42", text: "groceries for the week")
+        #expect(entry.content == .pileEntry(id: "pile.42"))
     }
 
     @Test("a quicklink declares url content")
@@ -60,9 +60,9 @@ struct ResultContentTests {
         #expect(secondaryActions(for: shortcut.content) == [])
     }
 
-    @Test("acting on a Note offers copy + share via its declared content")
-    func actOnNoteOffersCopyShare() {
-        let note = Action.note(id: "note.7", title: "Ideas")
-        #expect(secondaryActions(for: note.content) == [.copy, .share])
+    @Test("acting on a Pile entry offers copy + share via its declared content")
+    func actOnPileEntryOffersCopyShare() {
+        let entry = Action.pileEntry(id: "pile.7", text: "ideas for the offsite")
+        #expect(secondaryActions(for: entry.content) == [.copy, .share])
     }
 }

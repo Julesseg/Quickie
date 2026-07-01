@@ -21,6 +21,18 @@ struct QuickieApp: App {
         return QuickieStore.container
     }()
 
+    init() {
+        // Seed legacy pre-Pile Note rows under UI testing (issue #62; ADR 0018):
+        // the flag plants `StoredNote` rows in the fresh in-memory store *before*
+        // RootView's launch task runs `migrateNotesToPile`, so the test drives
+        // the real collapse. Gated on `--uitesting` too so a stray flag can never
+        // write into the real store.
+        if ProcessInfo.processInfo.arguments.contains("--uitesting"),
+           ProcessInfo.processInfo.arguments.contains(QuickieStore.uitestSeedNotesArgument) {
+            QuickieStore.seedLegacyNotesForUITesting(in: container.mainContext)
+        }
+    }
+
     var body: some Scene {
         WindowGroup {
             RootView()

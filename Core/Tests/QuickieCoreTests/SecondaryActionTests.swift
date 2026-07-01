@@ -26,9 +26,9 @@ struct SecondaryActionTests {
         #expect(secondaryActions(for: .number) == [.copy, .share])
     }
 
-    @Test("a Note body exposes copy + share (act on a Note)")
-    func noteBodyExposesCopyShare() {
-        #expect(secondaryActions(for: .noteBody(id: "note.1")) == [.copy, .share])
+    @Test("a Pile entry's text exposes copy + share (act on a Pile entry)")
+    func pileEntryExposesCopyShare() {
+        #expect(secondaryActions(for: .pileEntry(id: "pile.1")) == [.copy, .share])
     }
 
     @Test("a file additionally exposes reveal in Files")

@@ -16,7 +16,7 @@ final class SnippetUITests: XCTestCase {
     private func launchApp() -> XCUIApplication {
         let app = XCUIApplication()
         // Start from an empty in-memory store so snippets never accumulate across
-        // runs (the seam added for Notes), and a clean signals slate so persisted
+        // runs (the in-memory store seam), and a clean signals slate so persisted
         // Favorites/Frecency can't leak across runs either (issue #9).
         app.launchArguments = ["--uitesting", "-uitest-reset-signals"]
         app.launch()
