@@ -50,6 +50,27 @@ final class AppSettingsUITests: XCTestCase {
         back.tap()
     }
 
+    /// Flips a Form `Toggle` off and asserts it landed. Tapping the row-spanning
+    /// switch element's center is a no-op (it misses the control), so tap the
+    /// nested switch when the OS exposes one, and fall back to a trailing-edge
+    /// coordinate tap — where the control actually sits — when it doesn't.
+    @MainActor
+    private func flipOff(_ toggle: XCUIElement) {
+        let inner = toggle.switches.firstMatch
+        if inner.exists {
+            inner.tap()
+        } else {
+            toggle.coordinate(withNormalizedOffset: CGVector(dx: 0.95, dy: 0.5)).tap()
+        }
+        let isOff = NSPredicate(format: "value == '0'")
+        if XCTWaiter.wait(for: [XCTNSPredicateExpectation(predicate: isOff, object: toggle)], timeout: 3) != .completed {
+            // The first mechanism didn't reach the control — try the other one.
+            toggle.coordinate(withNormalizedOffset: CGVector(dx: 0.95, dy: 0.5)).tap()
+            _ = XCTWaiter.wait(for: [XCTNSPredicateExpectation(predicate: isOff, object: toggle)], timeout: 3)
+        }
+        XCTAssertEqual(toggle.value as? String, "0", "the tap flipped the toggle off")
+    }
+
     /// Settings shows the app-level section: Appearance plus the two toggles,
     /// both defaulting to on (issue #65 AC #1, #4).
     @MainActor
@@ -97,8 +118,7 @@ final class AppSettingsUITests: XCTestCase {
         app.buttons["builtin.settings"].tap()
         let recents = app.switches["settings-show-recents"]
         XCTAssertTrue(recents.waitForExistence(timeout: 10), "the Show Recents toggle exists")
-        recents.tap()
-        XCTAssertEqual(recents.value as? String, "0", "the tap flipped Show Recents off")
+        flipOff(recents)
 
         goBackHome(app)
 
@@ -134,8 +154,7 @@ final class AppSettingsUITests: XCTestCase {
         openSettings(app)
         let toggle = app.switches["settings-clipboard-prefill"]
         XCTAssertTrue(toggle.waitForExistence(timeout: 10), "the Clipboard prefill toggle exists")
-        toggle.tap()
-        XCTAssertEqual(toggle.value as? String, "0", "the tap flipped Clipboard prefill off")
+        flipOff(toggle)
 
         goBackHome(app)
 
