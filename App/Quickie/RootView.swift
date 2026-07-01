@@ -583,7 +583,6 @@ struct RootView: View {
             } else {
                 SettingsView()
             }
-        case .indexedFolders: IndexedFoldersView(store: indexedFolders)
         }
     }
 
@@ -591,8 +590,9 @@ struct RootView: View {
     /// issue #66) — the one destination both its typed Settings command row and
     /// the hub's Providers row resolve to. Content providers lead their existing
     /// list page with an Options section; the instance-less providers
-    /// (Calculator, File Search, Reminders) show only Options; Events hosts the
-    /// former New Event panel as its options.
+    /// (Calculator, Reminders) show only Options; Events hosts the former New
+    /// Event panel as its options; File Search hosts the folder grants — the
+    /// former standalone Indexed Folders page, folded in as its content.
     @ViewBuilder
     private func providerPage(for provider: ProviderID) -> some View {
         switch provider {
@@ -602,7 +602,8 @@ struct RootView: View {
         case .snippets: SnippetManagerView()
         case .shortcuts: ShortcutsView(store: shortcuts)
         case .events: EventSettingsView()
-        case .reminders, .calculator, .fileSearch: ProviderOptionsPage(provider: provider)
+        case .fileSearch: IndexedFoldersView(store: indexedFolders)
+        case .reminders, .calculator: ProviderOptionsPage(provider: provider)
         }
     }
 

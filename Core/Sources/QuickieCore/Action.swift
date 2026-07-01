@@ -78,12 +78,6 @@ public enum ManagementPage: Equatable, Hashable, Sendable {
     /// deeplinks straight to that provider's unified Management page — the
     /// target every Settings command row routes to.
     case settings(panel: ProviderID?)
-    /// The Indexed Folders management page (CONTEXT.md → Indexed Folder; issue
-    /// #49): where the user grants, lists, and revokes the folders Quickie may
-    /// search. Reached by typing an "Indexed Folders" command row, never chrome.
-    /// Not a provider page — it manages *access* (which folders File Search may
-    /// read), so it stays its own destination rather than a `ProviderID` panel.
-    case indexedFolders
 }
 
 /// Which kind of Provider an Action came from (CONTEXT.md → Provider): the
@@ -624,14 +618,18 @@ extension Action {
     /// The "File Search" command (CONTEXT.md → Settings command row; ADR 0019):
     /// the File Search provider's typed row, deeplinking to its page under the
     /// hub — the second previously row-less dynamic injector to gain one.
-    /// Distinct from "Search Files" (which *enters* the scoped browsing context)
-    /// and from "Indexed Folders" (which manages folder access).
+    /// Distinct from "Search Files", which *enters* the scoped browsing context.
+    ///
+    /// The provider page is also where the user grants, lists, and revokes the
+    /// folders Quickie may search: the former standalone Indexed Folders page
+    /// (issue #49) folded into it, so this row carries its file-access aliases
+    /// and is the single typed route to folder management.
     public static func openFileSearchPage() -> Action {
         Action(
             id: "builtin.file-search-page",
             kind: .managementPage,
             title: "File Search",
-            aliases: ["file search settings"],
+            aliases: ["file search settings", "folders", "indexed folders", "file access", "search folders"],
             inputTypes: [],
             outputType: .text
         ) { _ in .openPage(.settings(panel: .fileSearch)) }
@@ -716,20 +714,4 @@ extension Action {
         ) { _ in .enterFileSearch }
     }
 
-    /// The "Indexed Folders" command (CONTEXT.md → Indexed Folder; issue #49):
-    /// opens the full-screen page where the user grants, lists, and revokes the
-    /// folders Quickie is allowed to search. Like the other management commands it
-    /// matches by name/alias and opens a page — it is not a Fallback and rides no
-    /// bottom region. This lands before the "Search Files" context; it only manages
-    /// access, it does not search.
-    public static func openIndexedFoldersPage() -> Action {
-        Action(
-            id: "builtin.indexed-folders-page",
-            kind: .managementPage,
-            title: "Indexed Folders",
-            aliases: ["folders", "file access", "indexed folders", "search folders"],
-            inputTypes: [],
-            outputType: .text
-        ) { _ in .openPage(.indexedFolders) }
-    }
 }

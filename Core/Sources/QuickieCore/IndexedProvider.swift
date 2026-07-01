@@ -46,7 +46,6 @@ extension IndexedProvider {
             .openSettings(),
             .openQuicklinksPage(),
             .openFallbacksPage(),
-            .openIndexedFoldersPage(),
             .searchFiles(),
             // The Settings command rows of the providers that never had a typed
             // management row (ADR 0019; issue #66): the dynamic injectors

@@ -23,10 +23,10 @@ struct ProviderOptionsSection: View {
 }
 
 /// The unified page for a provider with **no enumerable instances** (CONTEXT.md
-/// → Management page; ADR 0019): Calculator, File Search, and the Reminders
-/// capture show only the Options section — there is no content list to render
-/// beneath it. Content providers instead lead their own list pages with the
-/// same `ProviderOptionsSection`.
+/// → Management page; ADR 0019): Calculator and the Reminders capture show only
+/// the Options section — there is no content list to render beneath it. Content
+/// providers (File Search included, whose content is its folder grants) instead
+/// lead their own list pages with the same `ProviderOptionsSection`.
 struct ProviderOptionsPage: View {
     let provider: ProviderID
 

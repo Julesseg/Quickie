@@ -1,12 +1,13 @@
 import XCTest
 
 /// The UI-only acceptance criteria for Indexed Folder grants (issue #49) that can
-/// only be verified by driving the real app on a simulator: a typed "Indexed
-/// Folders" command opens the management page, **Add Folder** grants a folder that
-/// appears in the list, a grant can be removed, and a grant survives relaunch. The
-/// Core additions (the `ManagementPage` case + built-in Action + aliases) are
-/// covered deterministically by QuickieCore's tests; these prove the store + page
-/// wiring around them.
+/// only be verified by driving the real app on a simulator: typing "folders"
+/// surfaces the File Search settings command (the standalone Indexed Folders page
+/// folded into the File Search provider page — issue #66), **Add Folder** grants a
+/// folder that appears in the list, a grant can be removed, and a grant survives
+/// relaunch. The Core routing (the built-in Action + aliases) is covered
+/// deterministically by QuickieCore's tests; these prove the store + page wiring
+/// around them.
 ///
 /// The system document picker can't be driven in CI, so under `--uitesting` the
 /// Add Folder button grants a real temporary folder directly (see
@@ -36,15 +37,13 @@ final class IndexedFolderUITests: XCTestCase {
         input.tap()
         input.typeText("folders")
 
-        let command = app.buttons.matching(
-            NSPredicate(format: "label CONTAINS[c] %@", "Indexed Folders")
-        ).firstMatch
+        let command = app.buttons["builtin.file-search-page"]
         XCTAssertTrue(command.waitForExistence(timeout: 5),
-                      "the Indexed Folders command should surface as a result row, matchable by 'folders'")
+                      "the File Search settings command should surface as a result row, matchable by 'folders'")
         command.tap()
 
         XCTAssertTrue(app.buttons["add-indexed-folder"].waitForExistence(timeout: 10),
-                      "selecting Indexed Folders should open the management page with an Add Folder button")
+                      "selecting File Search should open its provider page with an Add Folder button")
     }
 
     /// The command opens the page; Add Folder grants a folder that appears in the

@@ -108,6 +108,25 @@ struct SettingsHubTests {
         #expect(calculator?.run() == .openPage(.settings(panel: .calculator)))
     }
 
+    @Test("the File Search page absorbs Indexed Folders — one page, one typed route")
+    func fileSearchPageAbsorbsIndexedFolders() {
+        // The folder grants are File Search's own configuration, so the former
+        // standalone Indexed Folders page folds into the File Search provider
+        // page (issue #66 follow-up): its file-access aliases move onto the
+        // "File Search" settings command row, which stays the single typed
+        // route to `.settings(panel: .fileSearch)`.
+        let engine = SearchEngine(providers: [IndexedProvider.builtIns()])
+        for query in ["folders", "indexed folders", "file access"] {
+            #expect(
+                engine.results(for: query).map(\.id).contains("builtin.file-search-page"),
+                "typing \(query) should surface the File Search settings row"
+            )
+        }
+        // There is no separate Indexed Folders command row left to compete with.
+        let ids = IndexedProvider.builtIns().candidates(for: "").map(\.id)
+        #expect(!ids.contains("builtin.indexed-folders-page"))
+    }
+
     @Test("Settings is the hub, not a provider — so it can never be disabled")
     func settingsIsNotAProvider() {
         // Non-disableable by construction (issue #66): future kind-level
