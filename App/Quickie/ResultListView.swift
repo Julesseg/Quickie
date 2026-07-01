@@ -70,6 +70,19 @@ struct ActionRow: View {
     let action: Action
     var isHighlighted: Bool = false
 
+    /// The row's corner radius — a **fixed** value shared by every row, not a
+    /// capsule. A `Capsule` rounds by half the height, so a single-line row reads
+    /// as a clean pill but a multi-line one (a file with a wrapping name over its
+    /// relative-path subtitle) balloons into an oversized stadium. A fixed radius
+    /// keeps the one-line pill look while giving tall rows the *same* rounding, so
+    /// the stack reads consistently. Tuned to a single-line row's half-height
+    /// (badge 30 + vertical padding 2×10 = 50) so short rows are unchanged.
+    private let cornerRadius: CGFloat = 25
+
+    private var rowShape: RoundedRectangle {
+        RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
+    }
+
     var body: some View {
         HStack(spacing: 12) {
             ProviderBadge(kind: action.kind)
@@ -93,22 +106,22 @@ struct ActionRow: View {
         .padding(.horizontal, 16)
         .padding(.vertical, 10)
         .frame(maxWidth: .infinity)
-        .glassEffect(.regular.interactive(), in: Capsule())
+        .glassEffect(.regular.interactive(), in: rowShape)
         // A hairline accent ring plus a soft accent wash lift the highlighted row
         // above the stack so it reads as the default without shouting (ADR 0010
         // budget).
         .overlay {
             if isHighlighted {
-                Capsule()
+                rowShape
                     .fill(Color.accentColor.opacity(0.12))
                     .overlay {
-                        Capsule().strokeBorder(Color.accentColor.opacity(0.5), lineWidth: 1)
+                        rowShape.strokeBorder(Color.accentColor.opacity(0.5), lineWidth: 1)
                     }
                     .allowsHitTesting(false)
             }
         }
         .padding(.horizontal, 12)
-        .contentShape(Capsule())
+        .contentShape(rowShape)
         .accessibilityAddTraits(isHighlighted ? .isSelected : [])
     }
 }

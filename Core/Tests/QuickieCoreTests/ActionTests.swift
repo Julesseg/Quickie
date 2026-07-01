@@ -50,4 +50,37 @@ struct ActionTests {
         #expect(search?.inputTypes == [.text])
         #expect(search?.outputType == .url)
     }
+
+    @Test("a file's main action carries only its bookmark identity + relative path")
+    func fileOpensViaBookmarkIdentity() {
+        // Core never touches the filesystem (ADR 0015): a file Action resolves to a
+        // pure `.openFile` outcome the app turns into a security-scoped open.
+        let file = Action.file(bookmarkID: "folder-1", relativePath: "docs/report.pdf")
+        #expect(file.run() == .openFile(bookmarkID: "folder-1", relativePath: "docs/report.pdf"))
+    }
+
+    @Test("a file declares file output and consumes no typed input")
+    func fileTypedContent() {
+        let file = Action.file(bookmarkID: "folder-1", relativePath: "docs/report.pdf")
+        #expect(file.outputType == .file)
+        #expect(file.inputTypes.isEmpty)
+        #expect(file.isFallback == false)
+    }
+
+    @Test("a file's display name defaults to the relative path's last component")
+    func fileDisplayNameDefaultsToBasename() {
+        let file = Action.file(bookmarkID: "folder-1", relativePath: "docs/report.pdf")
+        #expect(file.title == "report.pdf")
+        // An explicit display name overrides the derived basename.
+        let named = Action.file(bookmarkID: "folder-1", relativePath: "docs/report.pdf", displayName: "Q3 Report")
+        #expect(named.title == "Q3 Report")
+    }
+
+    @Test("two files under different folders are distinct index entries")
+    func fileIdentityFolds_bookmarkAndPath() {
+        // Same relative path in two granted folders must not collide into one row.
+        let a = Action.file(bookmarkID: "folder-a", relativePath: "notes.txt")
+        let b = Action.file(bookmarkID: "folder-b", relativePath: "notes.txt")
+        #expect(a.id != b.id)
+    }
 }
