@@ -25,7 +25,7 @@ The app's preferences page, reached like any capability — by typing to surface
 _Avoid_: Preferences sheet, manage screen (Settings is not where you manage content)
 
 **Management page**:
-A full-screen page for a library or preferences surface — Settings, Quicklinks, Fallbacks, All Notes, All Snippets. Each is reached as a filtered result-row command (e.g. typing "quicklinks") rather than from chrome, and each presents full-screen with its own dismiss affordance — never as a partial-height sheet. Replaces both the top-right gear button and the old combined "Manage Quicklinks + search engine" surface.
+A full-screen page for a library or preferences surface — Settings, Quicklinks, Fallbacks, Shortcuts, All Notes, All Snippets. Each is reached as a filtered result-row command (e.g. typing "quicklinks") rather than from chrome, and each presents full-screen with its own dismiss affordance — never as a partial-height sheet. Replaces both the top-right gear button and the old combined "Manage Quicklinks + search engine" surface. The **Shortcuts** page is the home for the user's imported [[Shortcut Action]]s: it lists each by name, carries a per-row "accepts input" toggle (the only way Quickie learns a Shortcut takes input, since import is names-only), and hosts the Sync-Shortcut install/re-sync entry point. There is no manual add — the list is populated solely by the Sync Shortcut import.
 _Avoid_: Sheet, manager (each page is single-purpose)
 
 **Highlighted result**:
@@ -114,7 +114,7 @@ The frequency × recency ranking signal derived from a user's past Action select
 _Avoid_: Recents, history, MRU
 
 **Shortcut Action**:
-An Action that runs one of the user's iOS Shortcuts by name, via x-callback-url, capturing any returned output back into Quickie. Registered either by bulk import (via the Sync Shortcut) or one-by-one manual add — never enumerated through an API, which iOS forbids.
+An Action that runs one of the user's iOS Shortcuts by name, via x-callback-url. Quickie opens `shortcuts://x-callback-url/run-shortcut` with `x-success` pointing back at `quickie://`; on `x-success` Quickie **reinjects the returned output as the new query text** — the matcher re-runs over it and the Result list rebuilds as if the user had typed it, so the user decides what to do with it next. Reinjection is unconditional on success: non-empty output gives the user something to act on, and empty output clears the field back to a clean Home ready for a fresh query. `x-error` flashes a failure toast and leaves the query untouched; `x-cancel` is a silent no-op. This is the deliberate poor-man's precursor to [[Workflow]] (no content-type validation, no declared next step, just text back into the single input), not the Workflow feature itself. The returned output therefore lives in inbound URL-scheme handling, not in an `ActionOutcome` payload. Registered **only** by bulk import via the [[Sync Shortcut]] — there is no manual one-by-one add path (dropped from #13; see ADR 0007), so a user who has never run the Sync Shortcut has zero Shortcut Actions. iOS forbids enumerating the user's Shortcuts through any API, which is why the companion-shortcut import is the sole on-ramp.
 _Avoid_: Shortcut command, automation
 
 **Sync Shortcut**:
