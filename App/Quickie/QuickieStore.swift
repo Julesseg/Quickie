@@ -270,6 +270,23 @@ enum QuickieStore {
         }
     }
 
+    /// The launch argument that seeds legacy pre-Pile `StoredNote` rows into the
+    /// fresh in-memory UI-testing store (alongside `--uitesting`), so a UI test
+    /// can drive the real `migrateNotesToPile` collapse at launch instead of the
+    /// migration going unexercised (issue #62; ADR 0018).
+    static let uitestSeedNotesArgument = "-uitest-seed-notes"
+
+    /// Plants the legacy rows `uitestSeedNotesArgument` asks for: a note whose
+    /// title differs from its body, so the test can assert the collapse keeps
+    /// the body as the entry's text and drops the title (it stops matching).
+    @MainActor
+    static func seedLegacyNotesForUITesting(in context: ModelContext) {
+        context.insert(StoredNote(
+            title: "Groceries list",
+            body: "buy oat milk and eggs for the week"
+        ))
+    }
+
     /// One-time data migration for the Note → Pile replacement (ADR 0018), run
     /// at launch: every stored note collapses to a titleless Pile entry — the
     /// body *is* the entry's text; the title is dropped (it was derived from the

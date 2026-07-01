@@ -506,19 +506,28 @@ extension Action {
     }
 
     /// A Pile entry (CONTEXT.md → Pile; ADR 0018): a raw query text the user
-    /// saved to deal with later. It has **no title** — `text` is the whole entry,
-    /// so it doubles as the matched name: the entry is fuzzy-matched over its
-    /// body text, exactly what "searchable in Results" means for a titleless
-    /// blob. Its main action stages the text (CONTEXT.md → Stage); the Action
-    /// carries only the entry's identity, and the app resolves it at the edge.
+    /// saved to deal with later. It has **no stored title** — `text` is the whole
+    /// entry — but the saved text can be a large multi-line paste, and a result
+    /// row is a one-line pill. So the *display* title is the first non-empty
+    /// line, length-capped, while the full text rides as an alias: the matcher
+    /// scores title and aliases alike, so the entry stays fuzzy-matched over its
+    /// entire body ("searchable in Results" for a titleless blob), and every
+    /// surface renders a normal row. Its main action stages the text (CONTEXT.md
+    /// → Stage); the Action carries only the entry's identity, and the app
+    /// resolves it at the edge.
     public static func pileEntry(
         id: String,
         text: String
     ) -> Action {
-        Action(
+        let firstLine = text
+            .split(separator: "\n", omittingEmptySubsequences: true)
+            .first
+            .map { $0.trimmingCharacters(in: .whitespaces) } ?? text
+        return Action(
             id: id,
             kind: .pile,
-            title: text,
+            title: String(firstLine.prefix(60)),
+            aliases: [text],
             inputTypes: [],
             outputType: .text
         ) { _ in .stagePileEntry(id: id) }
