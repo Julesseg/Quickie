@@ -40,26 +40,27 @@ final class KeyboardDismissUITests: XCTestCase {
 
         let row = app.buttons["builtin.settings"]
         XCTAssertTrue(row.waitForExistence(timeout: 5), "typing surfaces the Settings command row")
-        let list = app.scrollViews.firstMatch
-        XCTAssertTrue(list.waitForExistence(timeout: 5), "the result list is a scroll view")
         XCTAssertTrue(
             app.keyboards.firstMatch.waitForExistence(timeout: 5),
             "typing brings the keyboard up"
         )
 
-        // Drag down the list into the keyboard region. Interactive scroll-dismiss
-        // follows the finger over the keyboard's frame and carries it off-screen —
-        // a quick flick within the upper list never reaches the keyboard, so this
-        // is a firm, continuous press-drag from inside the list to the bottom of
-        // the screen (past the input bar, over the keyboard), held briefly so the
-        // dismissal commits rather than snapping back.
-        let start = list.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.4))
+        // Drag down into the keyboard region, starting *on a result row* so the
+        // gesture is owned by the result list's scroll view — that is the view
+        // carrying `.scrollDismissesKeyboard(.interactively)`. (Targeting
+        // `scrollViews.firstMatch` matched an unrelated tiny scroll view at the
+        // keyboard's edge, so the list's pan never engaged.) Interactive dismiss
+        // follows the finger over the keyboard and carries it off-screen; a quick
+        // flick that never reaches the keyboard won't commit, so this is a firm,
+        // continuous press-drag to the bottom of the screen (past the input bar,
+        // over the keyboard), held briefly so the dismissal sticks.
+        let start = row.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5))
         let end = app.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.98))
         start.press(
-            forDuration: 0.2,
+            forDuration: 0.1,
             thenDragTo: end,
             withVelocity: .default,
-            thenHoldForDuration: 0.3
+            thenHoldForDuration: 0.4
         )
 
         XCTAssertTrue(
