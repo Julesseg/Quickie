@@ -13,7 +13,7 @@ The single default behavior an Action (or result row) performs when tapped — o
 _Avoid_: Default, primary (use "main action")
 
 **Secondary action**:
-An additional action that operates on a specific result's content, reached by long-pressing the row (deferred feature). The eligible secondary actions are determined by the result's content type. This is the home for "execute actions on a Note" and cross-cutting content actions. Distinct from Fallback/content-on-the-text actions, which appear as their own rows rather than behind long-press.
+A one-shot action that operates on a specific result's [[Result content]], reached from the row's long-press menu — the *same* menu that carries Pin/Unpin, not a competing gesture. Eligibility is a pure function of the result's Result content, **not** its content type: a row with no content (a command, capture, or Shortcut row) exposes none, even though it may carry a `text` output type (ADR 0017). The current set is `copy` and `share` on any content-bearing row plus `revealInFiles` on a file; multi-step actions that need a target, date, or name (Make-reminder, Append-to-note, Make-Quicklink) are deferred to a later breadcrumb-seeding slice. Distinct from Fallback/content-on-the-text actions, which appear as their own rows rather than behind long-press.
 _Avoid_: Context action, more actions
 
 **Result list**:
@@ -38,6 +38,10 @@ Reserved term, not yet built. A future user-composed chain of multiple Actions, 
 **Content type**:
 The kind of a value flowing through Quickie — text, url, file, number, date, etc. An item's content type determines which Actions are eligible for it (and their ranking), which secondary actions a result exposes, the **input method** used when it is collected as an Argument (e.g. `date` → an in-place date picker), and — in a future Workflow — whether one Action's output can feed another's input.
 _Avoid_: Data type, kind, payload type
+
+**Result content**:
+The concrete value or reference a result carries — the thing a [[Secondary action]] operates on — distinct from both its **content type** (the *kind*) and its **main action** (what tapping it does). Either an inline value (a Snippet's or Calculator's text, a Quicklink's URL) or an edge-resolved reference the app dereferences on demand (a Note's body by id, a File by bookmark + relative path). A command, capture, or Shortcut row has **no** Result content, which is what makes it ineligible for secondary actions regardless of its content type (ADR 0017). Declared per Action, not derived from the main-action outcome (an inert Shortcut's outcome is empty; a Calculator reads as `number` though it copies text).
+_Avoid_: Payload, value, content (ambiguous with content type)
 
 **Fallback Action**:
 Any Action flagged to always appear in the result list and consume the user's literal typed text as its payload, rather than matching by name. The umbrella over three concrete kinds: **Fallback queries** (URL templates), **New Note**, and **New Snippet**. Distinguished from a verb-first match, where the text fuzzy-matches an Action's name/alias. The single result list interleaves both; the user resolves intent by choosing a row, never by a mode toggle. Fallbacks live in one user-ordered, reversible list (see Fallback list) and each can be **disabled** (hidden from results) without being deleted.

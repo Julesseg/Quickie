@@ -1,0 +1,15 @@
+# Secondary actions are one-shot, keyed by a result's content, decoupled from the Workflow substrate
+
+ADR 0008 and 0011 framed the long-press **secondary actions** as a *content-type → applicable-actions registry* that would double as the substrate for a future **Workflow** (one Action's typed output feeding the next). Building issue #19 we deliberately narrowed that: secondary actions are a **self-contained, one-shot** affordance, and their eligibility is a pure function of a result's **`ResultContent`** — not a `[ContentType: …]` table derived from `Action.inputTypes`. The Workflow substrate stays where ADR 0011 already put it (`inputTypes`/`outputType`); Workflow will rederive its own "what can consume this type" later rather than reusing this registry.
+
+## Considered options
+
+- **Derive eligibility from `Action.inputTypes`** (a result's secondary actions = catalog Actions consuming its output type). This is the literal ADR-0011 substrate and makes "Make Reminder on text" fall out for free — but it forces terminal verbs like Copy/Share/Reveal (which produce no output and cannot chain) to masquerade as Actions, and it drags every multi-step action (which needs a target, a date, or a name) into a "one-shot" menu.
+- **A `[ContentType: [SecondaryActionKind]]` table.** Rejected once we decided command/capture/shortcut rows carry a content *type* (`.text`) but must expose **no** secondary actions: a type-keyed table cannot distinguish a text-bearing Snippet (`.text("body")`) from a text-typed Settings command (no content), because both are `ContentType.text`. Only `ResultContent` — which encodes *presence and value*, not just type — can express that.
+- **Chosen: a pure `secondaryActions(for: ResultContent) -> [SecondaryActionKind]` switch.** `.none → []` excludes command rows for free; `.file` adds `revealInFiles`; everything content-bearing gets the universal `copy`/`share`. The "registry" is a switch, not a table.
+
+## Consequences
+
+- **`ResultContent` is a first-class, *declared* property of an `Action`, distinct from its main-action outcome.** A Note's main action is "open reader" but its content is `.noteBody(id:)`; a Snippet's is `.text(body)`. Content is declared per factory (defaulting to a derive-from-outcome helper), because the outcome alone is ambiguous — a Calculator reads as `.number` though it copies text, and an inert Shortcut has a `.none` outcome.
+- **Core decides eligibility; the App executes.** Edge-resolved content (a Note body in SwiftData, a file behind a security-scoped bookmark) means even Copy cannot run in Core. So `SecondaryActionKind` is a bare verb enum and the App owns every execution and resolution — the same defer-to-the-edge pattern as `openNote`/`openFile`.
+- **This registry is *not* the Workflow substrate.** Chosen for a smaller, shippable long-press menu; the cost is that Workflow will build its own `inputTypes`-derived eligibility later. Multi-step per-type actions (Make-Reminder, Append-to-Note, Convert, Make-Quicklink) are deferred to that later, breadcrumb-seeding work — the `secondaryActions(for:)` switch is where they will slot in.
