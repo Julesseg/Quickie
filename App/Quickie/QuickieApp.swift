@@ -21,6 +21,17 @@ struct QuickieApp: App {
         return QuickieStore.container
     }()
 
+    init() {
+        // Honor the same UI-test reset flag as SignalsStore/FallbacksStore for the
+        // app-level toggles (issue #65): they persist in the App Group defaults,
+        // so without this a test that flipped Clipboard prefill or Show Recents
+        // off would leak that state into every later run. Done here, before
+        // `RootView`'s `@AppStorage` properties take their first read.
+        if ProcessInfo.processInfo.arguments.contains(SignalsStore.uitestResetArgument) {
+            AppSettings.reset(in: AppGroup.defaults)
+        }
+    }
+
     var body: some Scene {
         WindowGroup {
             RootView()

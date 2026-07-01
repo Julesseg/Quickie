@@ -36,6 +36,16 @@ struct RootView: View {
     /// System, applied to the whole app via `preferredColorScheme`.
     @AppStorage("appearance") private var appearanceRaw = Appearance.default.rawValue
 
+    /// The app-level Home-surface toggles (CONTEXT.md → Settings; issue #65),
+    /// read where those surfaces are built: **Clipboard prefill** gates the paste
+    /// chip's offer, **Show Recents** gates Home's Frecency "Recent" list. Both
+    /// default to on; the `@AppStorage` defaults must match `SettingsView`'s so
+    /// the first read before any write agrees.
+    @AppStorage(AppSettings.clipboardPrefillKey, store: AppGroup.defaults)
+    private var clipboardPrefillEnabled = true
+    @AppStorage(AppSettings.showRecentsKey, store: AppGroup.defaults)
+    private var showRecents = true
+
     /// New Reminder settings, persisted with working defaults (ADR 0012) so the
     /// capture is fully functional before any Settings UI exists (issue #37): ask
     /// for a due date, and either ask for the list or route to a default one.
@@ -240,6 +250,7 @@ struct RootView: View {
 
     private var clipboardPrefill: ClipboardPrefill {
         ClipboardPrefill(
+            isEnabled: clipboardPrefillEnabled,
             clipboardHasText: clipboard.clipboardHasText,
             isHome: isHome,
             hasBeenUsed: clipboard.hasBeenUsed
@@ -279,7 +290,7 @@ struct RootView: View {
                             .transition(captureMotion.edgeTransition(from: .bottom))
                     } else if isHome {
                         HomeView(
-                            content: engine.home(),
+                            content: engine.home(showRecents: showRecents),
                             onRun: run,
                             isFavorite: { signals.isFavorite($0.id) },
                             canFavorite: { signals.canFavorite($0.id) },
