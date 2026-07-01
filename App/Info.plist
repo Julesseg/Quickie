@@ -1,0 +1,27 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<!--
+	  Base Info.plist for the app target. GENERATE_INFOPLIST_FILE is still YES, so
+	  Xcode merges the generated keys and every INFOPLIST_KEY_* build setting on
+	  top of this file at build time (the supported "generated plist + custom keys"
+	  pattern). This file carries only what the generator can't express: the
+	  quickie:// custom URL scheme (issue #45; ADR 0007), the inbound route the Sync
+	  Shortcut returns names on and the next slice's shortcut-result route ride.
+	-->
+	<key>CFBundleURLTypes</key>
+	<array>
+		<dict>
+			<key>CFBundleTypeRole</key>
+			<string>Editor</string>
+			<key>CFBundleURLName</key>
+			<string>com.julesseguin.quickie.urlscheme</string>
+			<key>CFBundleURLSchemes</key>
+			<array>
+				<string>quickie</string>
+			</array>
+		</dict>
+	</array>
+</dict>
+</plist>

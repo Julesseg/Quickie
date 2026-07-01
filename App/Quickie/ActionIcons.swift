@@ -16,6 +16,7 @@ extension ActionKind {
         case .fallbackQuery: return "magnifyingglass"
         case .snippet: return "doc.on.clipboard"
         case .note: return "note.text"
+        case .shortcut: return "square.stack.3d.up"
         case .newNote: return "square.and.pencil"
         case .newSnippet: return "rectangle.and.pencil.and.ellipsis"
         case .calculator: return "function"
@@ -35,6 +36,7 @@ extension ActionKind {
         case .fallbackQuery: return .indigo
         case .snippet: return .teal
         case .note: return .orange
+        case .shortcut: return .indigo
         case .newNote: return .pink
         case .newSnippet: return .purple
         case .calculator: return .green
