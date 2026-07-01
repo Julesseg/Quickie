@@ -124,3 +124,11 @@ _Avoid_: Importer, bridge shortcut
 **Indexed Folder**:
 A folder the user has explicitly granted Quickie access to (via the document picker), persisted as a security-scoped bookmark. File search is bounded to the union of Indexed Folders — iOS forbids whole-filesystem or global indexing. Filenames within them are indexed for fuzzy matching; results open via QuickLook / share / open-in-place.
 _Avoid_: Search scope, watched folder, library
+
+**File Search**:
+The **Dynamic Provider** that fuzzy-matches filenames within the union of Indexed Folders. Unlike an Indexed Provider — whose whole catalog the SearchEngine matches and ranks centrally — File Search **owns its own filename index and runs the matcher itself**, so a large file set never floods the central catalog, Home, or Frecency. It returns already-ranked results into the boosted region, capped. Surfaces two ways: **inline-capped** (up to ~3 rows on strong matches while typing a normal query) and the **Search Files context** (see below). A file result carries only its Indexed Folder's bookmark identity plus the file's relative path; the app resolves that to a security-scoped URL and opens it — Core never touches the filesystem.
+_Avoid_: Spotlight, file provider, file index (that is the data, not the Provider)
+
+**Search Files context**:
+The dedicated, uncapped file-browsing surface, entered by **selecting a "Search Files" Action row** — never a chrome mode toggle. Once selected, the input scopes to the file index alone (shown as a breadcrumb, `[Search Files] ▸ …`), full-height, and every keystroke filters only filenames. This keeps faith with the Result list's "intent is resolved by choosing a row, never by a mode toggle": the "dedicated mode" is a selected-Action context reusing the breadcrumb model, not a UI mode. Distinct from the ongoing input filter it maintains, it never *commits* a value the way an Argument does — it is a live scoped filter, not an Argument slot.
+_Avoid_: File mode, search mode, files tab
