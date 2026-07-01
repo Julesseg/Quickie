@@ -1,4 +1,5 @@
 import SwiftUI
+import UIKit
 import QuickieCore
 
 /// The single bottom input field — the one surface the whole app is built
@@ -34,19 +35,79 @@ struct InputBar: View {
     /// The shared namespace the bottom glass surfaces morph within.
     var glassNamespace: Namespace.ID
 
+    /// The natural (unclamped) height of the typed text, measured behind the field.
+    /// Compared against one line-height to decide when the surface has wrapped past
+    /// one line — see `InputBarGrowth`.
+    @State private var contentHeight: CGFloat = 0
+
+    /// The grow-and-wrap policy (issue #63): whether the surface is a Capsule or the
+    /// squared-off box, and the box's corner radius. Pure and unit-tested in Core.
+    private let growth = InputBarGrowth(barHeight: InputBar.barHeight)
+
+    /// One line-height for the field's font — the yardstick the measured content
+    /// height is compared against. Taken from the resolved `UIFont` so no hidden
+    /// measuring view is needed.
+    private var lineHeight: CGFloat { UIFont.preferredFont(forTextStyle: .title3).lineHeight }
+
+    /// Whether the text has wrapped past one line, so the glass squares off from a
+    /// Capsule into a RoundedRectangle.
+    private var isExpanded: Bool {
+        growth.isExpanded(contentHeight: contentHeight, lineHeight: lineHeight)
+    }
+
+    /// The Liquid Glass surface: a Capsule on one line, a RoundedRectangle whose
+    /// ends stay as round as the capsule's once the text wraps.
+    private var glassShape: AnyShape {
+        isExpanded
+            ? AnyShape(RoundedRectangle(cornerRadius: growth.cornerRadius, style: .continuous))
+            : AnyShape(Capsule())
+    }
+
     var body: some View {
-        TextField(placeholder, text: $query)
+        // `axis: .vertical` is what lets the field wrap and grow instead of scrolling
+        // sideways; `lineLimit(1...maxLines)` caps the growth and then scrolls
+        // internally. Because the bar is anchored in the bottom safe-area inset, the
+        // extra height pushes the *top* edge up while the bottom stays put above the
+        // keyboard.
+        TextField(placeholder, text: $query, axis: .vertical)
             .textFieldStyle(.plain)
             .font(.title3)
+            .lineLimit(1...InputBarGrowth.maxLines)
             .focused(focused)
             .submitLabel(returnKey.submitLabel)
             .onSubmit(onSubmit)
             .accessibilityIdentifier("search-input")
             .autocorrectionDisabled()
             .textInputAutocapitalization(.never)
+            // On a vertical-axis field the software keyboard's Return key inserts a
+            // newline rather than firing `onSubmit`. A *lone trailing* newline is
+            // that Return keypress: drop it and run the highlighted result's Enter
+            // (CONTEXT.md → Highlighted result). Any other newline content — a
+            // programmatic set (clipboard prefill, Pile staging) or a multi-line
+            // paste — is left intact so it simply wraps.
+            .onChange(of: query) { oldValue, newValue in
+                guard newValue == oldValue + "\n" else { return }
+                query = oldValue
+                onSubmit()
+            }
+            // Measure the text's natural height (before the min-height frame and the
+            // vertical padding) so a single line reads as one line-height and a wrap
+            // reads as two — that difference is what flips the shape.
+            .background {
+                GeometryReader { proxy in
+                    Color.clear
+                        .onAppear { contentHeight = proxy.size.height }
+                        .onChange(of: proxy.size.height) { _, height in contentHeight = height }
+                }
+            }
             .padding(.horizontal, 20)
-            .frame(height: Self.barHeight)
-            .glassEffect(.regular.interactive(), in: Capsule())
+            // Keep the one-line vertical centring identical to the old fixed-height
+            // capsule, and give each wrapped line the same breathing room.
+            .padding(.vertical, max(0, (Self.barHeight - lineHeight) / 2))
+            // `minHeight` (not a fixed height) so the box can grow upward past the
+            // one-line capsule as lines are added.
+            .frame(minHeight: Self.barHeight)
+            .glassEffect(.regular.interactive(), in: glassShape)
             .glassEffectID(Self.glassID, in: glassNamespace)
     }
 }
