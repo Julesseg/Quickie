@@ -30,17 +30,18 @@ public struct IndexedProvider: Provider {
 
 extension IndexedProvider {
     /// The built-in command rows the app always indexes (CONTEXT.md → Management
-    /// page): Settings, Quicklinks, and Fallbacks, each reached by typing its
-    /// name to surface a full-screen page in place of chrome. Quickie ships **no**
-    /// default Quicklinks and no privileged web search — the default web-search
-    /// Fallback query is seeded into the store as ordinary, deletable data (ADR
-    /// 0013), not here. The Notes/Snippets library commands are wired alongside
-    /// their stored content in the app.
+    /// page): Settings, Quicklinks, Fallbacks, and Indexed Folders, each reached by
+    /// typing its name to surface a full-screen page in place of chrome. Quickie
+    /// ships **no** default Quicklinks and no privileged web search — the default
+    /// web-search Fallback query is seeded into the store as ordinary, deletable
+    /// data (ADR 0013), not here. The Notes/Snippets library commands are wired
+    /// alongside their stored content in the app.
     public static func builtIns() -> IndexedProvider {
         IndexedProvider(catalog: [
             .openSettings(),
             .openQuicklinksPage(),
             .openFallbacksPage(),
+            .openIndexedFoldersPage(),
         ])
     }
 }
