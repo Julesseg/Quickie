@@ -24,6 +24,9 @@ struct InputBar: View {
 
     @Binding var query: String
     var focused: FocusState<Bool>.Binding
+    /// The field's placeholder — the neutral "Type to search…" by default, or a
+    /// scoped prompt like "Search files…" inside the Search Files context (ADR 0014).
+    var placeholder: String = "Type to search…"
     /// The highlighted result's Return-key label, or `.none` on Home.
     var returnKey: ReturnKeyLabel = .none
     /// Runs the highlighted result's main action; a no-op when there is none.
@@ -32,7 +35,7 @@ struct InputBar: View {
     var glassNamespace: Namespace.ID
 
     var body: some View {
-        TextField("Type to search…", text: $query)
+        TextField(placeholder, text: $query)
             .textFieldStyle(.plain)
             .font(.title3)
             .focused(focused)

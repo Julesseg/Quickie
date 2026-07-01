@@ -23,6 +23,7 @@ extension ActionKind {
         case .event: return "calendar"
         case .settings: return "gearshape"
         case .file: return "doc"
+        case .searchFiles: return "doc.text.magnifyingglass"
         case .managementPage: return "slider.horizontal.3"
         }
     }
@@ -41,6 +42,7 @@ extension ActionKind {
         case .event: return .cyan
         case .settings: return .gray
         case .file: return .brown
+        case .searchFiles: return .brown
         case .managementPage: return .gray
         }
     }
@@ -72,6 +74,7 @@ extension MainAction {
         case .compose: return "square.and.pencil"
         case .openPage: return "chevron.right"
         case .openFile: return "arrow.up.forward.app"
+        case .searchFiles: return "chevron.right"
         case .none: return nil
         }
     }

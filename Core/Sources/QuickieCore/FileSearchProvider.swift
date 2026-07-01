@@ -59,13 +59,50 @@ public struct FileSearchProvider: Provider {
             }
             .sorted(by: bestFirst)
 
-        return scored.prefix(inlineCap).map { pair in
-            Action.file(
-                bookmarkID: pair.entry.bookmarkID,
-                relativePath: pair.entry.relativePath,
-                displayName: pair.entry.displayName
-            )
+        return scored.prefix(inlineCap).map { action(for: $0.entry) }
+    }
+
+    /// The file Actions for the **Search Files context** (CONTEXT.md → Search Files
+    /// context; ADR 0014): the uncapped, ungated counterpart to `candidates(for:)`.
+    /// The scoped file-browsing surface shows *every* filename match, not just the
+    /// strong ones the inline path allows, and never caps the count — so a buried or
+    /// fuzzy hit the root list holds back still appears here. An empty/whitespace
+    /// query **browses everything**, ordered by name, so entering the context lists
+    /// the whole file set before the user has typed a filter.
+    public func contextMatches(for query: String) -> [Action] {
+        let trimmed = query.trimmingCharacters(in: .whitespacesAndNewlines)
+
+        guard !trimmed.isEmpty else {
+            return index.entries
+                .sorted(by: byName)
+                .map(action(for:))
         }
+
+        return index
+            .prefiltered(for: trimmed)
+            .compactMap { entry in
+                guard let score = Matcher.score(query: trimmed, candidate: entry.displayName, layout: layout) else { return nil }
+                return (entry, score)
+            }
+            .sorted(by: bestFirst)
+            .map { action(for: $0.entry) }
+    }
+
+    /// Builds the file Action for an entry — the one place the provider projects a
+    /// `FileEntry` into a row, so the inline and context paths agree on identity.
+    private func action(for entry: FileEntry) -> Action {
+        Action.file(
+            bookmarkID: entry.bookmarkID,
+            relativePath: entry.relativePath,
+            displayName: entry.displayName
+        )
+    }
+
+    /// Orders two entries for the browse-all (empty-query) context list: by display
+    /// name, then relative path, so the untyped file set reads in a stable order.
+    private func byName(_ lhs: FileEntry, _ rhs: FileEntry) -> Bool {
+        if lhs.displayName != rhs.displayName { return lhs.displayName < rhs.displayName }
+        return lhs.relativePath < rhs.relativePath
     }
 
     /// Orders two scored survivors best-first: higher score wins, then a

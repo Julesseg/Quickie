@@ -74,6 +74,16 @@ struct RootView: View {
     @Environment(\.scenePhase) private var scenePhase
 
     @State private var query = ""
+    /// Whether the **Search Files context** is active (CONTEXT.md → Search Files
+    /// context; ADR 0014): entered by selecting the "Search Files" command row, it
+    /// scopes the input to the filename index alone — a `[Search Files] ▸ …`
+    /// breadcrumb over an uncapped, full-height file list — until dismissed. A plain
+    /// flag, not the Argument-collection machinery: it commits no value, it just
+    /// maintains a live scoped filter (ADR 0014 forbids shoehorning it into capture).
+    @State private var inFileSearch = false
+    /// A file being previewed in QuickLook (issue #51): holds the live
+    /// security-scoped access, released when the sheet dismisses.
+    @State private var filePreview: FilePreviewRequest?
     /// A note opened for reading or a seeded compose editor — presented as a
     /// sheet, distinct from the pushed management pages.
     @State private var activeSheet: ActiveSheet?
@@ -195,7 +205,17 @@ struct RootView: View {
 
     var body: some View {
         let engine = self.engine
-        let highlighted = isHome ? nil : engine.highlighted(for: query)
+        // In the Search Files context the filename index alone answers each
+        // keystroke — uncapped, and browsing everything before a filter is typed
+        // (ADR 0014) — so its results and highlight come from the provider's
+        // `contextMatches`, not the central engine.
+        let fileResults = inFileSearch
+            ? FileSearchProvider(index: fileIndex.index, layout: keyboardLayout.layout)
+                .contextMatches(for: query)
+            : []
+        let highlighted = inFileSearch
+            ? fileResults.first
+            : (isHome ? nil : engine.highlighted(for: query))
 
         NavigationStack(path: $path) {
             ZStack {
@@ -209,6 +229,11 @@ struct RootView: View {
                         // the bottom, toward the keyboard (issue #37).
                         CaptureContent(model: capture)
                             .transition(.opacity)
+                    } else if inFileSearch {
+                        // The scoped file-browsing surface (ADR 0014): an uncapped,
+                        // full-height list of filename matches under the breadcrumb.
+                        FileSearchResultList(results: fileResults, onRun: run)
+                            .transition(captureMotion.edgeTransition(from: .bottom))
                     } else if isHome {
                         HomeView(
                             content: engine.home(),
@@ -242,8 +267,16 @@ struct RootView: View {
                 if path.isEmpty && capture.isCapturing {
                     CaptureBreadcrumbBar(model: capture)
                         .transition(captureMotion.edgeTransition(from: .top))
+                } else if path.isEmpty && inFileSearch {
+                    // The `[Search Files] ▸ …` breadcrumb, on the same blur band as a
+                    // capture's, with a × that returns to normal results (ADR 0014).
+                    FileSearchBreadcrumbBar(query: query, onDismiss: exitFileSearch)
+                        .transition(captureMotion.edgeTransition(from: .top))
                 }
             }
+            // Slide the Search Files context in and out as one gesture, matching the
+            // capture transition budget (ADR 0010).
+            .animation(captureMotion.animation, value: inFileSearch)
             // Glide the whole capture in and out as one gesture (issue #37): the
             // browse list slides out the bottom while the breadcrumb slides in from
             // the top, and the reverse on finishing or cancelling. Scoped to the
@@ -282,11 +315,14 @@ struct RootView: View {
                                 InputBar(
                                     query: $query,
                                     focused: $inputFocused,
+                                    placeholder: inFileSearch ? "Search files…" : "Type to search…",
                                     returnKey: highlighted?.returnKeyLabel ?? ReturnKeyLabel.none,
                                     onSubmit: { if let highlighted { run(highlighted) } },
                                     glassNamespace: glassNamespace
                                 )
-                                if clipboardPrefill.isChipOffered {
+                                // The clipboard paste chip belongs to Home, not the
+                                // scoped file filter — hide it in the context.
+                                if !inFileSearch && clipboardPrefill.isChipOffered {
                                     ClipboardPasteButton(glassNamespace: glassNamespace) { text in
                                         query = text
                                         clipboard.markUsed()
@@ -407,6 +443,20 @@ struct RootView: View {
             .sheet(item: $eventEditor.request, onDismiss: { refocusInput() }) { request in
                 EventEditorView(draft: request.draft) { eventEditor.request = nil }
                     .ignoresSafeArea()
+            }
+            // The QuickLook preview of an opened File Search result (issue #51). The
+            // security-scoped access opened to resolve the file is released the moment
+            // the preview closes, balancing the start/stop bracket (ADR 0015). Staying
+            // a sheet keeps the Search Files context (or the result list) behind it, so
+            // dismissing returns straight to browsing.
+            .sheet(item: $filePreview, onDismiss: { refocusInput() }) { request in
+                FilePreview(fileURL: request.access.fileURL)
+                    .ignoresSafeArea()
+                    // Release the security-scoped access when the preview goes away,
+                    // balancing the start/stop bracket (ADR 0015). Read off the
+                    // content's `onDisappear` — not the sheet's `onDismiss`, which
+                    // fires after SwiftUI has already cleared the `item` binding.
+                    .onDisappear { indexedFolders.endFileAccess(request.access) }
             }
         }
         .preferredColorScheme(Appearance(stored: appearanceRaw).colorScheme)
@@ -542,15 +592,35 @@ struct RootView: View {
             // the capture model on the final commit, never a direct `run(input:)`,
             // so there is nothing to do here.
             break
-        case .openFile:
-            // Resolving the (bookmarkID, relativePath) pair to a security-scoped URL
-            // and presenting it via QuickLook is the next File Search slice (issue
-            // #50 scopes this to matching + ranking; the root-list/QuickLook UI
-            // follows). The file rows already surface, ranked, in the Result list.
-            break
+        case .openFile(let bookmarkID, let relativePath):
+            // Resolve the file's Indexed-Folder bookmark + relative path to a
+            // security-scoped URL and present it in QuickLook (CONTEXT.md → File
+            // Search; ADR 0015). Access to the granting folder is opened here and
+            // released when the preview dismisses. QuickLook carries its own Share /
+            // open-in-place affordances, so no long-press secondary action is needed.
+            if let access = indexedFolders.beginFileAccess(bookmarkID: bookmarkID, relativePath: relativePath) {
+                filePreview = FilePreviewRequest(access: access)
+            } else {
+                flashConfirmation("File not found")
+            }
+        case .enterFileSearch:
+            // Enter the scoped, uncapped Search Files context (ADR 0014): the input
+            // now filters the filename index alone under the breadcrumb. Clear the
+            // query so it opens browsing every file rather than filtered by the text
+            // that surfaced the command.
+            inFileSearch = true
+            query = ""
         case .none:
             break
         }
+    }
+
+    /// Leaves the Search Files context back to normal results (ADR 0014): the ×, or
+    /// a future dismiss gesture. Clears the scoped filter so the launcher lands on a
+    /// clean Home; the bottom input stayed mounted throughout, so focus persists.
+    private func exitFileSearch() {
+        inFileSearch = false
+        query = ""
     }
 
     /// Flashes a brief, non-blocking toast acknowledging a silent outcome. A toast
