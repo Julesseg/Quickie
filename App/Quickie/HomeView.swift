@@ -80,7 +80,11 @@ struct HomeView: View {
                         onSecondaryAction: { onSecondaryAction(action, $0) },
                         isFavorite: true,
                         toggle: { onToggleFavorite(action) }
-                    )
+                    ) {
+                        // Lift a copy of the pressed Favorite card as the detached
+                        // preview.
+                        FavoriteCard(action: action)
+                    }
                 }
             }
             .padding(.horizontal, 16)
@@ -128,7 +132,11 @@ struct HomeView: View {
                     isFavorite: isFavorite(action),
                     canPin: canFavorite(action),
                     toggle: { onToggleFavorite(action) }
-                )
+                ) {
+                    // Lift a copy of the pressed Recent row as the detached preview.
+                    ActionRow(action: action)
+                        .frame(maxWidth: .infinity)
+                }
             }
         }
     }

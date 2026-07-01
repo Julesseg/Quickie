@@ -54,7 +54,12 @@ struct ResultListView: View {
                             isFavorite: isFavorite(action),
                             canPin: canFavorite(action),
                             toggle: { onToggleFavorite(action) }
-                        )
+                        ) {
+                            // The lifted preview: a copy of this row, so the
+                            // long-pressed result detaches as a floating card.
+                            ActionRow(action: action)
+                                .frame(maxWidth: .infinity)
+                        }
                         .transition(rowMotion.insertionTransition)
                     }
                 }
@@ -166,12 +171,21 @@ extension View {
     /// `canPin` reflects the Favorites cap (CONTEXT.md → Favorite): when the grid
     /// is full, the "Pin as Favorite" item is disabled with a hint rather than
     /// silently swallowing the gesture — Unpin is always available.
-    func resultContextMenu(
+    ///
+    /// `preview` supplies the **lifted preview** (`contextMenu(menuItems:preview:)`):
+    /// the system renders it as a detached card floating over a dimmed backdrop, so
+    /// the long-pressed row visibly separates from the list. Without it the default
+    /// in-place highlight barely reads against the translucent Liquid Glass rows —
+    /// the lifted snapshot looks like the resting row. Each caller passes its own
+    /// row (an `ActionRow`, or a `FavoriteCard` for the grid) so the preview matches
+    /// what was pressed.
+    func resultContextMenu<Preview: View>(
         secondaryActions: [SecondaryActionKind] = [],
         onSecondaryAction: @escaping (SecondaryActionKind) -> Void = { _ in },
         isFavorite: Bool,
         canPin: Bool = true,
-        toggle: @escaping () -> Void
+        toggle: @escaping () -> Void,
+        @ViewBuilder preview: () -> Preview
     ) -> some View {
         contextMenu {
             ForEach(secondaryActions, id: \.self) { kind in
@@ -200,6 +214,8 @@ extension View {
             if !isFavorite && !canPin {
                 Text("Favorites are full (max \(SignalsStore.maxFavorites)). Unpin one first.")
             }
+        } preview: {
+            preview()
         }
     }
 }
