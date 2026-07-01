@@ -86,8 +86,13 @@ struct ShortcutsView: View {
     }
 
     private func delete(at offsets: IndexSet) {
-        for index in offsets {
-            store.delete(store.entries[index].name)
+        // Resolve the names from the current snapshot *before* mutating, then
+        // delete by name: `store.delete` removes from `store.entries` in place, so
+        // indexing into it mid-loop would shift the rows and delete the wrong ones
+        // on a multi-row swipe/Edit delete.
+        let names = offsets.map { store.entries[$0].name }
+        for name in names {
+            store.delete(name)
         }
     }
 }
