@@ -324,7 +324,9 @@ struct RootView: View {
                         }
                     } else {
                         GlassEffectContainer(spacing: 8) {
-                            HStack(spacing: 8) {
+                            // Bottom-align so the paste chip stays pinned to the
+                            // input's bottom edge as the field grows upward (issue #63).
+                            HStack(alignment: .bottom, spacing: 8) {
                                 InputBar(
                                     query: $query,
                                     focused: $inputFocused,
