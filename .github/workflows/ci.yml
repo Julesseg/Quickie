@@ -61,11 +61,19 @@ jobs:
         working-directory: App
         run: |
           set -o pipefail
+          # `-retry-tests-on-failure -test-iterations 3` reruns only the tests that
+          # fail, up to three attempts each, and the run passes if a retry passes.
+          # This absorbs the simulator's transient launch/lifecycle flakes (e.g.
+          # "Failed to get background assertion for target app", which strikes at
+          # `app.launch()` on a fresh sim) without masking real regressions — a
+          # genuinely broken test fails all three attempts and still reports failure.
           xcodebuild test \
             -project Quickie.xcodeproj \
             -scheme Quickie \
             -destination "platform=iOS Simulator,name=${{ steps.sim.outputs.name }},OS=latest" \
             -resultBundlePath TestResults.xcresult \
+            -retry-tests-on-failure \
+            -test-iterations 3 \
             CODE_SIGNING_ALLOWED=NO
 
       - name: Upload test results
