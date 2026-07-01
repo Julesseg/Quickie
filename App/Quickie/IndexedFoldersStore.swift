@@ -40,9 +40,10 @@ final class IndexedFoldersStore {
 
     @ObservationIgnored private let fileURL: URL
 
-    /// Builds a store backed by a device-local file. Under UI testing a fresh
-    /// unique file is used so each run starts empty and never inherits grants from a
-    /// previous run — mirroring the in-memory SwiftData store.
+    /// Builds a store backed by a device-local file. Under UI testing it uses a
+    /// fixed test file (`indexed-folders-uitest.json`) so a *relaunch* can prove a
+    /// grant persists; a test that wants a clean slate passes `-uitest-reset-folders`
+    /// to clear that file before load (see `storeURL`).
     static func launch() -> IndexedFoldersStore {
         IndexedFoldersStore(fileURL: Self.storeURL())
     }
@@ -89,7 +90,9 @@ final class IndexedFoldersStore {
     /// Resolves a grant's bookmark to a security-scoped URL, or `nil` if it no longer
     /// resolves. Callers that then *read* the folder must balance a
     /// `startAccessingSecurityScopedResource()` around their access; this method only
-    /// resolves the URL (used here for de-dupe and load-time pruning).
+    /// resolves the URL (used for de-dupe). Staleness is handled where a refresh can
+    /// be persisted — `loadAndPrune` re-mints a stale bookmark on load — so this
+    /// read-only resolver doesn't act on the stale flag itself.
     func resolveURL(for grant: IndexedFolderGrant) -> URL? {
         var stale = false
         guard let url = try? URL(
@@ -109,18 +112,50 @@ final class IndexedFoldersStore {
         let bookmark: Data
     }
 
-    /// Loads the persisted grants and prunes any whose bookmark no longer resolves,
-    /// rewriting the file when something was dropped so a dead grant never lingers.
+    /// Loads the persisted grants, resolving each bookmark with staleness handling:
+    /// a bookmark that no longer resolves is **pruned** (a dead grant never lingers),
+    /// and one that resolves **stale** is re-minted from the resolved URL so the store
+    /// self-heals instead of reusing an aging bookmark until it fails outright. The
+    /// file is rewritten whenever anything was pruned or refreshed.
     private func loadAndPrune() {
         guard let data = try? Data(contentsOf: fileURL),
               let stored = try? JSONDecoder().decode([PersistedGrant].self, from: data) else {
             grants = []
             return
         }
-        let loaded = stored.map { IndexedFolderGrant(id: $0.id, displayName: $0.displayName, bookmark: $0.bookmark) }
-        let resolvable = loaded.filter { resolveURL(for: $0) != nil }
-        grants = resolvable
-        if resolvable.count != loaded.count { persist() }
+
+        var result: [IndexedFolderGrant] = []
+        var changed = false
+        for persisted in stored {
+            let grant = IndexedFolderGrant(id: persisted.id, displayName: persisted.displayName, bookmark: persisted.bookmark)
+            var stale = false
+            guard let url = try? URL(
+                resolvingBookmarkData: grant.bookmark,
+                options: [],
+                relativeTo: nil,
+                bookmarkDataIsStale: &stale
+            ) else {
+                changed = true // pruned: no longer resolves
+                continue
+            }
+            if stale, let refreshed = remintBookmark(for: url) {
+                result.append(IndexedFolderGrant(id: grant.id, displayName: grant.displayName, bookmark: refreshed))
+                changed = true
+            } else {
+                result.append(grant)
+            }
+        }
+
+        grants = result
+        if changed { persist() }
+    }
+
+    /// Mints a fresh bookmark from a resolved URL, balancing security-scoped access
+    /// around the creation. Used to refresh a grant whose bookmark resolved stale.
+    private func remintBookmark(for url: URL) -> Data? {
+        let scoped = url.startAccessingSecurityScopedResource()
+        defer { if scoped { url.stopAccessingSecurityScopedResource() } }
+        return try? url.bookmarkData()
     }
 
     private func persist() {

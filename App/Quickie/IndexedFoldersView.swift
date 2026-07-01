@@ -76,8 +76,10 @@ struct IndexedFoldersView: View {
     }
 
     private func delete(_ offsets: IndexSet) {
-        for index in offsets {
-            store.remove(store.grants[index].id)
-        }
+        // Snapshot ids first: `store.remove` shrinks `grants` synchronously, so
+        // re-indexing per removal would target the wrong grant (or run past the
+        // shortened array) on a multi-select delete.
+        let ids = offsets.map { store.grants[$0].id }
+        ids.forEach(store.remove)
     }
 }
