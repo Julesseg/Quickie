@@ -25,11 +25,14 @@ final class SignalsStore {
     private static let favoritesKey = "signals.favorites"
     private static let frecencyKey = "signals.frecency"
 
-    /// The launch argument that resets persisted launcher signals to a clean
-    /// slate under UI testing. Shared so every store that honors it names the same
-    /// flag — note its reach is broad: it clears Favorites/Frecency **and** the
-    /// Fallback list order/disabled set (see `FallbacksStore.launch`), so a test
-    /// that passes it gets a fully reset launcher, not just reset Favorites.
+    /// The launch argument that resets persisted launcher state to a clean slate
+    /// under UI testing. Shared so every store that honors it names the same flag
+    /// — note its reach is broad; a test that passes it gets a fully reset
+    /// launcher, not just reset Favorites. The canonical list of what it clears:
+    /// Favorites/Frecency (here), the Fallback list order/disabled set
+    /// (`FallbacksStore.launch`), the imported Shortcut Actions
+    /// (`ShortcutsStore.launch`), and the app-level Settings toggles
+    /// (`AppSettings.reset`, run from `QuickieApp.init`).
     static let uitestResetArgument = "-uitest-reset-signals"
 
     /// The launch argument that pre-pins a Favorite under UI testing — the Action
