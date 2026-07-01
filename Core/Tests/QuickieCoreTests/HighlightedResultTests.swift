@@ -46,10 +46,10 @@ struct HighlightedResultTests {
         #expect(highlighted?.returnKeyLabel == .go)
     }
 
-    @Test("a copy/compose highlight reads as .done")
+    @Test("a copy/silent-capture highlight reads as .done")
     func doneLabelForSelfContained() {
         #expect(Action.snippet(id: "s", title: "Reply", body: "hi").returnKeyLabel == .done)
-        #expect(Action.newNote().returnKeyLabel == .done)
+        #expect(Action.saveForLater().returnKeyLabel == .done)
     }
 
     @Test("a multi-step capture row reads as .go — Enter begins the capture")

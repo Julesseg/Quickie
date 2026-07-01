@@ -39,7 +39,7 @@ struct SettingsHubTests {
         // in one. There is no separate content page left to open.
         #expect(Action.openQuicklinksPage().run() == .openPage(.settings(panel: .quicklinks)))
         #expect(Action.openFallbacksPage().run() == .openPage(.settings(panel: .fallbacks)))
-        #expect(Action.openNotesLibrary().run() == .openPage(.settings(panel: .notes)))
+        #expect(Action.openPilePage().run() == .openPage(.settings(panel: .pile)))
         #expect(Action.openSnippetsLibrary().run() == .openPage(.settings(panel: .snippets)))
         #expect(Action.openShortcutsPage().run() == .openPage(.settings(panel: .shortcuts)))
     }

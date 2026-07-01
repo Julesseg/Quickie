@@ -14,7 +14,9 @@ public enum ProviderID: String, CaseIterable, Equatable, Hashable, Sendable {
     case quicklinks
     case fallbacks
     case snippets
-    case notes
+    /// The Pile (CONTEXT.md → Pile; ADR 0018): the saved-for-later queries,
+    /// replacing the former Notes provider wholesale.
+    case pile
     case shortcuts
     case reminders
     case events
@@ -27,7 +29,7 @@ public enum ProviderID: String, CaseIterable, Equatable, Hashable, Sendable {
         case .quicklinks: return "Quicklinks"
         case .fallbacks: return "Fallbacks"
         case .snippets: return "Snippets"
-        case .notes: return "Notes"
+        case .pile: return "Pile"
         case .shortcuts: return "Shortcuts"
         case .reminders: return "Reminders"
         case .events: return "Events"

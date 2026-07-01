@@ -8,19 +8,20 @@ import Foundation
 public enum ActionOutcome: Equatable, Sendable {
     case openURL(URL)
     case copyText(String)
-    /// Open a stored Note for reading (CONTEXT.md → Note): a Note's main action.
-    /// The core carries only the Note's identity; the app layer resolves it to
-    /// the stored body and presents the reader — keeping the loop pure and
-    /// testable, exactly like `copyText` defers the pasteboard.
-    case openNote(id: String)
-    /// Open the Note editor seeded with the raw typed text (CONTEXT.md → Note):
-    /// the "New Note" Fallback. The core declares the intent and carries the
-    /// seed; the app presents the editor so the user titles and confirms before
-    /// it is stored — keeping the flow pure and testable.
-    case composeNote(seed: String)
+    /// Save the raw typed text into the Pile, silently (CONTEXT.md → Pile; ADR
+    /// 0018): the "Save for later" Fallback. No editor, no confirm step, no app
+    /// switch — the core declares the capture and carries the text; the app
+    /// stores it at the edge, the same defer-to-the-edge pattern as `copyText`.
+    case saveToPile(text: String)
+    /// Stage a Pile entry (CONTEXT.md → Pile, Stage; ADR 0018): a Pile entry's
+    /// main action. The core carries only the entry's identity; the app resolves
+    /// it to the stored text, replaces the input query with it (the matcher
+    /// re-runs — the same reinjection move as a Shortcut Action's returned
+    /// output), and removes the entry from the Pile: staging consumes it.
+    case stagePileEntry(id: String)
     /// Open the Snippet editor seeded with the raw typed text (CONTEXT.md →
-    /// Snippet): the "New Snippet" Fallback, the snippet counterpart to
-    /// `composeNote`.
+    /// Snippet): the "New Snippet" Fallback — the user titles and confirms
+    /// before it is stored, unlike the Pile's silent capture.
     case composeSnippet(seed: String)
     /// Open one of the full-screen management pages (CONTEXT.md → Management
     /// page): the typed-to command that surfaces Settings or a library/Fallbacks
@@ -30,8 +31,8 @@ public enum ActionOutcome: Equatable, Sendable {
     /// Create an EventKit reminder from a fully-collected New Reminder capture
     /// (CONTEXT.md → Reminder; issue #37). The core carries only the pure
     /// `ReminderDraft`; the app layer performs it against EventKit — the same
-    /// defer-to-the-edge pattern as `copyText` and `openNote`, keeping the capture
-    /// loop testable and EventKit-free.
+    /// defer-to-the-edge pattern as `copyText`, keeping the capture loop
+    /// testable and EventKit-free.
     case createReminder(ReminderDraft)
     /// Create an EventKit calendar event from a fully-collected New Event capture
     /// in **silent** mode (CONTEXT.md → Event; issue #38). The core carries only the
@@ -42,13 +43,13 @@ public enum ActionOutcome: Equatable, Sendable {
     /// **editor** mode (CONTEXT.md → Event; issue #38): the app pre-fills an
     /// `EKEventEditViewController` from the `EventDraft` for final review and native
     /// fields (alerts, invitees, recurrence) instead of writing silently — the
-    /// event counterpart to `composeNote`/`composeSnippet`'s "open editor, confirm".
+    /// event counterpart to `composeSnippet`'s "open editor, confirm".
     case composeEvent(EventDraft)
     /// Open a file surfaced by File Search (CONTEXT.md → File Search; ADR 0015).
     /// The core carries only the file's Indexed-Folder bookmark identity plus its
     /// relative path within that folder — never a filesystem URL. The app resolves
     /// the pair to a security-scoped URL under a start/stop bracket and opens it
-    /// (QuickLook / share), the same defer-to-the-edge pattern as `openNote`.
+    /// (QuickLook / share), the same defer-to-the-edge pattern as `copyText`.
     case openFile(bookmarkID: String, relativePath: String)
     /// Enter the **Search Files context** (CONTEXT.md → Search Files context; ADR
     /// 0014): the scoped, uncapped file-browsing surface the "Search Files" command
@@ -90,12 +91,18 @@ public enum ActionKind: Equatable, Sendable {
     /// Web search is the default-seeded one — no longer a privileged built-in.
     case fallbackQuery
     case snippet
-    case note
+    /// A Pile entry (CONTEXT.md → Pile; ADR 0018): a raw query text saved to
+    /// deal with later, whose main action stages it back into the input. Its own
+    /// kind so the row wears the Pile's tray badge.
+    case pile
     /// An imported Shortcut Action (CONTEXT.md → Shortcut Action; issue #45): runs
     /// one of the user's iOS Shortcuts by name. Registered solely by the Sync
     /// Shortcut import (ADR 0007); its own kind so the row wears a Shortcuts badge.
     case shortcut
-    case newNote
+    /// The "Save for later" Fallback (CONTEXT.md → Pile; ADR 0018): the silent
+    /// capture that drops the typed text into the Pile. Its own kind so the row
+    /// wears the save-to-tray badge, distinct from the Pile entries it creates.
+    case saveForLater
     case newSnippet
     case calculator
     /// A quick-capture that writes a reminder to EventKit — New Reminder (issue
@@ -132,11 +139,16 @@ public enum ActionKind: Equatable, Sendable {
 public enum MainAction: Equatable, Sendable {
     case openInBrowser
     case copyToClipboard
-    case openNote
-    /// Open an editor to compose a new Note or Snippet from the typed text.
+    /// Stage a Pile entry's text back into the input (CONTEXT.md → Stage): the
+    /// query is replaced, the matcher re-runs, and the entry leaves the Pile.
+    case stage
+    /// Silently drop the typed text into the Pile (CONTEXT.md → Pile): the
+    /// "Save for later" capture — no editor, so it is not a compose.
+    case saveToPile
+    /// Open an editor to compose a new Snippet from the typed text.
     case compose
-    /// Open a full-screen management page (Settings, Quicklinks, Fallbacks, all
-    /// Notes, all Snippets).
+    /// Open a full-screen management page (Settings, Quicklinks, Fallbacks, the
+    /// Pile, all Snippets).
     case openPage
     /// Open a file surfaced by File Search — the app resolves its bookmark identity
     /// to a security-scoped URL and opens it (CONTEXT.md → File Search).
@@ -235,11 +247,11 @@ public struct Action: Identifiable, Sendable {
             return .url
         case .copyText:
             return .text
-        case .openNote(let id):
-            return .noteBody(id: id)
+        case .stagePileEntry(let id):
+            return .pileEntry(id: id)
         case .openFile(let bookmarkID, let relativePath):
             return .file(bookmarkID: bookmarkID, relativePath: relativePath)
-        case .composeNote, .composeSnippet, .openPage, .createReminder,
+        case .saveToPile, .composeSnippet, .openPage, .createReminder,
              .createEvent, .composeEvent, .enterFileSearch, .runShortcut, .none:
             return .none
         }
@@ -274,8 +286,9 @@ public struct Action: Identifiable, Sendable {
         switch outcome {
         case .openURL: return .openInBrowser
         case .copyText: return .copyToClipboard
-        case .openNote: return .openNote
-        case .composeNote, .composeSnippet, .createReminder, .createEvent, .composeEvent: return .compose
+        case .stagePileEntry: return .stage
+        case .saveToPile: return .saveToPile
+        case .composeSnippet, .createReminder, .createEvent, .composeEvent: return .compose
         case .openPage: return .openPage
         case .openFile: return .openFile
         case .enterFileSearch: return .searchFiles
@@ -296,8 +309,8 @@ public struct Action: Identifiable, Sendable {
         if !arguments.isEmpty { return .go }
         switch run() {
         case .openURL: return isFallback ? .search : .go
-        case .copyText, .composeNote, .composeSnippet, .createReminder, .createEvent, .composeEvent: return .done
-        case .openNote, .openPage, .openFile, .enterFileSearch, .runShortcut: return .go
+        case .copyText, .saveToPile, .composeSnippet, .createReminder, .createEvent, .composeEvent: return .done
+        case .stagePileEntry, .openPage, .openFile, .enterFileSearch, .runShortcut: return .go
         case .none: return .none
         }
     }
@@ -407,7 +420,7 @@ extension Action {
     /// A Snippet: saved, reusable text whose main action is **Copy**
     /// (CONTEXT.md → Snippet). Self-contained — it ignores the typed text and
     /// always copies its stored `body` to the clipboard, which is what
-    /// distinguishes it from a Note (copy-out vs read).
+    /// distinguishes it from a Pile entry (copy-out vs stage).
     public static func snippet(
         id: String,
         title: String,
@@ -422,41 +435,21 @@ extension Action {
         ) { _ in .copyText(body) }
     }
 
-    /// A Note: a captured free-text thought whose main action is **Open/read**
-    /// (CONTEXT.md → Note). Self-contained — it ignores the typed text and
-    /// resolves to `openNote(id:)`, which the app turns into the reader. This is
-    /// the read-vs-copy-out distinction from a Snippet: same storage, opposite
-    /// main action. The Note's body lives in the store; the Action carries only
-    /// its identity and title so it matches and ranks like any other capability.
-    public static func note(
-        id: String,
-        title: String
-    ) -> Action {
+    /// The "Save for later" Fallback (CONTEXT.md → Pile, Fallback Action; ADR
+    /// 0018): the silent capture that replaces "New Note". It always rides the
+    /// bottom region and, when run, drops the user's literal typed text straight
+    /// into the Pile — no editor, no confirm step. A permanent, disable-only
+    /// Fallback like New Snippet.
+    public static func saveForLater() -> Action {
         Action(
-            id: id,
-            kind: .note,
-            title: title,
-            inputTypes: [],
-            outputType: .text
-        ) { _ in .openNote(id: id) }
-    }
-
-    /// The "New Note" Fallback (CONTEXT.md → Note, Fallback Action): a
-    /// Fallback-style action that always rides in the bottom region and, when
-    /// run, opens the Note editor seeded with the user's literal typed text. Like
-    /// the web-search Fallback it consumes the raw text; the outcome is
-    /// `composeNote`, which the app turns into a seeded editor the user titles and
-    /// confirms before it is stored.
-    public static func newNote() -> Action {
-        Action(
-            id: "builtin.new-note",
-            kind: .newNote,
-            title: "New Note",
-            aliases: ["note", "capture", "jot"],
+            id: "builtin.save-for-later",
+            kind: .saveForLater,
+            title: "Save for later",
+            aliases: ["later", "save", "pile"],
             inputTypes: [.text],
             outputType: .text,
             isFallback: true
-        ) { input in .composeNote(seed: input ?? "") }
+        ) { input in .saveToPile(text: input ?? "") }
     }
 
     /// The "New Snippet" Fallback (CONTEXT.md → Snippet, Fallback Action): the
@@ -512,24 +505,44 @@ extension Action {
         )
     }
 
-    /// The "All Notes" command (CONTEXT.md → Note, Settings command row): the
-    /// Notes provider's typed row. It keeps its id/title/aliases (pins and
-    /// Frecency survive) but now deeplinks to the Notes provider page under the
-    /// Settings hub — options + the note library on one page (ADR 0019).
-    public static func openNotesLibrary() -> Action {
+    /// A Pile entry (CONTEXT.md → Pile; ADR 0018): a raw query text the user
+    /// saved to deal with later. It has **no title** — `text` is the whole entry,
+    /// so it doubles as the matched name: the entry is fuzzy-matched over its
+    /// body text, exactly what "searchable in Results" means for a titleless
+    /// blob. Its main action stages the text (CONTEXT.md → Stage); the Action
+    /// carries only the entry's identity, and the app resolves it at the edge.
+    public static func pileEntry(
+        id: String,
+        text: String
+    ) -> Action {
         Action(
-            id: "builtin.notes-library",
-            kind: .note,
-            title: "All Notes",
-            aliases: ["notes", "note library", "browse notes"],
+            id: id,
+            kind: .pile,
+            title: text,
             inputTypes: [],
             outputType: .text
-        ) { _ in .openPage(.settings(panel: .notes)) }
+        ) { _ in .stagePileEntry(id: id) }
+    }
+
+    /// The "Pile" command (CONTEXT.md → Pile, Settings command row; ADR 0018):
+    /// the Pile provider's typed row, deeplinking to the Pile page under the
+    /// Settings hub (ADR 0019) — every saved entry with swipe-to-delete —
+    /// replacing "All Notes". Aliases later / saved so the deferred queries are
+    /// always a few keystrokes away.
+    public static func openPilePage() -> Action {
+        Action(
+            id: "builtin.pile-page",
+            kind: .pile,
+            title: "Pile",
+            aliases: ["later", "saved", "saved for later"],
+            inputTypes: [],
+            outputType: .text
+        ) { _ in .openPage(.settings(panel: .pile)) }
     }
 
     /// The "All Snippets" command (CONTEXT.md → Snippet, Settings command row):
-    /// the snippet counterpart to `openNotesLibrary`, deeplinking to the Snippets
-    /// provider page under the hub.
+    /// the Snippets provider's typed row, deeplinking to the Snippets provider
+    /// page under the hub.
     public static func openSnippetsLibrary() -> Action {
         Action(
             id: "builtin.snippets-library",
