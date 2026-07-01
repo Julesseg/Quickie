@@ -73,6 +73,11 @@ struct RootView: View {
     /// grants (or the files inside them) may have changed while backgrounded.
     @Environment(\.scenePhase) private var scenePhase
 
+    /// The user's imported Shortcut Actions — `{ name, acceptsInput }` populated
+    /// solely by the Sync Shortcut import (issue #45; ADR 0007), persisted across
+    /// launches.
+    @State private var shortcuts = ShortcutsStore.launch()
+
     @State private var query = ""
     /// Whether the **Search Files context** is active (CONTEXT.md → Search Files
     /// context; ADR 0014): entered by selecting the "Search Files" command row, it
@@ -146,6 +151,12 @@ struct RootView: View {
         let storedNotes = notes.map { note in
             Action.note(id: Self.noteActionID(note), title: note.title)
         }
+        // Imported Shortcut Actions surface by name like Quicklinks/Snippets
+        // (issue #45); inert this slice (triggering is the next). `acceptsInput`
+        // rides along for that future trigger, changing nothing here.
+        let storedShortcuts = shortcuts.entries.map { entry in
+            Action.shortcut(name: entry.name, acceptsInput: entry.acceptsInput)
+        }
         return SearchEngine(
             providers: [
                 // The Dynamic Calculator + unit-conversion Provider.
@@ -162,8 +173,10 @@ struct RootView: View {
                 IndexedProvider(catalog: storedFallbackQueries),
                 IndexedProvider(catalog: storedSnippets + [.newSnippet()]),
                 IndexedProvider(catalog: storedNotes + [.newNote()]),
-                // The Notes / Snippets library command rows.
-                IndexedProvider(catalog: [.openNotesLibrary(), .openSnippetsLibrary()]),
+                // Imported Shortcut Actions, matched by name (issue #45).
+                IndexedProvider(catalog: storedShortcuts),
+                // The Notes / Snippets / Shortcuts library command rows.
+                IndexedProvider(catalog: [.openNotesLibrary(), .openSnippetsLibrary(), .openShortcutsPage()]),
                 // The New Reminder quick capture (issue #37). This indexed
                 // instance is only for matching by name; activating it rebuilds a
                 // configured Action from the user's reminder lists + settings.
@@ -400,6 +413,15 @@ struct RootView: View {
                     .ignoresSafeArea(.keyboard, edges: .bottom)
                     .onDisappear { if path.isEmpty { refocusInput() } }
             }
+            // Inbound `quickie://` URLs are dispatched here at the app root by host
+            // (issue #45; ADR 0007). Today the only route is the Sync Shortcut's
+            // `quickie://import?names=…`, which the store ingests (parse → auto-prune
+            // reconcile → persist); the next slice adds the `shortcut-result` route
+            // that reinjects a triggered shortcut's output as the query. An
+            // unrecognized URL is ignored.
+            .onOpenURL { url in
+                shortcuts.handle(url: url)
+            }
             // Run the Quicklink / Fallback query data migration once on launch and
             // seed the default web-search Fallback query (ADR 0013).
             .task {
@@ -474,6 +496,7 @@ struct RootView: View {
         case .notes: NoteManagerView()
         case .snippets: SnippetManagerView()
         case .indexedFolders: IndexedFoldersView(store: indexedFolders)
+        case .shortcuts: ShortcutsView(store: shortcuts)
         }
     }
 

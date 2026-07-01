@@ -73,6 +73,10 @@ public enum ManagementPage: Equatable, Hashable, Sendable {
     /// #49): where the user grants, lists, and revokes the folders Quickie may
     /// search. Reached by typing an "Indexed Folders" command row, never chrome.
     case indexedFolders
+    /// The Shortcuts library page (CONTEXT.md → Management page; issue #45): the
+    /// home for imported Shortcut Actions, reached by typing "shortcuts" — its own
+    /// full-screen page, **not** nested under Settings.
+    case shortcuts
 }
 
 /// Which kind of Provider an Action came from (CONTEXT.md → Provider): the
@@ -86,6 +90,10 @@ public enum ActionKind: Equatable, Sendable {
     case fallbackQuery
     case snippet
     case note
+    /// An imported Shortcut Action (CONTEXT.md → Shortcut Action; issue #45): runs
+    /// one of the user's iOS Shortcuts by name. Registered solely by the Sync
+    /// Shortcut import (ADR 0007); its own kind so the row wears a Shortcuts badge.
+    case shortcut
     case newNote
     case newSnippet
     case calculator
@@ -426,6 +434,25 @@ extension Action {
         ) { input in .composeSnippet(seed: input ?? "") }
     }
 
+    /// A Shortcut Action (CONTEXT.md → Shortcut Action; issue #45): runs one of
+    /// the user's iOS Shortcuts by name. Registered solely by the Sync Shortcut
+    /// import (ADR 0007) and matched by name like a Quicklink or Snippet. This
+    /// slice lands only up to "searchable/rankable", so the Action is deliberately
+    /// **inert** — its outcome is `.none`; the x-callback-url trigger is the next
+    /// slice. `acceptsInput` is carried for that future trigger (whether to offer
+    /// an input Argument) but changes nothing here. The id is derived from the
+    /// case-folded name — the shortcut's stable identity — so a pinned Favorite or
+    /// its Frecency stays attached across launches and re-syncs.
+    public static func shortcut(name: String, acceptsInput: Bool = false) -> Action {
+        Action(
+            id: "shortcut.\(name.lowercased())",
+            kind: .shortcut,
+            title: name,
+            inputTypes: [],
+            outputType: .text
+        ) { _ in .none }
+    }
+
     /// The "All Notes" command (CONTEXT.md → Note): a built-in main-list Action
     /// that opens the Note library page full-screen. Surfaces the full library as
     /// a filterable, selectable row rather than a chrome button, so browsing notes
@@ -479,6 +506,21 @@ extension Action {
             inputTypes: [],
             outputType: .text
         ) { _ in .openPage(.quicklinks) }
+    }
+
+    /// The "Shortcuts" command (CONTEXT.md → Management page; issue #45): opens the
+    /// full-screen Shortcuts page — the home for imported Shortcut Actions, with the
+    /// per-row "accepts input" toggle and the Sync-Shortcut install/re-sync entry
+    /// point. Its own page reached by typing "shortcuts", not nested under Settings.
+    public static func openShortcutsPage() -> Action {
+        Action(
+            id: "builtin.shortcuts-page",
+            kind: .managementPage,
+            title: "Shortcuts",
+            aliases: ["shortcut", "sync shortcuts", "manage shortcuts"],
+            inputTypes: [],
+            outputType: .text
+        ) { _ in .openPage(.shortcuts) }
     }
 
     /// The "Fallbacks" command (CONTEXT.md → Fallback list, Management page):
