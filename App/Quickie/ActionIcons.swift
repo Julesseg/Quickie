@@ -74,8 +74,10 @@ extension MainAction {
         case .copyToClipboard: return "doc.on.doc"
         // Staging puts the saved text back into the input — the insert glyph.
         case .stage: return "text.insert"
-        // The silent capture drops the text into the Pile's tray.
-        case .saveToPile: return "tray.and.arrow.down"
+        // The silent capture drops the text in and you're done — distinct from
+        // the Save-for-later row's leading tray badge, so the two-glyph
+        // vocabulary (what it is vs. what tapping does) holds on that row too.
+        case .saveToPile: return "arrow.down.to.line"
         case .compose: return "square.and.pencil"
         case .openPage: return "chevron.right"
         case .openFile: return "arrow.up.forward.app"

@@ -40,6 +40,33 @@ struct PileTests {
         #expect(entry.returnKeyLabel == .go)
     }
 
+    @Test("a Pile entry's row title is a single line, capped — the raw text can be a multi-line blob")
+    func pileEntryTitleIsSingleLineAndCapped() {
+        // The saved text is whatever was typed — possibly a large multi-line
+        // paste. The row must still read as the same one-line pill as every
+        // other result, so the display title is the first non-empty line,
+        // length-capped; the full text stays the matching surface (below).
+        let multiline = Action.pileEntry(
+            id: "pile.trip",
+            text: "Trip planning\ncompare ferry vs train to Nanaimo\nbook the campsite"
+        )
+        #expect(multiline.title == "Trip planning")
+
+        let long = Action.pileEntry(id: "pile.long", text: String(repeating: "a", count: 200))
+        #expect(long.title.count == 60)
+    }
+
+    @Test("a multi-line Pile entry still matches over its whole body text, not just the shown line")
+    func multiLinePileEntryMatchesBeyondItsTitle() {
+        let pile = IndexedProvider(catalog: [
+            .pileEntry(id: "pile.trip", text: "Trip planning\ncompare ferry vs train to Nanaimo"),
+        ])
+        let engine = SearchEngine(providers: [pile])
+        // "ferry" lives on the second line — invisible in the row title, but the
+        // body is the entry's whole name in the index (CONTEXT.md → Pile).
+        #expect(engine.results(for: "ferry").map(\.id) == ["pile.trip"])
+    }
+
     @Test("a Pile entry is fuzzy-matched over its body text and stages from its result row")
     func pileEntryIsSearchableByBodyText() {
         // There is no title to match — the body text is the entry's whole name

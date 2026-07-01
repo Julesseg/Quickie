@@ -79,6 +79,42 @@ final class PileUITests: XCTestCase {
                        "staging should replace the input query with the entry's text")
     }
 
+    /// A pre-Pile build's stored notes migrate to titleless Pile entries at
+    /// launch (ADR 0018): `-uitest-seed-notes` plants a legacy `StoredNote`
+    /// (title ≠ body) before the launch migration runs, and the collapse keeps
+    /// the **body** as the entry's searchable text while the **title** is
+    /// dropped — it stops matching anything.
+    @MainActor
+    func testLegacyNotesMigrateToTitlelessPileEntries() throws {
+        let app = XCUIApplication()
+        app.launchArguments = ["--uitesting", "-uitest-seed-notes"]
+        app.launch()
+
+        let input = app.textFields["search-input"]
+        XCTAssertTrue(input.waitForExistence(timeout: 30))
+        input.tap()
+
+        // The dropped title first: once results are up (the always-present
+        // fallback row proves that), nothing matches the legacy note's title.
+        input.typeText("Groceries list")
+        XCTAssertTrue(app.buttons["builtin.save-for-later"].waitForExistence(timeout: 5))
+        let byTitle = app.buttons.matching(
+            NSPredicate(format: "label CONTAINS[c] %@", "oat milk")
+        ).firstMatch
+        XCTAssertFalse(byTitle.exists,
+                       "a migrated entry must not match by the legacy note's dropped title")
+
+        // The surviving body: clear the query and search by the body text — the
+        // migrated entry surfaces as a Pile result row.
+        input.typeText(String(repeating: XCUIKeyboardKey.delete.rawValue, count: 20))
+        input.typeText("oat milk")
+        let byBody = app.buttons.matching(
+            NSPredicate(format: "label CONTAINS[c] %@", "buy oat milk and eggs")
+        ).firstMatch
+        XCTAssertTrue(byBody.waitForExistence(timeout: 5),
+                      "a legacy note's body should survive as a searchable Pile entry")
+    }
+
     /// The Pile page is reached as a typed "Pile" command row (not chrome):
     /// it lists every saved entry, and swipe-to-delete discards one without
     /// staging it.

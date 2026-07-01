@@ -37,6 +37,13 @@ entry is just a block of text.
 - SwiftData model change with migration: the stored note loses its title and its
   reader/editor; the concept collapses to a text blob. This is the meaningful
   cost of reversing the decision.
+- A legacy Note's Favorites pin and Frecency history do **not** carry over. The
+  migrated entry keeps the stored row's identity, but its Action id moves from
+  `note.<id>` to `pile.<id>`, so existing pins/history are orphaned and pruned
+  by the launch reconciliation. Accepted deliberately rather than remapped: a
+  pin on "open this note's reader" has no faithful equivalent once the main
+  action is a *consuming* stage — a pinned Favorite that deletes itself on
+  first tap would be a trap, not a shortcut.
 - `.openNote`/`.composeNote` outcomes and `NoteEditorView` are removed; the
   `.notes` management-page case becomes `.pile`. `Snippet` is untouched (it keeps
   its title, editor, and copy-out main action).
