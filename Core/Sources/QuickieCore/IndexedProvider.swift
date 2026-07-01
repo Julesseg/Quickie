@@ -36,12 +36,18 @@ extension IndexedProvider {
     /// web-search Fallback query is seeded into the store as ordinary, deletable
     /// data (ADR 0013), not here. The Notes/Snippets library commands are wired
     /// alongside their stored content in the app.
+    ///
+    /// "Search Files" rides here too (CONTEXT.md → Search Files context; ADR 0014):
+    /// it is a command row that enters the scoped file-browsing context, indexed
+    /// beside the management commands so it matches by name like everything else —
+    /// distinct from "Indexed Folders", which only manages *access* to the folders.
     public static func builtIns() -> IndexedProvider {
         IndexedProvider(catalog: [
             .openSettings(),
             .openQuicklinksPage(),
             .openFallbacksPage(),
             .openIndexedFoldersPage(),
+            .searchFiles(),
         ])
     }
 }

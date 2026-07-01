@@ -36,6 +36,8 @@ struct IndexedProviderTests {
         #expect(ids.contains("builtin.quicklinks-page"))
         #expect(ids.contains("builtin.fallbacks-page"))
         #expect(ids.contains("builtin.indexed-folders-page"))
+        // The Search Files command enters the scoped file-browsing context (ADR 0014).
+        #expect(ids.contains("builtin.search-files"))
     }
 
     @Test("the Indexed Folders command is matchable by its file-access aliases")
@@ -55,7 +57,8 @@ struct IndexedProviderTests {
         // ordinary data, not shipped here; the built-ins are command rows only.
         #expect(actions.allSatisfy { !$0.isFallback })
         // A command row never wears a data kind — so the "Quicklinks" command
-        // can't be mistaken for a user's Quicklink, nor "Fallbacks" for a query.
-        #expect(actions.allSatisfy { $0.kind == .settings || $0.kind == .managementPage })
+        // can't be mistaken for a user's Quicklink, nor "Fallbacks" for a query, nor
+        // the "Search Files" entry point for a file result row.
+        #expect(actions.allSatisfy { $0.kind == .settings || $0.kind == .managementPage || $0.kind == .searchFiles })
     }
 }

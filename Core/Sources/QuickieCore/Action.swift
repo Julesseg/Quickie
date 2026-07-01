@@ -50,6 +50,13 @@ public enum ActionOutcome: Equatable, Sendable {
     /// the pair to a security-scoped URL under a start/stop bracket and opens it
     /// (QuickLook / share), the same defer-to-the-edge pattern as `openNote`.
     case openFile(bookmarkID: String, relativePath: String)
+    /// Enter the **Search Files context** (CONTEXT.md → Search Files context; ADR
+    /// 0014): the scoped, uncapped file-browsing surface the "Search Files" command
+    /// row opens. Entered by selecting a row — never a mode toggle — so it is an
+    /// outcome the app performs (scope the input to the file index, show the
+    /// breadcrumb) rather than a chrome flip. It commits no value: it is a live
+    /// scoped filter, not an Argument slot.
+    case enterFileSearch
     case none
 }
 
@@ -97,6 +104,11 @@ public enum ActionKind: Equatable, Sendable {
     /// kind so a file row wears a document badge, distinct from the Indexed Folders
     /// management command that governs where files come from.
     case file
+    /// The "Search Files" command row (CONTEXT.md → Search Files context; ADR 0014):
+    /// its own kind so it reads as the entry point to the scoped file-browsing
+    /// surface, distinct from a `file` result row and from the Indexed Folders
+    /// management command.
+    case searchFiles
     /// A management command row that opens a library/management page it does not
     /// itself belong to — Quicklinks and Fallbacks. A dedicated kind so a command
     /// row never wears the same badge as the data rows it governs (a Quicklinks
@@ -120,6 +132,9 @@ public enum MainAction: Equatable, Sendable {
     /// Open a file surfaced by File Search — the app resolves its bookmark identity
     /// to a security-scoped URL and opens it (CONTEXT.md → File Search).
     case openFile
+    /// Enter the Search Files context — the "Search Files" command's tap scopes the
+    /// input to the file index (CONTEXT.md → Search Files context; ADR 0014).
+    case searchFiles
     case none
 }
 
@@ -215,6 +230,7 @@ public struct Action: Identifiable, Sendable {
         case .composeNote, .composeSnippet, .createReminder, .createEvent, .composeEvent: return .compose
         case .openPage: return .openPage
         case .openFile: return .openFile
+        case .enterFileSearch: return .searchFiles
         case .none: return .none
         }
     }
@@ -232,7 +248,7 @@ public struct Action: Identifiable, Sendable {
         switch run() {
         case .openURL: return isFallback ? .search : .go
         case .copyText, .composeNote, .composeSnippet, .createReminder, .createEvent, .composeEvent: return .done
-        case .openNote, .openPage, .openFile: return .go
+        case .openNote, .openPage, .openFile, .enterFileSearch: return .go
         case .none: return .none
         }
     }
@@ -502,6 +518,29 @@ extension Action {
             inputTypes: [],
             outputType: .file
         ) { _ in .openFile(bookmarkID: bookmarkID, relativePath: relativePath) }
+    }
+
+    /// The "Search Files" command (CONTEXT.md → Search Files context; ADR 0014):
+    /// the built-in command row that opens the scoped, uncapped file-browsing
+    /// surface. Selecting it enters the context — never a chrome mode toggle — so its
+    /// outcome is `.enterFileSearch`, which the app performs by scoping the input to
+    /// the file index and showing the `[Search Files] ▸ …` breadcrumb. It matches by
+    /// name/alias like any command row (and so is Favorite-eligible), and is distinct
+    /// from "Indexed Folders", which manages *where* files come from rather than
+    /// searching them.
+    public static func searchFiles() -> Action {
+        Action(
+            id: "builtin.search-files",
+            kind: .searchFiles,
+            title: "Search Files",
+            aliases: ["files", "find files", "browse files", "file search"],
+            inputTypes: [],
+            // `.text` like every other command row (Settings, Quicklinks, Indexed
+            // Folders…): selecting it enters the scoped browsing context, it does not
+            // *produce* a file — so it must not read as a file-typed source for a
+            // future Argument chain (ADR 0011).
+            outputType: .text
+        ) { _ in .enterFileSearch }
     }
 
     /// The "Indexed Folders" command (CONTEXT.md → Indexed Folder; issue #49):

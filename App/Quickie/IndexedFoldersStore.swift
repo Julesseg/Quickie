@@ -19,6 +19,17 @@ struct IndexedFolderGrant: Identifiable, Equatable {
     let bookmark: Data
 }
 
+/// A live security-scoped handle to a File Search result's file, open for the
+/// duration of a QuickLook preview (CONTEXT.md → File Search; ADR 0015): the file
+/// URL to preview, the granted folder root whose access must be released, and
+/// whether that access was actually acquired. Balanced by
+/// `IndexedFoldersStore.beginFileAccess`/`endFileAccess`.
+struct FileAccess {
+    let fileURL: URL
+    let folderURL: URL
+    let scoped: Bool
+}
+
 /// Owns the user's **Indexed Folder** grants (CONTEXT.md → Indexed Folder; issue
 /// #49): grant a folder, list the grants, revoke one. No searching yet — this is
 /// the access foundation the future File Search Provider will read.
@@ -103,6 +114,34 @@ final class IndexedFoldersStore {
             bookmarkDataIsStale: &stale
         ) else { return nil }
         return url
+    }
+
+    /// Opens security-scoped access to a File Search result's file (CONTEXT.md →
+    /// File Search; ADR 0015): resolves the grant identified by `bookmarkID`, brackets
+    /// `startAccessingSecurityScopedResource()` on its **folder** root, and returns the
+    /// concrete file URL (`root / relativePath`) alongside the folder to release.
+    ///
+    /// Access is opened on the folder — not the file — because that is the granted
+    /// scope, and it is kept open for the caller (QuickLook reads the file lazily while
+    /// previewing). The caller **must** balance it with `endFileAccess` once the
+    /// preview closes. Returns `nil` when the grant is gone or its bookmark no longer
+    /// resolves, so a stale row simply fails to open rather than crashing.
+    func beginFileAccess(bookmarkID: String, relativePath: String) -> FileAccess? {
+        guard let grant = grants.first(where: { $0.id == bookmarkID }),
+              let folderURL = resolveURL(for: grant) else { return nil }
+        // A bookmark-resolved folder always needs its scope opened, so a `false`
+        // here means access was refused — fail the same way a missing grant does
+        // (the caller shows "File not found") rather than handing back a handle that
+        // would present a broken, unreadable preview.
+        guard folderURL.startAccessingSecurityScopedResource() else { return nil }
+        let fileURL = folderURL.appendingPathComponent(relativePath)
+        return FileAccess(fileURL: fileURL, folderURL: folderURL, scoped: true)
+    }
+
+    /// Releases the security-scoped access `beginFileAccess` opened, once the preview
+    /// is dismissed — the stop half of the start/stop bracket (ADR 0015).
+    func endFileAccess(_ access: FileAccess) {
+        if access.scoped { access.folderURL.stopAccessingSecurityScopedResource() }
     }
 
     // MARK: - Persistence (device-local, never synced — ADR 0016)
