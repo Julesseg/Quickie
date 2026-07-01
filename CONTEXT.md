@@ -13,7 +13,7 @@ The single default behavior an Action (or result row) performs when tapped — o
 _Avoid_: Default, primary (use "main action")
 
 **Secondary action**:
-A one-shot action that operates on a specific result's [[Result content]], reached from the row's long-press menu — the *same* menu that carries Pin/Unpin, not a competing gesture. Eligibility is a pure function of the result's Result content, **not** its content type: a row with no content (a command, capture, or Shortcut row) exposes none, even though it may carry a `text` output type (ADR 0017). The current set is `copy` and `share` on any content-bearing row plus `revealInFiles` on a file; multi-step actions that need a target, date, or name (Make-reminder, Append-to-note, Make-Quicklink) are deferred to a later breadcrumb-seeding slice. Distinct from Fallback/content-on-the-text actions, which appear as their own rows rather than behind long-press.
+A one-shot action that operates on a specific result's [[Result content]], reached from the row's long-press menu — the *same* menu that carries Pin/Unpin, not a competing gesture. Eligibility is a pure function of the result's Result content, **not** its content type: a row with no content (a command, capture, or Shortcut row) exposes none, even though it may carry a `text` output type (ADR 0017). The current set is `copy` and `share` on any content-bearing row plus `revealInFiles` on a file; a [[Pile]] entry additionally exposes **Remove from Pile** (its home for per-row discard, since the main action stages rather than removes). Multi-step actions that need a target, date, or name (Make-reminder, Make-Quicklink) are deferred to a later breadcrumb-seeding slice. Distinct from Fallback/content-on-the-text actions, which appear as their own rows rather than behind long-press.
 _Avoid_: Context action, more actions
 
 **Result list**:
@@ -21,11 +21,11 @@ The single, reversed (bottom-anchored, best match nearest the input/thumb) list 
 _Avoid_: Results, suggestions, search results
 
 **Settings**:
-The app's preferences page, reached like any capability — by typing to surface a "Settings" command row, not via chrome (the old top-right gear button is gone). It holds **Appearance** (Light / Dark / System, defaulting to System, applied app-wide) and an **Actions** section — a row per configurable capture Action that pushes its own per-Action panel (New Event today: ask-which-calendar and silent-vs-editor). It holds *only* settings — Quicklinks, Fallbacks, Notes, and Snippets each live on their own page.
+The app's preferences page, reached like any capability — by typing to surface a "Settings" command row, not via chrome (the old top-right gear button is gone). It holds **Appearance** (Light / Dark / System, defaulting to System, applied app-wide) and an **Actions** section — a row per configurable capture Action that pushes its own per-Action panel (New Event today: ask-which-calendar and silent-vs-editor). It holds *only* settings — Quicklinks, Fallbacks, the Pile, and Snippets each live on their own page.
 _Avoid_: Preferences sheet, manage screen (Settings is not where you manage content)
 
 **Management page**:
-A full-screen page for a library or preferences surface — Settings, Quicklinks, Fallbacks, Shortcuts, Indexed Folders, All Notes, All Snippets. Each is reached as a filtered result-row command (e.g. typing "quicklinks") rather than from chrome, and each presents full-screen with its own dismiss affordance — never as a partial-height sheet. Replaces both the top-right gear button and the old combined "Manage Quicklinks + search engine" surface. The **Shortcuts** page is the home for the user's imported [[Shortcut Action]]s: it lists each by name, carries a per-row "accepts input" toggle (the only way Quickie learns a Shortcut takes input, since import is names-only), and hosts the Sync-Shortcut install/re-sync entry point. There is no manual add — the list is populated solely by the Sync Shortcut import.
+A full-screen page for a library or preferences surface — Settings, Quicklinks, Fallbacks, Shortcuts, Indexed Folders, the Pile, All Snippets. Each is reached as a filtered result-row command (e.g. typing "quicklinks") rather than from chrome, and each presents full-screen with its own dismiss affordance — never as a partial-height sheet. Replaces both the top-right gear button and the old combined "Manage Quicklinks + search engine" surface. The **Shortcuts** page is the home for the user's imported [[Shortcut Action]]s: it lists each by name, carries a per-row "accepts input" toggle (the only way Quickie learns a Shortcut takes input, since import is names-only), and hosts the Sync-Shortcut install/re-sync entry point. There is no manual add — the list is populated solely by the Sync Shortcut import.
 _Avoid_: Sheet, manager (each page is single-purpose)
 
 **Highlighted result**:
@@ -40,11 +40,11 @@ The kind of a value flowing through Quickie — text, url, file, number, date, e
 _Avoid_: Data type, kind, payload type
 
 **Result content**:
-The concrete value or reference a result carries — the thing a [[Secondary action]] operates on — distinct from both its **content type** (the *kind*) and its **main action** (what tapping it does). Either an inline value (a Snippet's or Calculator's text, a Quicklink's URL) or an edge-resolved reference the app dereferences on demand (a Note's body by id, a File by bookmark + relative path). A command, capture, or Shortcut row has **no** Result content, which is what makes it ineligible for secondary actions regardless of its content type (ADR 0017). Declared per Action, not derived from the main-action outcome (an inert Shortcut's outcome is empty; a Calculator reads as `number` though it copies text).
+The concrete value or reference a result carries — the thing a [[Secondary action]] operates on — distinct from both its **content type** (the *kind*) and its **main action** (what tapping it does). Either an inline value (a Snippet's or Calculator's text, a Quicklink's URL) or an edge-resolved reference the app dereferences on demand (a [[Pile]] entry's text by id, a File by bookmark + relative path). A command, capture, or Shortcut row has **no** Result content, which is what makes it ineligible for secondary actions regardless of its content type (ADR 0017). Declared per Action, not derived from the main-action outcome (an inert Shortcut's outcome is empty; a Calculator reads as `number` though it copies text).
 _Avoid_: Payload, value, content (ambiguous with content type)
 
 **Fallback Action**:
-Any Action flagged to always appear in the result list and consume the user's literal typed text as its payload, rather than matching by name. The umbrella over three concrete kinds: **Fallback queries** (URL templates), **New Note**, and **New Snippet**. Distinguished from a verb-first match, where the text fuzzy-matches an Action's name/alias. The single result list interleaves both; the user resolves intent by choosing a row, never by a mode toggle. Fallbacks live in one user-ordered, reversible list (see Fallback list) and each can be **disabled** (hidden from results) without being deleted.
+Any Action flagged to always appear in the result list and consume the user's literal typed text as its payload, rather than matching by name. The umbrella over three concrete kinds: **Fallback queries** (URL templates), **Save for later** (captures the typed text into the [[Pile]]), and **New Snippet**. Distinguished from a verb-first match, where the text fuzzy-matches an Action's name/alias. The single result list interleaves both; the user resolves intent by choosing a row, never by a mode toggle. Fallbacks live in one user-ordered, reversible list (see Fallback list) and each can be **disabled** (hidden from results) without being deleted.
 _Avoid_: Default action, catch-all
 
 **Quicklink**:
@@ -56,7 +56,7 @@ A stored URL template that **requires** at least one `{placeholder}` token and c
 _Avoid_: placeholder-Quicklink (the placeholder capability no longer lives on Quicklink), search action
 
 **Fallback list**:
-The single user-ordered list of every Fallback Action (Fallback queries + New Note + New Snippet), managed on one page and persisted as an explicit order. It reads **most-important-first**: the top of the page is the fallback nearest the input/thumb in results. Because the Result list renders reversed, this page order is reversed when projected into the bottom (screen-top) fallback region. Each row can be **disabled** (kept in the list, hidden from results); rows can be reordered; only Fallback queries can be deleted, while New Note and New Snippet are permanent (disable-only). Replaces the previous alphabetical fallback ordering.
+The single user-ordered list of every Fallback Action (Fallback queries + Save for later + New Snippet), managed on one page and persisted as an explicit order. It reads **most-important-first**: the top of the page is the fallback nearest the input/thumb in results. Because the Result list renders reversed, this page order is reversed when projected into the bottom (screen-top) fallback region. Each row can be **disabled** (kept in the list, hidden from results); rows can be reordered; only Fallback queries can be deleted, while Save for later and New Snippet are permanent (disable-only). Replaces the previous alphabetical fallback ordering.
 _Avoid_: Fallback settings, fallback order screen (it is one page, "Fallbacks")
 
 **Argument**:
@@ -71,16 +71,20 @@ _Avoid_: Input mode, control, widget
 A piece of saved, reusable text whose primary action is **Copy** — canned replies, an address, a template the user pastes repeatedly. Stored in Quickie (SwiftData + CloudKit), searchable as Actions, addable via the Share Extension. Quickie deliberately has no automatic clipboard history (iOS forbids ambient clipboard access).
 _Avoid_: Clipboard history, clip, stash
 
-**Note**:
-A captured free-text thought whose primary action is **Open/read** (with append and copy secondary) — the brain-dump target. Stored in Quickie (SwiftData + CloudKit), captured instantly and silently (no app switch). Sending a Note to Apple Notes is an optional export, not the default. Distinct from a Snippet (reusable copy-out text) though they share storage.
-_Avoid_: Memo, Apple Note (that is the export target, not a Quickie Note)
+**Pile**:
+The collection of raw query texts the user saved to deal with later — "queries I didn't want to process on the spot." Replaces the former Note concept wholesale: there is **no title, no reader, and no compose-editor**. Each **Pile entry** is just a block of text, stored in Quickie (SwiftData + CloudKit) and captured **silently** by the "Save for later" Fallback (no app switch, no confirm step). An entry is an Action in the index, fuzzy-matched over its **body text** (there is no title to match), and its main action **stages** the text: it replaces the input query and re-runs the matcher — the same reinjection move as a [[Shortcut Action]]'s returned output — after which the entry **leaves the Pile** (staging consumes it). Discarding an entry *without* staging it happens on the **Pile page** (a [[Management page]], reached via a "Pile" command row; aliases "pile", "later", "saved") via swipe-to-delete; per-row removal from the Result list is the eventual first [[Secondary action]] ("Remove from Pile"), deferred with the long-press mechanism. Distinct from a [[Snippet]] (reusable copy-out text, which keeps its title and *copies* rather than *stages*).
+_Avoid_: Note, Inbox, notes system, memo; the individual item has no proper noun — say "a Pile entry" or "a saved query"
+
+**Stage**:
+The main action of a [[Pile]] entry: replace the input query with the entry's saved text and re-run the matcher, rebuilding the Result list as if the user had typed it — then remove the entry from the Pile (staging consumes it). Mechanically identical to a [[Shortcut Action]]'s output reinjection; the difference is only the trigger. The user is left "typing" the deferred query and decides what to do with it next.
+_Avoid_: Open, restore, load, paste (staging re-runs the matcher; it is not a passive paste)
 
 **Quick capture**:
-An Action that creates a record from the bottom input *without leaving Quickie* — the family comprising **Note** (Quickie-stored), **Reminder** and **Event** (written to EventKit). Each is silent by default (no app switch) and collects its fields through the breadcrumb, honoring just-in-time permission (ADR 0012).
+An Action that creates a record from the bottom input *without leaving Quickie* — the family comprising **Save for later** (Quickie-stored, into the [[Pile]]), **Reminder** and **Event** (written to EventKit). Each is silent by default (no app switch) and collects its fields through the breadcrumb, honoring just-in-time permission (ADR 0012).
 _Avoid_: Quick add, capture (ambiguous)
 
 **Reminder**:
-A quick-capture Action that creates an EventKit reminder from the breadcrumb — a **title**, an optional **due date** (with an alarm when a time is given; a date-only due date sets no alarm), and a target reminder **list**. Lives in the system Reminders store, distinct from a **Note** (a Quickie-stored thought). EventKit permission is requested just-in-time when the Action is activated, before data entry (ADR 0012).
+A quick-capture Action that creates an EventKit reminder from the breadcrumb — a **title**, an optional **due date** (with an alarm when a time is given; a date-only due date sets no alarm), and a target reminder **list**. Lives in the system Reminders store, distinct from a **Pile** entry (Quickie-stored deferred query text). EventKit permission is requested just-in-time when the Action is activated, before data entry (ADR 0012).
 _Avoid_: Todo, task, alarm
 
 **Event**:
