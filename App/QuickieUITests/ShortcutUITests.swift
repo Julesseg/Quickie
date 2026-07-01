@@ -30,6 +30,16 @@ final class ShortcutUITests: XCTestCase {
         return app
     }
 
+    /// Launches with shortcuts seeded **`acceptsInput` on** (issue #46) so a test can
+    /// drive the input-collecting trigger without first flipping toggles by hand.
+    @MainActor
+    private func launchAppWithInput(seed: String) -> XCUIApplication {
+        let app = XCUIApplication()
+        app.launchArguments += ["--uitesting", "-uitest-reset-signals", "-uitest-seed-input-shortcuts", seed]
+        app.launch()
+        return app
+    }
+
     /// An imported shortcut surfaces in the Result list, matched by name via the
     /// Indexed Provider — the core "my shortcuts show up and are searchable" slice.
     @MainActor
@@ -85,5 +95,100 @@ final class ShortcutUITests: XCTestCase {
         // flipping it — how Quickie learns a shortcut takes input — doesn't crash.
         toggle.tap()
         XCTAssertNotEqual(app.state, .notRunning, "toggling accepts-input should not crash the app")
+    }
+
+    /// A Shortcut Action with `acceptsInput` **on** runs through the breadcrumb
+    /// (issue #46 AC #4): tapping it starts a capture that collects the one optional
+    /// `text` input, headed by the shortcut's name — rather than firing immediately.
+    /// (The x-callback-url open and the `x-success` reinjection are pure Core logic,
+    /// covered by QuickieCore's ShortcutRunTests; XCUITest can neither open the
+    /// Shortcuts app nor deliver the inbound `quickie://` callback.)
+    @MainActor
+    func testInputAcceptingShortcutCollectsInputThroughBreadcrumb() throws {
+        let app = launchAppWithInput(seed: "Translate")
+
+        let input = app.textFields["search-input"]
+        XCTAssertTrue(input.waitForExistence(timeout: 30))
+        input.tap()
+        input.typeText("translate")
+
+        let row = app.buttons.matching(
+            NSPredicate(format: "label CONTAINS[c] %@", "Translate")
+        ).firstMatch
+        XCTAssertTrue(row.waitForExistence(timeout: 5), "the input-accepting shortcut surfaces as a row")
+        row.tap()
+
+        // The capture's bottom input field is the reliable "a breadcrumb is in flight"
+        // signal — the top breadcrumb bar (its cancel × and crumbs) rides under a
+        // progressive blur / status-bar bleed and is flaky to query. The field's mere
+        // presence proves the input-accepting shortcut collects text through the
+        // breadcrumb rather than firing immediately (a no-input shortcut shows none).
+        let captureField = app.textFields["capture-input"]
+        XCTAssertTrue(
+            captureField.waitForExistence(timeout: 5),
+            "an input-accepting shortcut starts the breadcrumb rather than firing immediately"
+        )
+    }
+
+    /// The input Argument is **optional** (issue #46): a user with nothing to type
+    /// can submit the step empty and the shortcut still runs, rather than being
+    /// trapped in the breadcrumb. Pressing Return on the empty capture field completes
+    /// the capture (fires the shortcut and dismisses the breadcrumb) — the escape the
+    /// generic `commitText` empty-guard would otherwise deny.
+    @MainActor
+    func testInputAcceptingShortcutCanRunWithEmptyInput() throws {
+        let app = launchAppWithInput(seed: "Translate")
+
+        let input = app.textFields["search-input"]
+        XCTAssertTrue(input.waitForExistence(timeout: 30))
+        input.tap()
+        input.typeText("translate")
+
+        let row = app.buttons.matching(
+            NSPredicate(format: "label CONTAINS[c] %@", "Translate")
+        ).firstMatch
+        XCTAssertTrue(row.waitForExistence(timeout: 5))
+        row.tap()
+
+        // The capture field auto-focuses; submit it empty via Return.
+        let captureField = app.textFields["capture-input"]
+        XCTAssertTrue(captureField.waitForExistence(timeout: 5), "the input breadcrumb starts")
+        captureField.tap()
+        captureField.typeText("\n")
+
+        // The capture completes (fires the shortcut with no input) rather than the
+        // empty submit silently no-opping — the input field is gone, not stuck. Keyed
+        // off `capture-input` (the reliable bottom field), not the flaky top-bar ×.
+        XCTAssertTrue(
+            captureField.waitForNonExistence(timeout: 5),
+            "submitting the optional input empty should run the shortcut, not trap the user"
+        )
+    }
+
+    /// A Shortcut Action with `acceptsInput` **off** fires immediately (issue #46 AC
+    /// #1): tapping it hands off via x-callback-url with no input — it must not start
+    /// the input breadcrumb. The hand-off leaves the app (or no-ops in a simulator
+    /// without the Shortcuts app), but the launcher must never enter a capture.
+    @MainActor
+    func testShortcutWithoutInputDoesNotCollectInput() throws {
+        let app = launchApp(seed: "Timer")
+
+        let input = app.textFields["search-input"]
+        XCTAssertTrue(input.waitForExistence(timeout: 30))
+        input.tap()
+        input.typeText("timer")
+
+        let row = app.buttons.matching(
+            NSPredicate(format: "label CONTAINS[c] %@", "Timer")
+        ).firstMatch
+        XCTAssertTrue(row.waitForExistence(timeout: 5), "the shortcut surfaces as a row")
+        row.tap()
+
+        // No breadcrumb: a no-input shortcut fires straight away — no capture input
+        // field appears (keyed off the reliable bottom field, not the top-bar ×).
+        XCTAssertFalse(
+            app.textFields["capture-input"].waitForExistence(timeout: 3),
+            "a shortcut with input off should fire immediately, not open the input breadcrumb"
+        )
     }
 }

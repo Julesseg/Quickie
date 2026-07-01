@@ -50,6 +50,14 @@ final class ShortcutsStore {
     /// URL scheme really carries before handing it to `ingest`.
     static let uitestSeedArgument = "-uitest-seed-shortcuts"
 
+    /// The launch argument that seeds imported shortcuts **with `acceptsInput` on**
+    /// (issue #46) — a comma-delimited name list, the same format as
+    /// `uitestSeedArgument`. It exists so a UI test can drive the input-collecting
+    /// trigger path (the breadcrumb) without first navigating the Shortcuts page to
+    /// flip each toggle by hand. Seeds through the real ingest, then flips each
+    /// seeded name's toggle on via the real `toggleAcceptsInput`.
+    static let uitestSeedInputArgument = "-uitest-seed-input-shortcuts"
+
     init(defaults: UserDefaults = SignalsStore.sharedDefaults) {
         self.defaults = defaults
         self.entries = Self.load(from: defaults)
@@ -72,6 +80,17 @@ final class ShortcutsStore {
                 .split(separator: ",", omittingEmptySubsequences: false)
                 .joined(separator: "\n")
             store.ingest(payload: payload)
+        }
+        if let flag = arguments.firstIndex(of: uitestSeedInputArgument), flag + 1 < arguments.count {
+            // Same real ingest, then flip every seeded name's toggle on so the test
+            // can trigger the input-collecting breadcrumb (issue #46).
+            let payload = arguments[flag + 1]
+                .split(separator: ",", omittingEmptySubsequences: false)
+                .joined(separator: "\n")
+            store.ingest(payload: payload)
+            for name in store.entries.map(\.name) {
+                store.toggleAcceptsInput(name)
+            }
         }
         return store
     }

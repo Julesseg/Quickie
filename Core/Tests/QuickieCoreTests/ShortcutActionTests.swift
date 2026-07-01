@@ -16,14 +16,15 @@ struct ShortcutActionTests {
         #expect(action.kind == .shortcut)
     }
 
-    @Test("a Shortcut Action is inert this slice — tapping it does nothing")
-    func isInertThisSlice() {
-        // Triggering goes through x-callback-url in the next slice; here the row
-        // is present and rankable but its main action is a no-op.
+    @Test("a Shortcut Action without input fires immediately, carrying its name")
+    func firesImmediatelyWithoutInput() {
+        // acceptsInput off (the import default): the row runs the shortcut straight
+        // away with no input (issue #46). The outcome carries only the name; the app
+        // edge turns it into the `shortcuts://x-callback-url/run-shortcut` open.
         let action = Action.shortcut(name: "Start Workout")
-        #expect(action.run() == .none)
-        #expect(action.run(input: "ignored") == .none)
-        #expect(action.mainAction == .none)
+        #expect(action.run() == .runShortcut(name: "Start Workout", input: nil))
+        // It collects no Arguments, so it never enters the breadcrumb.
+        #expect(action.arguments.isEmpty)
     }
 
     @Test("a Shortcut Action matches by name and consumes no typed text")
@@ -31,6 +32,47 @@ struct ShortcutActionTests {
         let action = Action.shortcut(name: "Start Workout")
         #expect(action.isFallback == false)
         #expect(action.inputTypes.isEmpty)
+    }
+
+    @Test("an input-accepting Shortcut Action collects one optional text Argument")
+    func acceptsInputDeclaresOneOptionalTextArgument() {
+        // With `acceptsInput` on (set on the Shortcuts page in #45), the shortcut
+        // declares one **optional** `text` Argument and runs through the breadcrumb
+        // (issue #46) — optional so the user can submit it empty and still run the
+        // shortcut. Matched by name, it is still not a Fallback.
+        let action = Action.shortcut(name: "Translate", acceptsInput: true)
+        #expect(action.arguments.count == 1)
+        #expect(action.arguments.first?.contentType == .text)
+        #expect(action.arguments.first?.isOptional == true)
+        #expect(action.isFallback == false)
+    }
+
+    @Test("an input-accepting Shortcut Action passes the collected value as input")
+    func acceptsInputPassesCollectedValue() {
+        // The breadcrumb collects the text, then the final commit fires the shortcut
+        // with that value as its x-callback input (issue #46).
+        let action = Action.shortcut(name: "Translate", acceptsInput: true)
+        var run = MultiStepAction(action: action)
+        let step = run.commit(.text("bonjour"))
+        #expect(step == .completed(.runShortcut(name: "Translate", input: "bonjour")))
+    }
+
+    @Test("submitting the optional input empty runs the shortcut with no input")
+    func acceptsInputEmptyRunsWithNoInput() {
+        // The `text` Argument is optional (issue #46): a user who provides no text
+        // still fires the shortcut. An empty submission reads as **no input** (nil),
+        // the same as an `acceptsInput`-off shortcut — not an empty-string input.
+        let action = Action.shortcut(name: "Translate", acceptsInput: true)
+        var run = MultiStepAction(action: action)
+        #expect(run.commit(.text("")) == .completed(.runShortcut(name: "Translate", input: nil)))
+    }
+
+    @Test("a Shortcut Action's tap reads as running the shortcut")
+    func mainActionReadsAsRunShortcut() {
+        // The trailing glyph must signal a hand-off to Shortcuts, for both shapes —
+        // read off the real outcome (no input) and off the multi-step outcome (input).
+        #expect(Action.shortcut(name: "Timer").mainAction == .runShortcut)
+        #expect(Action.shortcut(name: "Translate", acceptsInput: true).mainAction == .runShortcut)
     }
 
     @Test("a Shortcut Action's id is stable and derived from its name")

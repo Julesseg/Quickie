@@ -192,10 +192,13 @@ final class CaptureModel {
         session?.options(matching: stepText, layout: layout) ?? []
     }
 
-    /// Commits the current text step; ignores an empty value.
+    /// Commits the current text step. A **required** step ignores an empty value so
+    /// the user can't skip it; an **optional** step (a Shortcut Action's input, issue
+    /// #46) may be committed empty — the Action still runs, so the breadcrumb never
+    /// traps someone with nothing to type. The Core maps the empty value to "no input".
     func commitText() {
         let trimmed = stepText.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !trimmed.isEmpty else { return }
+        guard !trimmed.isEmpty || (currentArgument?.isOptional ?? false) else { return }
         apply { $0.commit(.text(trimmed)) }
     }
 

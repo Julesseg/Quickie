@@ -77,6 +77,7 @@ extension MainAction {
         case .openPage: return "chevron.right"
         case .openFile: return "arrow.up.forward.app"
         case .searchFiles: return "chevron.right"
+        case .runShortcut: return "play.fill"
         case .none: return nil
         }
     }

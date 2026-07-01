@@ -49,17 +49,26 @@ public struct Argument: Equatable, Sendable {
     /// declared with the step rather than hard-coded in the view; `nil` for non-choice
     /// steps, and the app falls back to a sensible default when a choice step omits it.
     public let optionSymbol: String?
+    /// Whether this Argument may be **committed empty** (issue #46): the user can
+    /// submit the step with no value and the Action still runs — a Shortcut Action's
+    /// optional `text` input. Defaults to `false`: most Arguments are required, so an
+    /// empty commit is ignored (the generic capture keeps the user on the step). Only
+    /// the free-text (`keyboard`) input method honours this; a `date` always carries a
+    /// value and a `choice` commits a picked option.
+    public let isOptional: Bool
 
     public init(
         label: String,
         contentType: ContentType,
         options: [ChoiceOption] = [],
-        optionSymbol: String? = nil
+        optionSymbol: String? = nil,
+        isOptional: Bool = false
     ) {
         self.label = label
         self.contentType = contentType
         self.options = options
         self.optionSymbol = optionSymbol
+        self.isOptional = isOptional
     }
 
     /// Which control the input region presents for this Argument (ADR 0013): a

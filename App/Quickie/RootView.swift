@@ -414,13 +414,13 @@ struct RootView: View {
                     .onDisappear { if path.isEmpty { refocusInput() } }
             }
             // Inbound `quickie://` URLs are dispatched here at the app root by host
-            // (issue #45; ADR 0007). Today the only route is the Sync Shortcut's
-            // `quickie://import?names=…`, which the store ingests (parse → auto-prune
-            // reconcile → persist); the next slice adds the `shortcut-result` route
-            // that reinjects a triggered shortcut's output as the query. An
-            // unrecognized URL is ignored.
+            // (issue #45, #46; ADR 0007). Two families ride the scheme: the Sync
+            // Shortcut's `quickie://import?names=…`, which the store ingests (parse →
+            // auto-prune reconcile → persist), and the run callbacks a triggered
+            // Shortcut Action comes back on. An unrecognized URL is ignored.
             .onOpenURL { url in
-                shortcuts.handle(url: url)
+                if shortcuts.handle(url: url) { return }
+                handleShortcutResult(url)
             }
             // Run the Quicklink / Fallback query data migration once on launch and
             // seed the default web-search Fallback query (ADR 0013).
@@ -534,6 +534,13 @@ struct RootView: View {
             startEventCapture()
             return
         }
+        // An input-accepting Shortcut Action (its `acceptsInput` toggle on, so it
+        // declares a `text` Argument) collects that input through the breadcrumb
+        // before firing (issue #46); one with no Arguments fires immediately below.
+        if action.kind == .shortcut && !action.arguments.isEmpty {
+            startShortcutCapture(name: action.title)
+            return
+        }
         perform(action.run(input: query))
     }
 
@@ -582,6 +589,15 @@ struct RootView: View {
             ),
             layout: keyboardLayout.layout
         )
+    }
+
+    /// Begins the input-collecting run of a Shortcut Action (issue #46): hand off to
+    /// the same capture model, configured with a `ShortcutCapture` recipe. It needs
+    /// no permission (running a shortcut is always available), so the breadcrumb
+    /// starts straight away to collect the one optional `text` input, then fires the
+    /// `shortcuts://x-callback-url/run-shortcut` open on commit.
+    private func startShortcutCapture(name: String) {
+        capture.start(ShortcutCapture(name: name), layout: keyboardLayout.layout)
     }
 
     /// Performs a single-step Action's outcome at the platform edge.
@@ -633,6 +649,13 @@ struct RootView: View {
             // that surfaced the command.
             inFileSearch = true
             query = ""
+        case .runShortcut(let name, let input):
+            // Fire the shortcut by name via x-callback-url (CONTEXT.md → Shortcut
+            // Action; issue #46), wiring the `quickie://` success/error/cancel
+            // callbacks so the result comes back to `onOpenURL` below. This is the
+            // no-input path (the toggle off); the input-collecting path runs through
+            // the capture and opens the same URL from `ShortcutCapture`.
+            openURL(ShortcutRun.runURL(name: name, input: input))
         case .none:
             break
         }
@@ -644,6 +667,28 @@ struct RootView: View {
     private func exitFileSearch() {
         inFileSearch = false
         query = ""
+    }
+
+    /// Handles a Shortcut Action run coming back over the `quickie://` scheme
+    /// (CONTEXT.md → Shortcut Action; issue #46). `x-success` **reinjects** the
+    /// returned output as the new query — the matcher re-runs and the Result list
+    /// rebuilds as if the user had typed it — unconditionally: non-empty output gives
+    /// the user something to act on, empty output clears the field to a fresh Home.
+    /// `x-error` flashes a failure toast and leaves the query untouched; `x-cancel`
+    /// is a silent no-op. A URL that isn't a run callback is ignored.
+    private func handleShortcutResult(_ url: URL) {
+        guard let result = ShortcutRun.result(from: url) else { return }
+        switch result {
+        case .reinject(let output):
+            // Reinject onto the launcher root: drop any scoped file context so the
+            // result rebuilds the normal Result list (or a clean Home when empty).
+            inFileSearch = false
+            query = output
+        case .failed:
+            flashConfirmation("Shortcut failed")
+        case .cancelled:
+            break
+        }
     }
 
     /// Flashes a brief, non-blocking toast acknowledging a silent outcome. A toast
