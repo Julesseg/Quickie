@@ -35,6 +35,10 @@ struct FallbacksView: View {
     // Pushed onto the launcher's navigation stack — no own stack or Done button.
     var body: some View {
         List {
+            // The unified page shape (ADR 0019; issue #66): Options lead, the
+            // user-ordered Fallback list follows.
+            ProviderOptionsSection(provider: .fallbacks)
+
             Section {
                     ForEach(rows) { row in
                         FallbackRowView(
