@@ -1,0 +1,32 @@
+[
+  {
+    "pr": 74,
+    "title": "feat(settings): app-level Clipboard prefill and Show Recents toggles",
+    "sha": "6f9d781",
+    "time": "2026-07-01T22:54:11.533Z"
+  },
+  {
+    "pr": 77,
+    "title": "fix(capture): release held keyboard inset on keyboard-less steps",
+    "sha": "af75870",
+    "time": "2026-07-01T22:44:40.423Z"
+  },
+  {
+    "pr": 75,
+    "title": "feat(pile): replace the Note system with the Pile",
+    "sha": "48554db",
+    "time": "2026-07-01T22:40:47.626Z"
+  },
+  {
+    "pr": 76,
+    "title": "feat(settings): Settings hub with per-provider pages and deeplink routing",
+    "sha": "1505581",
+    "time": "2026-07-01T22:39:22.800Z"
+  },
+  {
+    "pr": 73,
+    "title": "feat(secondary-actions): long-press menu keyed by result content",
+    "sha": "0259b0f",
+    "time": "2026-07-01T21:44:01.183Z"
+  }
+]
