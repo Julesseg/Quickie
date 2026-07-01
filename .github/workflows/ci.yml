@@ -1,9 +1,23 @@
 name: CI
 
+# Skip CI when a change only touches docs. The run is skipped only if EVERY
+# changed file matches one of these patterns — a mixed PR still runs in full.
 on:
   push:
     branches: [main]
+    paths-ignore:
+      - '**/*.md'
+      - 'docs/**'
+      - 'CONTEXT.md'
+      - 'ROADMAP.md'
+      - 'AGENTS.md'
   pull_request:
+    paths-ignore:
+      - '**/*.md'
+      - 'docs/**'
+      - 'CONTEXT.md'
+      - 'ROADMAP.md'
+      - 'AGENTS.md'
 
 concurrency:
   group: ci-${{ github.ref }}
