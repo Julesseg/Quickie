@@ -16,12 +16,15 @@ enum AppGroup {
     /// The shared App Group `UserDefaults`, falling back to `.standard` when the
     /// group isn't provisioned — the same degrade-gracefully posture as the
     /// SwiftData store, so preferences work on an unentitled build too.
-    /// Computed rather than stored: a stored `static let` of non-`Sendable`
-    /// `UserDefaults` is rejected under strict concurrency, and instances of the
-    /// same suite share one backing store anyway.
-    static var defaults: UserDefaults {
-        UserDefaults(suiteName: identifier) ?? .standard
-    }
+    ///
+    /// Stored once and shared, not computed per access: `@AppStorage` observes
+    /// the exact instance it was handed, so the Settings page's toggle writes
+    /// update `RootView`'s reads live only when both hold the *same* object —
+    /// with a fresh instance per access the write persists but the launcher
+    /// doesn't see it until the next launch. `nonisolated(unsafe)` is what lets
+    /// a non-`Sendable` type be stored globally under strict concurrency; it is
+    /// safe here because `UserDefaults` is documented thread-safe.
+    nonisolated(unsafe) static let defaults = UserDefaults(suiteName: identifier) ?? .standard
 }
 
 /// A user-saved Quicklink: a stored *static* URL that opens directly (CONTEXT.md
