@@ -59,6 +59,11 @@ struct ResultListView: View {
             .animation(rowMotion.animation, value: results.map(\.id))
         }
         .defaultScrollAnchor(.bottom)
+        // Swiping down the list dismisses the keyboard the native iOS way (issue
+        // #64): the keyboard tracks the drag off-screen, the input bar drops to the
+        // bottom, and the query + results are preserved — no custom gesture, just
+        // the system scroll-dismiss so more results become visible.
+        .scrollDismissesKeyboard(.interactively)
     }
 }
 
