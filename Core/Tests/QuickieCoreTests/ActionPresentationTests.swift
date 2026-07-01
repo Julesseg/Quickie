@@ -82,6 +82,7 @@ struct ActionPresentationTests {
         #expect(Action.openSettings().run() == .openPage(.settings))
         #expect(Action.openQuicklinksPage().run() == .openPage(.quicklinks))
         #expect(Action.openFallbacksPage().run() == .openPage(.fallbacks))
+        #expect(Action.openIndexedFoldersPage().run() == .openPage(.indexedFolders))
         // Commands, not Fallbacks — they match by name and don't ride the bottom.
         #expect(Action.openNotesLibrary().isFallback == false)
         #expect(Action.openSettings().isFallback == false)

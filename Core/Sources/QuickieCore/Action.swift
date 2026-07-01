@@ -56,6 +56,10 @@ public enum ManagementPage: Equatable, Hashable, Sendable {
     case fallbacks
     case notes
     case snippets
+    /// The Indexed Folders management page (CONTEXT.md → Indexed Folder; issue
+    /// #49): where the user grants, lists, and revokes the folders Quickie may
+    /// search. Reached by typing an "Indexed Folders" command row, never chrome.
+    case indexedFolders
 }
 
 /// Which kind of Provider an Action came from (CONTEXT.md → Provider): the
@@ -459,5 +463,22 @@ extension Action {
             inputTypes: [],
             outputType: .text
         ) { _ in .openPage(.fallbacks) }
+    }
+
+    /// The "Indexed Folders" command (CONTEXT.md → Indexed Folder; issue #49):
+    /// opens the full-screen page where the user grants, lists, and revokes the
+    /// folders Quickie is allowed to search. Like the other management commands it
+    /// matches by name/alias and opens a page — it is not a Fallback and rides no
+    /// bottom region. This lands before the "Search Files" context; it only manages
+    /// access, it does not search.
+    public static func openIndexedFoldersPage() -> Action {
+        Action(
+            id: "builtin.indexed-folders-page",
+            kind: .managementPage,
+            title: "Indexed Folders",
+            aliases: ["folders", "file access", "indexed folders", "search folders"],
+            inputTypes: [],
+            outputType: .text
+        ) { _ in .openPage(.indexedFolders) }
     }
 }

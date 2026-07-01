@@ -35,6 +35,17 @@ struct IndexedProviderTests {
         #expect(ids.contains("builtin.settings"))
         #expect(ids.contains("builtin.quicklinks-page"))
         #expect(ids.contains("builtin.fallbacks-page"))
+        #expect(ids.contains("builtin.indexed-folders-page"))
+    }
+
+    @Test("the Indexed Folders command is matchable by its file-access aliases")
+    func indexedFoldersMatchesByAlias() {
+        // The management page is reached by typing, not chrome (CONTEXT.md →
+        // Indexed Folder; issue #49) — so aliases like "folders" and "file access"
+        // must surface the command even though its title is "Indexed Folders".
+        let engine = SearchEngine(providers: [IndexedProvider.builtIns()])
+        #expect(engine.results(for: "folders").map(\.id).contains("builtin.indexed-folders-page"))
+        #expect(engine.results(for: "file access").map(\.id).contains("builtin.indexed-folders-page"))
     }
 
     @Test("the built-ins ship no Fallbacks and wear command badges, not data ones")

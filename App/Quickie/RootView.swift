@@ -59,6 +59,10 @@ struct RootView: View {
     /// persisted across launches.
     @State private var fallbacks = FallbacksStore.launch()
 
+    /// The user's Indexed Folder grants (CONTEXT.md → Indexed Folder; issue #49) —
+    /// security-scoped bookmarks in a device-local, non-synced store (ADR 0016).
+    @State private var indexedFolders = IndexedFoldersStore.launch()
+
     @State private var query = ""
     /// A note opened for reading or a seeded compose editor — presented as a
     /// sheet, distinct from the pushed management pages.
@@ -393,6 +397,7 @@ struct RootView: View {
         case .fallbacks: FallbacksView(store: fallbacks)
         case .notes: NoteManagerView()
         case .snippets: SnippetManagerView()
+        case .indexedFolders: IndexedFoldersView(store: indexedFolders)
         }
     }
 

@@ -25,7 +25,7 @@ The app's preferences page, reached like any capability — by typing to surface
 _Avoid_: Preferences sheet, manage screen (Settings is not where you manage content)
 
 **Management page**:
-A full-screen page for a library or preferences surface — Settings, Quicklinks, Fallbacks, Shortcuts, All Notes, All Snippets. Each is reached as a filtered result-row command (e.g. typing "quicklinks") rather than from chrome, and each presents full-screen with its own dismiss affordance — never as a partial-height sheet. Replaces both the top-right gear button and the old combined "Manage Quicklinks + search engine" surface. The **Shortcuts** page is the home for the user's imported [[Shortcut Action]]s: it lists each by name, carries a per-row "accepts input" toggle (the only way Quickie learns a Shortcut takes input, since import is names-only), and hosts the Sync-Shortcut install/re-sync entry point. There is no manual add — the list is populated solely by the Sync Shortcut import.
+A full-screen page for a library or preferences surface — Settings, Quicklinks, Fallbacks, Shortcuts, Indexed Folders, All Notes, All Snippets. Each is reached as a filtered result-row command (e.g. typing "quicklinks") rather than from chrome, and each presents full-screen with its own dismiss affordance — never as a partial-height sheet. Replaces both the top-right gear button and the old combined "Manage Quicklinks + search engine" surface. The **Shortcuts** page is the home for the user's imported [[Shortcut Action]]s: it lists each by name, carries a per-row "accepts input" toggle (the only way Quickie learns a Shortcut takes input, since import is names-only), and hosts the Sync-Shortcut install/re-sync entry point. There is no manual add — the list is populated solely by the Sync Shortcut import.
 _Avoid_: Sheet, manager (each page is single-purpose)
 
 **Highlighted result**:
@@ -122,7 +122,7 @@ A Quickie-provided iOS Shortcut the user installs and runs manually. It calls th
 _Avoid_: Importer, bridge shortcut
 
 **Indexed Folder**:
-A folder the user has explicitly granted Quickie access to (via the document picker), persisted as a security-scoped bookmark. File search is bounded to the union of Indexed Folders — iOS forbids whole-filesystem or global indexing. Filenames within them are indexed for fuzzy matching; results open via QuickLook / share / open-in-place.
+A folder the user has explicitly granted Quickie access to (via the document picker), persisted as a security-scoped bookmark. Grants are managed on the **Indexed Folders** [[Management page]] — a typed "Indexed Folders" command row (aliases "folders", "file access") opens a full-screen list with per-row removal and an **Add Folder** button that presents the document picker in folder-selection mode. Because bookmarks are opaque and device-specific, grants are stored **device-locally and never synced** (ADR 0016), and a grant whose bookmark no longer resolves is **pruned** rather than left as a dead row. File search is bounded to the union of Indexed Folders — iOS forbids whole-filesystem or global indexing. Filenames within them are indexed for fuzzy matching; results open via QuickLook / share / open-in-place.
 _Avoid_: Search scope, watched folder, library
 
 **File Search**:
