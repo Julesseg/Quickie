@@ -142,7 +142,9 @@ final class PileUITests: XCTestCase {
         pileCommand.tap()
 
         // The page lists the saved entry — the raw text, no title.
-        let entry = app.staticTexts[thought]
+        let entry = app.buttons.matching(
+            NSPredicate(format: "label CONTAINS[c] %@", thought)
+        ).firstMatch
         XCTAssertTrue(entry.waitForExistence(timeout: 10),
                       "the Pile page should list the saved entry's text")
 
@@ -153,5 +155,51 @@ final class PileUITests: XCTestCase {
         delete.tap()
         XCTAssertTrue(app.staticTexts["The Pile is empty"].waitForExistence(timeout: 5),
                       "deleting the only entry should leave an empty Pile")
+    }
+
+    /// Tapping an entry on the Pile page stages it exactly like its result row
+    /// (CONTEXT.md → Stage): the page pops back to the launcher, the input
+    /// becomes the saved text, and the entry leaves the Pile.
+    @MainActor
+    func testTappingAnEntryOnThePilePageStagesIt() throws {
+        let app = launchApp()
+
+        let input = app.textFields["search-input"]
+        XCTAssertTrue(input.waitForExistence(timeout: 30))
+        input.tap()
+        let thought = "Renew the passport before June"
+        input.typeText(thought)
+
+        let saveForLater = app.buttons["builtin.save-for-later"]
+        XCTAssertTrue(saveForLater.waitForExistence(timeout: 5))
+        saveForLater.tap()
+
+        // Open the Pile page via the typed command and tap the entry's row.
+        XCTAssertTrue(input.waitForExistence(timeout: 10))
+        input.tap()
+        input.typeText("pile")
+        let pileCommand = app.buttons["builtin.pile-page"]
+        XCTAssertTrue(pileCommand.waitForExistence(timeout: 5))
+        pileCommand.tap()
+
+        let entry = app.buttons.matching(
+            NSPredicate(format: "label CONTAINS[c] %@", thought)
+        ).firstMatch
+        XCTAssertTrue(entry.waitForExistence(timeout: 10))
+        entry.tap()
+
+        // Staged: back on the launcher with the saved text as the live query…
+        XCTAssertTrue(input.waitForExistence(timeout: 10))
+        expectation(for: NSPredicate(format: "value == %@", thought), evaluatedWith: input)
+        waitForExpectations(timeout: 5)
+
+        // …and consumed: reopening the Pile page finds it empty.
+        input.tap()
+        input.typeText(String(repeating: XCUIKeyboardKey.delete.rawValue, count: thought.count + 5))
+        input.typeText("pile")
+        XCTAssertTrue(pileCommand.waitForExistence(timeout: 5))
+        pileCommand.tap()
+        XCTAssertTrue(app.staticTexts["The Pile is empty"].waitForExistence(timeout: 10),
+                      "a staged entry should have left the Pile")
     }
 }
