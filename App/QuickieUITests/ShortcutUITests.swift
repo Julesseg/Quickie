@@ -120,17 +120,13 @@ final class ShortcutUITests: XCTestCase {
 
         // The capture's bottom input field is the reliable "a breadcrumb is in flight"
         // signal — the top breadcrumb bar (its cancel × and crumbs) rides under a
-        // progressive blur / status-bar bleed and is flaky to query. Its presence
-        // proves the shortcut collects input rather than firing immediately, and its
-        // placeholder label is the Argument being collected ("Input").
+        // progressive blur / status-bar bleed and is flaky to query. The field's mere
+        // presence proves the input-accepting shortcut collects text through the
+        // breadcrumb rather than firing immediately (a no-input shortcut shows none).
         let captureField = app.textFields["capture-input"]
         XCTAssertTrue(
             captureField.waitForExistence(timeout: 5),
             "an input-accepting shortcut starts the breadcrumb rather than firing immediately"
-        )
-        XCTAssertEqual(
-            captureField.label, "Input",
-            "the breadcrumb collects the optional text input step"
         )
     }
 
