@@ -33,20 +33,34 @@ final class KeyboardDismissUITests: XCTestCase {
         let input = app.textFields["search-input"]
         XCTAssertTrue(input.waitForExistence(timeout: 10), "bottom input should exist on launch")
         input.tap()
-        // A broad query surfaces several command rows, so the list is tall enough
-        // to scroll and the swipe registers as a real scroll-dismiss.
+        // A broad query surfaces many command rows (every built-in containing
+        // "s", plus the web-search fallback), so the list is tall enough to scroll
+        // and the drag registers as a real scroll-dismiss.
         input.typeText("s")
 
         let row = app.buttons["builtin.settings"]
         XCTAssertTrue(row.waitForExistence(timeout: 5), "typing surfaces the Settings command row")
+        let list = app.scrollViews.firstMatch
+        XCTAssertTrue(list.waitForExistence(timeout: 5), "the result list is a scroll view")
         XCTAssertTrue(
             app.keyboards.firstMatch.waitForExistence(timeout: 5),
             "typing brings the keyboard up"
         )
 
-        // Swipe down on the scrolling result list — the native interactive
-        // scroll-dismiss carries the keyboard off-screen with the drag.
-        app.scrollViews.firstMatch.swipeDown(velocity: .fast)
+        // Drag down the list into the keyboard region. Interactive scroll-dismiss
+        // follows the finger over the keyboard's frame and carries it off-screen —
+        // a quick flick within the upper list never reaches the keyboard, so this
+        // is a firm, continuous press-drag from inside the list to the bottom of
+        // the screen (past the input bar, over the keyboard), held briefly so the
+        // dismissal commits rather than snapping back.
+        let start = list.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.4))
+        let end = app.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.98))
+        start.press(
+            forDuration: 0.2,
+            thenDragTo: end,
+            withVelocity: .default,
+            thenHoldForDuration: 0.3
+        )
 
         XCTAssertTrue(
             app.keyboards.firstMatch.waitForNonExistence(timeout: 10),
