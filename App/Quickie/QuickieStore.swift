@@ -16,7 +16,12 @@ enum AppGroup {
     /// The shared App Group `UserDefaults`, falling back to `.standard` when the
     /// group isn't provisioned — the same degrade-gracefully posture as the
     /// SwiftData store, so preferences work on an unentitled build too.
-    static let defaults = UserDefaults(suiteName: identifier) ?? .standard
+    /// Computed rather than stored: a stored `static let` of non-`Sendable`
+    /// `UserDefaults` is rejected under strict concurrency, and instances of the
+    /// same suite share one backing store anyway.
+    static var defaults: UserDefaults {
+        UserDefaults(suiteName: identifier) ?? .standard
+    }
 }
 
 /// A user-saved Quicklink: a stored *static* URL that opens directly (CONTEXT.md
