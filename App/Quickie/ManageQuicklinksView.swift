@@ -19,6 +19,10 @@ struct QuicklinksView: View {
     // edge-swipe handle dismissal, so this view adds no stack or Done button.
     var body: some View {
         List {
+            // The unified page shape (ADR 0019; issue #66): Options lead, the
+            // provider's actions — the stored links — follow.
+            ProviderOptionsSection(provider: .quicklinks)
+
             Section {
                 if quicklinks.isEmpty {
                     Text("No Quicklinks yet")

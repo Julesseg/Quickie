@@ -13,13 +13,15 @@ extension Appearance {
     }
 }
 
-/// The Settings page (CONTEXT.md → Settings): a full-screen management page holding
-/// **Appearance** (Light / Dark / System, defaulting to System, applied app-wide)
-/// and an **Actions** section — a row per configurable capture Action that pushes
-/// its own per-Action panel (New Event today; issue #38). Reached by typing to
-/// surface the "Settings" command row, not from chrome; it is pushed onto the
-/// launcher's navigation stack, so it slides in from the right and its panels push
-/// onto the same stack, dismissing via the back chevron or the system edge-swipe.
+/// The top-level Settings hub (CONTEXT.md → Settings; ADR 0019, issue #66): an
+/// **app-level** section — Appearance today; the #65 toggles join it — over a
+/// **Providers** section, one navigation row per Provider. The rows are
+/// navigation only: each pushes that provider's unified Management page, the
+/// same destination its typed Settings command row deeplinks to, so the hub and
+/// the deeplink can never diverge. Reached by typing to surface the "Settings"
+/// command row, not from chrome; it is pushed onto the launcher's navigation
+/// stack, so it slides in from the right and its pages push onto the same
+/// stack, dismissing via the back chevron or the system edge-swipe.
 struct SettingsView: View {
     /// The persisted appearance preference, stored by its `Appearance` raw value
     /// and read back through the Core type (System → no forced scheme). Shared
@@ -58,18 +60,23 @@ struct SettingsView: View {
                 Text("Applies to the whole app. System follows your device.")
             }
 
-            // Per-Action settings (CONTEXT.md → Settings, Quick capture): each
-            // configurable capture Action gets a row that pushes its own panel onto
-            // the launcher's stack. New Event is the first (issue #38).
+            // The Providers section (CONTEXT.md → Settings; ADR 0019): one
+            // navigation row per Provider, each pushing the *same*
+            // `ManagementPage.settings(panel:)` destination its typed Settings
+            // command row deeplinks to — value-based links onto the launcher's
+            // stack, so the two routes share one page by construction. New
+            // Event's former per-Action panel lives on as the Events row.
             Section {
-                NavigationLink {
-                    EventSettingsView()
-                } label: {
-                    Label("New Event", systemImage: "calendar")
+                ForEach(ProviderID.allCases, id: \.rawValue) { provider in
+                    NavigationLink(value: ManagementPage.settings(panel: provider)) {
+                        Label(provider.displayName, systemImage: provider.symbol)
+                    }
+                    .accessibilityIdentifier("settings-provider-\(provider.rawValue)")
                 }
-                .accessibilityIdentifier("settings-action-new-event")
             } header: {
-                Text("Actions")
+                Text("Providers")
+            } footer: {
+                Text("Each provider's settings and content live on its own page. You can also get there by typing its name.")
             }
         }
         .navigationTitle("Settings")

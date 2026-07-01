@@ -1,15 +1,17 @@
 import SwiftUI
 import UniformTypeIdentifiers
+import QuickieCore
 
-/// The **Indexed Folders** management page (CONTEXT.md → Indexed Folder; issue
-/// #49): where the user grants, lists, and revokes the folders Quickie is allowed
-/// to search. Reached as the typed "Indexed Folders" command row and presented
-/// full-screen — never chrome, consistent with Quicklinks / Fallbacks / Settings.
+/// The **File Search** provider page (ADR 0019; issue #66): the unified home of
+/// the provider's options and its folder grants — the former standalone Indexed
+/// Folders page (issue #49), folded in as this page's content. Here the user
+/// grants, lists, and revokes the folders Quickie is allowed to search. Reached
+/// by typing "File Search" (or "folders" / "file access") or from the hub's
+/// Providers row, and presented full-screen — never chrome.
 ///
-/// This is the access foundation of File Search; it does **no** searching yet.
-/// **Add Folder** presents the system document picker in folder-selection mode; a
-/// granted folder appears in the list and can be removed (revoking the grant). The
-/// picker/store wiring is verified by the XCUITest CI job.
+/// **Add Folder** presents the system document picker in folder-selection mode;
+/// a granted folder appears in the list and can be removed (revoking the
+/// grant). The picker/store wiring is verified by the XCUITest CI job.
 struct IndexedFoldersView: View {
     let store: IndexedFoldersStore
 
@@ -19,6 +21,10 @@ struct IndexedFoldersView: View {
     // edge-swipe handle dismissal, so this view adds no stack or Done button.
     var body: some View {
         List {
+            // The unified page shape (ADR 0019; issue #66): Options lead, the
+            // folder grants — this provider's content — follow.
+            ProviderOptionsSection(provider: .fileSearch)
+
             Section {
                 if store.grants.isEmpty {
                     Text("No folders yet")
@@ -38,7 +44,7 @@ struct IndexedFoldersView: View {
                 Text("Folders Quickie is allowed to search. Access is stored on this device only and never synced.")
             }
         }
-        .navigationTitle("Indexed Folders")
+        .navigationTitle("File Search")
         .toolbar {
             ToolbarItem(placement: .topBarTrailing) {
                 Button {

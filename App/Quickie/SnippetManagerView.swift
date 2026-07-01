@@ -32,15 +32,22 @@ struct SnippetManagerView: View {
     // Pushed onto the launcher's navigation stack — the back chevron and
     // edge-swipe handle dismissal, so this view adds no stack or Done button.
     var body: some View {
-        Group {
+        // The unified page shape (ADR 0019; issue #66): Options lead, the
+        // snippet library follows — so the empty state now sits inside the
+        // list, beneath the always-present Options section.
+        List {
+            ProviderOptionsSection(provider: .snippets)
+
             if snippets.isEmpty {
-                ContentUnavailableView(
-                    "No snippets yet",
-                    systemImage: "doc.on.clipboard",
-                    description: Text("Save reusable text — an address, a canned reply — and copy it from the result list.")
-                )
+                Section {
+                    ContentUnavailableView(
+                        "No snippets yet",
+                        systemImage: "doc.on.clipboard",
+                        description: Text("Save reusable text — an address, a canned reply — and copy it from the result list.")
+                    )
+                }
             } else {
-                List {
+                Section {
                     ForEach(snippets) { snippet in
                         Button {
                             editorTarget = .edit(snippet)

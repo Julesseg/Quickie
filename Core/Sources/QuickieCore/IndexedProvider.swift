@@ -46,8 +46,16 @@ extension IndexedProvider {
             .openSettings(),
             .openQuicklinksPage(),
             .openFallbacksPage(),
-            .openIndexedFoldersPage(),
             .searchFiles(),
+            // The Settings command rows of the providers that never had a typed
+            // management row (ADR 0019; issue #66): the dynamic injectors
+            // (Calculator, File Search) and the capture providers (Events,
+            // Reminders — whose "New …" rows start captures, not pages). With
+            // these, every provider is reachable by typing its name.
+            .openCalculatorPage(),
+            .openFileSearchPage(),
+            .openEventsPage(),
+            .openRemindersPage(),
         ])
     }
 }
