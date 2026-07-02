@@ -76,6 +76,12 @@ struct RootView: View {
     /// keystroke, and each provider page's Enabled toggle writes into it.
     @State private var providerEnablement = ProviderEnablementStore.launch()
 
+    /// The user's instance-level Disabled state (CONTEXT.md → Disabled; issue
+    /// #68) — single actions reversibly hidden from results, Recents, and
+    /// Favorites, persisted across launches. Fallbacks keep their own set in
+    /// `fallbacks` above, and the kind switches live in `providerEnablement`.
+    @State private var instanceEnablement = EnablementStore.launch()
+
     /// The user's Indexed Folder grants (CONTEXT.md → Indexed Folder; issue #49) —
     /// security-scoped bookmarks in a device-local, non-synced store (ADR 0016).
     @State private var indexedFolders = IndexedFoldersStore.launch()
@@ -177,13 +183,13 @@ struct RootView: View {
         }
         let storedSnippets = snippets.map { snippet in
             Action.snippet(
-                id: Self.snippetActionID(snippet),
+                id: snippet.actionID,
                 title: snippet.title,
                 body: snippet.body
             )
         }
         let storedPileEntries = livePileEntries.map { entry in
-            Action.pileEntry(id: Self.pileActionID(entry), text: entry.text)
+            Action.pileEntry(id: entry.actionID, text: entry.text)
         }
         // Imported Shortcut Actions surface by name like Quicklinks/Snippets
         // (issue #45); inert this slice (triggering is the next). `acceptsInput`
@@ -206,7 +212,9 @@ struct RootView: View {
                 // page, so they must outlive any kind's disable (issue #67).
                 IndexedProvider.builtIns(),
                 // The user-content catalogs, each attributed to its configurable
-                // kind (issue #67) so the kind's Enabled toggle governs it.
+                // kind (issue #67) so the Disabled state can key the kind's
+                // Enabled toggle and each action's instance switch (issue #68)
+                // against it.
                 IndexedProvider(catalog: storedLinks, id: .quicklinks),
                 IndexedProvider(catalog: storedFallbackQueries, id: .fallbacks),
                 IndexedProvider(catalog: storedSnippets + [.newSnippet()], id: .snippets),
@@ -230,21 +238,11 @@ struct RootView: View {
             frecency: signals.frecency,
             fallbackOrder: fallbacks.resolvedOrder(for: fallbackQueries.map(\.id)),
             disabledFallbacks: fallbacks.disabled,
-            enablement: providerEnablement.enablement
+            enablement: providerEnablement.enablement,
+            disabledInstances: instanceEnablement.disabled
         )
     }
 
-    private static func pileActionID(_ entry: StoredPileEntry) -> String {
-        "pile.\(entry.id)"
-    }
-
-    /// The Action id the index derives from a stored Snippet — the single source
-    /// of the `"snippet.<id>"` scheme, used at both the catalog-construction site
-    /// and the `.snippet(id:)` lookup in `editSnippet`, so the two can't drift if
-    /// the id scheme ever changes (the same shared-helper move as `pileActionID`).
-    private static func snippetActionID(_ snippet: StoredSnippet) -> String {
-        "snippet.\(snippet.id)"
-    }
 
     /// The Pile entries that are safe to read this instant. A just-consumed
     /// entry can linger in the `@Query` snapshot after its deletion commits,
@@ -656,16 +654,18 @@ struct RootView: View {
     @ViewBuilder
     private func providerPage(for provider: ProviderID) -> some View {
         switch provider {
-        case .quicklinks: QuicklinksView()
+        case .quicklinks: QuicklinksView(enablement: instanceEnablement)
         case .fallbacks: FallbacksView(store: fallbacks)
-        case .snippets: SnippetManagerView()
-        case .shortcuts: ShortcutsView(store: shortcuts)
+        case .snippets: SnippetManagerView(enablement: instanceEnablement)
+        case .shortcuts: ShortcutsView(store: shortcuts, enablement: instanceEnablement)
         case .events: EventSettingsView()
         case .fileSearch: IndexedFoldersView(store: indexedFolders)
-        // The Pile's settings page is options-only (ADR 0018): its entries are
-        // temporary content, not configuration, and live on their own `.pile`
-        // page — the one carve-out from the unified content-under-options shape.
-        case .pile, .reminders, .calculator: ProviderOptionsPage(provider: provider)
+        // The Pile's Management page carries its entries as the actions section
+        // (issue #68) — per-entry enable toggles and swipe-to-delete — while
+        // the *entries* page (`.pile`, for staging) stays pure content: the
+        // configuration/content split of ADR 0018's carve-out.
+        case .pile: PileProviderPage(enablement: instanceEnablement)
+        case .reminders, .calculator: ProviderOptionsPage(provider: provider)
         }
     }
 
@@ -795,7 +795,7 @@ struct RootView: View {
             }
             query = ""
         case .stagePileEntry(let id):
-            if let entry = livePileEntries.first(where: { Self.pileActionID($0) == id }) {
+            if let entry = livePileEntries.first(where: { $0.actionID == id }) {
                 stage(entry)
             } else {
                 flashConfirmation("Not in the Pile")
@@ -875,7 +875,7 @@ struct RootView: View {
     /// was deleted) acknowledges rather than opening an empty editor.
     private func editSnippet(_ action: Action) {
         guard case .snippet(let id) = action.content,
-              let snippet = snippets.first(where: { Self.snippetActionID($0) == id }) else {
+              let snippet = snippets.first(where: { $0.actionID == id }) else {
             flashConfirmation("Snippet not found")
             return
         }
@@ -899,7 +899,7 @@ struct RootView: View {
             if case .openURL(let url) = action.run(input: query) { return url.absoluteString }
             return nil
         case .pileEntry(let id):
-            return livePileEntries.first(where: { Self.pileActionID($0) == id })?.text
+            return livePileEntries.first(where: { $0.actionID == id })?.text
         case .file(let bookmarkID, let relativePath):
             guard let access = indexedFolders.beginFileAccess(bookmarkID: bookmarkID, relativePath: relativePath) else {
                 return nil
@@ -922,7 +922,7 @@ struct RootView: View {
         case .url:
             if case .openURL(let url) = action.run(input: query) { shareRequest = ShareRequest(items: [url]) }
         case .pileEntry(let id):
-            if let text = livePileEntries.first(where: { Self.pileActionID($0) == id })?.text {
+            if let text = livePileEntries.first(where: { $0.actionID == id })?.text {
                 shareRequest = ShareRequest(items: [text])
             } else {
                 flashConfirmation("Not in the Pile")

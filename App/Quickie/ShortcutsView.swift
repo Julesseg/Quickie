@@ -17,6 +17,11 @@ struct ShortcutsView: View {
 
     let store: ShortcutsStore
 
+    /// The instance-level Disabled state (issue #68): each row's Enabled toggle
+    /// reversibly hides that one Shortcut Action from results/Recents/Favorites
+    /// — softer than swipe-to-delete, which a re-sync would undo anyway.
+    let enablement: EnablementStore
+
     var body: some View {
         List {
             // The unified page shape (ADR 0019; issue #66): Options lead; the
@@ -63,6 +68,8 @@ struct ShortcutsView: View {
                     ForEach(store.entries, id: \.name) { entry in
                         ShortcutRowView(
                             entry: entry,
+                            isDisabled: enablement.isDisabled(Action.shortcutID(for: entry.name)),
+                            onToggleDisabled: { enablement.toggleDisabled(Action.shortcutID(for: entry.name)) },
                             onToggleAcceptsInput: { store.toggleAcceptsInput(entry.name) }
                         )
                     }
@@ -70,7 +77,7 @@ struct ShortcutsView: View {
                 } header: {
                     Text("Imported shortcuts")
                 } footer: {
-                    Text("Turn on \u{201C}accepts input\u{201D} for a shortcut that takes text — Quickie can't tell from the import. Swipe to remove one; a later re-sync re-adds it if it's still in your library.")
+                    Text("Turn on \u{201C}accepts input\u{201D} for a shortcut that takes text — Quickie can't tell from the import. Disable one to hide it from results without removing it. Swipe to remove one; a later re-sync re-adds it if it's still in your library.")
                 }
             }
         }
@@ -102,22 +109,34 @@ struct ShortcutsView: View {
     }
 }
 
-/// One Shortcuts-page row: the shortcut's name and its "accepts input" toggle.
+/// One Shortcuts-page row: the shortcut's name with its **Enabled** switch (the
+/// instance-level Disabled toggle, issue #68), and its "accepts input" toggle
+/// beneath.
 private struct ShortcutRowView: View {
     let entry: ShortcutEntry
+    let isDisabled: Bool
+    let onToggleDisabled: () -> Void
     let onToggleAcceptsInput: () -> Void
 
     var body: some View {
-        Toggle(isOn: Binding(get: { entry.acceptsInput }, set: { _ in onToggleAcceptsInput() })) {
-            VStack(alignment: .leading, spacing: 2) {
+        VStack(spacing: 8) {
+            HStack(spacing: 12) {
                 Text(entry.name)
                     .font(.body)
-                    .foregroundStyle(.primary)
+                    .foregroundStyle(isDisabled ? .secondary : .primary)
+                Spacer(minLength: 8)
+                // Disabling keeps the row here but hides the Shortcut Action
+                // from every launcher surface — reversible, unlike delete.
+                Toggle("Enabled", isOn: Binding(get: { !isDisabled }, set: { _ in onToggleDisabled() }))
+                    .labelsHidden()
+                    .accessibilityIdentifier("shortcut-enabled.\(entry.name)")
+            }
+            Toggle(isOn: Binding(get: { entry.acceptsInput }, set: { _ in onToggleAcceptsInput() })) {
                 Text("Accepts input")
                     .font(.caption)
                     .foregroundStyle(.secondary)
             }
+            .accessibilityIdentifier("shortcut-accepts-input.\(entry.name)")
         }
-        .accessibilityIdentifier("shortcut-accepts-input.\(entry.name)")
     }
 }

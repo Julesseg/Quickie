@@ -12,6 +12,10 @@ struct QuicklinksView: View {
     @Environment(\.modelContext) private var modelContext
     @Query(sort: \StoredQuicklink.createdAt) private var quicklinks: [StoredQuicklink]
 
+    /// The instance-level Disabled state (issue #68): each row's toggle
+    /// reversibly hides that one Quicklink from results/Recents/Favorites.
+    let enablement: EnablementStore
+
     @State private var editing: StoredQuicklink?
     @State private var creatingNew = false
 
@@ -29,18 +33,18 @@ struct QuicklinksView: View {
                         .foregroundStyle(.secondary)
                 }
                 ForEach(quicklinks) { link in
-                    Button {
-                        editing = link
-                    } label: {
-                        QuicklinkRow(link: link)
-                    }
-                    .buttonStyle(.plain)
+                    QuicklinkRow(
+                        link: link,
+                        isDisabled: enablement.isDisabled(link.actionID),
+                        onToggleDisabled: { enablement.toggleDisabled(link.actionID) },
+                        onEdit: { editing = link }
+                    )
                 }
                 .onDelete(perform: delete)
             } header: {
                 Text("Quicklinks")
             } footer: {
-                Text("A Quicklink opens a fixed URL. For a search that consumes what you type, add a Fallback query on the Fallbacks page.")
+                Text("A Quicklink opens a fixed URL. For a search that consumes what you type, add a Fallback query on the Fallbacks page. Disable one to hide it from results without removing it.")
             }
         }
         .navigationTitle("Quicklinks")
@@ -74,19 +78,35 @@ struct QuicklinksView: View {
     }
 }
 
-/// One row in the Quicklinks list: name and its static URL.
+/// One row in the Quicklinks list: name, its static URL, an enable/disable
+/// toggle (the instance-level Disabled switch, issue #68), and a tap into the
+/// editor — the same row shape as the Fallbacks page.
 private struct QuicklinkRow: View {
     let link: StoredQuicklink
+    let isDisabled: Bool
+    let onToggleDisabled: () -> Void
+    let onEdit: () -> Void
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 2) {
-            Text(link.title)
-                .font(.body)
-            Text(link.urlString)
-                .font(.caption)
-                .foregroundStyle(.secondary)
-                .lineLimit(1)
+        HStack(spacing: 12) {
+            VStack(alignment: .leading, spacing: 2) {
+                Text(link.title)
+                    .font(.body)
+                    .foregroundStyle(isDisabled ? .secondary : .primary)
+                Text(link.urlString)
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .lineLimit(1)
+            }
+            Spacer(minLength: 8)
+            // Disabling keeps the row here but hides the Quicklink from every
+            // launcher surface — reversible, unlike swipe-to-delete.
+            Toggle("Enabled", isOn: Binding(get: { !isDisabled }, set: { _ in onToggleDisabled() }))
+                .labelsHidden()
+                .accessibilityIdentifier("quicklink-enabled.\(link.title)")
         }
+        .contentShape(Rectangle())
+        .onTapGesture { onEdit() }
     }
 }
 

@@ -30,9 +30,15 @@ final class SignalsStore {
     /// — note its reach is broad; a test that passes it gets a fully reset
     /// launcher, not just reset Favorites. The canonical list of what it clears:
     /// Favorites/Frecency (here), the Fallback list order/disabled set
+<<<<<<< HEAD
     /// (`FallbacksStore.launch`), the imported Shortcut Actions
     /// (`ShortcutsStore.launch`), the kind-level provider Enabled switches
     /// (`ProviderEnablementStore.launch`), and the app-level Settings toggles
+=======
+    /// (`FallbacksStore.launch`), the instance-level Disabled set
+    /// (`EnablementStore.launch`), the imported Shortcut Actions
+    /// (`ShortcutsStore.launch`), and the app-level Settings toggles
+>>>>>>> 5c40df4 (feat(settings): per-action enable toggles and swipe-to-delete on provider pages)
     /// (`AppSettings.reset`, run from `QuickieApp.init`).
     static let uitestResetArgument = "-uitest-reset-signals"
 
