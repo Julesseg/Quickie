@@ -15,6 +15,15 @@ struct PileView: View {
 
     @Query(sort: \StoredPileEntry.createdAt, order: .reverse) private var entries: [StoredPileEntry]
 
+    /// The rows safe to render this instant, mirroring the launcher's
+    /// `livePileEntries`: a deleted entry can linger in the `@Query` snapshot
+    /// after its commit, and reading `text`/`id` on it traps once SwiftData
+    /// frees the snapshot. `modelContext == nil` is the invalidation check that
+    /// never touches the backing data itself.
+    private var liveEntries: [StoredPileEntry] {
+        entries.filter { $0.modelContext != nil }
+    }
+
     /// Stages a tapped entry (CONTEXT.md → Stage). The launcher owns the query,
     /// the navigation stack, and the consume, so the page only reports the tap —
     /// the same defer-to-the-owner shape as the result list's `onRun`.
@@ -24,7 +33,7 @@ struct PileView: View {
     // edge-swipe handle dismissal, so this view adds no stack or Done button.
     var body: some View {
         Group {
-            if entries.isEmpty {
+            if liveEntries.isEmpty {
                 ContentUnavailableView(
                     "The Pile is empty",
                     systemImage: "tray",
@@ -32,7 +41,7 @@ struct PileView: View {
                 )
             } else {
                 List {
-                    ForEach(entries) { entry in
+                    ForEach(liveEntries) { entry in
                         Button {
                             onStage(entry)
                         } label: {
@@ -57,7 +66,7 @@ struct PileView: View {
     /// "Remove from Pile" secondary action).
     private func delete(at offsets: IndexSet) {
         for index in offsets {
-            context.delete(entries[index])
+            context.delete(liveEntries[index])
         }
         // Commit synchronously, like the launcher's stage-consume: a delete left
         // to autosave can invalidate a model the launcher's query snapshot still

@@ -96,14 +96,14 @@ final class KeyboardDismissUITests: XCTestCase {
     func testSwipeDownOnRecentListDismissesKeyboardAndPreservesRows() throws {
         let app = launchApp(extraArguments: [
             "-uitest-seed-frecent", "builtin.settings",
-            "-uitest-seed-frecent", "builtin.notes-library",
+            "-uitest-seed-frecent", "builtin.pile-page",
         ])
 
         // Launch opens straight to Home (empty query, ADR 0012) with the seeded
         // Recent rows — identified by their Action ids, as in the Result list.
         let row = app.buttons["builtin.settings"]
         XCTAssertTrue(row.waitForExistence(timeout: 10), "seeding frecency renders the Recent list")
-        let otherRow = app.buttons["builtin.notes-library"]
+        let otherRow = app.buttons["builtin.pile-page"]
         XCTAssertTrue(otherRow.exists, "every seeded entry appears as a Recent row")
 
         // Bring the keyboard up over Home. Tapping the field (rather than relying

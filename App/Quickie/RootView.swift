@@ -228,15 +228,16 @@ struct RootView: View {
     }
 
     /// The Pile entries that are safe to read this instant. A just-consumed
-    /// entry can linger in the `@Query` snapshot for a beat after its deletion
-    /// commits, and touching a stored attribute on an invalidated model traps —
-    /// the CI crash behind issue #62's tap-to-stage: stage → delete → keystroke
-    /// rebuilt the engine off the stale snapshot and read `.text` on a dead
-    /// model. Every `pileEntries` read goes through this filter; the metadata
-    /// checks (`isDeleted`, `modelContext`) are safe on an invalidated instance
-    /// where the stored attributes are not.
+    /// entry can linger in the `@Query` snapshot after its deletion commits,
+    /// and once SwiftData frees the deleted row's snapshot — which can happen
+    /// *seconds* later, not at save time — touching its backing data traps:
+    /// the recurring CI crash behind issue #62's tap-to-stage, killing a later
+    /// keystroke's engine rebuild. `modelContext == nil` is the one check that
+    /// stays safe on an invalidated instance (`isDeleted` reads the backing
+    /// data too, so guarding with it *was* the trap); every `pileEntries` read
+    /// goes through this filter.
     private var livePileEntries: [StoredPileEntry] {
-        pileEntries.filter { !$0.isDeleted && $0.modelContext != nil }
+        pileEntries.filter { $0.modelContext != nil }
     }
 
     private var isHome: Bool {
