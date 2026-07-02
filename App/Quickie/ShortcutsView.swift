@@ -19,6 +19,11 @@ struct ShortcutsView: View {
 
     var body: some View {
         List {
+            // The unified page shape (ADR 0019; issue #66): Options lead; the
+            // Sync Shortcut entry points below belong with them (CONTEXT.md →
+            // Management page), and the imported shortcuts are the actions list.
+            ProviderOptionsSection(provider: .shortcuts)
+
             Section {
                 Button {
                     if let url = ShortcutsStore.syncShortcutInstallURL { openURL(url) }

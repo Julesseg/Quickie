@@ -583,13 +583,33 @@ struct RootView: View {
     @ViewBuilder
     private func destinationView(for page: ManagementPage) -> some View {
         switch page {
-        case .settings: SettingsView()
+        case .settings(let panel):
+            if let panel {
+                providerPage(for: panel)
+            } else {
+                SettingsView()
+            }
+        }
+    }
+
+    /// A provider's unified Management page under the Settings hub (ADR 0019;
+    /// issue #66) — the one destination both its typed Settings command row and
+    /// the hub's Providers row resolve to. Content providers lead their existing
+    /// list page with an Options section; the instance-less providers
+    /// (Calculator, Reminders) show only Options; Events hosts the former New
+    /// Event panel as its options; File Search hosts the folder grants — the
+    /// former standalone Indexed Folders page, folded in as its content.
+    @ViewBuilder
+    private func providerPage(for provider: ProviderID) -> some View {
+        switch provider {
         case .quicklinks: QuicklinksView()
         case .fallbacks: FallbacksView(store: fallbacks)
         case .notes: NoteManagerView()
         case .snippets: SnippetManagerView()
-        case .indexedFolders: IndexedFoldersView(store: indexedFolders)
         case .shortcuts: ShortcutsView(store: shortcuts)
+        case .events: EventSettingsView()
+        case .fileSearch: IndexedFoldersView(store: indexedFolders)
+        case .reminders, .calculator: ProviderOptionsPage(provider: provider)
         }
     }
 

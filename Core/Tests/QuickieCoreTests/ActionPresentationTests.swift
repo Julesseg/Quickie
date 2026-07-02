@@ -86,12 +86,12 @@ struct ActionPresentationTests {
 
     @Test("the management commands open their full-screen pages")
     func managementCommandsOpenPages() {
-        #expect(Action.openNotesLibrary().run() == .openPage(.notes))
-        #expect(Action.openSnippetsLibrary().run() == .openPage(.snippets))
-        #expect(Action.openSettings().run() == .openPage(.settings))
-        #expect(Action.openQuicklinksPage().run() == .openPage(.quicklinks))
-        #expect(Action.openFallbacksPage().run() == .openPage(.fallbacks))
-        #expect(Action.openIndexedFoldersPage().run() == .openPage(.indexedFolders))
+        #expect(Action.openNotesLibrary().run() == .openPage(.settings(panel: .notes)))
+        #expect(Action.openSnippetsLibrary().run() == .openPage(.settings(panel: .snippets)))
+        #expect(Action.openSettings().run() == .openPage(.settings(panel: nil)))
+        #expect(Action.openQuicklinksPage().run() == .openPage(.settings(panel: .quicklinks)))
+        #expect(Action.openFallbacksPage().run() == .openPage(.settings(panel: .fallbacks)))
+        #expect(Action.openFileSearchPage().run() == .openPage(.settings(panel: .fileSearch)))
         // Commands, not Fallbacks — they match by name and don't ride the bottom.
         #expect(Action.openNotesLibrary().isFallback == false)
         #expect(Action.openSettings().isFallback == false)

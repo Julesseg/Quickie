@@ -84,13 +84,14 @@ struct ShortcutActionTests {
         #expect(Action.shortcut(name: "Timer").id != Action.shortcut(name: "Scan").id)
     }
 
-    @Test("the Shortcuts command opens its own management page, not nested under Settings")
+    @Test("the Shortcuts command deeplinks to the Shortcuts provider page")
     func shortcutsCommandOpensItsPage() {
-        // Typed "shortcuts" surfaces a management command row (CONTEXT.md →
-        // Management page) that pushes the dedicated Shortcuts page full-screen.
+        // Typed "shortcuts" surfaces the provider's Settings command row
+        // (CONTEXT.md → Settings command row; ADR 0019): same id/title/aliases as
+        // the old management command, now targeting the unified page in the hub.
         let action = Action.openShortcutsPage()
         #expect(action.title == "Shortcuts")
         #expect(action.kind == .managementPage)
-        #expect(action.run() == .openPage(.shortcuts))
+        #expect(action.run() == .openPage(.settings(panel: .shortcuts)))
     }
 }

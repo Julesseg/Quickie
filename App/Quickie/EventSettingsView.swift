@@ -1,11 +1,13 @@
 import SwiftUI
 import QuickieCore
 
-/// The per-Action settings panel for New Event (CONTEXT.md → Settings, Event; issue
-/// #38), reached from Settings → Actions → New Event. Exposes the two settings that
-/// shape the capture: whether to ask which calendar each time (vs. routing silently
-/// to the default calendar), and whether to open the pre-filled system event editor
-/// for final review instead of writing silently.
+/// The Events provider page (CONTEXT.md → Management page; ADR 0019, issue #66)
+/// — the former New Event settings panel, now the unified page the hub's Events
+/// row lands on. Its options shape the capture: whether to ask which calendar
+/// each time (vs. routing silently to the default calendar), and whether to
+/// open the pre-filled system event editor for final review instead of writing
+/// silently. An instance-less capture provider, so there is no actions list
+/// beneath the options (its one capture is the typed "New Event" row itself).
 ///
 /// Both persist via `@AppStorage`, so flipping one here updates the value the next
 /// New Event activation reads in `RootView.startEventCapture`. The `@AppStorage`
@@ -17,6 +19,11 @@ struct EventSettingsView: View {
 
     var body: some View {
         Form {
+            // The unified page shape (ADR 0019; issue #66): the shared Options
+            // lead-in, with the real capture options beneath until the declared
+            // settings schema absorbs them (a later slice).
+            ProviderOptionsSection(provider: .events)
+
             Section {
                 Toggle("Ask which calendar each time", isOn: $askCalendar)
                     .accessibilityIdentifier("event-ask-calendar")
@@ -35,6 +42,6 @@ struct EventSettingsView: View {
                 Text("On opens the system event editor pre-filled with what you captured — so you can set alerts, invitees, or recurrence before saving. Off saves silently.")
             }
         }
-        .navigationTitle("New Event")
+        .navigationTitle("Events")
     }
 }

@@ -73,19 +73,11 @@ public enum ActionOutcome: Equatable, Sendable {
 /// Management page). Each is reached as a typed command row, never from chrome,
 /// and presents full-screen with its own dismiss affordance.
 public enum ManagementPage: Equatable, Hashable, Sendable {
-    case settings
-    case quicklinks
-    case fallbacks
-    case notes
-    case snippets
-    /// The Indexed Folders management page (CONTEXT.md → Indexed Folder; issue
-    /// #49): where the user grants, lists, and revokes the folders Quickie may
-    /// search. Reached by typing an "Indexed Folders" command row, never chrome.
-    case indexedFolders
-    /// The Shortcuts library page (CONTEXT.md → Management page; issue #45): the
-    /// home for imported Shortcut Actions, reached by typing "shortcuts" — its own
-    /// full-screen page, **not** nested under Settings.
-    case shortcuts
+    /// The Settings hub (ADR 0019; issue #66). `panel: nil` is the top-level
+    /// page (app-level section + the Providers list); a `ProviderID` panel
+    /// deeplinks straight to that provider's unified Management page — the
+    /// target every Settings command row routes to.
+    case settings(panel: ProviderID?)
 }
 
 /// Which kind of Provider an Action came from (CONTEXT.md → Provider): the
@@ -520,10 +512,10 @@ extension Action {
         )
     }
 
-    /// The "All Notes" command (CONTEXT.md → Note): a built-in main-list Action
-    /// that opens the Note library page full-screen. Surfaces the full library as
-    /// a filterable, selectable row rather than a chrome button, so browsing notes
-    /// lives in the same loop as everything else.
+    /// The "All Notes" command (CONTEXT.md → Note, Settings command row): the
+    /// Notes provider's typed row. It keeps its id/title/aliases (pins and
+    /// Frecency survive) but now deeplinks to the Notes provider page under the
+    /// Settings hub — options + the note library on one page (ADR 0019).
     public static func openNotesLibrary() -> Action {
         Action(
             id: "builtin.notes-library",
@@ -532,11 +524,12 @@ extension Action {
             aliases: ["notes", "note library", "browse notes"],
             inputTypes: [],
             outputType: .text
-        ) { _ in .openPage(.notes) }
+        ) { _ in .openPage(.settings(panel: .notes)) }
     }
 
-    /// The "All Snippets" command (CONTEXT.md → Snippet): the snippet counterpart
-    /// to `openNotesLibrary`, opening the Snippet library page full-screen.
+    /// The "All Snippets" command (CONTEXT.md → Snippet, Settings command row):
+    /// the snippet counterpart to `openNotesLibrary`, deeplinking to the Snippets
+    /// provider page under the hub.
     public static func openSnippetsLibrary() -> Action {
         Action(
             id: "builtin.snippets-library",
@@ -545,7 +538,7 @@ extension Action {
             aliases: ["snippets", "snippet library", "browse snippets"],
             inputTypes: [],
             outputType: .text
-        ) { _ in .openPage(.snippets) }
+        ) { _ in .openPage(.settings(panel: .snippets)) }
     }
 
     /// The "Settings" command (CONTEXT.md → Settings, Management page): a typed-to
@@ -559,11 +552,12 @@ extension Action {
             aliases: ["preferences", "appearance", "theme"],
             inputTypes: [],
             outputType: .text
-        ) { _ in .openPage(.settings) }
+        ) { _ in .openPage(.settings(panel: nil)) }
     }
 
-    /// The "Quicklinks" command (CONTEXT.md → Quicklink, Management page): opens
-    /// the full-screen Quicklinks management page (static links only).
+    /// The "Quicklinks" command (CONTEXT.md → Quicklink, Settings command row):
+    /// deeplinks to the Quicklinks provider page under the hub — settings +
+    /// the stored links on one page (ADR 0019).
     public static func openQuicklinksPage() -> Action {
         Action(
             id: "builtin.quicklinks-page",
@@ -572,13 +566,13 @@ extension Action {
             aliases: ["links", "manage quicklinks", "bookmarks"],
             inputTypes: [],
             outputType: .text
-        ) { _ in .openPage(.quicklinks) }
+        ) { _ in .openPage(.settings(panel: .quicklinks)) }
     }
 
-    /// The "Shortcuts" command (CONTEXT.md → Management page; issue #45): opens the
-    /// full-screen Shortcuts page — the home for imported Shortcut Actions, with the
-    /// per-row "accepts input" toggle and the Sync-Shortcut install/re-sync entry
-    /// point. Its own page reached by typing "shortcuts", not nested under Settings.
+    /// The "Shortcuts" command (CONTEXT.md → Management page; issue #45):
+    /// deeplinks to the Shortcuts provider page — the home for imported Shortcut
+    /// Actions, with the per-row "accepts input" toggle and the Sync-Shortcut
+    /// install/re-sync entry point — now reached through the hub (ADR 0019).
     public static func openShortcutsPage() -> Action {
         Action(
             id: "builtin.shortcuts-page",
@@ -587,12 +581,12 @@ extension Action {
             aliases: ["shortcut", "sync shortcuts", "manage shortcuts"],
             inputTypes: [],
             outputType: .text
-        ) { _ in .openPage(.shortcuts) }
+        ) { _ in .openPage(.settings(panel: .shortcuts)) }
     }
 
-    /// The "Fallbacks" command (CONTEXT.md → Fallback list, Management page):
-    /// opens the unified, reorderable Fallbacks page (Fallback queries + New Note
-    /// + New Snippet).
+    /// The "Fallbacks" command (CONTEXT.md → Fallback list, Settings command
+    /// row): deeplinks to the unified, reorderable Fallbacks provider page
+    /// (Fallback queries + New Note + New Snippet) under the hub.
     public static func openFallbacksPage() -> Action {
         Action(
             id: "builtin.fallbacks-page",
@@ -601,7 +595,75 @@ extension Action {
             aliases: ["fallback", "search engines", "manage fallbacks"],
             inputTypes: [],
             outputType: .text
-        ) { _ in .openPage(.fallbacks) }
+        ) { _ in .openPage(.settings(panel: .fallbacks)) }
+    }
+
+    /// The "Calculator" command (CONTEXT.md → Settings command row; ADR 0019):
+    /// the Calculator provider's typed row, deeplinking to its page under the
+    /// hub. Brand-new — as a dynamic injector it never had a management row, so
+    /// this is what makes the provider reachable (and, later, re-enableable) by
+    /// typing its name. Distinct from a calculator *result*, which only appears
+    /// when the query is a math expression.
+    public static func openCalculatorPage() -> Action {
+        Action(
+            id: "builtin.calculator-page",
+            kind: .managementPage,
+            title: "Calculator",
+            aliases: ["calc", "calculator settings", "unit conversion"],
+            inputTypes: [],
+            outputType: .text
+        ) { _ in .openPage(.settings(panel: .calculator)) }
+    }
+
+    /// The "File Search" command (CONTEXT.md → Settings command row; ADR 0019):
+    /// the File Search provider's typed row, deeplinking to its page under the
+    /// hub — the second previously row-less dynamic injector to gain one.
+    /// Distinct from "Search Files", which *enters* the scoped browsing context.
+    ///
+    /// The provider page is also where the user grants, lists, and revokes the
+    /// folders Quickie may search: the former standalone Indexed Folders page
+    /// (issue #49) folded into it, so this row carries its file-access aliases
+    /// and is the single typed route to folder management.
+    public static func openFileSearchPage() -> Action {
+        Action(
+            id: "builtin.file-search-page",
+            kind: .managementPage,
+            title: "File Search",
+            aliases: ["file search settings", "folders", "indexed folders", "file access", "search folders"],
+            inputTypes: [],
+            outputType: .text
+        ) { _ in .openPage(.settings(panel: .fileSearch)) }
+    }
+
+    /// The "Events" command (CONTEXT.md → Settings command row; ADR 0019): the
+    /// Events capture provider's typed row, deeplinking to its page under the
+    /// hub. Distinct from "New Event", which *starts a capture* rather than
+    /// opening a page — so the capture provider, like the dynamic injectors,
+    /// never had a typed route to its settings until this row.
+    public static func openEventsPage() -> Action {
+        Action(
+            id: "builtin.events-page",
+            kind: .managementPage,
+            title: "Events",
+            aliases: ["event settings", "calendar settings"],
+            inputTypes: [],
+            outputType: .text
+        ) { _ in .openPage(.settings(panel: .events)) }
+    }
+
+    /// The "Reminders" command (CONTEXT.md → Settings command row; ADR 0019):
+    /// the Reminders capture provider's typed row, deeplinking to its page under
+    /// the hub — the reminder counterpart to `openEventsPage`, distinct from the
+    /// "New Reminder" capture row.
+    public static func openRemindersPage() -> Action {
+        Action(
+            id: "builtin.reminders-page",
+            kind: .managementPage,
+            title: "Reminders",
+            aliases: ["reminder settings"],
+            inputTypes: [],
+            outputType: .text
+        ) { _ in .openPage(.settings(panel: .reminders)) }
     }
 
     /// A file surfaced by File Search (CONTEXT.md → File Search; ADR 0015): a row
@@ -652,20 +714,4 @@ extension Action {
         ) { _ in .enterFileSearch }
     }
 
-    /// The "Indexed Folders" command (CONTEXT.md → Indexed Folder; issue #49):
-    /// opens the full-screen page where the user grants, lists, and revokes the
-    /// folders Quickie is allowed to search. Like the other management commands it
-    /// matches by name/alias and opens a page — it is not a Fallback and rides no
-    /// bottom region. This lands before the "Search Files" context; it only manages
-    /// access, it does not search.
-    public static func openIndexedFoldersPage() -> Action {
-        Action(
-            id: "builtin.indexed-folders-page",
-            kind: .managementPage,
-            title: "Indexed Folders",
-            aliases: ["folders", "file access", "indexed folders", "search folders"],
-            inputTypes: [],
-            outputType: .text
-        ) { _ in .openPage(.indexedFolders) }
-    }
 }

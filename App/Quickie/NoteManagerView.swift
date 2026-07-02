@@ -34,15 +34,22 @@ struct NoteManagerView: View {
     // Pushed onto the launcher's navigation stack — the back chevron and
     // edge-swipe handle dismissal, so this view adds no stack or Done button.
     var body: some View {
-        Group {
+        // The unified page shape (ADR 0019; issue #66): Options lead, the note
+        // library follows — so the empty state now sits inside the list,
+        // beneath the always-present Options section.
+        List {
+            ProviderOptionsSection(provider: .notes)
+
             if notes.isEmpty {
-                ContentUnavailableView(
-                    "No notes yet",
-                    systemImage: "note.text",
-                    description: Text("Capture a thought — type it and pick “New Note”, or add one here — then reopen it to read or add more.")
-                )
+                Section {
+                    ContentUnavailableView(
+                        "No notes yet",
+                        systemImage: "note.text",
+                        description: Text("Capture a thought — type it and pick “New Note”, or add one here — then reopen it to read or add more.")
+                    )
+                }
             } else {
-                List {
+                Section {
                     ForEach(notes) { note in
                         Button {
                             editorTarget = .open(note)
