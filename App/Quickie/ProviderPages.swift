@@ -47,7 +47,7 @@ extension ProviderID {
         case .quicklinks: return "link"
         case .fallbacks: return "magnifyingglass"
         case .snippets: return "doc.on.clipboard"
-        case .notes: return "note.text"
+        case .pile: return "tray.full"
         case .shortcuts: return "square.stack.3d.up"
         case .reminders: return "checklist"
         case .events: return "calendar"

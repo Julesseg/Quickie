@@ -39,9 +39,14 @@ struct SettingsHubTests {
         // in one. There is no separate content page left to open.
         #expect(Action.openQuicklinksPage().run() == .openPage(.settings(panel: .quicklinks)))
         #expect(Action.openFallbacksPage().run() == .openPage(.settings(panel: .fallbacks)))
-        #expect(Action.openNotesLibrary().run() == .openPage(.settings(panel: .notes)))
         #expect(Action.openSnippetsLibrary().run() == .openPage(.settings(panel: .snippets)))
         #expect(Action.openShortcutsPage().run() == .openPage(.settings(panel: .shortcuts)))
+        // The Pile is the deliberate exception (ADR 0018): its typed row opens
+        // the temporary *entries* — content, not configuration — so it targets
+        // its own `.pile` page; the provider's settings stay reachable from the
+        // hub's Providers list (`ProviderID.pile` still exists for that row).
+        #expect(Action.openPilePage().run() == .openPage(.pile))
+        #expect(ProviderID.pile.displayName == "Pile")
     }
 
     @Test("Calculator and File Search gain a typed settings command row")

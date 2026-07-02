@@ -40,7 +40,7 @@ enum AppGroup {
 final class StoredQuicklink {
     /// A stable, collision-free identity assigned at creation and persisted with
     /// the Quicklink. This — not `persistentModelID.hashValue`, which is neither
-    /// collision-free nor stable across launches (the same trap the Note avoids) —
+    /// collision-free nor stable across launches (the same trap the Pile entry avoids) —
     /// is what the index derives this Quicklink's Action id from, so a pinned
     /// Favorite or its Frecency survives relaunches instead of silently orphaning.
     /// Defaulted at the property so existing rows migrate without a value.
@@ -67,7 +67,7 @@ final class StoredQuicklink {
 /// A user-saved Fallback query: a stored URL template that **requires** a
 /// `{placeholder}` and consumes the typed text as its query (CONTEXT.md →
 /// Fallback query; ADR 0013). One kind of Fallback Action, managed on the
-/// unified Fallbacks page alongside New Note / New Snippet. Web search is just a
+/// unified Fallbacks page alongside Save for later / New Snippet. Web search is just a
 /// default-seeded, fully deletable instance of this (`migrateToFallbackQueries`
 /// seeds it on first launch).
 ///
@@ -102,13 +102,13 @@ final class StoredFallbackQuery {
 /// A user-saved Snippet: reusable text whose main action is **Copy**
 /// (CONTEXT.md → Snippet) — canned replies, an address, a template pasted
 /// repeatedly. Persisted in SwiftData alongside Quicklinks; the in-memory index
-/// is rebuilt from these on launch (ADR 0006). A Snippet shares storage with a
-/// future Note but is distinct in intent: copy-out, not read.
+/// is rebuilt from these on launch (ADR 0006). A Snippet is distinct from a Pile
+/// entry in intent: titled, reusable copy-out text, not a deferred query.
 @Model
 final class StoredSnippet {
     /// A stable, collision-free identity assigned at creation and persisted with
     /// the Snippet. This — not `persistentModelID.hashValue`, which is neither
-    /// collision-free nor stable across launches (the same trap the Note avoids) —
+    /// collision-free nor stable across launches (the same trap the Pile entry avoids) —
     /// is what the index derives this Snippet's Action id from, so a pinned
     /// Favorite or its Frecency survives relaunches instead of silently orphaning.
     /// Defaulted at the property so existing rows migrate without a value.
@@ -124,18 +124,36 @@ final class StoredSnippet {
     }
 }
 
-/// A user-captured Note: a free-text thought whose main action is **Open/read**
-/// (CONTEXT.md → Note) — the brain-dump target. Persisted in SwiftData alongside
+/// A saved Pile entry: a raw query text the user saved to deal with later
+/// (CONTEXT.md → Pile; ADR 0018) — a titleless block of text, nothing more.
+/// Captured silently by the "Save for later" Fallback, staged (and consumed) by
+/// its main action, discarded on the Pile page. Persisted in SwiftData alongside
 /// Quicklinks and Snippets; the in-memory index is rebuilt from these on launch
-/// (ADR 0006). A Note shares storage with a Snippet but is distinct in intent:
-/// read, not copy-out. `updatedAt` advances on every edit/append so the library
-/// can show what was touched most recently.
+/// (ADR 0006).
+@Model
+final class StoredPileEntry {
+    /// A stable, collision-free identity assigned at creation and persisted with
+    /// the entry. This — not `persistentModelID.hashValue`, which is neither
+    /// collision-free nor stable across launches — is what the index uses to
+    /// derive the entry's Action id and what `stagePileEntry(id:)` resolves back
+    /// to.
+    var id: String
+    var text: String
+    var createdAt: Date
+
+    init(id: String = UUID().uuidString, text: String, createdAt: Date = Date()) {
+        self.id = id
+        self.text = text
+        self.createdAt = createdAt
+    }
+}
+
+/// The legacy Note entity (pre-ADR 0018), kept in the schema **only** so
+/// `migrateNotesToPile` can read the rows a previous build stored and collapse
+/// each to a titleless Pile entry. Nothing else creates or reads these; once
+/// migrated, the table stays empty.
 @Model
 final class StoredNote {
-    /// A stable, collision-free identity assigned at creation and persisted with
-    /// the note. This — not `persistentModelID.hashValue`, which is neither
-    /// collision-free nor stable across launches — is what the index uses to
-    /// derive a note's Action id and what `openNote(id:)` resolves back to.
     var id: String
     var title: String
     var body: String
@@ -149,31 +167,13 @@ final class StoredNote {
         self.createdAt = createdAt
         self.updatedAt = updatedAt
     }
-
-    /// Builds a Note from a single blob of captured text — the instant, silent
-    /// "New Note" capture (CONTEXT.md → Note). The whole text is the body; the
-    /// title is its first non-empty line, trimmed and length-capped, so the note
-    /// reads well in the library and matches by a sensible name. An untitled
-    /// blank capture falls back to a stable placeholder rather than an empty row.
-    static func capture(text: String, now: Date = Date()) -> StoredNote {
-        let body = text.trimmingCharacters(in: .whitespacesAndNewlines)
-        let firstLine = body
-            .split(separator: "\n", omittingEmptySubsequences: true)
-            .first
-            .map(String.init) ?? ""
-        let trimmedLine = firstLine.trimmingCharacters(in: .whitespaces)
-        let title = trimmedLine.isEmpty
-            ? "Note"
-            : String(trimmedLine.prefix(60))
-        return StoredNote(title: title, body: body, createdAt: now, updatedAt: now)
-    }
 }
 
 /// Owns the single `ModelContainer`, configured for the shared App Group with
 /// CloudKit off for now (M1 is fully local — ADR 0006 / ROADMAP).
 enum QuickieStore {
     static let container: ModelContainer = {
-        let schema = Schema([StoredQuicklink.self, StoredFallbackQuery.self, StoredSnippet.self, StoredNote.self])
+        let schema = Schema([StoredQuicklink.self, StoredFallbackQuery.self, StoredSnippet.self, StoredPileEntry.self, StoredNote.self])
 
         // Only ask SwiftData for the shared App Group container when this build
         // is actually entitled for it — `containerURL(forSecurityApplication…)`
@@ -198,12 +198,12 @@ enum QuickieStore {
     }()
 
     /// An ephemeral, in-memory container used under UI testing (the `--uitesting`
-    /// launch argument). Each launch starts with an empty store, so notes and
-    /// snippets never persist or accumulate across runs — the tests stay
+    /// launch argument). Each launch starts with an empty store, so Pile entries
+    /// and snippets never persist or accumulate across runs — the tests stay
     /// idempotent and a capture assertion can't pass on a stale row from a
     /// previous run.
     static func inMemoryContainer() -> ModelContainer {
-        let schema = Schema([StoredQuicklink.self, StoredFallbackQuery.self, StoredSnippet.self, StoredNote.self])
+        let schema = Schema([StoredQuicklink.self, StoredFallbackQuery.self, StoredSnippet.self, StoredPileEntry.self, StoredNote.self])
         let configuration = ModelConfiguration(schema: schema, isStoredInMemoryOnly: true, cloudKitDatabase: .none)
         do {
             return try ModelContainer(for: schema, configurations: [configuration])
@@ -268,5 +268,43 @@ enum QuickieStore {
         } catch {
             // Save failed; migration will retry on the next launch.
         }
+    }
+
+    /// The launch argument that seeds legacy pre-Pile `StoredNote` rows into the
+    /// fresh in-memory UI-testing store (alongside `--uitesting`), so a UI test
+    /// can drive the real `migrateNotesToPile` collapse at launch instead of the
+    /// migration going unexercised (issue #62; ADR 0018).
+    static let uitestSeedNotesArgument = "-uitest-seed-notes"
+
+    /// Plants the legacy rows `uitestSeedNotesArgument` asks for: a note whose
+    /// title differs from its body, so the test can assert the collapse keeps
+    /// the body as the entry's text and drops the title (it stops matching).
+    @MainActor
+    static func seedLegacyNotesForUITesting(in context: ModelContext) {
+        context.insert(StoredNote(
+            title: "Groceries list",
+            body: "buy oat milk and eggs for the week"
+        ))
+    }
+
+    /// One-time data migration for the Note → Pile replacement (ADR 0018), run
+    /// at launch: every stored note collapses to a titleless Pile entry — the
+    /// body *is* the entry's text; the title is dropped (it was derived from the
+    /// body's first line at capture, and ADR 0018 accepts losing it). No flag is
+    /// needed: migrated rows are deleted, so the source empties and re-running
+    /// is a no-op — self-healing if a save ever fails mid-way.
+    @MainActor
+    static func migrateNotesToPile(in context: ModelContext) {
+        let notes = (try? context.fetch(FetchDescriptor<StoredNote>())) ?? []
+        guard !notes.isEmpty else { return }
+
+        for note in notes {
+            let text = note.body.trimmingCharacters(in: .whitespacesAndNewlines)
+            if !text.isEmpty {
+                context.insert(StoredPileEntry(id: note.id, text: text, createdAt: note.createdAt))
+            }
+            context.delete(note)
+        }
+        try? context.save()
     }
 }

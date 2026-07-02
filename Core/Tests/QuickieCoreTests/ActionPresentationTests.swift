@@ -3,9 +3,9 @@ import Testing
 @testable import QuickieCore
 
 // Every result row carries two glyphs (issue #11 follow-up): a leading
-// provider badge — what kind of thing this is (Quicklink, Snippet, Note…) — and
+// provider badge — what kind of thing this is (Quicklink, Snippet, Pile…) — and
 // a trailing main-action glyph — what tapping it does (open in browser, copy,
-// read). Both are pure classifications of the Action, so the App renders icons
+// stage). Both are pure classifications of the Action, so the App renders icons
 // without re-deriving intent: `kind` is the provider identity and `mainAction`
 // is read straight off the Action's real outcome, so the trailing glyph can
 // never drift from what the row actually does.
@@ -30,10 +30,10 @@ struct ActionPresentationTests {
     @Test("each main action reads off the row's real outcome")
     func mainActionFollowsOutcome() {
         #expect(Action.quicklink(id: "q", title: "GitHub", url: URL(string: "https://github.com")!).mainAction == .openInBrowser)
-        #expect(Action.note(id: "n", title: "Idea").mainAction == .openNote)
-        #expect(Action.newNote().mainAction == .compose)
+        #expect(Action.pileEntry(id: "p", text: "look into e-bike rebates").mainAction == .stage)
+        #expect(Action.saveForLater().mainAction == .saveToPile)
         #expect(Action.newSnippet().mainAction == .compose)
-        #expect(Action.openNotesLibrary().mainAction == .openPage)
+        #expect(Action.openPilePage().mainAction == .openPage)
         #expect(Action.file(bookmarkID: "f", relativePath: "a/b.txt").mainAction == .openFile)
     }
 
@@ -50,7 +50,7 @@ struct ActionPresentationTests {
         // New Reminder collects its Arguments before producing anything, so its
         // plain `run()` is the placeholder `.none`; the trailing glyph must still
         // read the capture's real outcome (`createReminder` → compose), so the row
-        // wears the same compose pencil as New Note rather than no glyph at all.
+        // wears the same compose pencil as New Snippet rather than no glyph at all.
         #expect(Action.newReminder().mainAction == .compose)
         #expect(Action.newReminder(askDate: false, list: .ask, lists: [
             ChoiceOption(id: "work", label: "Work"),
@@ -86,14 +86,14 @@ struct ActionPresentationTests {
 
     @Test("the management commands open their full-screen pages")
     func managementCommandsOpenPages() {
-        #expect(Action.openNotesLibrary().run() == .openPage(.settings(panel: .notes)))
+        #expect(Action.openPilePage().run() == .openPage(.pile))
         #expect(Action.openSnippetsLibrary().run() == .openPage(.settings(panel: .snippets)))
         #expect(Action.openSettings().run() == .openPage(.settings(panel: nil)))
         #expect(Action.openQuicklinksPage().run() == .openPage(.settings(panel: .quicklinks)))
         #expect(Action.openFallbacksPage().run() == .openPage(.settings(panel: .fallbacks)))
         #expect(Action.openFileSearchPage().run() == .openPage(.settings(panel: .fileSearch)))
         // Commands, not Fallbacks — they match by name and don't ride the bottom.
-        #expect(Action.openNotesLibrary().isFallback == false)
+        #expect(Action.openPilePage().isFallback == false)
         #expect(Action.openSettings().isFallback == false)
     }
 }
