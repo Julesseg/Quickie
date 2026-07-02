@@ -40,6 +40,11 @@ public struct SearchEngine {
     /// in the list but never surfaced in results.
     private let disabledFallbacks: Set<String>
 
+    /// The kind-level Enabled switches (CONTEXT.md → Disabled; issue #67): a
+    /// disabled provider contributes nothing to typed results, the Frecency
+    /// "Recent" list, or the Favorites grid — reversibly, its data retained.
+    private let enablement: ProviderEnablement
+
     /// The boost a Favorite adds to its match score. Tuned to reorder *within* a
     /// match tier (e.g. float a pinned exact match above an unpinned one)
     /// without lifting a weak match over a clean exact/prefix one — the tiers,
@@ -65,7 +70,8 @@ public struct SearchEngine {
         frecency: Frecency = Frecency(),
         now: Date = Date(),
         fallbackOrder: [String] = [],
-        disabledFallbacks: Set<String> = []
+        disabledFallbacks: Set<String> = [],
+        enablement: ProviderEnablement = ProviderEnablement()
     ) {
         self.providers = providers
         self.layout = layout
@@ -77,6 +83,15 @@ public struct SearchEngine {
         for (index, id) in fallbackOrder.enumerated() { rank[id] = index }
         self.fallbackRank = rank
         self.disabledFallbacks = disabledFallbacks
+        self.enablement = enablement
+    }
+
+    /// Whether a Provider's Actions may surface at all (issue #67): true unless
+    /// the provider declares a kind the user has switched off. A kind-less
+    /// provider (the built-in command rows) is always live — that is what keeps
+    /// every Settings command row typeable while its provider is disabled.
+    private func isLive(_ provider: Provider) -> Bool {
+        provider.id.map(enablement.isEnabled) ?? true
     }
 
     /// The ranked Result list for `query`, best match first. An empty or
@@ -98,13 +113,20 @@ public struct SearchEngine {
         var boosted: [Action] = []  // boosted-dynamic: type-triggered, floats top
         var ranked: [Ranked] = []   // indexed + ranked-dynamic: scored + blended
         var fallbacks: [Action] = [] // pinned to the bottom region
-        for provider in providers {
+        for provider in providers where isLive(provider) {
             let weight: Double = provider.weight
             for action in provider.candidates(for: trimmed) {
                 if action.isFallback {
-                    // A disabled fallback is kept in the user's list but never
-                    // surfaced in results (CONTEXT.md → Fallback list).
-                    if !disabledFallbacks.contains(action.id) { fallbacks.append(action) }
+                    // The Fallbacks kind's Enabled toggle is a *master* switch
+                    // over the whole bottom region (issue #67): the Fallback
+                    // list's instances span three kinds (queries + Save for
+                    // later + New Snippet), and a disabled kind short-circuits
+                    // its instances (CONTEXT.md → Disabled) — even the two
+                    // permanent captures that ride other providers' catalogs.
+                    // Keyed off `isFallback` — the same property that pins the
+                    // region — so no wiring can leak a fallback past it.
+                    if enablement.isEnabled(.fallbacks),
+                       !disabledFallbacks.contains(action.id) { fallbacks.append(action) }
                 } else if provider.kind == .dynamic {
                     // Boosted-dynamic results skip name-matching — the Provider
                     // already decided they apply (Provider.swift: "boosted-dynamic
@@ -157,7 +179,10 @@ public struct SearchEngine {
     ///   "Recent" section while leaving Favorites untouched — the signals keep
     ///   recording and ranking; only the Home surface is hidden.
     public func home(showRecents: Bool = true) -> HomeContent {
-        let byId = indexedActionsByID()
+        // Disabled kinds are excluded here (issue #67): their Favorites drop
+        // from the grid — without consuming a visible slot, since the pin list
+        // itself is untouched — and their Frecency rows leave the Recent list.
+        let byId = indexedActionsByID(includingDisabled: false)
 
         let favorites: [Action] = favoriteOrder.compactMap { byId[$0] }
 
@@ -172,10 +197,14 @@ public struct SearchEngine {
     }
 
     /// The Indexed, non-Fallback Actions keyed by id — the enumerable catalog
-    /// `home()` resolves Favorite and Frecency ids against.
-    private func indexedActionsByID() -> [String: Action] {
+    /// `home()` resolves Favorite and Frecency ids against. `home()` reads it
+    /// with disabled kinds excluded, so their cards and Recent rows vanish;
+    /// `resolvableHomeIDs()` reads it unfiltered, because a disabled action
+    /// still *exists* — only a deleted one stops resolving.
+    private func indexedActionsByID(includingDisabled: Bool) -> [String: Action] {
         var byId: [String: Action] = [:]
         for provider in providers where provider.kind == .indexed {
+            guard includingDisabled || isLive(provider) else { continue }
             for action in provider.candidates(for: "") where !action.isFallback {
                 if byId[action.id] == nil { byId[action.id] = action }
             }
@@ -188,8 +217,13 @@ public struct SearchEngine {
     /// reconciles persisted Favorites against this so an id whose target no longer
     /// exists (a deleted Snippet, or a stale id from an older build) is pruned
     /// rather than lingering invisibly and consuming a Favorites slot.
+    ///
+    /// Deliberately ignores kind-level enablement (issue #67 AC #3): a disabled
+    /// Favorite keeps its pin — dropped from the grid by `home()`, restored on
+    /// re-enable — so it must keep resolving here or the reconciliation would
+    /// prune the pin the moment its provider is switched off.
     public func resolvableHomeIDs() -> Set<String> {
-        Set(indexedActionsByID().keys)
+        Set(indexedActionsByID(includingDisabled: true).keys)
     }
 
     /// A scored match in flight: the raw matcher score (which fixes its tier)

@@ -151,10 +151,10 @@ final class PileUITests: XCTestCase {
                       "the Pile page should list the saved entry's text")
 
         // Content only: the entries are temporary, so this page carries no
-        // provider Options section — the Pile's settings live on its own page
-        // under the Settings hub (ADR 0018 carve-out from ADR 0019).
-        XCTAssertFalse(app.otherElements["provider-options-pile"].exists
-                        || app.staticTexts["provider-options-pile"].exists,
+        // provider Options section — the Pile's settings (its Enabled toggle,
+        // issue #67) live on its own page under the Settings hub (ADR 0018
+        // carve-out from ADR 0019).
+        XCTAssertFalse(app.descendants(matching: .any)["provider-enabled-pile"].firstMatch.exists,
                        "the entries page must not embed the provider's settings")
 
         // Swipe-to-delete discards it without staging; the page empties.

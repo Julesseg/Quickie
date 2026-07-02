@@ -24,13 +24,14 @@ final class SettingsHubUITests: XCTestCase {
         return app
     }
 
-    /// A provider page is recognized by its Options placeholder row — the
-    /// unified two-section shape's lead (issue #66). Queried as `.any` because
-    /// SwiftUI may expose the labeled row as a cell, other, or static text
-    /// depending on how it merges the accessibility children.
+    /// A provider page is recognized by the Options section's lead entry — the
+    /// provider's Enabled toggle (issue #66's placeholder row, replaced by the
+    /// real switch in issue #67). Queried as `.any` because SwiftUI may expose
+    /// the toggle row as a switch, cell, or other depending on how it merges
+    /// the accessibility children.
     @MainActor
     private func optionsRow(_ app: XCUIApplication, _ provider: String) -> XCUIElement {
-        app.descendants(matching: .any)["provider-options-\(provider)"].firstMatch
+        app.descendants(matching: .any)["provider-enabled-\(provider)"].firstMatch
     }
 
     /// Typing a content provider's name and tapping its command row lands on

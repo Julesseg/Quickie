@@ -14,6 +14,11 @@ import Foundation
 public struct CalculatorProvider: Provider {
     public let kind: ProviderKind = .dynamic
 
+    /// The Calculator is a configurable kind (issue #67): its Enabled toggle
+    /// governs the injected result, though its typed settings command row rides
+    /// the built-ins and stays.
+    public let id: ProviderID? = .calculator
+
     public init() {}
 
     public func candidates(for query: String) -> [Action] {

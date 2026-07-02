@@ -23,6 +23,13 @@ public enum ProviderKind: Sendable {
 public protocol Provider: Sendable {
     var kind: ProviderKind { get }
 
+    /// Which configurable kind this Provider is (ADR 0019; issue #67) — the
+    /// identity its Enabled toggle persists against. `nil` for a catalog that
+    /// belongs to no disableable kind (the hub's built-in command rows), which
+    /// is what keeps every Settings command row typeable while its provider is
+    /// disabled: the recovery path can't be switched off.
+    var id: ProviderID? { get }
+
     /// A multiplier on the match score of every Action this Provider
     /// contributes (issue #9 AC #3) — the lever that lets one source outrank
     /// another at equal match quality (e.g. a user's own Quicklinks over the
@@ -40,4 +47,8 @@ public extension Provider {
     /// Neutral weight: most Providers neither boost nor suppress their Actions
     /// relative to others, so they need not declare one.
     var weight: Double { 1.0 }
+
+    /// No kind by default: a Provider is only disableable once it declares
+    /// which `ProviderID` it is.
+    var id: ProviderID? { nil }
 }

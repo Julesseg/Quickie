@@ -31,7 +31,8 @@ final class SignalsStore {
     /// launcher, not just reset Favorites. The canonical list of what it clears:
     /// Favorites/Frecency (here), the Fallback list order/disabled set
     /// (`FallbacksStore.launch`), the imported Shortcut Actions
-    /// (`ShortcutsStore.launch`), and the app-level Settings toggles
+    /// (`ShortcutsStore.launch`), the kind-level provider Enabled switches
+    /// (`ProviderEnablementStore.launch`), and the app-level Settings toggles
     /// (`AppSettings.reset`, run from `QuickieApp.init`).
     static let uitestResetArgument = "-uitest-reset-signals"
 
