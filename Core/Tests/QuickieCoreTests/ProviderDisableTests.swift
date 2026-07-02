@@ -146,6 +146,24 @@ struct ProviderDisableTests {
         #expect(reEnabled.home().favorites.map(\.id) == favorites)
     }
 
+    @Test("a disabled Pile is still re-enableable by typing — via Pile Settings")
+    func disabledPileKeepsATypedRouteToItsToggle() {
+        // The Pile's typed "Pile" row opens its *entries* page, which carries no
+        // options (the ADR 0018 carve-out) — so without a settings command row of
+        // its own, a disabled Pile would be re-enableable only from the hub's
+        // Providers list, breaking issue #67 AC #2 for exactly one provider. The
+        // "Pile Settings" built-in closes that: it deeplinks to the provider's
+        // options-only page and, riding the built-ins, survives the disable.
+        #expect(Action.openPileSettings().run() == .openPage(.settings(panel: .pile)))
+
+        let providers: [Provider] = [
+            IndexedProvider.builtIns(),
+            IndexedProvider(catalog: [.pileEntry(id: "pile.1", text: "call the bank"), .saveForLater()], id: .pile),
+        ]
+        let engine = SearchEngine(providers: providers, enablement: disabled(.pile))
+        #expect(engine.results(for: "pile").map(\.id).contains("builtin.pile-settings"))
+    }
+
     @Test("a disabled provider's actions leave the Recent list")
     func disabledProviderLeavesTheFrecencyList() {
         // The link was used often — but its kind is switched off, so the

@@ -557,6 +557,26 @@ extension Action {
         ) { _ in .openPage(.pile) }
     }
 
+    /// The "Pile Settings" command (CONTEXT.md → Settings command row; ADR
+    /// 0019): the Pile provider's typed route to its options-only settings page
+    /// under the hub. Its own row, distinct from the "Pile" command above,
+    /// because the Pile is the one provider whose typed name opens *content*
+    /// (the temporary entries — the ADR 0018 carve-out) rather than its unified
+    /// page: the entries page deliberately carries no options, so without this
+    /// row a disabled Pile (issue #67) would be re-enableable only from the
+    /// hub's Providers list — the lone provider breaking the typed-recovery
+    /// promise every other Settings command row keeps.
+    public static func openPileSettings() -> Action {
+        Action(
+            id: "builtin.pile-settings",
+            kind: .managementPage,
+            title: "Pile Settings",
+            aliases: ["pile options", "save for later settings"],
+            inputTypes: [],
+            outputType: .text
+        ) { _ in .openPage(.settings(panel: .pile)) }
+    }
+
     /// The "All Snippets" command (CONTEXT.md → Snippet, Settings command row):
     /// the Snippets provider's typed row, deeplinking to the Snippets provider
     /// page under the hub.

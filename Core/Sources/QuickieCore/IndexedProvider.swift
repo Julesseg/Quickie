@@ -62,6 +62,11 @@ extension IndexedProvider {
             .openFileSearchPage(),
             .openEventsPage(),
             .openRemindersPage(),
+            // The Pile's settings command row (issue #67): its typed "Pile" row
+            // opens the *entries* page (the ADR 0018 carve-out), so this is the
+            // typed route to its Enabled toggle — riding the built-ins like the
+            // rows above, it survives the Pile's own disable.
+            .openPileSettings(),
         ])
     }
 }

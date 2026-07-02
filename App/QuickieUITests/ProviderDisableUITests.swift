@@ -120,6 +120,21 @@ final class ProviderDisableUITests: XCTestCase {
                       "re-enabling Calculator restores the math result")
     }
 
+    /// The Pile's typed recovery path (AC #2): its "Pile" command opens the
+    /// *entries* page, which deliberately carries no options — so the "Pile
+    /// Settings" command row is the typed route to its Enabled toggle, and it
+    /// must land on the page that has one.
+    @MainActor
+    func testPileSettingsCommandReachesThePileEnabledToggle() throws {
+        let app = launchApp()
+
+        openProviderPage(app, typing: "pile settings", row: "builtin.pile-settings")
+        let toggle = app.switches["provider-enabled-pile"]
+        XCTAssertTrue(toggle.waitForExistence(timeout: 10),
+                      "the Pile Settings command must open the options page that carries the Enabled toggle")
+        XCTAssertEqual(toggle.value as? String, "1", "the Pile defaults to enabled")
+    }
+
     /// Disabling a provider whose action is pinned drops the card from the
     /// Favorites grid without losing the pin: re-enabling brings the card back
     /// (AC #3). New Reminder is the pinned action — a built-in of the Reminders
