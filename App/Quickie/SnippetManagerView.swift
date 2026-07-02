@@ -53,13 +53,18 @@ struct SnippetManagerView: View {
             } else {
                 Section {
                     ForEach(snippets) { snippet in
+                        // No identifier on the row container: one there makes
+                        // the row read as a single accessibility element and
+                        // swallows the nested Enabled switch from XCUITest
+                        // queries (the CI failure on issue #68's toggle test) —
+                        // the Fallbacks and Pile rows expose only the switch's
+                        // own identifier, and this row matches them.
                         SnippetRow(
                             snippet: snippet,
                             isDisabled: enablement.isDisabled(snippet.actionID),
                             onToggleDisabled: { enablement.toggleDisabled(snippet.actionID) },
                             onEdit: { editorTarget = .edit(snippet) }
                         )
-                        .accessibilityIdentifier("snippet-row-\(snippet.title)")
                     }
                     .onDelete(perform: delete)
                 } footer: {
