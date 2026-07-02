@@ -179,12 +179,12 @@ final class InstanceDisableUITests: XCTestCase {
         }
         pileRow.tap()
 
-        // The unified page shape: Options lead, the entries follow as the
-        // actions section, each row wearing an Enabled toggle.
+        // The unified page shape: Options lead — headed by the kind-level
+        // Enabled toggle (issue #67) — and the entries follow as the actions
+        // section, each row wearing its own instance toggle.
         XCTAssertTrue(
-            app.descendants(matching: .any).matching(identifier: "provider-options-pile")
-                .firstMatch.waitForExistence(timeout: 10),
-            "the Pile provider page leads with its Options section"
+            app.switches["provider-enabled-pile"].waitForExistence(timeout: 10),
+            "the Pile provider page leads with its Options section's Enabled toggle"
         )
         let toggle = app.switches.matching(
             NSPredicate(format: "identifier BEGINSWITH %@", "pile-enabled.")
