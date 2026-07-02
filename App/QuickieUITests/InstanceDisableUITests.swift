@@ -106,7 +106,12 @@ final class InstanceDisableUITests: XCTestCase {
         XCTAssertTrue(libraryCommand.waitForExistence(timeout: 5))
         libraryCommand.tap()
 
-        let toggle = app.switches["snippet-enabled.\(title)"]
+        // The toggle's identifier keys off the snippet's stable store id (not
+        // its user-editable, collision-prone title), so match by prefix — this
+        // test's store holds exactly one snippet.
+        let toggle = app.switches.matching(
+            NSPredicate(format: "identifier BEGINSWITH %@", "snippet-enabled.")
+        ).firstMatch
         XCTAssertTrue(toggle.waitForExistence(timeout: 10), "each snippet row carries an Enabled toggle")
         XCTAssertEqual(toggle.value as? String, "1", "a fresh snippet starts enabled")
         flip(toggle, to: false)

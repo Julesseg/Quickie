@@ -120,7 +120,7 @@ private struct SnippetRow: View {
             // launcher surface — reversible, unlike swipe-to-delete.
             Toggle("Enabled", isOn: Binding(get: { !isDisabled }, set: { _ in onToggleDisabled() }))
                 .labelsHidden()
-                .accessibilityIdentifier("snippet-enabled.\(snippet.title)")
+                .accessibilityIdentifier("snippet-enabled.\(snippet.id)")
         }
         .contentShape(Rectangle())
         .onTapGesture { onEdit() }

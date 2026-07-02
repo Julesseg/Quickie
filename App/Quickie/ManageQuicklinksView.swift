@@ -103,7 +103,7 @@ private struct QuicklinkRow: View {
             // launcher surface — reversible, unlike swipe-to-delete.
             Toggle("Enabled", isOn: Binding(get: { !isDisabled }, set: { _ in onToggleDisabled() }))
                 .labelsHidden()
-                .accessibilityIdentifier("quicklink-enabled.\(link.title)")
+                .accessibilityIdentifier("quicklink-enabled.\(link.id)")
         }
         .contentShape(Rectangle())
         .onTapGesture { onEdit() }
