@@ -66,6 +66,26 @@ struct HomeTests {
         #expect(engine.home().frecent.isEmpty)
     }
 
+    @Test("Show Recents off hides the Recent list but keeps the Favorites grid")
+    func showRecentsOffHidesOnlyTheRecentList() {
+        // The app-level **Show Recents** toggle (CONTEXT.md → Settings; issue
+        // #65): off suppresses the Frecency "Recent" section on Home, leaving the
+        // pinned Favorites untouched. The signals themselves keep recording —
+        // this hides the surface, it doesn't forget the history.
+        let now = Date()
+        var frecency = Frecency()
+        frecency.record("a", at: now)
+        let engine = SearchEngine(
+            providers: [IndexedProvider(catalog: [link("a", "Alpha"), link("b", "Bravo")])],
+            favorites: ["b"],
+            frecency: frecency,
+            now: now
+        )
+        let home = engine.home(showRecents: false)
+        #expect(home.frecent.isEmpty)
+        #expect(home.favorites.map(\.id) == ["b"])
+    }
+
     @Test("resolvableHomeIDs lists every indexed, non-Fallback id")
     func resolvableHomeIDsCoversIndexedCatalog() {
         let engine = SearchEngine(

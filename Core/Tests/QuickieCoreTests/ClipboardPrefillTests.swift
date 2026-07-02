@@ -40,4 +40,13 @@ struct ClipboardPrefillTests {
         let prefill = ClipboardPrefill(clipboardHasText: true, isHome: true, hasBeenUsed: true)
         #expect(prefill.isChipOffered == false)
     }
+
+    @Test("the Clipboard prefill setting off suppresses the chip entirely")
+    func noChipWhenSettingOff() {
+        // The app-level **Clipboard prefill** toggle (CONTEXT.md → Settings;
+        // issue #65): off means the chip never appears, even in the exact state
+        // that would otherwise offer it (text on the clipboard, on Home, unused).
+        let prefill = ClipboardPrefill(isEnabled: false, clipboardHasText: true, isHome: true)
+        #expect(prefill.isChipOffered == false)
+    }
 }

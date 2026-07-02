@@ -14,20 +14,25 @@ public struct ClipboardPrefill: Equatable, Sendable {
     /// Whether the tap-to-fill paste chip should be shown right now.
     public let isChipOffered: Bool
 
-    /// Decides whether to offer the chip from launch-time metadata
-    /// (`clipboardHasText`, i.e. `UIPasteboard.hasStrings`), the input state, and
-    /// whether the offer has already been taken this launch. No clipboard
-    /// *content* enters this initializer by design.
+    /// Decides whether to offer the chip from the app-level setting, launch-time
+    /// metadata (`clipboardHasText`, i.e. `UIPasteboard.hasStrings`), the input
+    /// state, and whether the offer has already been taken this launch. No
+    /// clipboard *content* enters this initializer by design.
     ///
+    /// - Parameter isEnabled: the app-level **Clipboard prefill** toggle
+    ///   (CONTEXT.md → Settings; issue #65), default on. Off suppresses the chip
+    ///   outright — the setting gates the *offer*; the silent metadata check is
+    ///   banner-free either way.
     /// - Parameter hasBeenUsed: whether the chip has already seeded the input
     ///   since the app started. The offer is once-per-launch: once taken it stays
     ///   gone until the next app start, even though the clipboard still holds text
     ///   and the user may return to Home by clearing the input.
-    public init(clipboardHasText: Bool, isHome: Bool, hasBeenUsed: Bool = false) {
-        // The chip is a Home affordance: offered only in the empty-query state and
-        // only when the metadata check found text. The first keystroke (isHome ==
-        // false) withdraws it as Results takes over; taking the offer
-        // (hasBeenUsed) retires it for the rest of the launch.
-        self.isChipOffered = clipboardHasText && isHome && !hasBeenUsed
+    public init(isEnabled: Bool = true, clipboardHasText: Bool, isHome: Bool, hasBeenUsed: Bool = false) {
+        // The chip is a Home affordance: offered only when the setting allows it,
+        // only in the empty-query state, and only when the metadata check found
+        // text. The first keystroke (isHome == false) withdraws it as Results
+        // takes over; taking the offer (hasBeenUsed) retires it for the rest of
+        // the launch.
+        self.isChipOffered = isEnabled && clipboardHasText && isHome && !hasBeenUsed
     }
 }

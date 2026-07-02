@@ -113,9 +113,11 @@ final class SettingsHubUITests: XCTestCase {
         XCTAssertTrue(command.waitForExistence(timeout: 5), "typing 'settings' surfaces the Settings command row")
         command.tap()
 
-        // The app-level section (Appearance today; the #65 toggles join it).
+        // The app-level section (issue #65): Appearance is a labeled menu
+        // Picker — its options only exist once the menu opens, so assert the
+        // picker row itself (element-type-agnostic, as in AppSettingsUITests).
         XCTAssertTrue(
-            app.descendants(matching: .any)["appearance-system"].firstMatch.waitForExistence(timeout: 10),
+            app.descendants(matching: .any)["appearance-picker"].firstMatch.waitForExistence(timeout: 10),
             "the top-level hub shows the app-level Appearance setting"
         )
 
