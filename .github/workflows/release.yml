@@ -265,7 +265,12 @@ jobs:
     name: Notify
     needs: [build, deploy]
     runs-on: ubuntu-latest
-    if: ${{ always() && needs.build.outputs.configured == 'true' }}
+    # `!cancelled()` (instead of `always()`) still runs on a genuine build/deploy
+    # failure — so we keep the failure alert — but skips entirely when the run was
+    # cancelled, e.g. superseded by a newer push to the same PR (see the
+    # concurrency block above). A supersession isn't a failure, so it shouldn't
+    # page anyone.
+    if: ${{ !cancelled() && needs.build.outputs.configured == 'true' }}
     steps:
       - name: Send ntfy notification
         env:
@@ -277,6 +282,12 @@ jobs:
         run: |
           if [ -z "$NTFY_TOPIC" ]; then
             echo "NTFY_TOPIC secret not set — skipping notification."
+            exit 0
+          fi
+          # A cancelled build/deploy (e.g. this PR got a newer push) is not a
+          # failure — stay quiet rather than firing the failure alert below.
+          if [ "${{ needs.build.result }}" = "cancelled" ] || [ "${{ needs.deploy.result }}" = "cancelled" ]; then
+            echo "Build or deploy was cancelled — skipping notification."
             exit 0
           fi
           SHA7="${SHORT_SHA:0:7}"
