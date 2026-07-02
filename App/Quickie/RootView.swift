@@ -172,7 +172,7 @@ struct RootView: View {
         }
         let storedSnippets = snippets.map { snippet in
             Action.snippet(
-                id: "snippet.\(snippet.id)",
+                id: Self.snippetActionID(snippet),
                 title: snippet.title,
                 body: snippet.body
             )
@@ -225,6 +225,14 @@ struct RootView: View {
 
     private static func pileActionID(_ entry: StoredPileEntry) -> String {
         "pile.\(entry.id)"
+    }
+
+    /// The Action id the index derives from a stored Snippet — the single source
+    /// of the `"snippet.<id>"` scheme, used at both the catalog-construction site
+    /// and the `.snippet(id:)` lookup in `editSnippet`, so the two can't drift if
+    /// the id scheme ever changes (the same shared-helper move as `pileActionID`).
+    private static func snippetActionID(_ snippet: StoredSnippet) -> String {
+        "snippet.\(snippet.id)"
     }
 
     /// The Pile entries that are safe to read this instant. A just-consumed
@@ -852,7 +860,7 @@ struct RootView: View {
     /// was deleted) acknowledges rather than opening an empty editor.
     private func editSnippet(_ action: Action) {
         guard case .snippet(let id) = action.content,
-              let snippet = snippets.first(where: { "snippet.\($0.id)" == id }) else {
+              let snippet = snippets.first(where: { Self.snippetActionID($0) == id }) else {
             flashConfirmation("Snippet not found")
             return
         }
