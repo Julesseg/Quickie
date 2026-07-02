@@ -71,6 +71,11 @@ struct RootView: View {
     /// persisted across launches.
     @State private var fallbacks = FallbacksStore.launch()
 
+    /// The kind-level Enabled switches (CONTEXT.md → Disabled; issue #67),
+    /// persisted across launches: the engine is rebuilt from this on every
+    /// keystroke, and each provider page's Enabled toggle writes into it.
+    @State private var providerEnablement = ProviderEnablementStore.launch()
+
     /// The user's Indexed Folder grants (CONTEXT.md → Indexed Folder; issue #49) —
     /// security-scoped bookmarks in a device-local, non-synced store (ADR 0016).
     @State private var indexedFolders = IndexedFoldersStore.launch()
@@ -196,30 +201,36 @@ struct RootView: View {
                 // an exact command name still outranks a strong filename hit.
                 FileSearchProvider(index: fileIndex.index, layout: keyboardLayout.layout),
                 // The built-in management command rows (Settings, Quicklinks,
-                // Fallbacks) — no default links, no privileged web search.
+                // Fallbacks) — no default links, no privileged web search. No
+                // ProviderID: these are each provider's typed route back to its
+                // page, so they must outlive any kind's disable (issue #67).
                 IndexedProvider.builtIns(),
-                IndexedProvider(catalog: storedLinks),
-                IndexedProvider(catalog: storedFallbackQueries),
-                IndexedProvider(catalog: storedSnippets + [.newSnippet()]),
-                IndexedProvider(catalog: storedPileEntries + [.saveForLater()]),
+                // The user-content catalogs, each attributed to its configurable
+                // kind (issue #67) so the kind's Enabled toggle governs it.
+                IndexedProvider(catalog: storedLinks, id: .quicklinks),
+                IndexedProvider(catalog: storedFallbackQueries, id: .fallbacks),
+                IndexedProvider(catalog: storedSnippets + [.newSnippet()], id: .snippets),
+                IndexedProvider(catalog: storedPileEntries + [.saveForLater()], id: .pile),
                 // Imported Shortcut Actions, matched by name (issue #45).
-                IndexedProvider(catalog: storedShortcuts),
-                // The Pile / Snippets / Shortcuts library command rows.
+                IndexedProvider(catalog: storedShortcuts, id: .shortcuts),
+                // The Pile / Snippets / Shortcuts library command rows — kind-less
+                // like the built-ins, so a disabled provider stays reachable.
                 IndexedProvider(catalog: [.openPilePage(), .openSnippetsLibrary(), .openShortcutsPage()]),
                 // The New Reminder quick capture (issue #37). This indexed
                 // instance is only for matching by name; activating it rebuilds a
                 // configured Action from the user's reminder lists + settings.
-                IndexedProvider(catalog: [.newReminder()]),
+                IndexedProvider(catalog: [.newReminder()], id: .reminders),
                 // The New Event quick capture (issue #38). Like New Reminder, this
                 // indexed instance is only for matching by name; activating it
                 // rebuilds a configured Action from the user's calendars + settings.
-                IndexedProvider(catalog: [.newEvent()]),
+                IndexedProvider(catalog: [.newEvent()], id: .events),
             ],
             layout: keyboardLayout.layout,
             favorites: signals.favorites,
             frecency: signals.frecency,
             fallbackOrder: fallbacks.resolvedOrder(for: fallbackQueries.map(\.id)),
-            disabledFallbacks: fallbacks.disabled
+            disabledFallbacks: fallbacks.disabled,
+            enablement: providerEnablement.enablement
         )
     }
 
@@ -599,6 +610,10 @@ struct RootView: View {
             }
         }
         .preferredColorScheme(Appearance(stored: appearanceRaw).colorScheme)
+        // Every provider page's Options section reads and writes the same
+        // kind-level Enabled switches the engine filters by (issue #67) — the
+        // pages are pushed inside this stack, so root injection reaches them all.
+        .environment(providerEnablement)
     }
 
     /// The pushed view for a management page (CONTEXT.md → Management page). Each

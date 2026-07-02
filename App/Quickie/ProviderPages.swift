@@ -2,22 +2,33 @@ import SwiftUI
 import QuickieCore
 
 /// The **Options** section every provider page leads with (CONTEXT.md →
-/// Management page; ADR 0019, issue #66). This slice is the page-*shape*
-/// reframe, so the section carries only the provider's name as a placeholder —
-/// the declared settings schema (toggles, choices, the Enabled switch) lands in
-/// a later slice and will replace this row. Shared by every provider page so
-/// the unified two-section shape reads the same everywhere.
+/// Management page; ADR 0019, issue #66), led by the provider-level **Enabled**
+/// toggle — the kind-level disable switch (CONTEXT.md → Disabled; issue #67).
+/// Off reversibly hides the whole provider from typed results, the Recent list,
+/// and the Favorites grid while its data and configuration are retained; the
+/// declared settings schema (ADR 0020) joins it beneath in a later slice.
+/// Shared by every provider page so the unified two-section shape reads the
+/// same everywhere. Settings itself has no `ProviderID`, so no page can even
+/// render a toggle for it — non-disableable by construction.
 struct ProviderOptionsSection: View {
     let provider: ProviderID
 
+    /// The persisted kind-level switches, injected at the root so every
+    /// provider page — however it is reached — reads and writes the same state
+    /// the engine filters by.
+    @Environment(ProviderEnablementStore.self) private var enablement
+
     var body: some View {
         Section {
-            LabeledContent("Provider") {
-                Text(provider.displayName)
-            }
-            .accessibilityIdentifier("provider-options-\(provider.rawValue)")
+            Toggle("Enabled", isOn: Binding(
+                get: { enablement.isEnabled(provider) },
+                set: { enablement.setEnabled($0, for: provider) }
+            ))
+            .accessibilityIdentifier("provider-enabled-\(provider.rawValue)")
         } header: {
             Text("Options")
+        } footer: {
+            Text("Off hides \(provider.displayName) from results, Recents, and Favorites until you turn it back on. Its data is kept, and you can always reach this page by typing its name.")
         }
     }
 }
