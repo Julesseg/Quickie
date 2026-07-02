@@ -76,6 +76,27 @@ jobs:
             -test-iterations 3 \
             CODE_SIGNING_ALLOWED=NO
 
+      - name: Dump app crash reports on failure
+        if: failure()
+        run: |
+          # Surface the actual crash/hang cause in the job log: when XCUITest
+          # reports "Lost connection to the application", the reason lives in a
+          # simulator .ips crash report on the host — buried inside the xcresult
+          # artifact otherwise. Print this run's Quickie reports (the exception
+          # message and termination reason sit in the header) so the failure is
+          # diagnosable straight from the log.
+          set +e
+          find ~/Library/Logs/DiagnosticReports -name '*.ips' -mmin -90 2>/dev/null | while read -r f; do
+            case "$(basename "$f")" in
+              Quickie*|quickie*) ;;
+              *) continue ;;
+            esac
+            echo "================ $f"
+            head -c 20000 "$f"
+            echo
+          done
+          true
+
       - name: Upload test results
         if: ${{ !cancelled() }}
         uses: actions/upload-artifact@v4
