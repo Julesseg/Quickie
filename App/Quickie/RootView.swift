@@ -864,8 +864,24 @@ struct RootView: View {
         case .revealInFiles:
             revealInFiles(action)
         case .edit:
-            editSnippet(action)
+            // Edit resolves per content: a Shortcut deeplinks into the Shortcuts
+            // app's editor by name, a Snippet opens its stored record in-app.
+            switch action.content {
+            case .shortcut(let name):
+                editShortcut(name)
+            default:
+                editSnippet(action)
+            }
         }
+    }
+
+    /// **Edit** a Shortcut (ADR 0017): deeplinks into the Shortcuts app's editor for
+    /// the shortcut by name via `shortcuts://open-shortcut` (CONTEXT.md → Shortcut
+    /// Action). Only the name is needed — the same handle the run path carries — so
+    /// unlike a Snippet there is no stored record to resolve; the App just opens the
+    /// URL at the edge, the same defer-to-the-edge pattern as running one.
+    private func editShortcut(_ name: String) {
+        openURL(ShortcutRun.editURL(name: name))
     }
 
     /// **Edit** a Snippet (ADR 0017): resolves the row's `.snippet(id:)` content to
@@ -906,7 +922,9 @@ struct RootView: View {
             }
             defer { indexedFolders.endFileAccess(access) }
             return access.fileURL.path
-        case .none:
+        case .none, .shortcut:
+            // Neither carries copyable text — a command/capture row has no content,
+            // and a Shortcut is a launchable reference whose only verb is Edit.
             return nil
         }
     }
@@ -933,7 +951,9 @@ struct RootView: View {
             } else {
                 flashConfirmation("File not found")
             }
-        case .none:
+        case .none, .shortcut:
+            // Nothing to share — a content-less command row, or a Shortcut whose
+            // only verb is Edit (a launchable reference, not a value).
             break
         }
     }

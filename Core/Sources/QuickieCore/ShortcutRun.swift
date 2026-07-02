@@ -14,7 +14,13 @@ import Foundation
 ///   in an `ActionOutcome` (CONTEXT.md → Shortcut Action), because it is the
 ///   deliberate poor-man's precursor to Workflow: text straight back into the input.
 ///
-/// Both halves are pure and `swift test`-covered so the whole round-trip is
+/// A third, simpler outbound verb rides alongside these: `editURL(name:)` builds
+/// the `shortcuts://open-shortcut` deeplink that opens a shortcut in its editor by
+/// name — the target of a Shortcut row's **Edit** secondary action. It needs no
+/// callback (opening the editor is fire-and-forget), so it is not part of the
+/// run round-trip.
+///
+/// All halves are pure and `swift test`-covered so the whole round-trip is
 /// exercised without a device; the app only opens the URL and reinjects/toasts.
 public enum ShortcutRun {
 
@@ -49,6 +55,32 @@ public enum ShortcutRun {
         // The components are always valid for this fixed structure; fall back to the
         // bare endpoint only to keep the signature non-optional.
         return components.url ?? URL(string: runEndpoint)!
+    }
+
+    // MARK: Edit
+
+    /// The Shortcuts endpoint that opens a shortcut **for editing** by name — the
+    /// edit counterpart to `runEndpoint`. Unlike the run path this takes no
+    /// x-callback-url wrapper: opening a shortcut in its editor is fire-and-forget,
+    /// so there is nothing to route back over `quickie://`.
+    public static let editEndpoint = "shortcuts://open-shortcut"
+
+    /// Builds the `shortcuts://open-shortcut?name=<name>` open that deeplinks
+    /// straight into the named shortcut's editor in the Shortcuts app (CONTEXT.md →
+    /// Shortcut Action). Only the name is needed — the same name-keyed identity the
+    /// run path uses (ADR 0007) — so a Shortcut row's **Edit** secondary action
+    /// reuses the handle it already carries, with no Apple UUID to resolve.
+    /// `URLComponents` percent-encodes the name, so spaces or reserved characters
+    /// are carried safely.
+    public static func editURL(name: String) -> URL {
+        var components = URLComponents()
+        components.scheme = "shortcuts"
+        components.host = "open-shortcut"
+        components.queryItems = [URLQueryItem(name: "name", value: name)]
+
+        // The components are always valid for this fixed structure; fall back to the
+        // bare endpoint only to keep the signature non-optional.
+        return components.url ?? URL(string: editEndpoint)!
     }
 
     // MARK: Inbound

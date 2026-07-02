@@ -67,6 +67,16 @@ struct ShortcutActionTests {
         #expect(run.commit(.text("")) == .completed(.runShortcut(name: "Translate", input: nil)))
     }
 
+    @Test("a Shortcut Action declares shortcut content so it can offer Edit")
+    func declaresShortcutContent() {
+        // The row carries `.shortcut(name:)` content, not the `.none` its run
+        // outcome would derive (ADR 0017): the name is what lets the long-press menu
+        // add **Edit** — a deeplink into the Shortcuts app's editor.
+        let action = Action.shortcut(name: "Start Workout")
+        #expect(action.content == .shortcut(name: "Start Workout"))
+        #expect(secondaryActions(for: action.content) == [.edit])
+    }
+
     @Test("a Shortcut Action's tap reads as running the shortcut")
     func mainActionReadsAsRunShortcut() {
         // The trailing glyph must signal a hand-off to Shortcuts, for both shapes —

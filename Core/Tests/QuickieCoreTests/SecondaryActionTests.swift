@@ -5,9 +5,10 @@ import Testing
 // Secondary actions are a one-shot long-press affordance keyed by a result's
 // *content* — its value/reference — not its content *type* (ADR 0017,
 // CONTEXT.md → Secondary action / Result content). Eligibility is a pure
-// function of `ResultContent`, so a content-less row (command / capture /
-// shortcut) exposes none even though it may carry a `text` output type. These
-// tests pin that switch; execution and edge-resolution live in the App.
+// function of `ResultContent`, so a content-less row (a command or capture)
+// exposes none even though it may carry a `text` output type, while a Shortcut —
+// a launchable reference — exposes Edit alone. These tests pin that switch;
+// execution and edge-resolution live in the App.
 struct SecondaryActionTests {
 
     @Test("a content-less result exposes no secondary actions")
@@ -36,6 +37,13 @@ struct SecondaryActionTests {
         // A Snippet is editable where a bare `.text` value is not: `.snippet`
         // carries the record's id, so the App can open the editor on it.
         #expect(secondaryActions(for: .snippet(id: "snippet.1")) == [.copy, .share, .edit])
+    }
+
+    @Test("a shortcut exposes Edit alone — a launchable reference, no text")
+    func shortcutExposesEditOnly() {
+        // A Shortcut carries no textual value to copy or share; its `.shortcut`
+        // content earns only Edit — a deeplink into the Shortcuts app's editor.
+        #expect(secondaryActions(for: .shortcut(name: "Start Workout")) == [.edit])
     }
 
     @Test("a file additionally exposes reveal in Files")

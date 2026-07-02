@@ -45,6 +45,28 @@ struct ShortcutRunTests {
         #expect(queryValue("text", in: url) == "bonjour le monde")
     }
 
+    @Test("editing a shortcut opens open-shortcut by name, with no callbacks")
+    func editURLOpensOpenShortcutByName() {
+        let url = ShortcutRun.editURL(name: "Start Workout")
+        #expect(url.scheme == "shortcuts")
+        // The plain open-shortcut endpoint, addressed by name — the editor deeplink.
+        #expect(url.absoluteString.hasPrefix("shortcuts://open-shortcut"))
+        #expect(queryValue("name", in: url) == "Start Workout")
+        // Opening the editor is fire-and-forget: no x-callback-url wrapper, so none
+        // of the run's success/error/cancel callbacks ride along.
+        #expect(queryValue("x-success", in: url) == nil)
+        #expect(queryValue("x-error", in: url) == nil)
+        #expect(queryValue("x-cancel", in: url) == nil)
+    }
+
+    @Test("a shortcut name with spaces and reserved characters is encoded safely")
+    func editURLEncodesName() {
+        // URLComponents percent-encodes the value, so a name with a space and an
+        // ampersand round-trips intact rather than corrupting the query string.
+        let url = ShortcutRun.editURL(name: "Log Food & Water")
+        #expect(queryValue("name", in: url) == "Log Food & Water")
+    }
+
     @Test("x-success reinjects the returned output as the new query")
     func successReinjectsOutput() {
         // The output Shortcuts appends to x-success (`result`) comes back to be

@@ -123,9 +123,52 @@ final class SecondaryActionUITests: XCTestCase {
                        "a non-file row must not offer Reveal in Files")
     }
 
+    /// A Shortcut row long-press offers **Edit** — a deeplink into the Shortcuts
+    /// app's editor by name — and, being a launchable reference with no text, it
+    /// offers neither Copy nor Share (ADR 0017). A Shortcut Action can only be
+    /// registered by the Sync-Shortcut import (names-only), so the row is seeded
+    /// through the real ingest via `-uitest-seed-shortcuts`.
+    @MainActor
+    func testLongPressingAShortcutOffersEditOnly() throws {
+        let app = XCUIApplication()
+        app.launchArguments = ["--uitesting", "-uitest-instant-motion"]
+        // Seed one imported Shortcut through the real ingest so its row is searchable
+        // without a device round-trip through the Shortcuts app.
+        app.launchArguments += ["-uitest-seed-shortcuts", Self.seededShortcutName]
+        app.launch()
+
+        let input = app.textFields["search-input"]
+        XCTAssertTrue(input.waitForExistence(timeout: 30))
+        input.tap()
+        input.typeText(Self.seededShortcutName)
+
+        let row = app.buttons.matching(
+            NSPredicate(format: "label CONTAINS[c] %@", Self.seededShortcutName)
+        ).firstMatch
+        XCTAssertTrue(row.waitForExistence(timeout: 5))
+        row.press(forDuration: 1.3)
+
+        // Edit is offered (open the shortcut in the Shortcuts app), alongside Pin.
+        XCTAssertTrue(app.buttons["Edit"].waitForExistence(timeout: 5),
+                      "a shortcut's long-press menu should offer Edit (open it in Shortcuts)")
+        XCTAssertTrue(app.buttons["Pin as Favorite"].exists,
+                      "Edit joins the existing Pin item in one menu")
+        // A Shortcut is a launchable reference, not a value: no text to copy/share.
+        XCTAssertFalse(app.buttons["Copy"].exists,
+                       "a shortcut has no text, so it must not offer Copy")
+        XCTAssertFalse(app.buttons["Share"].exists,
+                       "a shortcut has no text, so it must not offer Share")
+        XCTAssertFalse(app.buttons["Reveal in Files"].exists,
+                       "a non-file row must not offer Reveal in Files")
+    }
+
+    /// The name of the Shortcut Action seeded through the real import path so a
+    /// shortcut row is searchable in this suite.
+    private static let seededShortcutName = "UITest Shortcut"
+
     /// A command row carries no content, so its long-press menu shows only
     /// Pin/Unpin — exactly as before secondary actions existed (AC
-    /// "command/capture/shortcut rows show only Pin/Unpin").
+    /// "command/capture rows show only Pin/Unpin").
     @MainActor
     func testLongPressingACommandRowOffersOnlyPin() throws {
         let app = launchApp()
