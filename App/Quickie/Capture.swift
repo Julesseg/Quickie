@@ -121,6 +121,17 @@ final class CaptureModel {
     /// Whether the capture owns the bottom region — an active session, the primer,
     /// or the denial affordance — so the launcher swaps its normal input for it.
     var isActive: Bool { session != nil || denied || priming }
+    /// Whether the capture's bottom control is **keyboard-less** — the date step's
+    /// picker + commit button, or the primer/denial affordances. The keyboard
+    /// hiding under one of these is *structural* (the control replaced the text
+    /// field for the whole step), not the transient context-menu resignation the
+    /// launcher's held inset guards against (issue #58) — so the launcher releases
+    /// the inset and the control takes the keyboard's space, instead of floating a
+    /// keyboard-height above a dead band.
+    var usesKeyboardlessControl: Bool {
+        if priming || denied { return true }
+        return currentArgument?.inputMethod == .datePicker
+    }
 
     var actionTitle: String { session?.actionTitle ?? "" }
     var pills: [ArgumentValue] { session?.pills ?? [] }
