@@ -17,6 +17,12 @@ struct IndexedFolderGrant: Identifiable, Equatable {
     let displayName: String
     /// The opaque security-scoped bookmark the app resolves back to a URL.
     let bookmark: Data
+    /// Whether the user has **disabled** this folder (CONTEXT.md → Disabled;
+    /// issue #68 follow-up): the grant and its access are retained, but its
+    /// files are hidden from results and the Search Files context. Lives on the
+    /// grant — not the enablement store — so the state is device-local like the
+    /// bookmark it qualifies (ADR 0016) and is pruned with it.
+    var disabled: Bool = false
 }
 
 /// A live security-scoped handle to a File Search result's file, open for the
@@ -99,6 +105,21 @@ final class IndexedFoldersStore {
         persist()
     }
 
+    /// The ids of the grants the user has disabled — what the app hands
+    /// `FileSearchProvider` so a disabled folder's files are hidden from every
+    /// search surface while the grant (and its bookmark) is retained.
+    var disabledFolderIDs: Set<String> {
+        Set(grants.filter(\.disabled).map(\.id))
+    }
+
+    /// Toggles a grant's disabled state (the folder stays granted and listed
+    /// either way — the reversible counterpart to `remove`), then persists.
+    func toggleDisabled(_ id: String) {
+        guard let index = grants.firstIndex(where: { $0.id == id }) else { return }
+        grants[index].disabled.toggle()
+        persist()
+    }
+
     /// Resolves a grant's bookmark to a security-scoped URL, or `nil` if it no longer
     /// resolves. Callers that then *read* the folder must balance a
     /// `startAccessingSecurityScopedResource()` around their access; this method only
@@ -150,6 +171,9 @@ final class IndexedFoldersStore {
         let id: String
         let displayName: String
         let bookmark: Data
+        /// Optional so store files written before per-folder disable existed
+        /// decode as enabled rather than failing wholesale.
+        var disabled: Bool?
     }
 
     /// Loads the persisted grants, resolving each bookmark with staleness handling:
@@ -167,7 +191,12 @@ final class IndexedFoldersStore {
         var result: [IndexedFolderGrant] = []
         var changed = false
         for persisted in stored {
-            let grant = IndexedFolderGrant(id: persisted.id, displayName: persisted.displayName, bookmark: persisted.bookmark)
+            let grant = IndexedFolderGrant(
+                id: persisted.id,
+                displayName: persisted.displayName,
+                bookmark: persisted.bookmark,
+                disabled: persisted.disabled ?? false
+            )
             var stale = false
             guard let url = try? URL(
                 resolvingBookmarkData: grant.bookmark,
@@ -179,7 +208,12 @@ final class IndexedFoldersStore {
                 continue
             }
             if stale, let refreshed = remintBookmark(for: url) {
-                result.append(IndexedFolderGrant(id: grant.id, displayName: grant.displayName, bookmark: refreshed))
+                result.append(IndexedFolderGrant(
+                    id: grant.id,
+                    displayName: grant.displayName,
+                    bookmark: refreshed,
+                    disabled: grant.disabled
+                ))
                 changed = true
             } else {
                 result.append(grant)
@@ -199,7 +233,7 @@ final class IndexedFoldersStore {
     }
 
     private func persist() {
-        let stored = grants.map { PersistedGrant(id: $0.id, displayName: $0.displayName, bookmark: $0.bookmark) }
+        let stored = grants.map { PersistedGrant(id: $0.id, displayName: $0.displayName, bookmark: $0.bookmark, disabled: $0.disabled) }
         guard let data = try? JSONEncoder().encode(stored) else { return }
         try? data.write(to: fileURL, options: .atomic)
     }

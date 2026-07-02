@@ -204,8 +204,14 @@ struct RootView: View {
                 // File Search (CONTEXT.md → File Search; ADR 0015): a ranked-dynamic
                 // Provider serving the current filename snapshot. Its survivors are
                 // scored and ranked by match quality, never boosted to the top, so
-                // an exact command name still outranks a strong filename hit.
-                FileSearchProvider(index: fileIndex.index, layout: keyboardLayout.layout),
+                // an exact command name still outranks a strong filename hit. A
+                // disabled Indexed Folder's files are dropped up front (issue #68
+                // follow-up) — hidden while the grant stays revocable on its page.
+                FileSearchProvider(
+                    index: fileIndex.index,
+                    layout: keyboardLayout.layout,
+                    disabledFolders: indexedFolders.disabledFolderIDs
+                ),
                 // The built-in management command rows (Settings, Quicklinks,
                 // Fallbacks) — no default links, no privileged web search. No
                 // ProviderID: these are each provider's typed route back to its
@@ -295,8 +301,11 @@ struct RootView: View {
         // (ADR 0014) — so its results and highlight come from the provider's
         // `contextMatches`, not the central engine.
         let fileResults = inFileSearch
-            ? FileSearchProvider(index: fileIndex.index, layout: keyboardLayout.layout)
-                .contextMatches(for: query)
+            ? FileSearchProvider(
+                index: fileIndex.index,
+                layout: keyboardLayout.layout,
+                disabledFolders: indexedFolders.disabledFolderIDs
+            ).contextMatches(for: query)
             : []
         let highlighted = inFileSearch
             ? fileResults.first

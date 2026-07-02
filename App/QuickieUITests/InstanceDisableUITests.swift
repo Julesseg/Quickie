@@ -209,6 +209,60 @@ final class InstanceDisableUITests: XCTestCase {
         )
     }
 
+    /// Disabling an Indexed Folder on the File Search page hides its files from
+    /// results while the grant stays listed and revocable (issue #68 follow-up)
+    /// — the per-folder counterpart of the per-action toggle.
+    @MainActor
+    func testDisablingAnIndexedFolderHidesItsFilesFromResults() throws {
+        let app = XCUIApplication()
+        // A clean folder slate, then a seeded grant holding a known fixture
+        // file (the FileSearchUITests seam), plus the usual signal reset.
+        app.launchArguments = [
+            "--uitesting",
+            "-uitest-reset-signals",
+            "-uitest-reset-folders",
+            "-uitest-seed-files",
+        ]
+        app.launch()
+
+        // Control leg: the seeded folder's file surfaces as a ranked result.
+        let input = app.textFields["search-input"]
+        XCTAssertTrue(input.waitForExistence(timeout: 30))
+        input.tap()
+        let query = "quickie-fixture-report"
+        input.typeText(query)
+        let fileRow = app.buttons.matching(
+            NSPredicate(format: "identifier BEGINSWITH %@", "file.")
+        ).firstMatch
+        XCTAssertTrue(fileRow.waitForExistence(timeout: 10), "the granted folder's file surfaces in results")
+
+        // Open the File Search page and flip the folder's Enabled toggle off.
+        clearInput(app, count: query.count)
+        input.typeText("file search")
+        let command = app.buttons["builtin.file-search-page"]
+        XCTAssertTrue(command.waitForExistence(timeout: 5))
+        command.tap()
+
+        let toggle = app.switches.matching(
+            NSPredicate(format: "identifier BEGINSWITH %@", "folder-enabled.")
+        ).firstMatch
+        XCTAssertTrue(toggle.waitForExistence(timeout: 10), "each granted folder carries an Enabled toggle")
+        XCTAssertEqual(toggle.value as? String, "1", "a fresh grant starts enabled")
+        flip(toggle, to: false)
+
+        // Hidden from results — the always-present Fallbacks prove the list
+        // rendered before the absence is asserted; the grant itself remains.
+        goBackHome(app)
+        XCTAssertTrue(input.waitForExistence(timeout: 10))
+        input.tap()
+        input.typeText(query)
+        let fallback = app.buttons.matching(
+            NSPredicate(format: "label CONTAINS[c] %@", "New Snippet")
+        ).firstMatch
+        XCTAssertTrue(fallback.waitForExistence(timeout: 5), "results rendered for the query")
+        XCTAssertFalse(fileRow.exists, "a disabled folder's files are hidden from results")
+    }
+
     /// Permanent built-ins are disable-only (issue #68 AC #2): on the Fallbacks
     /// page a deletable Fallback query exposes swipe-to-delete, while Save for
     /// later refuses the swipe — its only off-switch is the toggle.

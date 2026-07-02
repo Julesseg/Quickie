@@ -88,6 +88,33 @@ struct EnablementTests {
         #expect(engine.resolvableHomeIDs().contains("snippet.a"))
     }
 
+    @Test("a disabled Indexed Folder's files are hidden from results and the Search Files context")
+    func disabledFolderHidesItsFilesEverywhere() {
+        // Two granted folders, one file each — disabling folder A must hide its
+        // file from the inline results *and* the uncapped browsing context,
+        // while folder B's file stays searchable (the per-folder counterpart
+        // of instance disable, issue #68 follow-up).
+        let index = FilenameIndex(entries: [
+            FileEntry(bookmarkID: "folder-a", relativePath: "report.txt"),
+            FileEntry(bookmarkID: "folder-b", relativePath: "recipe.txt"),
+        ])
+        let provider = FileSearchProvider(index: index, disabledFolders: ["folder-a"])
+
+        let inline = provider.candidates(for: "report").map(\.title)
+        #expect(!inline.contains("report.txt"))
+        #expect(provider.candidates(for: "recipe").map(\.title).contains("recipe.txt"))
+
+        // The context browses everything it is *allowed* to see — a disabled
+        // folder is hidden from every surface, not just the inline rows.
+        let browsed = provider.contextMatches(for: "").map(\.title)
+        #expect(browsed == ["recipe.txt"])
+
+        // Re-enabling (the id leaving the set) restores the files — the grant
+        // and its index were never touched.
+        let reEnabled = FileSearchProvider(index: index)
+        #expect(reEnabled.candidates(for: "report").map(\.title).contains("report.txt"))
+    }
+
     @Test("the shortcut action-id derivation is public, so a row's toggle keys the id the engine sees")
     func shortcutActionIDDerivationIsShared() {
         // A Shortcut Action's id is derived from its name inside the factory;
