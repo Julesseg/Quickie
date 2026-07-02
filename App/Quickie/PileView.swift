@@ -67,5 +67,9 @@ struct PileView: View {
         for index in offsets {
             context.delete(entries[index])
         }
+        // Commit synchronously, like the launcher's stage-consume: a delete left
+        // to autosave can invalidate a model the launcher's query snapshot still
+        // lists, trapping the next engine rebuild.
+        try? context.save()
     }
 }

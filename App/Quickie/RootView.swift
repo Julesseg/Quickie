@@ -177,7 +177,7 @@ struct RootView: View {
                 body: snippet.body
             )
         }
-        let storedPileEntries = pileEntries.map { entry in
+        let storedPileEntries = livePileEntries.map { entry in
             Action.pileEntry(id: Self.pileActionID(entry), text: entry.text)
         }
         // Imported Shortcut Actions surface by name like Quicklinks/Snippets
@@ -225,6 +225,18 @@ struct RootView: View {
 
     private static func pileActionID(_ entry: StoredPileEntry) -> String {
         "pile.\(entry.id)"
+    }
+
+    /// The Pile entries that are safe to read this instant. A just-consumed
+    /// entry can linger in the `@Query` snapshot for a beat after its deletion
+    /// commits, and touching a stored attribute on an invalidated model traps —
+    /// the CI crash behind issue #62's tap-to-stage: stage → delete → keystroke
+    /// rebuilt the engine off the stale snapshot and read `.text` on a dead
+    /// model. Every `pileEntries` read goes through this filter; the metadata
+    /// checks (`isDeleted`, `modelContext`) are safe on an invalidated instance
+    /// where the stored attributes are not.
+    private var livePileEntries: [StoredPileEntry] {
+        pileEntries.filter { !$0.isDeleted && $0.modelContext != nil }
     }
 
     private var isHome: Bool {
@@ -750,7 +762,7 @@ struct RootView: View {
             }
             query = ""
         case .stagePileEntry(let id):
-            if let entry = pileEntries.first(where: { Self.pileActionID($0) == id }) {
+            if let entry = livePileEntries.first(where: { Self.pileActionID($0) == id }) {
                 stage(entry)
             } else {
                 flashConfirmation("Not in the Pile")
@@ -838,7 +850,7 @@ struct RootView: View {
             if case .openURL(let url) = action.run(input: query) { return url.absoluteString }
             return nil
         case .pileEntry(let id):
-            return pileEntries.first(where: { Self.pileActionID($0) == id })?.text
+            return livePileEntries.first(where: { Self.pileActionID($0) == id })?.text
         case .file(let bookmarkID, let relativePath):
             guard let access = indexedFolders.beginFileAccess(bookmarkID: bookmarkID, relativePath: relativePath) else {
                 return nil
@@ -861,7 +873,7 @@ struct RootView: View {
         case .url:
             if case .openURL(let url) = action.run(input: query) { shareRequest = ShareRequest(items: [url]) }
         case .pileEntry(let id):
-            if let text = pileEntries.first(where: { Self.pileActionID($0) == id })?.text {
+            if let text = livePileEntries.first(where: { Self.pileActionID($0) == id })?.text {
                 shareRequest = ShareRequest(items: [text])
             } else {
                 flashConfirmation("Not in the Pile")
@@ -910,6 +922,12 @@ struct RootView: View {
     private func stage(_ entry: StoredPileEntry) {
         let text = entry.text
         modelContext.delete(entry)
+        // Commit the consume synchronously: leaving it to autosave opens a
+        // window where the `@Query` snapshot still lists the entry after its
+        // backing data is gone, and the next keystroke's engine rebuild traps
+        // reading it (the CI crash on tap-to-stage). Saving here makes the
+        // query republish without the entry in the same beat.
+        try? modelContext.save()
         query = text
         path = []
     }
