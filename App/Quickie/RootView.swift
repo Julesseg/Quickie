@@ -612,6 +612,11 @@ struct RootView: View {
             } else {
                 SettingsView()
             }
+        case .pile:
+            // The Pile *entries* page (ADR 0018): pure content to view and act
+            // on — distinct from the Pile provider's settings page above, which
+            // the hub's Providers list reaches via `.settings(panel: .pile)`.
+            PileView(onStage: stage)
         }
     }
 
@@ -627,12 +632,14 @@ struct RootView: View {
         switch provider {
         case .quicklinks: QuicklinksView()
         case .fallbacks: FallbacksView(store: fallbacks)
-        case .pile: PileView(onStage: stage)
         case .snippets: SnippetManagerView()
         case .shortcuts: ShortcutsView(store: shortcuts)
         case .events: EventSettingsView()
         case .fileSearch: IndexedFoldersView(store: indexedFolders)
-        case .reminders, .calculator: ProviderOptionsPage(provider: provider)
+        // The Pile's settings page is options-only (ADR 0018): its entries are
+        // temporary content, not configuration, and live on their own `.pile`
+        // page — the one carve-out from the unified content-under-options shape.
+        case .pile, .reminders, .calculator: ProviderOptionsPage(provider: provider)
         }
     }
 

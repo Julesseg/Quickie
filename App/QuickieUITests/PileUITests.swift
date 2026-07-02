@@ -148,6 +148,13 @@ final class PileUITests: XCTestCase {
         XCTAssertTrue(entry.waitForExistence(timeout: 10),
                       "the Pile page should list the saved entry's text")
 
+        // Content only: the entries are temporary, so this page carries no
+        // provider Options section — the Pile's settings live on its own page
+        // under the Settings hub (ADR 0018 carve-out from ADR 0019).
+        XCTAssertFalse(app.otherElements["provider-options-pile"].exists
+                        || app.staticTexts["provider-options-pile"].exists,
+                       "the entries page must not embed the provider's settings")
+
         // Swipe-to-delete discards it without staging; the page empties.
         entry.swipeLeft()
         let delete = app.buttons["Delete"]

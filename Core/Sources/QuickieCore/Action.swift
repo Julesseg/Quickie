@@ -79,6 +79,13 @@ public enum ManagementPage: Equatable, Hashable, Sendable {
     /// deeplinks straight to that provider's unified Management page — the
     /// target every Settings command row routes to.
     case settings(panel: ProviderID?)
+    /// The Pile **entries** page (CONTEXT.md → Pile; ADR 0018): pure content to
+    /// view and act on — tap stages, swipe discards. The entries are temporary,
+    /// so their page is deliberately NOT the Pile provider's settings page
+    /// (`.settings(panel: .pile)`, reached from the hub's Providers list): the
+    /// one carve-out from ADR 0019's unified page, because a transient to-do
+    /// list is content, not configuration.
+    case pile
 }
 
 /// Which kind of Provider an Action came from (CONTEXT.md → Provider): the
@@ -533,11 +540,12 @@ extension Action {
         ) { _ in .stagePileEntry(id: id) }
     }
 
-    /// The "Pile" command (CONTEXT.md → Pile, Settings command row; ADR 0018):
-    /// the Pile provider's typed row, deeplinking to the Pile page under the
-    /// Settings hub (ADR 0019) — every saved entry with swipe-to-delete —
-    /// replacing "All Notes". Aliases later / saved so the deferred queries are
-    /// always a few keystrokes away.
+    /// The "Pile" command (CONTEXT.md → Pile; ADR 0018): opens the full-screen
+    /// Pile **entries** page — pure content to view and act on (tap stages,
+    /// swipe discards) — replacing "All Notes". Deliberately not a Settings
+    /// command row: the entries are temporary, so their page is distinct from
+    /// the Pile provider's settings page under the hub. Aliases later / saved
+    /// so the deferred queries are always a few keystrokes away.
     public static func openPilePage() -> Action {
         Action(
             id: "builtin.pile-page",
@@ -546,7 +554,7 @@ extension Action {
             aliases: ["later", "saved", "saved for later"],
             inputTypes: [],
             outputType: .text
-        ) { _ in .openPage(.settings(panel: .pile)) }
+        ) { _ in .openPage(.pile) }
     }
 
     /// The "All Snippets" command (CONTEXT.md → Snippet, Settings command row):

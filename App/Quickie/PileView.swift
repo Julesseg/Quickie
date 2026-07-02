@@ -1,16 +1,15 @@
 import SwiftUI
 import SwiftData
-import QuickieCore
 
-/// The Pile provider's unified Management page (CONTEXT.md → Pile, Management
-/// page; ADR 0018, ADR 0019): every saved-for-later query text, newest first,
-/// reached by the typed "Pile" command row or the Settings hub's Providers
-/// list. Replaces the "All Notes" library — there is no editor and no reader,
-/// because a Pile entry is just a block of text. Tapping an entry **stages**
-/// it, exactly like its result row: the launcher pops back, the input becomes
-/// the saved text, and the entry leaves the Pile. Swipe-to-delete is the
-/// counterpart — **discard without staging**. Like every provider page it
-/// leads with the Options section, the entries beneath.
+/// The Pile **entries** page (CONTEXT.md → Pile; ADR 0018): every
+/// saved-for-later query text, newest first, reached by the typed "Pile"
+/// command row. The entries are temporary, so this page is purely content to
+/// view and act on — tapping an entry **stages** it, exactly like its result
+/// row (the launcher pops back, the input becomes the saved text, and the
+/// entry leaves the Pile), and swipe-to-delete is the counterpart, **discard
+/// without staging**. Deliberately NOT the Pile provider's settings page
+/// (reached from the Settings hub's Providers list), and so no Options
+/// section: content here, configuration there.
 struct PileView: View {
     @Environment(\.modelContext) private var context
 
@@ -24,22 +23,15 @@ struct PileView: View {
     // Pushed onto the launcher's navigation stack — the back chevron and
     // edge-swipe handle dismissal, so this view adds no stack or Done button.
     var body: some View {
-        // The unified page shape (ADR 0019): Options lead, the entries follow —
-        // so the empty state sits inside the list, beneath the always-present
-        // Options section.
-        List {
-            ProviderOptionsSection(provider: .pile)
-
+        Group {
             if entries.isEmpty {
-                Section {
-                    ContentUnavailableView(
-                        "The Pile is empty",
-                        systemImage: "tray",
-                        description: Text("Type a query you don't want to deal with right now and pick “Save for later” — it lands here until you stage it again.")
-                    )
-                }
+                ContentUnavailableView(
+                    "The Pile is empty",
+                    systemImage: "tray",
+                    description: Text("Type a query you don't want to deal with right now and pick “Save for later” — it lands here until you stage it again.")
+                )
             } else {
-                Section {
+                List {
                     ForEach(entries) { entry in
                         Button {
                             onStage(entry)
@@ -60,8 +52,8 @@ struct PileView: View {
         .navigationTitle("Pile")
     }
 
-    /// Swipe-to-delete discards an entry without staging it — the Pile page's
-    /// whole job (per-row removal from the Result list is the deferred
+    /// Swipe-to-delete discards an entry without staging it — the entries
+    /// page's second verb (per-row removal from the Result list is the deferred
     /// "Remove from Pile" secondary action).
     private func delete(at offsets: IndexSet) {
         for index in offsets {

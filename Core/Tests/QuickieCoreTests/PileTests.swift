@@ -134,10 +134,15 @@ struct PileTests {
         #expect(engine().results(for: "   ").isEmpty)
     }
 
-    @Test("the Pile command row opens the full-screen Pile page, by name or alias")
+    @Test("the Pile command row opens the entries page — content, not the provider's settings")
     func pileCommandOpensPilePage() {
+        // The entries are temporary: their page is purely content to view and
+        // act on (tap stages, swipe discards), so the typed row opens its own
+        // `.pile` destination — NOT the Pile provider's settings page, which is
+        // reached from the Settings hub's Providers list instead.
         let command = Action.openPilePage()
-        #expect(command.run() == .openPage(.settings(panel: .pile)))
+        #expect(command.run() == .openPage(.pile))
+        #expect(command.run() != .openPage(.settings(panel: .pile)))
         // A command, not a Fallback — it matches by name (pile / later / saved)
         // and doesn't ride the bottom region.
         #expect(command.isFallback == false)

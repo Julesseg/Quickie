@@ -86,7 +86,7 @@ struct ActionPresentationTests {
 
     @Test("the management commands open their full-screen pages")
     func managementCommandsOpenPages() {
-        #expect(Action.openPilePage().run() == .openPage(.settings(panel: .pile)))
+        #expect(Action.openPilePage().run() == .openPage(.pile))
         #expect(Action.openSnippetsLibrary().run() == .openPage(.settings(panel: .snippets)))
         #expect(Action.openSettings().run() == .openPage(.settings(panel: nil)))
         #expect(Action.openQuicklinksPage().run() == .openPage(.settings(panel: .quicklinks)))
