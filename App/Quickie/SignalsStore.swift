@@ -45,6 +45,17 @@ final class SignalsStore {
     /// pin lands on a clean slate.
     static let uitestPinArgument = "-uitest-pin-favorite"
 
+    /// The launch argument that seeds a Frecency entry under UI testing — the
+    /// Action id to record follows the flag, and the flag may repeat to seed
+    /// several entries. It exists because Home's Recent list only renders when
+    /// there is frecency history, which a UI test could otherwise build only by
+    /// tapping rows first — extra steps that couple the test to unrelated
+    /// behavior (issue #71). This seeds history through the real
+    /// `SignalsStore.record` path, mirroring how `uitestPinArgument` seeds a
+    /// Favorite. Pair it with `-uitest-reset-signals` so the seeded entries land
+    /// on a clean slate.
+    static let uitestSeedFrecentArgument = "-uitest-seed-frecent"
+
     init(defaults: UserDefaults = SignalsStore.sharedDefaults) {
         self.defaults = defaults
         self.favorites = defaults.stringArray(forKey: Self.favoritesKey) ?? []
@@ -69,6 +80,14 @@ final class SignalsStore {
         // Home renders a pinned Favorite without the undrivable context menu.
         if let flag = arguments.firstIndex(of: uitestPinArgument), flag + 1 < arguments.count {
             store.toggleFavorite(arguments[flag + 1])
+        }
+        // UI-test hook: seed a Frecency entry per occurrence of the flag (see
+        // `uitestSeedFrecentArgument`), through the real record path, so a test
+        // can drive Home's Recent list without tapping rows to build history.
+        for flag in arguments.indices where arguments[flag] == uitestSeedFrecentArgument {
+            if flag + 1 < arguments.count {
+                store.record(arguments[flag + 1])
+            }
         }
         return store
     }
