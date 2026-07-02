@@ -16,9 +16,15 @@ public struct IndexedProvider: Provider {
     /// The full, enumerable set of Actions this provider indexes.
     public let catalog: [Action]
 
-    public init(catalog: [Action], weight: Double = 1.0) {
+    /// The configurable kind this catalog belongs to (issue #67), so the kind's
+    /// Enabled toggle governs it. `nil` — the default — for the catalogs that
+    /// are no disableable kind: the built-in command rows.
+    public let id: ProviderID?
+
+    public init(catalog: [Action], weight: Double = 1.0, id: ProviderID? = nil) {
         self.catalog = catalog
         self.weight = weight
+        self.id = id
     }
 
     /// Returns the whole catalog: an indexed provider does not filter, it

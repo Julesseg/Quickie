@@ -23,6 +23,11 @@ import Foundation
 public struct FileSearchProvider: Provider {
     public let kind: ProviderKind = .rankedDynamic
 
+    /// File Search is a configurable kind (issue #67): its Enabled toggle
+    /// governs the inline file rows, though its typed settings command row
+    /// rides the built-ins and stays.
+    public let id: ProviderID? = .fileSearch
+
     /// The in-memory filename snapshot, built by the app under a per-folder
     /// security-scoped bracket and rebuilt on launch / foreground / grant change.
     /// Every keystroke is served from this snapshot — never a filesystem rescan.
