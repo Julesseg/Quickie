@@ -63,8 +63,10 @@ final class ShortcutUITests: XCTestCase {
     }
 
     /// The dedicated Shortcuts page (typed "shortcuts", not under Settings) lists
-    /// imported shortcuts with a per-row "accepts input" toggle, and the Sync
-    /// Shortcut has self-filtered itself out of the import.
+    /// imported shortcuts as navigation rows into each shortcut's own settings
+    /// page — where the **Enabled** and **Accepts input** toggles live in their
+    /// own sections (issue #68 follow-up) — and the Sync Shortcut has
+    /// self-filtered itself out of the import.
     @MainActor
     func testShortcutsPageListsImportsWithToggleAndSelfFilters() throws {
         let app = launchApp(seed: "Timer,Start Workout,Quickie Sync")
@@ -80,22 +82,39 @@ final class ShortcutUITests: XCTestCase {
         XCTAssertTrue(command.waitForExistence(timeout: 5), "typing 'shortcuts' surfaces the Shortcuts command")
         command.tap()
 
-        // The page lists each imported shortcut with an "accepts input" toggle.
-        let toggle = app.switches["shortcut-accepts-input.Start Workout"]
+        // The page lists each imported shortcut as a navigation row.
+        let row = app.buttons["shortcut-row.Start Workout"]
         XCTAssertTrue(
-            toggle.waitForExistence(timeout: 10),
-            "the Shortcuts page lists imported shortcuts with a per-row accepts-input toggle"
+            row.waitForExistence(timeout: 10),
+            "the Shortcuts page lists imported shortcuts as navigation rows"
         )
 
         // The Sync Shortcut self-filtered itself out — it's not a runnable import.
         XCTAssertFalse(
-            app.switches["shortcut-accepts-input.Quickie Sync"].exists,
+            app.buttons["shortcut-row.Quickie Sync"].exists,
             "the Sync Shortcut should self-filter out of its own import"
         )
 
-        // The toggle is drivable (a real List Toggle, not a context menu) and
-        // flipping it — how Quickie learns a shortcut takes input — doesn't crash.
-        toggle.tap()
+        // Tapping the row pushes the shortcut's own settings page: the Enabled
+        // switch and the accepts-input switch, clearly separated in a Form.
+        row.tap()
+        let enabled = app.switches["shortcut-enabled.Start Workout"]
+        XCTAssertTrue(
+            enabled.waitForExistence(timeout: 10),
+            "the shortcut's page leads with its Enabled toggle"
+        )
+        XCTAssertEqual(enabled.value as? String, "1", "an imported shortcut starts enabled")
+
+        let acceptsInput = app.switches["shortcut-accepts-input.Start Workout"]
+        XCTAssertTrue(
+            acceptsInput.waitForExistence(timeout: 10),
+            "the shortcut's page carries its accepts-input toggle"
+        )
+
+        // The toggle is drivable — how Quickie learns a shortcut takes input —
+        // via the nested switch control (a Form row's center misses it).
+        let control = acceptsInput.switches.firstMatch
+        (control.exists ? control : acceptsInput).tap()
         XCTAssertNotEqual(app.state, .notRunning, "toggling accepts-input should not crash the app")
     }
 
