@@ -21,6 +21,7 @@ final class InputWrapUITests: XCTestCase {
     private func launchApp(extraArguments: [String] = []) -> XCUIApplication {
         let app = XCUIApplication()
         app.launchArguments += ["-uitest-reset-signals"] + extraArguments
+        app.launchArguments.append("-uitest-instant-motion")
         app.launch()
         return app
     }

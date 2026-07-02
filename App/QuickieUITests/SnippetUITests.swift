@@ -19,6 +19,7 @@ final class SnippetUITests: XCTestCase {
         // runs (the in-memory store seam), and a clean signals slate so persisted
         // Favorites/Frecency can't leak across runs either (issue #9).
         app.launchArguments = ["--uitesting", "-uitest-reset-signals"]
+        app.launchArguments.append("-uitest-instant-motion")
         app.launch()
         return app
     }

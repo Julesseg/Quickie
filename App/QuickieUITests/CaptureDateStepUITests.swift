@@ -24,6 +24,7 @@ final class CaptureDateStepUITests: XCTestCase {
         // stubbed reminder capture so the breadcrumb starts without a permission
         // dialog.
         app.launchArguments += ["--uitesting", "-uitest-reset-signals", "-uitest-stub-reminders"]
+        app.launchArguments.append("-uitest-instant-motion")
         app.launch()
         return app
     }

@@ -22,6 +22,7 @@ final class AppSettingsUITests: XCTestCase {
     private func launchApp() -> XCUIApplication {
         let app = XCUIApplication()
         app.launchArguments += ["-uitest-reset-signals"]
+        app.launchArguments.append("-uitest-instant-motion")
         app.launch()
         return app
     }

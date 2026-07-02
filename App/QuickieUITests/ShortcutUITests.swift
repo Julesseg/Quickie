@@ -26,6 +26,7 @@ final class ShortcutUITests: XCTestCase {
         // Clean in-memory + signals slate so nothing leaks across runs, then seed
         // the imported shortcuts through the real parse→reconcile→persist path.
         app.launchArguments += ["--uitesting", "-uitest-reset-signals", "-uitest-seed-shortcuts", seed]
+        app.launchArguments.append("-uitest-instant-motion")
         app.launch()
         return app
     }
@@ -36,6 +37,7 @@ final class ShortcutUITests: XCTestCase {
     private func launchAppWithInput(seed: String) -> XCUIApplication {
         let app = XCUIApplication()
         app.launchArguments += ["--uitesting", "-uitest-reset-signals", "-uitest-seed-input-shortcuts", seed]
+        app.launchArguments.append("-uitest-instant-motion")
         app.launch()
         return app
     }

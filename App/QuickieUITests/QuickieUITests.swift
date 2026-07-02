@@ -18,6 +18,7 @@ final class QuickieUITests: XCTestCase {
         // prior run can't pollute these tests (issue #9). `extraArguments` lets a
         // test add hooks such as `-uitest-pin-favorite <id>`.
         app.launchArguments += ["-uitest-reset-signals"] + extraArguments
+        app.launchArguments.append("-uitest-instant-motion")
         app.launch()
         return app
     }

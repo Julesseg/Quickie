@@ -26,6 +26,7 @@ final class IndexedFolderUITests: XCTestCase {
         // A clean slate by default; a relaunch passes reset: false to keep the
         // device-local grant file and prove persistence.
         if reset { app.launchArguments.append("-uitest-reset-folders") }
+        app.launchArguments.append("-uitest-instant-motion")
         app.launch()
         return app
     }

@@ -23,6 +23,7 @@ final class SearchFilesContextUITests: XCTestCase {
             "-uitest-reset-folders", // clean slate, then seed a folder with a file
             "-uitest-seed-files",
         ]
+        app.launchArguments.append("-uitest-instant-motion")
         app.launch()
         return app
     }
