@@ -172,7 +172,7 @@ struct RootView: View {
         }
         let storedSnippets = snippets.map { snippet in
             Action.snippet(
-                id: "snippet.\(snippet.id)",
+                id: Self.snippetActionID(snippet),
                 title: snippet.title,
                 body: snippet.body
             )
@@ -225,6 +225,14 @@ struct RootView: View {
 
     private static func pileActionID(_ entry: StoredPileEntry) -> String {
         "pile.\(entry.id)"
+    }
+
+    /// The Action id the index derives from a stored Snippet — the single source
+    /// of the `"snippet.<id>"` scheme, used at both the catalog-construction site
+    /// and the `.snippet(id:)` lookup in `editSnippet`, so the two can't drift if
+    /// the id scheme ever changes (the same shared-helper move as `pileActionID`).
+    private static func snippetActionID(_ snippet: StoredSnippet) -> String {
+        "snippet.\(snippet.id)"
     }
 
     /// The Pile entries that are safe to read this instant. A just-consumed
@@ -563,6 +571,8 @@ struct RootView: View {
                 switch sheet {
                 case .composeSnippet(let seed):
                     SnippetEditorView(seed: seed.text)
+                case .editSnippet(let snippet):
+                    SnippetEditorView(snippet: snippet)
                 }
             }
             // New Event's editor mode (issue #38): the pre-filled system event editor
@@ -838,7 +848,23 @@ struct RootView: View {
             presentShare(for: action)
         case .revealInFiles:
             revealInFiles(action)
+        case .edit:
+            editSnippet(action)
         }
+    }
+
+    /// **Edit** a Snippet (ADR 0017): resolves the row's `.snippet(id:)` content to
+    /// its stored record and opens the Snippet editor on it — the same sheet the
+    /// Snippets library uses for edits, reached here straight from a result's
+    /// long-press. Only a `.snippet` row offers this verb; a stale id (the Snippet
+    /// was deleted) acknowledges rather than opening an empty editor.
+    private func editSnippet(_ action: Action) {
+        guard case .snippet(let id) = action.content,
+              let snippet = snippets.first(where: { Self.snippetActionID($0) == id }) else {
+            flashConfirmation("Snippet not found")
+            return
+        }
+        activeSheet = .editSnippet(snippet)
     }
 
     /// Resolves a row's content to the text a **Copy** puts on the pasteboard (ADR
@@ -848,7 +874,7 @@ struct RootView: View {
     /// when a reference no longer resolves.
     private func copyableText(for action: Action) -> String? {
         switch action.content {
-        case .text, .number:
+        case .text, .number, .snippet:
             // Resolve against the current query so an input-consuming row (a
             // Fallback query) copies the URL it would actually open; self-contained
             // rows (Snippet, Calculator) ignore the input.
@@ -876,7 +902,7 @@ struct RootView: View {
     /// access open until the sheet dismisses (`shareRequest.fileAccess`).
     private func presentShare(for action: Action) {
         switch action.content {
-        case .text, .number:
+        case .text, .number, .snippet:
             if case .copyText(let text) = action.run(input: query) { shareRequest = ShareRequest(items: [text]) }
         case .url:
             if case .openURL(let url) = action.run(input: query) { shareRequest = ShareRequest(items: [url]) }
@@ -1026,14 +1052,18 @@ private struct ShareSheet: UIViewControllerRepresentable {
     func updateUIViewController(_ controller: UIActivityViewController, context: Context) {}
 }
 
-/// The seeded-compose sheet (New Snippet), as an Identifiable enum so the one
-/// `.sheet(item:)` presentation point stays in place as sheets come and go.
+/// The Snippet editor sheets, as an Identifiable enum so the one `.sheet(item:)`
+/// presentation point stays in place as sheets come and go: `composeSnippet`
+/// seeds a brand-new Snippet from typed text (New Snippet), `editSnippet` opens
+/// an existing one for revision (the **Edit** secondary action — ADR 0017).
 private enum ActiveSheet: Identifiable {
     case composeSnippet(ComposeSeed)
+    case editSnippet(StoredSnippet)
 
     var id: String {
         switch self {
         case .composeSnippet(let seed): return "compose-snippet-\(seed.id)"
+        case .editSnippet(let snippet): return "edit-snippet-\(snippet.id)"
         }
     }
 }

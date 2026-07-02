@@ -438,7 +438,12 @@ extension Action {
             kind: .snippet,
             title: title,
             inputTypes: [],
-            outputType: .text
+            outputType: .text,
+            // A Snippet declares `.snippet(id:)` content, not the bare `.text` its
+            // copy outcome would derive (ADR 0017): the id lets the long-press menu
+            // add **Edit** (open the stored record in the editor) on top of the
+            // universal copy/share, which a value-only `.text` row can't offer.
+            content: .snippet(id: id)
         ) { _ in .copyText(body) }
     }
 

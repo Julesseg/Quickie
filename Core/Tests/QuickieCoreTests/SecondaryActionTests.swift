@@ -31,6 +31,13 @@ struct SecondaryActionTests {
         #expect(secondaryActions(for: .pileEntry(id: "pile.1")) == [.copy, .share])
     }
 
+    @Test("a snippet additionally exposes Edit — a stored, titled record")
+    func snippetAlsoExposesEdit() {
+        // A Snippet is editable where a bare `.text` value is not: `.snippet`
+        // carries the record's id, so the App can open the editor on it.
+        #expect(secondaryActions(for: .snippet(id: "snippet.1")) == [.copy, .share, .edit])
+    }
+
     @Test("a file additionally exposes reveal in Files")
     func fileAlsoExposesReveal() {
         #expect(

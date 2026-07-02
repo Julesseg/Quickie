@@ -188,6 +188,7 @@ jobs:
       contents: write   # force-push the build-history branch
       pages: write
       id-token: write
+      actions: write    # delete a stale github-pages artifact before re-upload
     environment:
       name: github-pages
       url: ${{ steps.deployment.outputs.page_url }}
@@ -235,6 +236,32 @@ jobs:
           REPO_URL: https://github.com/julesseg/Quickie
           RETENTION: '5'
         run: node ci/assemble-build-history.mjs
+
+      # Re-running only the failed `deploy` job re-runs this upload, so the run
+      # ends up with TWO artifacts named `github-pages` and actions/deploy-pages
+      # aborts ("Multiple artifacts named github-pages were unexpectedly found").
+      # Delete any `github-pages` artifact left by an earlier attempt of THIS run
+      # before uploading, so the upload below is the only one — making the deploy
+      # job safely re-runnable (e.g. after a transient "try again later" from the
+      # Pages backend). Scoped to `github.run_id`, so a concurrent PR's run (a
+      # different run id, already serialized by the concurrency group) is never
+      # touched.
+      - name: Remove any stale Pages artifact from a prior attempt
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          ids="$(gh api --paginate \
+            "repos/${{ github.repository }}/actions/runs/${{ github.run_id }}/artifacts" \
+            --jq '.artifacts[] | select(.name == "github-pages") | .id')"
+          if [ -z "$ids" ]; then
+            echo "No pre-existing github-pages artifact — nothing to clean up."
+          else
+            for id in $ids; do
+              echo "Deleting stale github-pages artifact $id"
+              gh api -X DELETE "repos/${{ github.repository }}/actions/artifacts/$id"
+            done
+          fi
 
       - name: Upload Pages artifact
         uses: actions/upload-pages-artifact@v3
