@@ -21,6 +21,7 @@ final class PileUITests: XCTestCase {
         // across runs — a capture assertion can't pass on a stale row from a
         // previous run.
         app.launchArguments = ["--uitesting"]
+        app.launchArguments.append("-uitest-instant-motion")
         app.launch()
         return app
     }
@@ -88,6 +89,7 @@ final class PileUITests: XCTestCase {
     func testLegacyNotesMigrateToTitlelessPileEntries() throws {
         let app = XCUIApplication()
         app.launchArguments = ["--uitesting", "-uitest-seed-notes"]
+        app.launchArguments.append("-uitest-instant-motion")
         app.launch()
 
         let input = app.textFields["search-input"]

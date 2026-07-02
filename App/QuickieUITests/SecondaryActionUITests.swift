@@ -26,6 +26,7 @@ final class SecondaryActionUITests: XCTestCase {
         // A clean in-memory store so a Pile entry captured here can't collide
         // with a stale row from a previous run.
         app.launchArguments = ["--uitesting"]
+        app.launchArguments.append("-uitest-instant-motion")
         app.launch()
         return app
     }

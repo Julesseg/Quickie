@@ -19,6 +19,7 @@ final class KeyboardDismissUITests: XCTestCase {
         // rows appear (mirrors the other UI suites). `extraArguments` lets a test
         // add hooks such as `-uitest-seed-frecent <id>`.
         app.launchArguments += ["-uitest-reset-signals"] + extraArguments
+        app.launchArguments.append("-uitest-instant-motion")
         app.launch()
         return app
     }

@@ -19,6 +19,7 @@ final class SettingsHubUITests: XCTestCase {
         // A clean signals slate, as everywhere else (issue #9): persisted
         // Favorites/Frecency from a prior run must not reorder these results.
         app.launchArguments += ["-uitest-reset-signals"]
+        app.launchArguments.append("-uitest-instant-motion")
         app.launch()
         return app
     }
