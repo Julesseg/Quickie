@@ -10,10 +10,12 @@ import Testing
 // while content-bearing rows do.
 struct ResultContentTests {
 
-    @Test("a snippet declares text content")
-    func snippetContentIsText() {
+    @Test("a snippet declares snippet content, keyed by its id")
+    func snippetContentIsSnippet() {
+        // A Snippet declares `.snippet(id:)`, not the bare `.text` its copy
+        // outcome would derive — the id is what lets the menu add Edit (ADR 0017).
         let snippet = Action.snippet(id: "s1", title: "Address", body: "1 Infinite Loop")
-        #expect(snippet.content == .text)
+        #expect(snippet.content == .snippet(id: "s1"))
     }
 
     @Test("a Pile entry declares its text content, keyed by the entry's id")
@@ -64,5 +66,13 @@ struct ResultContentTests {
     func actOnPileEntryOffersCopyShare() {
         let entry = Action.pileEntry(id: "pile.7", text: "ideas for the offsite")
         #expect(secondaryActions(for: entry.content) == [.copy, .share])
+    }
+
+    @Test("a snippet additionally offers Edit via its declared content")
+    func snippetOffersEdit() {
+        // The Edit verb rides a Snippet's `.snippet(id:)` content on top of the
+        // universal copy/share, distinguishing it from a value-only `.text` row.
+        let snippet = Action.snippet(id: "snip.1", title: "Address", body: "1 Infinite Loop")
+        #expect(secondaryActions(for: snippet.content) == [.copy, .share, .edit])
     }
 }

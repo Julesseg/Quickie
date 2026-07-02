@@ -243,6 +243,7 @@ extension SecondaryActionKind {
         case .copy: return "Copy"
         case .share: return "Share"
         case .revealInFiles: return "Reveal in Files"
+        case .edit: return "Edit"
         }
     }
 
@@ -251,6 +252,7 @@ extension SecondaryActionKind {
         case .copy: return "doc.on.doc"
         case .share: return "square.and.arrow.up"
         case .revealInFiles: return "folder"
+        case .edit: return "pencil"
         }
     }
 }

@@ -72,6 +72,56 @@ final class SecondaryActionUITests: XCTestCase {
                        "a non-file row must not offer Reveal in Files")
     }
 
+    /// Compose a snippet, then long-press its result row: the menu offers **Edit**
+    /// (open the stored record in the editor) on top of Copy and Share — the verb a
+    /// stored, titled Snippet earns that a bare text row does not (ADR 0017).
+    @MainActor
+    func testLongPressingASnippetOffersEdit() throws {
+        let app = launchApp()
+
+        // Compose a snippet from the input via the always-present "New Snippet"
+        // Fallback, then name and save it.
+        let input = app.textFields["search-input"]
+        XCTAssertTrue(input.waitForExistence(timeout: 30))
+        input.tap()
+        input.typeText("221B Baker Street")
+
+        let newSnippet = app.buttons.matching(
+            NSPredicate(format: "label CONTAINS[c] %@", "New Snippet")
+        ).firstMatch
+        XCTAssertTrue(newSnippet.waitForExistence(timeout: 5))
+        newSnippet.tap()
+
+        let title = "Home address"
+        let bodyField = app.textFields["snippet-body-field"]
+        XCTAssertTrue(bodyField.waitForExistence(timeout: 10))
+        app.textFields["snippet-title-field"].tap()
+        app.textFields["snippet-title-field"].typeText(title)
+        app.buttons["snippet-save"].tap()
+
+        // Search it back up by title and long-press the row for its menu.
+        XCTAssertTrue(input.waitForExistence(timeout: 10))
+        input.tap()
+        input.typeText(title)
+        let row = app.buttons.matching(
+            NSPredicate(format: "label CONTAINS[c] %@", title)
+        ).firstMatch
+        XCTAssertTrue(row.waitForExistence(timeout: 5))
+        row.press(forDuration: 1.3)
+
+        // Edit joins the universal Copy / Share and the existing Pin item.
+        XCTAssertTrue(app.buttons["Edit"].waitForExistence(timeout: 5),
+                      "a snippet's long-press menu should offer Edit (open its editor)")
+        XCTAssertTrue(app.buttons["Copy"].exists,
+                      "a snippet's long-press menu should still offer Copy")
+        XCTAssertTrue(app.buttons["Share"].exists,
+                      "a snippet's long-press menu should still offer Share")
+        XCTAssertTrue(app.buttons["Pin as Favorite"].exists,
+                      "the content verbs join the existing Pin item in one menu")
+        XCTAssertFalse(app.buttons["Reveal in Files"].exists,
+                       "a non-file row must not offer Reveal in Files")
+    }
+
     /// A command row carries no content, so its long-press menu shows only
     /// Pin/Unpin — exactly as before secondary actions existed (AC
     /// "command/capture/shortcut rows show only Pin/Unpin").
