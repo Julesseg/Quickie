@@ -1,5 +1,8 @@
 # Split Quicklink into static Quicklink + Fallback query
 
+Status: partially superseded by ADR-0021 — the Fallback query half is absorbed
+into Custom Actions; the static-Quicklink half stands.
+
 ## Context
 
 Originally a **Quicklink** was one polymorphic concept: a URL *template* that
