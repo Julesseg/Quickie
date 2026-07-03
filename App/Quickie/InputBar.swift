@@ -35,10 +35,12 @@ struct InputBar: View {
     /// The shared namespace the bottom glass surfaces morph within.
     var glassNamespace: Namespace.ID
 
-    /// The natural (unclamped) height of the typed text, measured behind the field.
-    /// Compared against one line-height to decide when the surface has wrapped past
-    /// one line — see `InputBarGrowth`.
-    @State private var contentHeight: CGFloat = 0
+    /// Whether the glass surface is *currently* the squared-off box (issue #80). Held
+    /// as state, not derived, because the wrap decision is hysteretic: it depends on
+    /// the prior shape so a jittery measurement at the boundary can't flip-flop it
+    /// (see `InputBarGrowth.isExpanded`). Recomputed only when the measured height
+    /// changes.
+    @State private var isExpanded = false
 
     /// The grow-and-wrap policy (issue #63): whether the surface is a Capsule or the
     /// squared-off box, and the box's corner radius. Pure and unit-tested in Core.
@@ -48,12 +50,6 @@ struct InputBar: View {
     /// height is compared against. Taken from the resolved `UIFont` so no hidden
     /// measuring view is needed.
     private var lineHeight: CGFloat { UIFont.preferredFont(forTextStyle: .title3).lineHeight }
-
-    /// Whether the text has wrapped past one line, so the glass squares off from a
-    /// Capsule into a RoundedRectangle.
-    private var isExpanded: Bool {
-        growth.isExpanded(contentHeight: contentHeight, lineHeight: lineHeight)
-    }
 
     /// The Liquid Glass surface: a Capsule on one line, a RoundedRectangle whose
     /// ends stay as round as the capsule's once the text wraps.
@@ -96,8 +92,8 @@ struct InputBar: View {
             .background {
                 GeometryReader { proxy in
                     Color.clear
-                        .onAppear { contentHeight = proxy.size.height }
-                        .onChange(of: proxy.size.height) { _, height in contentHeight = height }
+                        .onAppear { updateHeight(proxy.size.height) }
+                        .onChange(of: proxy.size.height) { _, height in updateHeight(height) }
                 }
             }
             .padding(.horizontal, 20)
@@ -109,5 +105,19 @@ struct InputBar: View {
             .frame(minHeight: Self.barHeight)
             .glassEffect(.regular.interactive(), in: glassShape)
             .glassEffectID(Self.glassID, in: glassNamespace)
+    }
+
+    /// Records a fresh content-height measurement and re-derives the glass shape
+    /// through the hysteretic wrap decision (issue #80). Feeding the *current*
+    /// `isExpanded` back in is what gives the box its dead band: a height wobbling
+    /// at the wrap boundary — as a `TextField(axis: .vertical)` reports mid-reflow
+    /// under rapid backspace — holds the existing shape instead of flip-flopping it
+    /// and firing a burst of Liquid Glass morphs that stalls the main runloop.
+    private func updateHeight(_ height: CGFloat) {
+        isExpanded = growth.isExpanded(
+            contentHeight: height,
+            lineHeight: lineHeight,
+            wasExpanded: isExpanded
+        )
     }
 }
