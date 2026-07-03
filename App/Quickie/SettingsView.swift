@@ -129,17 +129,32 @@ private struct PastePermissionHint: View {
     @Environment(\.openURL) private var openURL
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 6) {
+        // The link is styled to read as a continuation of the hint, not a
+        // separate control: same footnote size as the footer text, a shade
+        // darker grey (not the accent tint a default Form button would take —
+        // hence `.plain`), and a small trailing chevron cueing that the tap
+        // leaves Quickie for the iOS Settings app.
+        VStack(alignment: .leading, spacing: 3) {
             Text("To paste without iOS asking each time, set Paste from Other Apps to Allow in iOS Settings.")
                 .accessibilityIdentifier("settings-paste-hint")
 
-            Button("Open iOS Settings") {
+            Button {
                 if let url = URL(string: UIApplication.openSettingsURLString) {
                     openURL(url)
                 }
+            } label: {
+                HStack(spacing: 2) {
+                    Text("Open iOS Settings")
+                    Image(systemName: "chevron.right")
+                        .font(.caption2)
+                        .accessibilityHidden(true)
+                }
+                .font(.footnote)
+                .foregroundStyle(Color.primary.opacity(0.7))
             }
-            .buttonStyle(.borderless)
+            .buttonStyle(.plain)
             .accessibilityIdentifier("settings-open-ios-settings")
+            .accessibilityLabel("Open iOS Settings")
         }
     }
 }
