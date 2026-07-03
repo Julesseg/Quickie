@@ -55,11 +55,21 @@ struct ResultContentTests {
         #expect(secondaryActions(for: settings.content) == [])
     }
 
-    @Test("a Shortcut row carries no content even though it is text-typed")
-    func shortcutRowHasNoContent() {
+    @Test("a Shortcut declares shortcut content, keyed by its name")
+    func shortcutContentIsShortcut() {
+        // A Shortcut declares `.shortcut(name:)`, not the `.none` its run outcome
+        // would derive — the name is what lets the menu add Edit, a deeplink into
+        // the Shortcuts app's editor (ADR 0017).
         let shortcut = Action.shortcut(name: "Do Thing")
-        #expect(shortcut.content == .none)
-        #expect(secondaryActions(for: shortcut.content) == [])
+        #expect(shortcut.content == .shortcut(name: "Do Thing"))
+    }
+
+    @Test("a Shortcut offers Edit alone — no text to copy or share")
+    func shortcutOffersEditOnly() {
+        // A Shortcut is a launchable reference, not a value, so it earns only Edit
+        // (open the named shortcut in the Shortcuts app) — never copy/share.
+        let shortcut = Action.shortcut(name: "Do Thing")
+        #expect(secondaryActions(for: shortcut.content) == [.edit])
     }
 
     @Test("acting on a Pile entry offers copy + share via its declared content")
