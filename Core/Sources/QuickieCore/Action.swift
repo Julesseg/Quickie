@@ -8,6 +8,15 @@ import Foundation
 public enum ActionOutcome: Equatable, Sendable {
     case openURL(URL)
     case copyText(String)
+    /// Copy the text **and** stage it back into the input (CONTEXT.md → main
+    /// action; a math result's main action). It fuses `copyText`'s clipboard
+    /// write with the same query-reinjection as `stagePileEntry` — the answer
+    /// lands on the pasteboard *and* replaces the query so the matcher re-runs,
+    /// leaving the user "typing" the result to keep calculating (`4` → `4 * 3`).
+    /// Unlike `stagePileEntry` it carries the literal text, not a store id: there
+    /// is nothing to resolve and nothing to consume, so it reads as a Copy row
+    /// (the copy is the headline; the staging is the "also").
+    case copyAndStage(text: String)
     /// Save the raw typed text into the Pile, silently (CONTEXT.md → Pile; ADR
     /// 0018): the "Save for later" Fallback. No editor, no confirm step, no app
     /// switch — the core declares the capture and carries the text; the app
@@ -252,7 +261,7 @@ public struct Action: Identifiable, Sendable {
         switch outcome {
         case .openURL:
             return .url
-        case .copyText:
+        case .copyText, .copyAndStage:
             return .text
         case .stagePileEntry(let id):
             return .pileEntry(id: id)
@@ -292,7 +301,10 @@ public struct Action: Identifiable, Sendable {
         let outcome = arguments.isEmpty ? run() : run(arguments: [])
         switch outcome {
         case .openURL: return .openInBrowser
-        case .copyText: return .copyToClipboard
+        // `copyAndStage` reads as Copy: the copy is the headline outcome (glyph
+        // and Enter hint), and the staging that keeps the user calculating is the
+        // "also" — visible when the input becomes the answer, not a second glyph.
+        case .copyText, .copyAndStage: return .copyToClipboard
         case .stagePileEntry: return .stage
         case .saveToPile: return .saveToPile
         case .composeSnippet, .createReminder, .createEvent, .composeEvent: return .compose
@@ -316,7 +328,7 @@ public struct Action: Identifiable, Sendable {
         if !arguments.isEmpty { return .go }
         switch run() {
         case .openURL: return isFallback ? .search : .go
-        case .copyText, .saveToPile, .composeSnippet, .createReminder, .createEvent, .composeEvent: return .done
+        case .copyText, .copyAndStage, .saveToPile, .composeSnippet, .createReminder, .createEvent, .composeEvent: return .done
         case .stagePileEntry, .openPage, .openFile, .enterFileSearch, .runShortcut: return .go
         case .none: return .none
         }

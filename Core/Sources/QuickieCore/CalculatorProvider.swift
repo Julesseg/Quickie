@@ -3,9 +3,11 @@ import Foundation
 /// The built-in **Dynamic Provider** for calculation and unit conversion (issue
 /// #8). It inspects the live query and, when it parses as math or an offline
 /// unit conversion, injects a single result whose main action **copies** the
-/// answer. The SearchEngine floats a Dynamic Provider's result to the top of the
-/// Result list (boosted rank), so the answer reads as a top hit even though it
-/// is not a name match (ADR 0008).
+/// answer *and stages it back into the input*, so the user can keep calculating
+/// from the result (`2+2` → tap → `4` on the clipboard *and* in the input, ready
+/// for `* 3`). The SearchEngine floats a Dynamic Provider's result to the top of
+/// the Result list (boosted rank), so the answer reads as a top hit even though
+/// it is not a name match (ADR 0008).
 ///
 /// It declines cleanly — returning `[]` — for anything that is neither math nor
 /// a conversion, so it never adds a spurious row. Math is tried first; a bare
@@ -51,8 +53,9 @@ public struct CalculatorProvider: Provider {
     }
 
     /// Builds the boosted result row: its title is the answer, its subtitle the
-    /// expression that produced it, and its main action copies the answer
-    /// (CONTEXT.md → main action). It produces a `.number` and consumes nothing —
+    /// expression that produced it, and its main action copies the answer *and*
+    /// stages it back into the input (CONTEXT.md → main action) so the user keeps
+    /// calculating from the result. It produces a `.number` and consumes nothing —
     /// it is self-contained, like a Snippet, not a Fallback.
     private func result(id: String, title: String, subtitle: String, copying copy: String) -> Action {
         Action(
@@ -67,6 +70,6 @@ public struct CalculatorProvider: Provider {
             // it copies text. This is the one factory the derive-from-outcome
             // default can't get right, so it overrides.
             content: .number
-        ) { _ in .copyText(copy) }
+        ) { _ in .copyAndStage(text: copy) }
     }
 }

@@ -9,7 +9,7 @@ A single invokable capability shown in the fuzzy list (e.g. Open App, Web Search
 _Avoid_: Command, Workflow (reserved — see below), Item
 
 **Main action**:
-The single default behavior an Action (or result row) performs when tapped — open a Quicklink in the browser, open a file, run a Shortcut, copy a math result. Every row in the result list is presented by its main action.
+The single default behavior an Action (or result row) performs when tapped — open a Quicklink in the browser, open a file, run a Shortcut, copy-and-stage a math result. Every row in the result list is presented by its main action.
 _Avoid_: Default, primary (use "main action")
 
 **Secondary action**:
@@ -84,7 +84,7 @@ The collection of raw query texts the user saved to deal with later — "queries
 _Avoid_: Note, Inbox, notes system, memo; the individual item has no proper noun — say "a Pile entry" or "a saved query"
 
 **Stage**:
-The main action of a [[Pile]] entry: replace the input query with the entry's saved text and re-run the matcher, rebuilding the Result list as if the user had typed it — then remove the entry from the Pile (staging consumes it). Mechanically identical to a [[Shortcut Action]]'s output reinjection; the difference is only the trigger. The user is left "typing" the deferred query and decides what to do with it next.
+The main action of a [[Pile]] entry: replace the input query with the entry's saved text and re-run the matcher, rebuilding the Result list as if the user had typed it — then remove the entry from the Pile (staging consumes it). Mechanically identical to a [[Shortcut Action]]'s output reinjection; the difference is only the trigger. The user is left "typing" the deferred query and decides what to do with it next. The **Calculator** reuses this reinjection in its main action: a math result **copies-and-stages** — it writes the answer to the clipboard *and* stages it back into the input so the user keeps calculating from it (`2+2` → `4` → `4 * 3`). Unlike a Pile stage it carries a literal value (nothing to resolve, nothing to consume) and reads as a **Copy** row — the copy is the headline, the staging the "also".
 _Avoid_: Open, restore, load, paste (staging re-runs the matcher; it is not a passive paste)
 
 **Quick capture**:

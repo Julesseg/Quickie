@@ -795,6 +795,17 @@ struct RootView: View {
         case .copyText(let text):
             UIPasteboard.general.string = text
             flashConfirmation("Copied")
+        case .copyAndStage(let text):
+            // A math result's main action (CONTEXT.md → main action): copy the
+            // answer *and* stage it back into the input so the user keeps
+            // calculating from it. The clipboard write mirrors `copyText`; setting
+            // `query` re-runs the matcher, the same reinjection as staging a Pile
+            // entry — but on a literal value with nothing to consume. We are always
+            // on the launcher root here (a calculator row only appears in Results),
+            // so there is no page to pop.
+            UIPasteboard.general.string = text
+            query = text
+            flashConfirmation("Copied")
         case .saveToPile(let text):
             // The silent "Save for later" capture (CONTEXT.md → Pile; ADR 0018):
             // drop the typed text straight into the Pile — no editor, no confirm,
@@ -919,9 +930,12 @@ struct RootView: View {
         case .text, .number, .snippet:
             // Resolve against the current query so an input-consuming row (a
             // Fallback query) copies the URL it would actually open; self-contained
-            // rows (Snippet, Calculator) ignore the input.
-            if case .copyText(let text) = action.run(input: query) { return text }
-            return nil
+            // rows (Snippet, Calculator) ignore the input. A Calculator's main
+            // action copies *and* stages, so its text rides `copyAndStage`.
+            switch action.run(input: query) {
+            case .copyText(let text), .copyAndStage(let text): return text
+            default: return nil
+            }
         case .url:
             if case .openURL(let url) = action.run(input: query) { return url.absoluteString }
             return nil
@@ -947,7 +961,10 @@ struct RootView: View {
     private func presentShare(for action: Action) {
         switch action.content {
         case .text, .number, .snippet:
-            if case .copyText(let text) = action.run(input: query) { shareRequest = ShareRequest(items: [text]) }
+            switch action.run(input: query) {
+            case .copyText(let text), .copyAndStage(let text): shareRequest = ShareRequest(items: [text])
+            default: break
+            }
         case .url:
             if case .openURL(let url) = action.run(input: query) { shareRequest = ShareRequest(items: [url]) }
         case .pileEntry(let id):

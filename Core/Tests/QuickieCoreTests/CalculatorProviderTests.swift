@@ -11,24 +11,26 @@ struct CalculatorProviderTests {
 
     private let provider = CalculatorProvider()
 
-    @Test("a math query yields one result whose main action copies the answer")
-    func mathResultCopiesAnswer() {
+    @Test("a math query yields one result whose main action copies and stages the answer")
+    func mathResultCopiesAndStagesAnswer() {
         let results = provider.candidates(for: "23*7")
         #expect(results.count == 1)
         #expect(results.first?.title == "161")
-        #expect(results.first?.run() == .copyText("161"))
+        // The main action both copies the answer and stages it back into the input
+        // so the user keeps calculating (CONTEXT.md → main action).
+        #expect(results.first?.run() == .copyAndStage(text: "161"))
     }
 
-    @Test("a conversion query yields one result that copies the formatted answer")
-    func conversionResultCopiesAnswer() {
+    @Test("a conversion query yields one result that copies and stages the formatted answer")
+    func conversionResultCopiesAndStagesAnswer() {
         let results = provider.candidates(for: "20 mi to km")
         #expect(results.count == 1)
         // The row's title is the formatted conversion, and its main action copies
-        // exactly what it shows — asserted without pinning the exact float, which
-        // depends on Foundation's conversion factors.
+        // and stages exactly what it shows — asserted without pinning the exact
+        // float, which depends on Foundation's conversion factors.
         let title = try? #require(results.first?.title)
         #expect(title?.hasSuffix(" km") == true)
-        #expect(results.first?.run() == .copyText(title ?? ""))
+        #expect(results.first?.run() == .copyAndStage(text: title ?? ""))
     }
 
     @Test("the injected result declares number content, not the text it copies")

@@ -50,6 +50,9 @@ struct HighlightedResultTests {
     func doneLabelForSelfContained() {
         #expect(Action.snippet(id: "s", title: "Reply", body: "hi").returnKeyLabel == .done)
         #expect(Action.saveForLater().returnKeyLabel == .done)
+        // A math result copies *and* stages, but its Enter intent still reads as
+        // Copy-done — the staging is the "also", not a distinct submit label.
+        #expect(CalculatorProvider().candidates(for: "2+2").first?.returnKeyLabel == .done)
     }
 
     @Test("a multi-step capture row reads as .go — Enter begins the capture")
