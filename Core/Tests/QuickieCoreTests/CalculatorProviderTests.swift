@@ -85,6 +85,20 @@ struct CalculatorProviderTests {
         #expect(title?.hasPrefix("1") == true)
     }
 
+    @Test("the unit-conversion toggle gates conversions but never arithmetic")
+    func unitConversionToggleGatesConversions() {
+        // The schema's new Calculator unit-conversion toggle (issue #69 AC #4) takes
+        // effect here: off, the provider answers arithmetic only and declines a
+        // conversion query (rather than injecting a spurious row); on, both work.
+        let mathOnly = CalculatorProvider(unitConversion: false)
+        #expect(mathOnly.candidates(for: "20 mi to km").isEmpty)
+        // Arithmetic is untouched by the conversion toggle.
+        #expect(mathOnly.candidates(for: "23*7").first?.title == "161")
+
+        // On (the default) still answers conversions.
+        #expect(!provider.candidates(for: "20 mi to km").isEmpty)
+    }
+
     @Test("\"of\" only triggers as a whole word, not inside another word")
     func ofIsWordBounded() {
         // The "of" calculation gate must not fire on words that merely contain

@@ -8,6 +8,13 @@ public enum ReminderListSelection: Equatable, Sendable {
     case ask
     case fixed(id: String?)
 
+    /// Maps the list dynamic choice's stored value to a routing (ADR 0020; issue
+    /// #69): empty is the "Ask each time" sentinel (`.ask`); any other value is a
+    /// fixed list id. The single string the schema persists, read back.
+    public init(stored: String) {
+        self = stored.isEmpty ? .ask : .fixed(id: stored)
+    }
+
     /// The list id to bake in when this selection skips the list step — `nil`
     /// when the step is collected instead (`.ask`) or routed to the system default.
     var presetListID: String? {

@@ -8,6 +8,13 @@ public enum EventCalendarSelection: Equatable, Sendable {
     case ask
     case fixed(id: String?)
 
+    /// Maps the calendar dynamic choice's stored value to a routing (ADR 0020;
+    /// issue #69): empty is the "Ask each time" sentinel (`.ask`); any other value
+    /// is a fixed calendar id. The single string the schema persists, read back.
+    public init(stored: String) {
+        self = stored.isEmpty ? .ask : .fixed(id: stored)
+    }
+
     /// The calendar id to bake in when this selection skips the calendar step —
     /// `nil` when the step is collected instead (`.ask`) or routed to the default.
     var presetCalendarID: String? {
