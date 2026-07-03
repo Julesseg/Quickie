@@ -78,21 +78,20 @@ struct CustomActionTests {
         CustomActionDefinition(name: "Search", template: template).makeAction(id: "one")!
     }
 
-    @Test("filling percent-encodes the value with .urlQueryAllowed")
+    @Test("filling percent-encodes the value, escaping structural query delimiters")
     func fillPercentEncodes() {
-        // Spaces and unicode are percent-encoded. The query-allowed sub-delimiters
-        // `&` and `$` are *preserved* (that is exactly what `.urlQueryAllowed` means,
-        // the set ADR 0021 mandates): `$` stays so "$5 menu" keeps its "$5" (a regex
-        // replacement would have read it as a capture ref), and `&` passes through as
-        // a query-allowed character — the same characters the retired Fallback query
-        // let through.
+        // Spaces and unicode are percent-encoded. The **structural** query delimiters
+        // are escaped per-value so a value can't break out of its slot into a
+        // multi-slot template: `&` → `%26` (else it would start a new parameter). `$`
+        // and other query-legal characters stay unescaped, so "$5 menu" keeps its
+        // "$5" (a regex replacement would have read it as a capture ref).
         var space = MultiStepAction(action: oneSlot())
         #expect(space.commit(.text("swift testing"))
                 == .completed(.openURL(URL(string: "https://x.com/search?q=swift%20testing")!)))
 
         var amp = MultiStepAction(action: oneSlot())
         #expect(amp.commit(.text("cats & dogs"))
-                == .completed(.openURL(URL(string: "https://x.com/search?q=cats%20&%20dogs")!)))
+                == .completed(.openURL(URL(string: "https://x.com/search?q=cats%20%26%20dogs")!)))
 
         var unicode = MultiStepAction(action: oneSlot())
         #expect(unicode.commit(.text("café"))
@@ -101,6 +100,21 @@ struct CustomActionTests {
         var dollar = MultiStepAction(action: oneSlot())
         #expect(dollar.commit(.text("$5 menu"))
                 == .completed(.openURL(URL(string: "https://x.com/search?q=$5%20menu")!)))
+    }
+
+    @Test("an ampersand in one slot can't leak into the next slot")
+    func ampersandStaysInItsSlot() {
+        // The multi-slot regression the escaping guards against (PR #99 review): a
+        // title of "Milk & eggs" must not have its `&` read as a parameter separator
+        // that truncates the title and injects a bogus param ahead of notes.
+        let action = CustomActionDefinition(
+            name: "Add to Things",
+            template: "things:///add?title={title}&notes={notes}"
+        ).makeAction(id: "things")!
+        var session = MultiStepAction(action: action)
+        _ = session.commit(.text("Milk & eggs"))
+        #expect(session.commit(.text("for the week"))
+                == .completed(.openURL(URL(string: "things:///add?title=Milk%20%26%20eggs&notes=for%20the%20week")!)))
     }
 
     @Test("a duplicated token fans one Argument out to every occurrence")
@@ -169,6 +183,29 @@ struct CustomActionTests {
 
         #expect(session.commit(.text("for the week"))
                 == .completed(.openURL(URL(string: "things:///add?title=buy%20oat%20milk&notes=for%20the%20week")!)))
+    }
+
+    @Test("a fallback Custom Action reads as .search regardless of slot count")
+    func fallbackReturnKeyIsSearch() {
+        // A fallback whose commit opens a URL reads as `.search` (web search's today
+        // behaviour) — for the one-slot web-search case *and* a multi-slot one, since
+        // the label comes from the fallback flag + openURL fill, not the slot count.
+        let oneSlot = CustomActionDefinition(
+            name: "Search the web", template: "https://x.com/?q={q}", isFallback: true
+        ).makeAction(id: "one")!
+        #expect(oneSlot.returnKeyLabel == .search)
+
+        let multiSlot = CustomActionDefinition(
+            name: "Add to Things", template: "things:///add?title={title}&notes={notes}", isFallback: true
+        ).makeAction(id: "multi")!
+        #expect(multiSlot.returnKeyLabel == .search)
+
+        // A non-fallback multi-slot Custom Action begins its breadcrumb on Enter, so
+        // it reads `.go`, not `.search`.
+        let verbFirst = CustomActionDefinition(
+            name: "Add to Things", template: "things:///add?title={title}&notes={notes}"
+        ).makeAction(id: "verb")!
+        #expect(verbFirst.returnKeyLabel == .go)
     }
 
     @Test("verb-first collects every Argument from an empty breadcrumb")

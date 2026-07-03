@@ -34,11 +34,20 @@ struct CustomActionCapture: Capture {
     /// Opens the filled URL at the platform edge. `UIApplication.open` reports
     /// whether a handler existed: an unopenable scheme (the target app isn't
     /// installed) surfaces the failure toast, matching the Shortcut x-error path
-    /// (ADR 0021). The `await` hops to the main actor `UIApplication` requires.
+    /// (ADR 0021).
     func perform(_ outcome: ActionOutcome) async -> CaptureConfirmation? {
         guard case .openURL(let url) = outcome else { return nil }
-        let opened = await UIApplication.shared.open(url)
+        let opened = await Self.open(url)
         return opened ? nil : CaptureConfirmation(message: "Couldn't open", isError: true)
+    }
+
+    /// Opens the URL wholly on the main actor. Keeping the `open` call inside a
+    /// `@MainActor` context is what lets us pass its (non-`Sendable`) default options
+    /// dictionary without a Swift 6 sending violation — nothing crosses an actor
+    /// boundary; only the `Sendable` `url` in and `Bool` out do.
+    @MainActor
+    private static func open(_ url: URL) async -> Bool {
+        await UIApplication.shared.open(url)
     }
 
     /// No permission affordances are ever shown, so the copy is unused; the default

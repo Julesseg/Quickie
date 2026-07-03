@@ -54,7 +54,7 @@ struct FallbacksView: View {
                             onEdit: { if case let .query(q) = row { editing = q } }
                         )
                         // Built-ins (Save for later / New Snippet) are permanent
-                        // — only Fallback queries can be deleted.
+                        // — only Custom Actions can be deleted.
                         .deleteDisabled(!row.isQuery)
                     }
                     .onMove(perform: move)
@@ -77,12 +77,12 @@ struct FallbacksView: View {
                 }
             }
             .sheet(isPresented: $creatingNew) {
-                FallbackQueryEditorView(query: nil) { draft in
+                CustomActionEditorView(query: nil) { draft in
                     modelContext.insert(draft.makeModel())
                 }
             }
             .sheet(item: $editing) { query in
-                FallbackQueryEditorView(query: query) { draft in
+                CustomActionEditorView(query: query) { draft in
                     draft.apply(to: query)
                 }
             }
@@ -96,7 +96,7 @@ struct FallbacksView: View {
         store.setOrder(ids)
     }
 
-    /// Deletes only Fallback queries — Save for later / New Snippet refuse
+    /// Deletes only Custom Actions — Save for later / New Snippet refuse
     /// deletion (CONTEXT.md → Fallback list). A swipe over a built-in row is a
     /// no-op.
     private func delete(_ offsets: IndexSet) {
@@ -143,7 +143,7 @@ enum FallbackRow: Identifiable {
 }
 
 /// A single Fallbacks-page row: title (+ template for a query), an enable/disable
-/// toggle, and — for a Fallback query — a tap into its editor.
+/// toggle, and — for a Custom Action — a tap into its editor.
 private struct FallbackRowView: View {
     let row: FallbackRow
     let isDisabled: Bool
@@ -178,7 +178,7 @@ private struct FallbackRowView: View {
 /// A plain value carrying the fields the interim Custom Action editor collects
 /// (name + URL template). All detected `{name}` slots are text Arguments; the real
 /// per-argument editor is the next slice (ADR 0021).
-struct FallbackQueryDraft {
+struct CustomActionDraft {
     var title: String = ""
     var urlString: String = ""
     var alias: String = ""
@@ -207,25 +207,25 @@ struct FallbackQueryDraft {
 /// The interim create/edit form for a Custom Action (ADR 0021). A templated URL is
 /// **required** — it must contain at least one `{name}` slot the breadcrumb fills
 /// (mirroring `CustomActionDefinition`), the inverse of the Quicklinks editor's rule.
-struct FallbackQueryEditorView: View {
+struct CustomActionEditorView: View {
     @Environment(\.dismiss) private var dismiss
 
     let query: StoredCustomAction?
-    let onSave: (FallbackQueryDraft) -> Void
+    let onSave: (CustomActionDraft) -> Void
 
-    @State private var draft: FallbackQueryDraft
+    @State private var draft: CustomActionDraft
 
-    init(query: StoredCustomAction?, onSave: @escaping (FallbackQueryDraft) -> Void) {
+    init(query: StoredCustomAction?, onSave: @escaping (CustomActionDraft) -> Void) {
         self.query = query
         self.onSave = onSave
         if let query {
-            _draft = State(initialValue: FallbackQueryDraft(
+            _draft = State(initialValue: CustomActionDraft(
                 title: query.title,
                 urlString: query.urlString,
                 alias: query.alias ?? ""
             ))
         } else {
-            _draft = State(initialValue: FallbackQueryDraft())
+            _draft = State(initialValue: CustomActionDraft())
         }
     }
 

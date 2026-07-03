@@ -97,20 +97,36 @@ public struct CustomActionDefinition: Equatable, Sendable {
         )
     }
 
+    /// The characters a filled **value** may carry unescaped: `.urlQueryAllowed`
+    /// minus the sub-delimiters that are *structural* in a query — `&` (separates
+    /// params), `=` (separates key from value), `+` (a space under form decoding),
+    /// and `#` (starts the fragment). A multi-slot template splices values into a
+    /// structured query (`?title={title}&notes={notes}`), so a title of "Milk & eggs"
+    /// left with a raw `&` would be read as a delimiter — truncating the title and
+    /// injecting a bogus parameter. Escaping these per-value keeps each value inside
+    /// its own slot. `$` and the other query-legal characters stay unescaped, so
+    /// "$5 menu" keeps its "$5" (a stricter `.alphanumerics` would over-encode).
+    private static let valueAllowed: CharacterSet = {
+        var set = CharacterSet.urlQueryAllowed
+        set.remove(charactersIn: "&=+#")
+        return set
+    }()
+
     /// Fills the collected Argument values into the template (ADR 0021): each token
-    /// occurrence is replaced **literally** by the percent-encoded (`.urlQueryAllowed`)
-    /// value — no regex replacement template, where `$1`/`\` would be read as capture
-    /// references (`.urlQueryAllowed` leaves `$` unescaped, so "$5 menu" keeps its
-    /// "$5"). A repeated name fills every occurrence from its one Argument; a value
-    /// missing from `values` (only the glyph-probe `run(arguments: [])` passes fewer)
-    /// fills empty. The encoded value can never contain `{`/`}` (both are escaped),
-    /// so no replacement can introduce a new token or collide across names.
+    /// occurrence is replaced **literally** by the percent-encoded value — no regex
+    /// replacement template, where `$1`/`\` would be read as capture references. A
+    /// repeated name fills every occurrence from its one Argument; a value missing
+    /// from `values` (only the glyph-probe `run(arguments: [])` passes fewer) fills
+    /// empty. The encoding escapes the structural query delimiters (`valueAllowed`),
+    /// so a value can never break out of its slot, and can never contain `{`/`}`
+    /// (both escaped), so no replacement introduces a new token or collides across
+    /// names. The template's own delimiters stay literal — only the value is encoded.
     static func fill(template: String, tokenNames: [String], values: [ArgumentValue]) -> ActionOutcome {
         var filled = template
         for (index, name) in tokenNames.enumerated() {
             let raw: String
             if index < values.count, case .text(let text) = values[index] { raw = text } else { raw = "" }
-            let encoded = raw.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? raw
+            let encoded = raw.addingPercentEncoding(withAllowedCharacters: valueAllowed) ?? raw
             filled = filled.replacingOccurrences(of: "{\(name)}", with: encoded)
         }
         guard let url = URL(string: filled) else { return .none }
