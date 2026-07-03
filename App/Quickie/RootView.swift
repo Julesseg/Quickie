@@ -646,12 +646,13 @@ struct RootView: View {
                 SettingsView()
             }
         case .pile:
-            // The Pile *entries* page (ADR 0018): the temporary storage to act
-            // on, carrying every per-entry verb — stage, discard, and the
-            // Enabled toggle (issue #68) — distinct from the Pile provider's
-            // options-only settings page, which the hub's Providers list
-            // reaches via `.settings(panel: .pile)`.
-            PileView(enablement: instanceEnablement, onStage: stage)
+            // The Pile *entries* page (ADR 0018): pure content to view and act
+            // on — stage or discard, deliberately no per-entry disable (a
+            // deferred query is acted on or kept in results, never "kept but
+            // hidden") — distinct from the Pile provider's options-only
+            // settings page, which the hub's Providers list reaches via
+            // `.settings(panel: .pile)`.
+            PileView(onStage: stage)
         }
     }
 
@@ -672,9 +673,9 @@ struct RootView: View {
         case .events: EventSettingsView()
         case .fileSearch: IndexedFoldersView(store: indexedFolders)
         // The Pile's settings page stays options-only (ADR 0018): its entries
-        // are temporary content whose per-entry verbs — stage, discard, and
-        // the Enabled toggle (issue #68) — all live on the `.pile` entries
-        // page, the carve-out from the unified content-under-options shape.
+        // are temporary content whose verbs — stage and discard — live on the
+        // `.pile` entries page, the carve-out from the unified
+        // content-under-options shape. Entries have no per-entry disable.
         case .pile, .reminders, .calculator: ProviderOptionsPage(provider: provider)
         }
     }
