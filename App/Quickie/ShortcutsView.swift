@@ -17,6 +17,11 @@ struct ShortcutsView: View {
 
     let store: ShortcutsStore
 
+    /// The instance-level Disabled state (issue #68): each row's Enabled toggle
+    /// reversibly hides that one Shortcut Action from results/Recents/Favorites
+    /// — softer than swipe-to-delete, which a re-sync would undo anyway.
+    let enablement: EnablementStore
+
     var body: some View {
         List {
             // The unified page shape (ADR 0019; issue #66): Options lead; the
@@ -60,17 +65,27 @@ struct ShortcutsView: View {
                 }
             } else {
                 Section {
+                    // Each shortcut is a navigation row into its own settings
+                    // page — two toggles in one list row read as one mushy
+                    // control, so the row carries only the name and the page
+                    // holds the clearly-separated switches.
                     ForEach(store.entries, id: \.name) { entry in
-                        ShortcutRowView(
-                            entry: entry,
-                            onToggleAcceptsInput: { store.toggleAcceptsInput(entry.name) }
-                        )
+                        NavigationLink {
+                            ShortcutDetailView(name: entry.name, store: store, enablement: enablement)
+                        } label: {
+                            Text(entry.name)
+                                .foregroundStyle(
+                                    enablement.isDisabled(Action.shortcutID(for: entry.name))
+                                        ? .secondary : .primary
+                                )
+                        }
+                        .accessibilityIdentifier("shortcut-row.\(entry.name)")
                     }
                     .onDelete(perform: delete)
                 } header: {
                     Text("Imported shortcuts")
                 } footer: {
-                    Text("Turn on \u{201C}accepts input\u{201D} for a shortcut that takes text — Quickie can't tell from the import. Swipe to remove one; a later re-sync re-adds it if it's still in your library.")
+                    Text("Tap a shortcut to enable or disable it and mark whether it accepts input. Swipe to remove one; a later re-sync re-adds it if it's still in your library.")
                 }
             }
         }
@@ -102,22 +117,48 @@ struct ShortcutsView: View {
     }
 }
 
-/// One Shortcuts-page row: the shortcut's name and its "accepts input" toggle.
-private struct ShortcutRowView: View {
-    let entry: ShortcutEntry
-    let onToggleAcceptsInput: () -> Void
+/// One imported shortcut's own settings page (issue #68 follow-up): the
+/// **Enabled** switch (the instance-level Disabled toggle) and the **Accepts
+/// input** switch, each in its own explained section — the two verbs a single
+/// list row couldn't hold apart. Pushed from the Shortcuts page's navigation
+/// rows, riding the launcher's stack like every other pushed page.
+struct ShortcutDetailView: View {
+    let name: String
+    let store: ShortcutsStore
+    let enablement: EnablementStore
+
+    /// The shortcut's stable Action id — the same derivation the engine
+    /// filters by (`Action.shortcutID(for:)`), so the toggle can't drift.
+    private var actionID: String { Action.shortcutID(for: name) }
+
+    /// Read live from the store: the entry can be re-synced while this page is
+    /// up, and a deleted entry simply reads as input-off.
+    private var acceptsInput: Bool {
+        store.entries.first(where: { $0.name == name })?.acceptsInput ?? false
+    }
 
     var body: some View {
-        Toggle(isOn: Binding(get: { entry.acceptsInput }, set: { _ in onToggleAcceptsInput() })) {
-            VStack(alignment: .leading, spacing: 2) {
-                Text(entry.name)
-                    .font(.body)
-                    .foregroundStyle(.primary)
-                Text("Accepts input")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
+        Form {
+            Section {
+                Toggle("Enabled", isOn: Binding(
+                    get: { !enablement.isDisabled(actionID) },
+                    set: { _ in enablement.toggleDisabled(actionID) }
+                ))
+                .accessibilityIdentifier("shortcut-enabled.\(name)")
+            } footer: {
+                Text("Turn off to hide this shortcut from results, Recents, and Favorites without removing it. It stays in the list and keeps this setting through a re-sync.")
+            }
+
+            Section {
+                Toggle("Accepts input", isOn: Binding(
+                    get: { acceptsInput },
+                    set: { _ in store.toggleAcceptsInput(name) }
+                ))
+                .accessibilityIdentifier("shortcut-accepts-input.\(name)")
+            } footer: {
+                Text("Turn on for a shortcut that takes text — Quickie collects the input before running it, since the import can't tell.")
             }
         }
-        .accessibilityIdentifier("shortcut-accepts-input.\(entry.name)")
+        .navigationTitle(name)
     }
 }

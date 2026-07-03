@@ -30,7 +30,8 @@ final class SignalsStore {
     /// — note its reach is broad; a test that passes it gets a fully reset
     /// launcher, not just reset Favorites. The canonical list of what it clears:
     /// Favorites/Frecency (here), the Fallback list order/disabled set
-    /// (`FallbacksStore.launch`), the imported Shortcut Actions
+    /// (`FallbacksStore.launch`), the instance-level Disabled set
+    /// (`EnablementStore.launch`), the imported Shortcut Actions
     /// (`ShortcutsStore.launch`), the kind-level provider Enabled switches
     /// (`ProviderEnablementStore.launch`), and the app-level Settings toggles
     /// (`AppSettings.reset`, run from `QuickieApp.init`).

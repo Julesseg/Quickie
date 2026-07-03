@@ -11,6 +11,10 @@ struct SnippetManagerView: View {
 
     @Query(sort: \StoredSnippet.createdAt, order: .reverse) private var snippets: [StoredSnippet]
 
+    /// The instance-level Disabled state (issue #68): each row's toggle
+    /// reversibly hides that one Snippet from results/Recents/Favorites.
+    let enablement: EnablementStore
+
     /// What the editor sheet is doing — composing a new snippet or editing an
     /// existing one. A single optional drives one sheet, sidestepping the
     /// SwiftUI multiple-`.sheet`-on-one-view gotcha and keeping add and edit on
@@ -49,15 +53,22 @@ struct SnippetManagerView: View {
             } else {
                 Section {
                     ForEach(snippets) { snippet in
-                        Button {
-                            editorTarget = .edit(snippet)
-                        } label: {
-                            SnippetRow(snippet: snippet)
-                        }
-                        .buttonStyle(.plain)
-                        .accessibilityIdentifier("snippet-row-\(snippet.title)")
+                        // No identifier on the row container: one there makes
+                        // the row read as a single accessibility element and
+                        // swallows the nested Enabled switch from XCUITest
+                        // queries (the CI failure on issue #68's toggle test) —
+                        // the Fallbacks and Pile rows expose only the switch's
+                        // own identifier, and this row matches them.
+                        SnippetRow(
+                            snippet: snippet,
+                            isDisabled: enablement.isDisabled(snippet.actionID),
+                            onToggleDisabled: { enablement.toggleDisabled(snippet.actionID) },
+                            onEdit: { editorTarget = .edit(snippet) }
+                        )
                     }
                     .onDelete(perform: delete)
+                } footer: {
+                    Text("Disable a snippet to hide it from results without removing it.")
                 }
             }
         }
@@ -90,21 +101,33 @@ struct SnippetManagerView: View {
 }
 
 /// One library row: the title with a one-line preview of the body so snippets
-/// are distinguishable at a glance.
+/// are distinguishable at a glance, plus an enable/disable toggle (the
+/// instance-level Disabled switch, issue #68) and a tap into the editor.
 private struct SnippetRow: View {
     let snippet: StoredSnippet
+    let isDisabled: Bool
+    let onToggleDisabled: () -> Void
+    let onEdit: () -> Void
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 2) {
-            Text(snippet.title)
-                .font(.body)
-                .foregroundStyle(.primary)
-            Text(snippet.body)
-                .font(.caption)
-                .foregroundStyle(.secondary)
-                .lineLimit(1)
+        HStack(spacing: 12) {
+            VStack(alignment: .leading, spacing: 2) {
+                Text(snippet.title)
+                    .font(.body)
+                    .foregroundStyle(isDisabled ? .secondary : .primary)
+                Text(snippet.body)
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .lineLimit(1)
+            }
+            Spacer(minLength: 8)
+            // Disabling keeps the row here but hides the Snippet from every
+            // launcher surface — reversible, unlike swipe-to-delete.
+            Toggle("Enabled", isOn: Binding(get: { !isDisabled }, set: { _ in onToggleDisabled() }))
+                .labelsHidden()
+                .accessibilityIdentifier("snippet-enabled.\(snippet.id)")
         }
-        .frame(maxWidth: .infinity, alignment: .leading)
         .contentShape(Rectangle())
+        .onTapGesture { onEdit() }
     }
 }

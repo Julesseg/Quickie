@@ -45,6 +45,16 @@ public struct SearchEngine {
     /// "Recent" list, or the Favorites grid — reversibly, its data retained.
     private let enablement: ProviderEnablement
 
+    /// The **instance**-level Disabled state (CONTEXT.md → Disabled; issue
+    /// #68): single actions — a Quicklink, Snippet, Pile entry, or Shortcut —
+    /// reversibly hidden by stable id from results, Recents, and Favorites,
+    /// while staying in their Management page's Actions list. A disabled kind
+    /// short-circuits its instances (the provider is skipped before any id is
+    /// consulted); `resolvableHomeIDs()` ignores this set like it ignores the
+    /// kinds, so a disabled favorite keeps its pin. Fallbacks keep their own
+    /// instance state in `disabledFallbacks` (no migration).
+    private let disabledInstances: Set<String>
+
     /// The boost a Favorite adds to its match score. Tuned to reorder *within* a
     /// match tier (e.g. float a pinned exact match above an unpinned one)
     /// without lifting a weak match over a clean exact/prefix one — the tiers,
@@ -71,7 +81,8 @@ public struct SearchEngine {
         now: Date = Date(),
         fallbackOrder: [String] = [],
         disabledFallbacks: Set<String> = [],
-        enablement: ProviderEnablement = ProviderEnablement()
+        enablement: ProviderEnablement = ProviderEnablement(),
+        disabledInstances: Set<String> = []
     ) {
         self.providers = providers
         self.layout = layout
@@ -84,6 +95,7 @@ public struct SearchEngine {
         self.fallbackRank = rank
         self.disabledFallbacks = disabledFallbacks
         self.enablement = enablement
+        self.disabledInstances = disabledInstances
     }
 
     /// Whether a Provider's Actions may surface at all (issue #67): true unless
@@ -116,6 +128,12 @@ public struct SearchEngine {
         for provider in providers where isLive(provider) {
             let weight: Double = provider.weight
             for action in provider.candidates(for: trimmed) {
+                // A disabled instance is reversibly hidden from results while
+                // staying in its Management page's Actions list (issue #68).
+                // Checked after the kind gate, so a disabled kind
+                // short-circuits its instances regardless of per-instance
+                // state.
+                guard !disabledInstances.contains(action.id) else { continue }
                 if action.isFallback {
                     // The Fallbacks kind's Enabled toggle is a *master* switch
                     // over the whole bottom region (issue #67): the Fallback
@@ -198,14 +216,16 @@ public struct SearchEngine {
 
     /// The Indexed, non-Fallback Actions keyed by id — the enumerable catalog
     /// `home()` resolves Favorite and Frecency ids against. `home()` reads it
-    /// with disabled kinds excluded, so their cards and Recent rows vanish;
-    /// `resolvableHomeIDs()` reads it unfiltered, because a disabled action
-    /// still *exists* — only a deleted one stops resolving.
+    /// with disabled kinds *and* disabled instances excluded, so their cards
+    /// and Recent rows vanish; `resolvableHomeIDs()` reads it unfiltered,
+    /// because a disabled action still *exists* — only a deleted one stops
+    /// resolving.
     private func indexedActionsByID(includingDisabled: Bool) -> [String: Action] {
         var byId: [String: Action] = [:]
         for provider in providers where provider.kind == .indexed {
             guard includingDisabled || isLive(provider) else { continue }
             for action in provider.candidates(for: "") where !action.isFallback {
+                if !includingDisabled && disabledInstances.contains(action.id) { continue }
                 if byId[action.id] == nil { byId[action.id] = action }
             }
         }
@@ -218,10 +238,11 @@ public struct SearchEngine {
     /// exists (a deleted Snippet, or a stale id from an older build) is pruned
     /// rather than lingering invisibly and consuming a Favorites slot.
     ///
-    /// Deliberately ignores kind-level enablement (issue #67 AC #3): a disabled
-    /// Favorite keeps its pin — dropped from the grid by `home()`, restored on
-    /// re-enable — so it must keep resolving here or the reconciliation would
-    /// prune the pin the moment its provider is switched off.
+    /// Deliberately ignores enablement at both levels (issue #67 AC #3, issue
+    /// #68): a disabled Favorite — whether its kind or the single instance was
+    /// switched off — keeps its pin, dropped from the grid by `home()` and
+    /// restored on re-enable, so it must keep resolving here or the
+    /// reconciliation would prune the pin the moment it was disabled.
     public func resolvableHomeIDs() -> Set<String> {
         Set(indexedActionsByID(includingDisabled: true).keys)
     }

@@ -35,13 +35,25 @@ struct IndexedFoldersView: View {
                         Image(systemName: "folder")
                             .foregroundStyle(.secondary)
                         Text(grant.displayName)
+                            .foregroundStyle(grant.disabled ? .secondary : .primary)
+                        Spacer(minLength: 8)
+                        // Disabling keeps the grant (and its access) but hides
+                        // the folder's files from results and the Search Files
+                        // context — reversible, unlike swipe-to-delete, which
+                        // revokes the grant (issue #68 follow-up).
+                        Toggle("Enabled", isOn: Binding(
+                            get: { !grant.disabled },
+                            set: { _ in store.toggleDisabled(grant.id) }
+                        ))
+                        .labelsHidden()
+                        .accessibilityIdentifier("folder-enabled.\(grant.id)")
                     }
                 }
                 .onDelete(perform: delete)
             } header: {
                 Text("Indexed Folders")
             } footer: {
-                Text("Folders Quickie is allowed to search. Access is stored on this device only and never synced.")
+                Text("Folders Quickie is allowed to search. Access is stored on this device only and never synced. Disable a folder to hide its files from results without revoking access.")
             }
         }
         .navigationTitle("File Search")

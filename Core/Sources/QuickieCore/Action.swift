@@ -498,7 +498,7 @@ extension Action {
         // nothing to type.
         let arguments = acceptsInput ? [Argument(label: "Input", contentType: .text, isOptional: true)] : []
         return Action(
-            id: "shortcut.\(name.lowercased())",
+            id: shortcutID(for: name),
             kind: .shortcut,
             title: name,
             // A shortcut that accepts input consumes text; one that doesn't is
@@ -521,6 +521,14 @@ extension Action {
                 return .runShortcut(name: name, input: (text?.isEmpty ?? true) ? nil : text)
             }
         )
+    }
+
+    /// The stable id of the Shortcut Action named `name` — the same derivation
+    /// the `shortcut` factory uses, exposed so a surface that only holds the
+    /// name (the Shortcuts page's per-row enablement toggle, issue #68) keys
+    /// the exact id the engine filters by, and the two can never drift.
+    public static func shortcutID(for name: String) -> String {
+        "shortcut.\(name.lowercased())"
     }
 
     /// A Pile entry (CONTEXT.md → Pile; ADR 0018): a raw query text the user

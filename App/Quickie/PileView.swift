@@ -10,6 +10,11 @@ import SwiftData
 /// without staging**. Deliberately NOT the Pile provider's settings page
 /// (reached from the Settings hub's Providers list), and so no Options
 /// section: content here, configuration there.
+///
+/// Pile entries deliberately carry **no per-entry Enabled toggle** (issue #68
+/// scoped them out): an entry is a deferred query you either act on or keep
+/// waiting in results — "kept but hidden" is not a state this data has. Its
+/// verbs are stage and discard, nothing in between.
 struct PileView: View {
     @Environment(\.modelContext) private var context
 

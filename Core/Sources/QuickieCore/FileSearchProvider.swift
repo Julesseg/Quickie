@@ -41,8 +41,21 @@ public struct FileSearchProvider: Provider {
     /// (~3, ADR 0015). The uncapped Search Files context is a later slice.
     private let inlineCap: Int
 
-    public init(index: FilenameIndex, layout: KeyboardLayout = .qwerty, inlineCap: Int = 3) {
-        self.index = index
+    /// Builds the provider over `index`, dropping every entry under a
+    /// **disabled** Indexed Folder up front (issue #68 follow-up): the one
+    /// filter covers both the inline `candidates(for:)` path and the Search
+    /// Files context, so a disabled folder's files are hidden from every
+    /// surface — reversibly, since the grant and the snapshot are untouched.
+    /// `disabledFolders` holds grant ids (`FileEntry.bookmarkID`s).
+    public init(
+        index: FilenameIndex,
+        layout: KeyboardLayout = .qwerty,
+        inlineCap: Int = 3,
+        disabledFolders: Set<String> = []
+    ) {
+        self.index = disabledFolders.isEmpty
+            ? index
+            : FilenameIndex(entries: index.entries.filter { !disabledFolders.contains($0.bookmarkID) })
         self.layout = layout
         self.inlineCap = inlineCap
     }

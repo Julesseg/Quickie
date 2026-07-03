@@ -148,6 +148,24 @@ final class StoredPileEntry {
     }
 }
 
+/// The stable Action id each stored row's Action is indexed under — one
+/// derivation shared by the engine wiring (`RootView`) and the Management
+/// pages' per-row enablement toggles (issue #68), so a toggle always keys the
+/// exact id the engine filters by. Quicklinks use the stored id as-is; the
+/// prefixed spaces keep the id families collision-free. Shortcuts derive
+/// theirs in Core (`Action.shortcutID(for:)`), since the factory owns it.
+extension StoredQuicklink {
+    var actionID: String { id }
+}
+
+extension StoredSnippet {
+    var actionID: String { "snippet.\(id)" }
+}
+
+extension StoredPileEntry {
+    var actionID: String { "pile.\(id)" }
+}
+
 /// The legacy Note entity (pre-ADR 0018), kept in the schema **only** so
 /// `migrateNotesToPile` can read the rows a previous build stored and collapse
 /// each to a titleless Pile entry. Nothing else creates or reads these; once
