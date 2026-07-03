@@ -21,7 +21,7 @@ The single, reversed (bottom-anchored, best match nearest the input/thumb) list 
 _Avoid_: Results, suggestions, search results
 
 **Settings**:
-The app's top-level preferences page and the **per-action hub**, reached like any capability — by typing to surface a "Settings" command row, not via chrome (the old top-right gear button is gone). It has two sections: an **app-level** section (**Appearance** — Light / Dark / System, defaulting to System, applied app-wide; a **Clipboard prefill** on/off toggle; a **Show Recents** on/off toggle for the Frecency list) and a **Providers** section — one navigation row per [[Provider]] that pushes that provider's [[Management page]]. The top-level rows are navigation only; a provider is enabled/disabled and configured *inside* its own page, not here. Settings no longer holds *only* settings (ADR 0019): each provider's page unifies its settings and its content.
+The app's top-level preferences page and the **per-action hub**, reached like any capability — by typing to surface a "Settings" command row, not via chrome (the old top-right gear button is gone). It has two sections: an **app-level** section (**Appearance** — Light / Dark / System, defaulting to System, applied app-wide; a **Clipboard prefill** on/off toggle; a **Show Recents** on/off toggle for the Frecency list; footed by the [[Paste permission hint]], which replaced the old footer's redundant toggle descriptions) and a **Providers** section — one navigation row per [[Provider]] that pushes that provider's [[Management page]]. The top-level rows are navigation only; a provider is enabled/disabled and configured *inside* its own page, not here. Settings no longer holds *only* settings (ADR 0019): each provider's page unifies its settings and its content.
 _Avoid_: Preferences sheet, manage screen (the per-provider destination is the [[Management page]])
 
 **Settings command row**:
@@ -100,8 +100,12 @@ A quick-capture Action that creates an EventKit calendar event from the breadcru
 _Avoid_: Appointment, meeting, calendar entry
 
 **Clipboard prefill**:
-A launch-time offer to seed the input field with the current clipboard contents. Quickie silently checks only whether the clipboard *has text* (metadata, no system banner) and, if so, shows a tap-to-fill paste chip backed by the iOS Paste control — reading the actual content only on tap, never ambiently.
-_Avoid_: Auto-paste, clipboard read
+A launch-time offer to seed the input field with the current clipboard contents. Quickie silently checks only whether the clipboard *has text* (metadata, no system banner) and, if so, shows a tap-to-fill paste chip backed by the iOS Paste control — reading the actual content only on tap, never ambiently. Tapping the chip **does raise the iOS paste-permission alert**: the bare system paste control is exempt from that alert, but only when shown untouched, and Quickie deliberately dresses it in the input bar's Liquid Glass (the bare control's opaque platter clashes with it), trading the exemption for the look. That trade-off is accepted, not a bug to fix; the mitigation is the [[Paste permission hint]] — inform the user, don't fight the system.
+_Avoid_: Auto-paste, clipboard read; never describe the chip as prompt-free or banner-free (only the *has-text metadata check* is silent — the tap prompts until the user allows pasting in iOS Settings)
+
+**Paste permission hint**:
+The footer line under the [[Settings]] app-level section telling the user how to stop the iOS paste-permission alert for good: "To paste without iOS asking each time, set Paste from Other Apps to Allow in iOS Settings.", followed by a tappable **Open iOS Settings** link that deeplinks to Quickie's page in the Settings app (where the *Paste from Other Apps* row lives — the user still flips it to **Allow** themselves). It replaced the footer's former toggle descriptions, which restated what the self-describing toggles already said. Passive and always present — never a popup, banner, or nag (an information popup would fight a popup annoyance with another popup) — and necessarily **blind**: iOS offers no way to read the *Paste from Other Apps* state, so the hint cannot know whether it is still needed.
+_Avoid_: Paste tip popup, permission primer (that is the quick-capture pattern, ADR 0012)
 
 **Provider**:
 A source that contributes Actions to the result list. Every Action originates from exactly one Provider. Providers are either Indexed or Dynamic.
