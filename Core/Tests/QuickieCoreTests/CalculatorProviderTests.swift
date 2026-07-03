@@ -11,24 +11,26 @@ struct CalculatorProviderTests {
 
     private let provider = CalculatorProvider()
 
-    @Test("a math query yields one result whose main action copies the answer")
-    func mathResultCopiesAnswer() {
+    @Test("a math query yields one result whose main action copies and stages the answer")
+    func mathResultCopiesAndStagesAnswer() {
         let results = provider.candidates(for: "23*7")
         #expect(results.count == 1)
         #expect(results.first?.title == "161")
-        #expect(results.first?.run() == .copyText("161"))
+        // The main action both copies the answer and stages it back into the input
+        // so the user keeps calculating (CONTEXT.md → main action).
+        #expect(results.first?.run() == .copyAndStage(text: "161"))
     }
 
-    @Test("a conversion query yields one result that copies the formatted answer")
-    func conversionResultCopiesAnswer() {
+    @Test("a conversion query yields one result that copies and stages the formatted answer")
+    func conversionResultCopiesAndStagesAnswer() {
         let results = provider.candidates(for: "20 mi to km")
         #expect(results.count == 1)
         // The row's title is the formatted conversion, and its main action copies
-        // exactly what it shows — asserted without pinning the exact float, which
-        // depends on Foundation's conversion factors.
+        // and stages exactly what it shows — asserted without pinning the exact
+        // float, which depends on Foundation's conversion factors.
         let title = try? #require(results.first?.title)
         #expect(title?.hasSuffix(" km") == true)
-        #expect(results.first?.run() == .copyText(title ?? ""))
+        #expect(results.first?.run() == .copyAndStage(text: title ?? ""))
     }
 
     @Test("the injected result declares number content, not the text it copies")
@@ -66,6 +68,27 @@ struct CalculatorProviderTests {
     func declinesBareNumber() {
         #expect(provider.candidates(for: "42").isEmpty)
         #expect(provider.candidates(for: "3.14").isEmpty)
+    }
+
+    @Test("a negative bare number declines — a staged negative answer stays inert")
+    func declinesLeadingNegativeNumber() {
+        // A leading `-` is a sign, not an operator, so a negative literal reads as
+        // a bare number and declines like `42` does. This keeps a staged negative
+        // answer from re-triggering the Calculator on itself: `2 - 7` computes to
+        // `-5`, and staging `-5` back into the input declines — inert, exactly like
+        // staging `2+2` → `4`.
+        #expect(provider.candidates(for: "-5").isEmpty)
+        #expect(provider.candidates(for: "-3.14").isEmpty)
+        #expect(provider.candidates(for: "2 - 7").first?.title == "-5")
+        #expect(provider.candidates(for: "-5").isEmpty)
+    }
+
+    @Test("a leading sign in front of an operator is still a calculation")
+    func leadingSignWithOperatorStillCalculates() {
+        // Only the *leading* `+`/`-` is exempted: an expression that opens with a
+        // sign but carries a real operator (or a paren) still calculates.
+        #expect(provider.candidates(for: "-5+3").first?.title == "-2")
+        #expect(provider.candidates(for: "-(2+3)").first?.title == "-5")
     }
 
     @Test("a malformed expression declines")
