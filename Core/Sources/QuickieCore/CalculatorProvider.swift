@@ -43,12 +43,23 @@ public struct CalculatorProvider: Provider {
         return []
     }
 
-    /// True when the query carries an arithmetic operator (or the `of` keyword) —
-    /// the signal that the user is *calculating*, not merely typing a number.
-    /// `of` is matched on word boundaries so it triggers on "15% of 200" but not
-    /// on words that merely contain the letters (`profile`, `off`).
+    /// True when the query carries a *binary* arithmetic operator (or the `of`
+    /// keyword) — the signal that the user is *calculating*, not merely typing a
+    /// number. A leading `+`/`-` is a **sign**, not an operator, so a negative
+    /// literal like `-5` reads as a bare number and declines, exactly as `42`
+    /// does. That is what keeps a staged negative answer (`2 - 7` → `-5`) inert
+    /// rather than re-triggering the Calculator on itself — the staged result
+    /// behaves the same whether it is positive (`4`) or negative (`-5`). `of` is
+    /// matched on word boundaries so it triggers on "15% of 200" but not on words
+    /// that merely contain the letters (`profile`, `off`).
     private func isCalculation(_ query: String) -> Bool {
-        if query.contains(where: { "+-*/^%()".contains($0) }) { return true }
+        for (offset, char) in query.enumerated() {
+            // `* / ^ % ( )` are always operators; `+`/`-` count only past the
+            // leading position, where they are binary rather than a sign on the
+            // number. `query` arrives trimmed, so offset 0 is the first real char.
+            if "*/^%()".contains(char) { return true }
+            if offset > 0 && "+-".contains(char) { return true }
+        }
         return query.range(of: "\\bof\\b", options: [.regularExpression, .caseInsensitive]) != nil
     }
 

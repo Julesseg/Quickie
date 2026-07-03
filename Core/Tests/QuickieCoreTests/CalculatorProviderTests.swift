@@ -70,6 +70,27 @@ struct CalculatorProviderTests {
         #expect(provider.candidates(for: "3.14").isEmpty)
     }
 
+    @Test("a negative bare number declines — a staged negative answer stays inert")
+    func declinesLeadingNegativeNumber() {
+        // A leading `-` is a sign, not an operator, so a negative literal reads as
+        // a bare number and declines like `42` does. This keeps a staged negative
+        // answer from re-triggering the Calculator on itself: `2 - 7` computes to
+        // `-5`, and staging `-5` back into the input declines — inert, exactly like
+        // staging `2+2` → `4`.
+        #expect(provider.candidates(for: "-5").isEmpty)
+        #expect(provider.candidates(for: "-3.14").isEmpty)
+        #expect(provider.candidates(for: "2 - 7").first?.title == "-5")
+        #expect(provider.candidates(for: "-5").isEmpty)
+    }
+
+    @Test("a leading sign in front of an operator is still a calculation")
+    func leadingSignWithOperatorStillCalculates() {
+        // Only the *leading* `+`/`-` is exempted: an expression that opens with a
+        // sign but carries a real operator (or a paren) still calculates.
+        #expect(provider.candidates(for: "-5+3").first?.title == "-2")
+        #expect(provider.candidates(for: "-(2+3)").first?.title == "-5")
+    }
+
     @Test("a malformed expression declines")
     func declinesMalformed() {
         #expect(provider.candidates(for: "2+").isEmpty)
