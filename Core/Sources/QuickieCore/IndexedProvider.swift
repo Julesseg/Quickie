@@ -39,8 +39,8 @@ extension IndexedProvider {
     /// page): Settings, Quicklinks, Fallbacks, and Indexed Folders, each reached by
     /// typing its name to surface a full-screen page in place of chrome. Quickie
     /// ships **no** default Quicklinks and no privileged web search — the default
-    /// web-search Fallback query is seeded into the store as ordinary, deletable
-    /// data (ADR 0013), not here. The Notes/Snippets library commands are wired
+    /// web-search Custom Action is seeded into the store as ordinary, deletable
+    /// data (ADR 0021), not here. The Notes/Snippets library commands are wired
     /// alongside their stored content in the app.
     ///
     /// "Search Files" rides here too (CONTEXT.md → Search Files context; ADR 0014):

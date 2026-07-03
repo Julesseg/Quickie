@@ -17,14 +17,23 @@ struct ActionPresentationTests {
         #expect(snippet.mainAction == .copyToClipboard)
     }
 
-    @Test("a Fallback query is a distinct provider kind from a plain Quicklink")
-    func fallbackQueryKindIsDistinctFromQuicklink() {
+    @Test("a Custom Action is a distinct provider kind from a plain Quicklink")
+    func customActionKindIsDistinctFromQuicklink() {
         // Both open the browser, so the leading badge can only tell them apart by
         // provider identity, not by what they do.
         let search = Action.webSearchFallback()
         let link = Action.quicklink(id: "q1", title: "GitHub", url: URL(string: "https://github.com")!)
-        #expect(search.kind == .fallbackQuery)
+        #expect(search.kind == .customAction)
         #expect(link.kind == .quicklink)
+    }
+
+    @Test("a Custom Action's glyph reads as open-in-browser, from its fill outcome")
+    func customActionMainActionIsOpenInBrowser() {
+        // A Custom Action collects its slots before producing anything, so its plain
+        // `run()` is the placeholder `.none`; the trailing glyph must still read the
+        // fill's real outcome (`openURL` → open-in-browser), so the row wears the
+        // globe rather than no glyph at all.
+        #expect(Action.webSearchFallback().mainAction == .openInBrowser)
     }
 
     @Test("each main action reads off the row's real outcome")

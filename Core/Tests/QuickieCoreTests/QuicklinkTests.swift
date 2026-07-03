@@ -4,7 +4,7 @@ import Testing
 
 // A Quicklink is now a *static* URL only (CONTEXT.md → Quicklink; ADR 0013): it
 // opens directly, consumes no typed text, and carries no `{placeholder}`. The
-// query-consuming behaviour has moved to `fallbackQuery`. These tests pin the
+// query-consuming behaviour has moved to the Custom Action. These tests pin the
 // single-shape Quicklink and the validation that keeps a placeholder out of one.
 struct QuicklinkTests {
 

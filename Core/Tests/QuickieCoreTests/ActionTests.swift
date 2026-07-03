@@ -29,24 +29,23 @@ struct ActionTests {
         #expect(github.inputTypes.isEmpty)
     }
 
-    @Test("a Fallback query fills the typed text into its template")
-    func fallbackQueryConsumesInput() {
-        let search = Action.fallbackQuery(
-            id: "web-search",
-            title: "Search the web",
+    @Test("a Custom Action fills its collected Argument into the template")
+    func customActionFillsTemplate() {
+        let search = CustomActionDefinition(
+            name: "Search the web",
             template: "https://duckduckgo.com/?q={query}"
-        )
-        #expect(search?.run(input: "swift testing")
-                == .openURL(URL(string: "https://duckduckgo.com/?q=swift%20testing")!))
+        ).makeAction(id: "web-search")!
+        var session = MultiStepAction(action: search)
+        #expect(session.commit(.text("swift testing"))
+                == .completed(.openURL(URL(string: "https://duckduckgo.com/?q=swift%20testing")!)))
     }
 
-    @Test("a Fallback query declares text input and url output")
-    func fallbackQueryTypedContent() {
-        let search = Action.fallbackQuery(
-            id: "web-search",
-            title: "Search the web",
+    @Test("a Custom Action declares text input and url output")
+    func customActionTypedContent() {
+        let search = CustomActionDefinition(
+            name: "Search the web",
             template: "https://duckduckgo.com/?q={query}"
-        )
+        ).makeAction(id: "web-search")
         #expect(search?.inputTypes == [.text])
         #expect(search?.outputType == .url)
     }

@@ -13,7 +13,7 @@ extension ActionKind {
     var symbol: String {
         switch self {
         case .quicklink: return "link"
-        case .fallbackQuery: return "magnifyingglass"
+        case .customAction: return "magnifyingglass"
         case .snippet: return "doc.on.clipboard"
         case .pile: return "tray.full"
         case .shortcut: return "square.stack.3d.up"
@@ -33,7 +33,7 @@ extension ActionKind {
     var tint: Color {
         switch self {
         case .quicklink: return .blue
-        case .fallbackQuery: return .indigo
+        case .customAction: return .indigo
         case .snippet: return .teal
         case .pile: return .orange
         case .shortcut: return .indigo

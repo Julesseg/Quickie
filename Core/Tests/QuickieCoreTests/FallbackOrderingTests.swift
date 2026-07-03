@@ -16,8 +16,8 @@ struct FallbackOrderingTests {
         SearchEngine(
             providers: [
                 IndexedProvider(catalog: [
-                    .fallbackQuery(id: "fb.ddg", title: "Search the web", template: "https://ddg/?q={q}")!,
-                    .fallbackQuery(id: "fb.gh", title: "Search GitHub", template: "https://gh/?q={q}")!,
+                    CustomActionDefinition(name: "Search the web", template: "https://ddg/?q={q}", isFallback: true).makeAction(id: "fb.ddg")!,
+                    CustomActionDefinition(name: "Search GitHub", template: "https://gh/?q={q}", isFallback: true).makeAction(id: "fb.gh")!,
                     .saveForLater(),
                 ])
             ],

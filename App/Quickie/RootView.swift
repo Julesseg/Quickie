@@ -20,9 +20,10 @@ struct RootView: View {
     /// built-in command rows (ADR 0006: index rebuilt from the source of truth).
     @Query(sort: \StoredQuicklink.createdAt) private var quicklinks: [StoredQuicklink]
 
-    /// User Fallback queries — templated, query-consuming Fallback Actions (ADR
-    /// 0013). Web search is just a default-seeded one of these.
-    @Query(sort: \StoredFallbackQuery.createdAt) private var fallbackQueries: [StoredFallbackQuery]
+    /// User Custom Actions — templated, slot-filling Actions whose fallback-flagged
+    /// rows consume the typed query (CONTEXT.md → Custom Action; ADR 0021). Web
+    /// search is just a default-seeded one of these.
+    @Query(sort: \StoredCustomAction.createdAt) private var customActions: [StoredCustomAction]
 
     /// User Snippets feed the same index — copy-out Actions ranked beside every
     /// other capability (issue #6).
@@ -184,13 +185,13 @@ struct RootView: View {
                 url: url
             )
         }
-        let storedFallbackQueries: [Action] = fallbackQueries.compactMap { query in
-            Action.fallbackQuery(
-                id: query.id,
-                title: query.title,
-                aliases: query.alias.map { [$0] } ?? [],
-                template: query.urlString
-            )
+        let storedCustomActions: [Action] = customActions.compactMap { custom in
+            CustomActionDefinition(
+                name: custom.title,
+                aliases: custom.alias.map { [$0] } ?? [],
+                template: custom.urlString,
+                isFallback: custom.isFallback
+            ).makeAction(id: custom.id)
         }
         let storedSnippets = snippets.map { snippet in
             Action.snippet(
@@ -236,7 +237,7 @@ struct RootView: View {
                 // Enabled toggle and each action's instance switch (issue #68)
                 // against it.
                 IndexedProvider(catalog: storedLinks, id: .quicklinks),
-                IndexedProvider(catalog: storedFallbackQueries, id: .fallbacks),
+                IndexedProvider(catalog: storedCustomActions, id: .fallbacks),
                 IndexedProvider(catalog: storedSnippets + [.newSnippet()], id: .snippets),
                 IndexedProvider(catalog: storedPileEntries + [.saveForLater()], id: .pile),
                 // Imported Shortcut Actions, matched by name (issue #45).
@@ -256,7 +257,7 @@ struct RootView: View {
             layout: keyboardLayout.layout,
             favorites: signals.favorites,
             frecency: signals.frecency,
-            fallbackOrder: fallbacks.resolvedOrder(for: fallbackQueries.map(\.id)),
+            fallbackOrder: fallbacks.resolvedOrder(for: customActions.filter(\.isFallback).map(\.id)),
             disabledFallbacks: fallbacks.disabled,
             enablement: providerEnablement.enablement,
             disabledInstances: instanceEnablement.disabled
@@ -579,10 +580,9 @@ struct RootView: View {
                 if shortcuts.handle(url: url) { return }
                 handleShortcutResult(url)
             }
-            // Run the Quicklink / Fallback query data migration once on launch and
-            // seed the default web-search Fallback query (ADR 0013).
+            // Seed the default web-search Custom Action once on launch (ADR 0021).
             .task {
-                QuickieStore.migrateToFallbackQueries(in: modelContext)
+                QuickieStore.seedDefaultCustomActions(in: modelContext)
                 // Collapse any stored notes from a pre-Pile build into titleless
                 // Pile entries (ADR 0018).
                 QuickieStore.migrateNotesToPile(in: modelContext)
@@ -750,6 +750,15 @@ struct RootView: View {
             startShortcutCapture(name: action.title)
             return
         }
+        // A Custom Action always runs through the breadcrumb (CONTEXT.md → Custom
+        // Action; ADR 0021): a fallback selection seeds-and-commits the typed query
+        // as Argument 1 (a one-slot fallback finishes in one tap, a multi-slot one
+        // continues at step 2), while verb-first (a name match) opens the breadcrumb
+        // empty at Argument 1.
+        if action.kind == .customAction {
+            startCustomActionCapture(action)
+            return
+        }
         perform(action.run(input: query))
     }
 
@@ -812,6 +821,20 @@ struct RootView: View {
     /// `shortcuts://x-callback-url/run-shortcut` open on commit.
     private func startShortcutCapture(name: String) {
         capture.start(ShortcutCapture(name: name), layout: keyboardLayout.layout)
+    }
+
+    /// Begins the breadcrumb run of a Custom Action (CONTEXT.md → Custom Action; ADR
+    /// 0021). A fallback-flagged one seeds-and-commits the typed query as Argument 1
+    /// (`seed`), so a one-slot fallback like web search completes in one tap and a
+    /// multi-slot one continues at step 2 with the seeded first pill sealed; a
+    /// verb-first (name-matched) selection passes no seed, opening the breadcrumb
+    /// empty. Opening a URL needs no permission, so the session starts straight away.
+    private func startCustomActionCapture(_ action: Action) {
+        capture.start(
+            CustomActionCapture(action: action),
+            layout: keyboardLayout.layout,
+            seed: action.isFallback ? query : nil
+        )
     }
 
     /// Performs a single-step Action's outcome at the platform edge.

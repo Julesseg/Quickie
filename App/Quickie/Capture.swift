@@ -101,6 +101,13 @@ final class CaptureModel {
     /// outcome performer for the in-flight session.
     private var capture: (any Capture)?
 
+    /// A value to **seed-and-commit** as Argument 1 the instant the session begins
+    /// (CONTEXT.md → Fallback Action): a fallback selection commits the typed query
+    /// through the normal engine, so a one-Argument fallback completes in one tap and
+    /// a multi-Argument one continues at step 2 with pill 1 sealed. `nil` for a
+    /// verb-first start (an empty breadcrumb) and for the permission-gated captures.
+    private var seed: String?
+
     /// The active keyboard layout, so a choice step's fuzzy matching weights
     /// adjacent-key typos for the user's real layout — consistent with the Result
     /// list (the Core defaults to QWERTY when this isn't threaded through).
@@ -154,9 +161,14 @@ final class CaptureModel {
     /// session straight away; already-refused shows the inline affordance; an
     /// undetermined status shows a one-line primer first, then `confirmPrimer`
     /// triggers the system dialog.
-    func start(_ capture: any Capture, layout: KeyboardLayout) {
+    ///
+    /// `seed`, when non-nil, is committed as Argument 1 the moment the session
+    /// begins — the fallback seed-and-commit (CONTEXT.md → Fallback Action). A
+    /// verb-first start passes `nil` and the breadcrumb opens empty.
+    func start(_ capture: any Capture, layout: KeyboardLayout, seed: String? = nil) {
         self.capture = capture
         self.layout = layout
+        self.seed = seed
         denied = false
         priming = false
         switch capture.access {
@@ -186,6 +198,7 @@ final class CaptureModel {
         session = nil
         denied = false
         priming = false
+        seed = nil
         resetInputs()
     }
 
@@ -194,6 +207,15 @@ final class CaptureModel {
         let action = await capture.makeAction()
         resetInputs()
         session = MultiStepAction(action: action)
+        // Seed-and-commit (CONTEXT.md → Fallback Action): a fallback selection
+        // commits the typed query as Argument 1 through the same engine. A
+        // one-Argument fallback completes here at once (the outcome performs and the
+        // session clears); a multi-Argument one continues at step 2 with the seeded
+        // first pill sealed and re-editable like any other.
+        if let seed {
+            self.seed = nil
+            apply { $0.commit(.text(seed.trimmingCharacters(in: .whitespacesAndNewlines))) }
+        }
     }
 
     /// The current choice step's options, fuzzy-filtered by the typed text and

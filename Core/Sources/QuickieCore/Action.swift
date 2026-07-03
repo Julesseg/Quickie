@@ -103,9 +103,11 @@ public enum ManagementPage: Equatable, Hashable, Sendable {
 /// from `mainAction`, which is what tapping it *does*.
 public enum ActionKind: Equatable, Sendable {
     case quicklink
-    /// A Fallback query (ADR 0013): a templated, query-consuming Fallback Action.
-    /// Web search is the default-seeded one — no longer a privileged built-in.
-    case fallbackQuery
+    /// A Custom Action (CONTEXT.md → Custom Action; ADR 0021): a user-authored URL
+    /// template whose `{name}` slots become the breadcrumb's Arguments. It absorbs
+    /// the retired Fallback query wholesale — web search is the default-seeded,
+    /// fallback-flagged one-Argument instance, no longer a privileged built-in.
+    case customAction
     case snippet
     /// A Pile entry (CONTEXT.md → Pile; ADR 0018): a raw query text saved to
     /// deal with later, whose main action stages it back into the input. Its own
@@ -144,7 +146,7 @@ public enum ActionKind: Equatable, Sendable {
     /// A management command row that opens a library/management page it does not
     /// itself belong to — Quicklinks and Fallbacks. A dedicated kind so a command
     /// row never wears the same badge as the data rows it governs (a Quicklinks
-    /// command vs a user's Quicklinks, a Fallbacks command vs a Fallback query).
+    /// command vs a user's Quicklinks, a Fallbacks command vs a Custom Action).
     case managementPage
 }
 
@@ -317,15 +319,21 @@ public struct Action: Identifiable, Sendable {
     }
 
     /// The closest system Return-key submit label for running this Action from
-    /// the highlighted row (CONTEXT.md → Highlighted result): a Fallback query
-    /// reads as `.search`, a link as `.go`, and self-contained captures/copies as
+    /// the highlighted row (CONTEXT.md → Highlighted result): a fallback that opens
+    /// a URL (a web search) reads as `.search`, a link as `.go`, and self-contained captures/copies as
     /// `.done`. Platform-agnostic — the app maps it to a SwiftUI `SubmitLabel`.
     /// The outcome *case* is stable regardless of input, so it is read with none.
     public var returnKeyLabel: ReturnKeyLabel {
         // A multi-step Action begins its breadcrumb capture rather than performing
         // an outcome, so its label comes from having Arguments, not from `run()`
         // (whose plain outcome is `.none`): Enter on the highlighted row starts it.
-        if !arguments.isEmpty { return .go }
+        // A fallback-flagged one whose commit opens a URL — a Custom Action used as
+        // a search, web search the seed — still reads `.search`, matching the way a
+        // one-tap web query has always read; every other multi-step row reads `.go`.
+        if !arguments.isEmpty {
+            if isFallback, case .openURL = run(arguments: []) { return .search }
+            return .go
+        }
         switch run() {
         case .openURL: return isFallback ? .search : .go
         case .copyText, .copyAndStage, .saveToPile, .composeSnippet, .createReminder, .createEvent, .composeEvent: return .done
@@ -349,10 +357,10 @@ public enum ReturnKeyLabel: Equatable, Sendable {
 extension Action {
     /// A Quicklink (CONTEXT.md → Quicklink; ADR 0013): a *static* URL that opens
     /// directly, consuming no typed text and carrying no `{placeholder}`. It
-    /// matches by name like any other Action. The query-consuming behaviour has
-    /// moved out to `fallbackQuery`, so this type now has exactly one shape — no
-    /// auto-detection, no Fallback flag. Quickie ships no default Quicklinks; the
-    /// app builds these from the user's stored static links.
+    /// matches by name like any other Action. The query-consuming, templated
+    /// behaviour lives on the Custom Action (`CustomActionDefinition`), so this type
+    /// has exactly one shape — no auto-detection, no Fallback flag. Quickie ships no
+    /// default Quicklinks; the app builds these from the user's stored static links.
     public static func quicklink(
         id: String,
         title: String,
@@ -371,67 +379,12 @@ extension Action {
         ) { _ in .openURL(url) }
     }
 
-    /// Substitutes the typed text into every `{placeholder}` token of a Fallback
-    /// query's template (M1's single Argument fills them all), percent-encoding it
-    /// for the query string. Only `fallbackQuery` reaches here, and it is built
-    /// only from a placeholder-bearing template, so there is always a token to
-    /// fill.
-    ///
-    /// The substitution is *literal*: each `{…}` token is matched, then replaced
-    /// with the encoded text as a plain string. We never feed the typed text to
-    /// a regex replacement template, where `$1`/`\` would be read as capture
-    /// references — `.urlQueryAllowed` leaves `$` unescaped, so "$5 menu" would
-    /// otherwise lose its "$5".
-    private static func fill(template: String, with input: String?) -> ActionOutcome {
-        let raw = input ?? ""
-        let encoded = raw.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? raw
-
-        // Replace one token at a time, re-scanning from the start. This
-        // terminates because the encoded text can never contain `{`/`}` (both
-        // are escaped by `.urlQueryAllowed`), so each pass strictly removes one
-        // token and never introduces a new one.
-        var filled = template
-        while let token = filled.range(of: "\\{[^}]+\\}", options: .regularExpression) {
-            filled.replaceSubrange(token, with: encoded)
-        }
-
-        guard let url = URL(string: filled) else { return .none }
-        return .openURL(url)
-    }
-
-    /// A Fallback query (CONTEXT.md → Fallback query; ADR 0013): a URL template
-    /// that **requires** a `{placeholder}` and consumes the typed text as its
-    /// query. Returns `nil` when `template` carries no placeholder — the type's
-    /// defining invariant, so a static link can never masquerade as one. It is a
-    /// Fallback Action: always surfaced, pinned to the bottom region, fed the raw
-    /// typed text. Web search is just a default-seeded instance of this.
-    public static func fallbackQuery(
-        id: String,
-        title: String,
-        subtitle: String? = nil,
-        aliases: [String] = [],
-        template: String
-    ) -> Action? {
-        guard templateContainsPlaceholder(template) else { return nil }
-        return Action(
-            id: id,
-            kind: .fallbackQuery,
-            title: title,
-            subtitle: subtitle,
-            aliases: aliases,
-            inputTypes: [.text],
-            outputType: .url,
-            isFallback: true
-        ) { input in
-            fill(template: template, with: input)
-        }
-    }
-
-    /// True when `template` carries at least one real `{placeholder}` token —
-    /// the validation both editors use (a Quicklink rejects one, a Fallback query
-    /// requires one) and the invariant `fallbackQuery` enforces. An empty `{}`
-    /// pair is not a placeholder. Unlike the removed `templateHasPlaceholder`,
-    /// this never switches an Action's behaviour — the type does that now.
+    /// True when `template` carries at least one real `{name}` token — the
+    /// validation the Quicklink editor uses to reject a templated URL, and the
+    /// interim Custom Action editor uses to require one. An empty `{}` pair is not a
+    /// token. The Custom Action factory enforces the same invariant via
+    /// `CustomActionDefinition.tokenNames` (a definition with no token factories no
+    /// Action); this stays the App-facing validator so a form can gate Save on it.
     public static func templateContainsPlaceholder(_ template: String) -> Bool {
         template.range(of: "\\{[^}]+\\}", options: .regularExpression) != nil
     }
