@@ -131,8 +131,8 @@ private struct StepperOptionRow: View {
 /// A schema `choice` (ADR 0020; issue #69): a picker over a fixed (`static`) or live
 /// (`dynamic`) option set. A dynamic choice — the EventKit calendar / reminder-list
 /// pickers — resolves its options from the app-supplied `DynamicSettingOptions` at
-/// render time, with a leading placeholder row ("Ask each time") that stores the
-/// empty sentinel the capture reads back as `.ask`.
+/// render time, beneath the schema's `leadingOptions` routing rows ("Ask each time"
+/// storing the empty sentinel `.ask`, "Default calendar/list" the system-default one).
 private struct ChoiceOptionRow: View {
     private let title: String
     private let key: String
@@ -148,7 +148,7 @@ private struct ChoiceOptionRow: View {
         _value = AppStorage(wrappedValue: choice.defaultValue, key)
     }
 
-    /// The option set the picker offers below the placeholder: static options come
+    /// The option set the picker offers below the routing rows: static options come
     /// straight from the schema; dynamic ones from the app, loaded on appear.
     private var options: [ChoiceOption] {
         switch choice.source {
@@ -159,9 +159,10 @@ private struct ChoiceOptionRow: View {
 
     var body: some View {
         Picker(title, selection: $value) {
-            if let placeholder = choice.placeholder {
-                // The sentinel row: empty stored value → "Ask each time" (`.ask`).
-                Text(placeholder).tag("")
+            // The routing rows first (e.g. "Ask each time" → "", "Default calendar"
+            // → the system-default sentinel), then the live/static option set.
+            ForEach(choice.leadingOptions) { option in
+                Text(option.label).tag(option.id)
             }
             ForEach(options) { option in
                 Text(option.label).tag(option.id)

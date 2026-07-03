@@ -34,11 +34,15 @@ struct SettingOptionTests {
         #expect(keys.contains(SettingsKey.eventCalendar))
         #expect(keys.contains(SettingsKey.eventEditor))
 
-        let calendar = schema.first { $0.key == SettingsKey.eventCalendar }
-        #expect(calendar?.kind == .choice(ChoiceSetting(
-            source: .dynamic(.eventCalendars),
-            placeholder: "Ask each time"
-        )))
+        guard case .choice(let calendar)? = schema.first(where: { $0.key == SettingsKey.eventCalendar })?.kind else {
+            Issue.record("the calendar option should be a choice"); return
+        }
+        #expect(calendar.source == .dynamic(.eventCalendars))
+        // The picker leads with two synthetic rows that preserve both routings the
+        // old settings could express: empty = "Ask each time" (`.ask`), and the
+        // system-default sentinel = "Default calendar" (`.fixed(id: nil)`).
+        #expect(calendar.leadingOptions.map(\.id) == ["", SettingsChoice.systemDefault])
+        #expect(calendar.leadingOptions.map(\.label) == ["Ask each time", "Default calendar"])
 
         let editor = schema.first { $0.key == SettingsKey.eventEditor }
         #expect(editor?.kind == .toggle(default: false))
@@ -55,11 +59,12 @@ struct SettingOptionTests {
         // The due-date step defaults on (ADR 0012's working defaults).
         #expect(askDate?.kind == .toggle(default: true))
 
-        let list = schema.first { $0.key == SettingsKey.reminderList }
-        #expect(list?.kind == .choice(ChoiceSetting(
-            source: .dynamic(.reminderLists),
-            placeholder: "Ask each time"
-        )))
+        guard case .choice(let list)? = schema.first(where: { $0.key == SettingsKey.reminderList })?.kind else {
+            Issue.record("the list option should be a choice"); return
+        }
+        #expect(list.source == .dynamic(.reminderLists))
+        #expect(list.leadingOptions.map(\.id) == ["", SettingsChoice.systemDefault])
+        #expect(list.leadingOptions.map(\.label) == ["Ask each time", "Default list"])
     }
 
     @Test("the Calculator schema ships a new unit-conversion toggle, defaulting on")
@@ -84,6 +89,25 @@ struct SettingOptionTests {
         #expect(setting.defaultValue == 3)
         #expect(setting.range.lowerBound >= 1)
         #expect(setting.range.contains(setting.defaultValue))
+    }
+
+    @Test("migrating the retired ask/default settings preserves the old routing")
+    func migrationPreservesOldRouting() {
+        // The upgrade path (issue #69 review): the old `askCalendar`/`askList` +
+        // `defaultID` pair seeds the new single dynamic-choice value so a "save
+        // silently" capture survives — the reviewer's formula, corrected for the
+        // ask-off + empty-default state (the only one the old UI could reach), which
+        // must land on the system-default sentinel, not "" (which would revert to ask).
+        #expect(SettingsChoice.migratedSelection(ask: true, defaultID: "") == "")
+        #expect(SettingsChoice.migratedSelection(ask: true, defaultID: "cal-x") == "")
+        #expect(SettingsChoice.migratedSelection(ask: false, defaultID: "") == SettingsChoice.systemDefault)
+        #expect(SettingsChoice.migratedSelection(ask: false, defaultID: "cal-x") == "cal-x")
+
+        // …and the migrated value round-trips back through the routing mapping to the
+        // exact `EventCalendarSelection` the old settings produced.
+        #expect(EventCalendarSelection(stored: SettingsChoice.migratedSelection(ask: true, defaultID: "")) == .ask)
+        #expect(EventCalendarSelection(stored: SettingsChoice.migratedSelection(ask: false, defaultID: "")) == .fixed(id: nil))
+        #expect(EventCalendarSelection(stored: SettingsChoice.migratedSelection(ask: false, defaultID: "cal-x")) == .fixed(id: "cal-x"))
     }
 
     @Test("the bespoke escape hatch ships but no schema uses it")
@@ -111,9 +135,14 @@ struct SettingOptionTests {
         // "Ask each time" sentinel (`.ask`); any other value is a fixed calendar.
         #expect(EventCalendarSelection(stored: "") == .ask)
         #expect(EventCalendarSelection(stored: "cal-work") == .fixed(id: "cal-work"))
+        // The system-default sentinel routes silently to the system default calendar
+        // (`.fixed(id: nil)`) — the state the old "ask off" setting expressed, which
+        // the migration seeds so an upgrade never silently flips it back to ask.
+        #expect(EventCalendarSelection(stored: SettingsChoice.systemDefault) == .fixed(id: nil))
         // Reminders route the same way over their list picker.
         #expect(ReminderListSelection(stored: "") == .ask)
         #expect(ReminderListSelection(stored: "list-errands") == .fixed(id: "list-errands"))
+        #expect(ReminderListSelection(stored: SettingsChoice.systemDefault) == .fixed(id: nil))
     }
 
     @Test("a stepper clamps a stored value into its range")

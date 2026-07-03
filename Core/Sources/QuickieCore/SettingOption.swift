@@ -61,9 +61,12 @@ public struct SettingOption: Identifiable, Equatable, Sendable {
 
 /// A single-choice option's option set and default (ADR 0020; issue #69). A `static`
 /// source carries its fixed options in Core; a `dynamic` source names a live set the
-/// app resolves at render time (the EventKit calendars / reminder lists), optionally
-/// with a leading `placeholder` row that maps to the empty/sentinel stored value
-/// (the capture pickers' "Ask each time").
+/// app resolves at render time (the EventKit calendars / reminder lists). Both may
+/// lead with `leadingOptions` — synthetic rows shown *before* the option set, each
+/// mapping to a reserved stored value rather than a live option: the capture pickers
+/// lead with "Ask each time" (the empty sentinel → `.ask`) and "Default calendar" /
+/// "Default list" (the system-default sentinel → `.fixed(id: nil)`), so both routings
+/// the old settings expressed survive.
 public struct ChoiceSetting: Equatable, Sendable {
     public enum Source: Equatable, Sendable {
         case `static`(options: [ChoiceOption])
@@ -71,17 +74,38 @@ public struct ChoiceSetting: Equatable, Sendable {
     }
 
     public let source: Source
-    /// The label of the leading row that stores the sentinel (empty) value — "Ask
-    /// each time" for the capture pickers; `nil` for a plain pick with no such row.
-    public let placeholder: String?
-    /// The stored value when nothing specific is chosen. Empty string is the
-    /// sentinel the `placeholder` row (when present) represents.
+    /// Synthetic rows shown before the option set, each with the stored value it
+    /// selects — the routing sentinels above. Empty for a plain pick.
+    public let leadingOptions: [ChoiceOption]
+    /// The stored value when nothing specific is chosen (empty = "Ask each time").
     public let defaultValue: String
 
-    public init(source: Source, placeholder: String? = nil, defaultValue: String = "") {
+    public init(source: Source, leadingOptions: [ChoiceOption] = [], defaultValue: String = "") {
         self.source = source
-        self.placeholder = placeholder
+        self.leadingOptions = leadingOptions
         self.defaultValue = defaultValue
+    }
+}
+
+/// Reserved dynamic-choice stored values (issue #69) that name a *routing* rather
+/// than a live option. Empty string is "Ask each time" (`.ask`); `systemDefault` is
+/// "save silently to the system default" (`.fixed(id: nil)`) — the state the old
+/// ask-off Event/Reminder setting expressed, which the app's one-time migration
+/// seeds so an upgrade never silently flips it back to asking. A reserved token that
+/// can't collide with an EventKit calendar/list identifier.
+public enum SettingsChoice {
+    public static let systemDefault = "__quickie_system_default__"
+
+    /// The value to seed a dynamic-choice key from the retired ask/default-id pair
+    /// (issue #69) when migrating an install off the old Event/Reminder settings. The
+    /// old routing was `ask ? .ask : .fixed(id: defaultID or system default)`, so:
+    /// ask-on → "" ("Ask each time"); ask-off → the set default id, or the
+    /// system-default sentinel when none was set (the only reachable ask-off state,
+    /// since the old UI never exposed a default-id picker). Keeps an upgrade from
+    /// silently flipping a "save silently" capture back to asking.
+    public static func migratedSelection(ask: Bool, defaultID: String) -> String {
+        if ask { return "" }
+        return defaultID.isEmpty ? systemDefault : defaultID
     }
 }
 
@@ -170,7 +194,10 @@ public extension ProviderID {
                     footer: "Ask each time adds a calendar step to the capture. Pick a calendar to save every event there silently.",
                     kind: .choice(ChoiceSetting(
                         source: .dynamic(.eventCalendars),
-                        placeholder: "Ask each time"
+                        leadingOptions: [
+                            ChoiceOption(id: "", label: "Ask each time"),
+                            ChoiceOption(id: SettingsChoice.systemDefault, label: "Default calendar"),
+                        ]
                     ))
                 ),
                 SettingOption(
@@ -194,7 +221,10 @@ public extension ProviderID {
                     footer: "Ask each time adds a list step to the capture. Pick a list to save every reminder there silently.",
                     kind: .choice(ChoiceSetting(
                         source: .dynamic(.reminderLists),
-                        placeholder: "Ask each time"
+                        leadingOptions: [
+                            ChoiceOption(id: "", label: "Ask each time"),
+                            ChoiceOption(id: SettingsChoice.systemDefault, label: "Default list"),
+                        ]
                     ))
                 ),
             ]
