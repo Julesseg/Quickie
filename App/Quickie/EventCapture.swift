@@ -11,28 +11,23 @@ import QuickieCore
 // MARK: - Settings
 
 /// The New Event settings, read from `@AppStorage` with working defaults (ADR 0012)
-/// so the capture is fully functional before any Settings UI exists. The Settings →
-/// Actions registry that will host these lives elsewhere.
+/// and rendered from the declared schema (ADR 0020; issue #69). The calendar picker
+/// is now a single `dynamic choice`: `calendarStored` is empty for "Ask each time"
+/// (`.ask`) or a fixed calendar id — the string the schema's picker persists, read
+/// back here. Keys are Core-owned (`SettingsKey`) so the schema and the capture never
+/// drift onto different keys.
 struct EventSettings {
-    static let askCalendarKey = "event.askCalendar"
-    static let defaultCalendarIDKey = "event.defaultCalendarID"
-    static let editorKey = "event.editor"
-
-    /// Ask for the target calendar every capture (default **ON** → the calendar is
-    /// the third breadcrumb step, fuzzy-found over the user's calendars); OFF routes
-    /// silently to `defaultCalendarID`, empty meaning the system default calendar.
-    /// Configurable from Settings → Actions → New Event (issue #38).
-    var askCalendar: Bool = true
-    /// The preset calendar's identifier; empty means the system default calendar.
-    var defaultCalendarID: String = ""
+    /// The calendar dynamic choice's stored value: empty = "Ask each time" (`.ask`),
+    /// else a fixed calendar id.
+    var calendarStored: String = ""
     /// Open the pre-filled system event editor for final review instead of writing
     /// silently (default **silent**, OFF).
     var useEditor: Bool = false
 
-    /// How the calendar step is routed (CONTEXT.md → Event): ask every capture, or a
-    /// fixed default calendar — an empty id being the system default.
+    /// How the calendar step is routed (CONTEXT.md → Event): the stored dynamic
+    /// choice, mapped by Core — empty is "Ask each time", any value a fixed calendar.
     var calendarSelection: EventCalendarSelection {
-        askCalendar ? .ask : .fixed(id: defaultCalendarID.isEmpty ? nil : defaultCalendarID)
+        EventCalendarSelection(stored: calendarStored)
     }
 }
 

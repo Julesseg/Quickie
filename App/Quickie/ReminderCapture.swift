@@ -11,26 +11,21 @@ import QuickieCore
 // MARK: - Settings
 
 /// The New Reminder settings, read from `@AppStorage` with working defaults (ADR
-/// 0012) so the capture is fully functional before any Settings UI exists. The
-/// Settings → Actions registry that will host these lives elsewhere.
+/// 0012) and rendered from the declared schema (ADR 0020; issue #69). The list picker
+/// is now a single `dynamic choice`: `listStored` is empty for "Ask each time"
+/// (`.ask`) or a fixed list id — the string the schema's picker persists, read back
+/// here. Keys are Core-owned (`SettingsKey`) so the schema and the capture never drift.
 struct ReminderSettings {
-    static let askDateKey = "reminder.askDate"
-    static let askListKey = "reminder.askList"
-    static let defaultListIDKey = "reminder.defaultListID"
-
     /// Ask for a due date (default ON); OFF skips the date step.
     var askDate: Bool = true
-    /// Ask for the target list every capture (default ON → the list is the third
-    /// breadcrumb step, fuzzy-found over the user's lists); OFF routes silently to
-    /// `defaultListID` (empty → the system default reminders list).
-    var askList: Bool = true
-    /// The preset list's identifier; empty means the system default reminders list.
-    var defaultListID: String = ""
+    /// The list dynamic choice's stored value: empty = "Ask each time" (`.ask`),
+    /// else a fixed list id.
+    var listStored: String = ""
 
-    /// How the list step is routed (CONTEXT.md → Reminder): ask every capture, or
-    /// a fixed default list — an empty id being the system default.
+    /// How the list step is routed (CONTEXT.md → Reminder): the stored dynamic
+    /// choice, mapped by Core — empty is "Ask each time", any value a fixed list.
     var listSelection: ReminderListSelection {
-        askList ? .ask : .fixed(id: defaultListID.isEmpty ? nil : defaultListID)
+        ReminderListSelection(stored: listStored)
     }
 }
 

@@ -8,6 +8,18 @@ public enum EventCalendarSelection: Equatable, Sendable {
     case ask
     case fixed(id: String?)
 
+    /// Maps the calendar dynamic choice's stored value to a routing (ADR 0020;
+    /// issue #69): empty is "Ask each time" (`.ask`); the system-default sentinel is
+    /// "save silently to the system default calendar" (`.fixed(id: nil)`) — the state
+    /// the old ask-off setting expressed; any other value is a fixed calendar id.
+    public init(stored: String) {
+        switch stored {
+        case "": self = .ask
+        case SettingsChoice.systemDefault: self = .fixed(id: nil)
+        default: self = .fixed(id: stored)
+        }
+    }
+
     /// The calendar id to bake in when this selection skips the calendar step —
     /// `nil` when the step is collected instead (`.ask`) or routed to the default.
     var presetCalendarID: String? {

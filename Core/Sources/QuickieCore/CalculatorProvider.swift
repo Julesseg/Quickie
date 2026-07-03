@@ -21,7 +21,15 @@ public struct CalculatorProvider: Provider {
     /// the built-ins and stays.
     public let id: ProviderID? = .calculator
 
-    public init() {}
+    /// Whether offline unit conversions are answered too (CONTEXT.md → Calculator;
+    /// ADR 0020, issue #69), gated by the Calculator's unit-conversion schema toggle.
+    /// Off keeps the provider to arithmetic only; defaults on so the Core stays fully
+    /// functional and the App merely reflects the user's stored preference.
+    private let unitConversion: Bool
+
+    public init(unitConversion: Bool = true) {
+        self.unitConversion = unitConversion
+    }
 
     public func candidates(for query: String) -> [Action] {
         let trimmed = query.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -35,8 +43,8 @@ public struct CalculatorProvider: Provider {
             return [result(id: "calc.math", title: answer, subtitle: trimmed, copying: answer)]
         }
 
-        // Otherwise an offline unit conversion, if the query parses as one.
-        if let conversion = Units.convert(trimmed) {
+        // Otherwise an offline unit conversion, when enabled and the query parses.
+        if unitConversion, let conversion = Units.convert(trimmed) {
             return [result(id: "calc.conversion", title: conversion.formatted, subtitle: trimmed, copying: conversion.formatted)]
         }
 

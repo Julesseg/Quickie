@@ -30,6 +30,11 @@ struct QuickieApp: App {
         if ProcessInfo.processInfo.arguments.contains(SignalsStore.uitestResetArgument) {
             AppSettings.reset(in: AppGroup.defaults)
         }
+        // Forward-migrate the retired Event/Reminder capture settings onto the
+        // schema's single dynamic-choice keys (ADR 0020; issue #69), before
+        // RootView's `@AppStorage` first read — so a "save silently" preference set
+        // on an older build survives the upgrade instead of reverting to "ask".
+        SettingsMigration.migrateDynamicChoices()
         // Seed legacy pre-Pile Note rows under UI testing (issue #62; ADR 0018):
         // the flag plants `StoredNote` rows in the fresh in-memory store *before*
         // RootView's launch task runs `migrateNotesToPile`, so the test drives

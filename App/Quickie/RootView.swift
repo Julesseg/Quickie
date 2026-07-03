@@ -48,20 +48,25 @@ struct RootView: View {
     private var showRecents = true
 
     /// New Reminder settings, persisted with working defaults (ADR 0012) so the
-    /// capture is fully functional before any Settings UI exists (issue #37): ask
-    /// for a due date, and either ask for the list or route to a default one.
-    @AppStorage(ReminderSettings.askDateKey) private var reminderAskDate = true
-    @AppStorage(ReminderSettings.askListKey) private var reminderAskList = true
-    @AppStorage(ReminderSettings.defaultListIDKey) private var reminderDefaultListID = ""
+    /// capture is fully functional and now rendered from the declared schema (ADR
+    /// 0020; issue #69): ask for a due date, and pick the target list — empty is the
+    /// "Ask each time" sentinel the generic renderer stores for a dynamic choice. The
+    /// keys are Core-owned (`SettingsKey`) so the schema and this reader never drift.
+    @AppStorage(SettingsKey.reminderAskDate) private var reminderAskDate = true
+    @AppStorage(SettingsKey.reminderList) private var reminderList = ""
 
-    /// New Event settings, persisted with working defaults (ADR 0012) and tuned from
-    /// Settings → Actions → New Event (issue #38): ask which calendar each capture,
-    /// and create silently (vs. opening the pre-filled system event editor). The
-    /// `@AppStorage` defaults must match `EventSettingsView`'s so the first read
-    /// before any write agrees.
-    @AppStorage(EventSettings.askCalendarKey) private var eventAskCalendar = true
-    @AppStorage(EventSettings.defaultCalendarIDKey) private var eventDefaultCalendarID = ""
-    @AppStorage(EventSettings.editorKey) private var eventUseEditor = false
+    /// New Event settings, persisted with working defaults (ADR 0012) and rendered
+    /// from the schema (ADR 0020; issue #69): the target-calendar dynamic choice
+    /// (empty = "Ask each time") and create silently vs. opening the pre-filled system
+    /// event editor. Same Core-owned keys the schema declares.
+    @AppStorage(SettingsKey.eventCalendar) private var eventCalendar = ""
+    @AppStorage(SettingsKey.eventEditor) private var eventUseEditor = false
+
+    /// The Calculator unit-conversion toggle and File Search inline-result cap — the
+    /// representative new schema options (ADR 0020; issue #69), read here so flipping
+    /// one on its provider page rebuilds the engine with the new provider config.
+    @AppStorage(SettingsKey.calculatorUnitConversion) private var calculatorUnitConversion = true
+    @AppStorage(SettingsKey.fileSearchInlineCap) private var fileSearchInlineCap = 3
 
     /// The user's ranking signals — pinned Favorites and Frecency of past
     /// selections — persisted across launches (issue #9).
@@ -81,6 +86,12 @@ struct RootView: View {
     /// Favorites, persisted across launches. Fallbacks keep their own set in
     /// `fallbacks` above, and the kind switches live in `providerEnablement`.
     @State private var instanceEnablement = EnablementStore.launch()
+
+    /// Feeds a `dynamic choice` its live options (ADR 0020; issue #69) — the EventKit
+    /// calendars / reminder lists the New Event / New Reminder pickers show. Injected
+    /// into the provider pages' environment so the schema-rendered pickers read the
+    /// same live source the captures build their steps from.
+    @State private var dynamicSettingOptions = DynamicSettingOptions()
 
     /// The user's Indexed Folder grants (CONTEXT.md → Indexed Folder; issue #49) —
     /// security-scoped bookmarks in a device-local, non-synced store (ADR 0016).
@@ -199,8 +210,10 @@ struct RootView: View {
         }
         return SearchEngine(
             providers: [
-                // The Dynamic Calculator + unit-conversion Provider.
-                CalculatorProvider(),
+                // The Dynamic Calculator + unit-conversion Provider. The
+                // unit-conversion branch is gated by its schema toggle (ADR 0020;
+                // issue #69): off keeps the Calculator to arithmetic only.
+                CalculatorProvider(unitConversion: calculatorUnitConversion),
                 // File Search (CONTEXT.md → File Search; ADR 0015): a ranked-dynamic
                 // Provider serving the current filename snapshot. Its survivors are
                 // scored and ranked by match quality, never boosted to the top, so
@@ -210,6 +223,7 @@ struct RootView: View {
                 FileSearchProvider(
                     index: fileIndex.index,
                     layout: keyboardLayout.layout,
+                    inlineCap: resolvedInlineCap,
                     disabledFolders: indexedFolders.disabledFolderIDs
                 ),
                 // The built-in management command rows (Settings, Quicklinks,
@@ -283,6 +297,16 @@ struct RootView: View {
     /// when motion is allowed, a brief crossfade under Reduce Motion.
     private var captureMotion: MotionStyle {
         MotionPolicy(reduceMotion: reduceMotion).style(for: .captureTransition)
+    }
+
+    /// The File Search inline cap, clamped through the declared stepper (ADR 0020;
+    /// issue #69) so a stale or out-of-bounds store never drives the provider past
+    /// its bounds — the same `clamped` the renderer reads through.
+    private var resolvedInlineCap: Int {
+        guard case .stepper(let stepper)? = ProviderID.fileSearch.settingsSchema
+            .first(where: { $0.key == SettingsKey.fileSearchInlineCap })?.kind
+        else { return fileSearchInlineCap }
+        return stepper.clamped(fileSearchInlineCap)
     }
 
     private var clipboardPrefill: ClipboardPrefill {
@@ -631,6 +655,10 @@ struct RootView: View {
         // kind-level Enabled switches the engine filters by (issue #67) — the
         // pages are pushed inside this stack, so root injection reaches them all.
         .environment(providerEnablement)
+        // …and the live options a schema `dynamic choice` shows (ADR 0020; issue
+        // #69), so the New Event / New Reminder pickers resolve their calendars /
+        // lists wherever the page is reached.
+        .environment(dynamicSettingOptions)
     }
 
     /// The pushed view for a management page (CONTEXT.md → Management page). Each
@@ -670,13 +698,14 @@ struct RootView: View {
         case .fallbacks: FallbacksView(store: fallbacks)
         case .snippets: SnippetManagerView(enablement: instanceEnablement)
         case .shortcuts: ShortcutsView(store: shortcuts, enablement: instanceEnablement)
-        case .events: EventSettingsView()
         case .fileSearch: IndexedFoldersView(store: indexedFolders)
         // The Pile's settings page stays options-only (ADR 0018): its entries
         // are temporary content whose verbs — stage and discard — live on the
         // `.pile` entries page, the carve-out from the unified
-        // content-under-options shape. Entries have no per-entry disable.
-        case .pile, .reminders, .calculator: ProviderOptionsPage(provider: provider)
+        // content-under-options shape. Entries have no per-entry disable. Events
+        // is now options-only too (issue #69): its former bespoke EventSettingsView
+        // folded into the declared schema, so it renders like the others.
+        case .pile, .reminders, .calculator, .events: ProviderOptionsPage(provider: provider)
         }
     }
 
@@ -750,8 +779,7 @@ struct RootView: View {
             ReminderCapture(
                 settings: ReminderSettings(
                     askDate: reminderAskDate,
-                    askList: reminderAskList,
-                    defaultListID: reminderDefaultListID
+                    listStored: reminderList
                 )
             ),
             layout: keyboardLayout.layout
@@ -768,8 +796,7 @@ struct RootView: View {
         capture.start(
             EventCapture(
                 settings: EventSettings(
-                    askCalendar: eventAskCalendar,
-                    defaultCalendarID: eventDefaultCalendarID,
+                    calendarStored: eventCalendar,
                     useEditor: eventUseEditor
                 ),
                 presenter: eventEditor
