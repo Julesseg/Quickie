@@ -1,4 +1,5 @@
 import SwiftUI
+import UIKit
 import QuickieCore
 
 extension Appearance {
@@ -84,7 +85,7 @@ struct SettingsView: View {
             } header: {
                 Text("App")
             } footer: {
-                Text("Appearance applies to the whole app; System follows your device. Clipboard prefill offers to paste what you copied; Show Recents lists recently used actions on Home.")
+                PastePermissionHint()
             }
 
             // The Providers section (CONTEXT.md → Settings; ADR 0019): one
@@ -107,5 +108,38 @@ struct SettingsView: View {
             }
         }
         .navigationTitle("Settings")
+    }
+}
+
+/// The **Paste permission hint** (CONTEXT.md → Paste permission hint; issue #91):
+/// the footer under the Settings app-level section telling the user how to stop
+/// the iOS paste-permission alert for good, over a tappable **Open iOS Settings**
+/// deeplink into Quickie's page in the Settings app (where the *Paste from Other
+/// Apps* row lives — the user still flips it to **Allow** themselves; the hint
+/// only shortens the trip). It replaced the footer's former toggle descriptions,
+/// which restated what the self-describing toggles already said.
+///
+/// Passive and always present — never a popup, banner, or one-time dismissal
+/// state (an information popup would fight a popup annoyance with another popup) —
+/// and necessarily **blind**: iOS exposes no API to read the *Paste from Other
+/// Apps* state, so the hint cannot condition on whether it is still needed. The
+/// deeplink reuses the standard open-settings URL the quick-capture denied
+/// affordance already uses (`UIApplication.openSettingsURLString`).
+private struct PastePermissionHint: View {
+    @Environment(\.openURL) private var openURL
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 6) {
+            Text("To paste without iOS asking each time, set Paste from Other Apps to Allow in iOS Settings.")
+                .accessibilityIdentifier("settings-paste-hint")
+
+            Button("Open iOS Settings") {
+                if let url = URL(string: UIApplication.openSettingsURLString) {
+                    openURL(url)
+                }
+            }
+            .buttonStyle(.borderless)
+            .accessibilityIdentifier("settings-open-ios-settings")
+        }
     }
 }

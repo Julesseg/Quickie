@@ -135,6 +135,41 @@ final class AppSettingsUITests: XCTestCase {
         )
     }
 
+    /// The App section footer shows the **Paste permission hint** (issue #91): the
+    /// exact hint copy over a tappable **Open iOS Settings** deeplink, replacing the
+    /// old toggle-description blurb. iOS exposes no API to read the *Paste from
+    /// Other Apps* state, so the hint is blind and always present — this only
+    /// asserts it renders; that tapping it leaves for iOS Settings can't be driven
+    /// from XCUITest without leaving the app.
+    @MainActor
+    func testAppSectionFooterShowsPastePermissionHint() throws {
+        let app = launchApp()
+        openSettings(app)
+
+        let hint = app.staticTexts["settings-paste-hint"]
+        XCTAssertTrue(hint.waitForExistence(timeout: 10), "the App section footer shows the Paste permission hint")
+        XCTAssertEqual(
+            hint.label,
+            "To paste without iOS asking each time, set Paste from Other Apps to Allow in iOS Settings.",
+            "the footer shows the exact hint copy"
+        )
+
+        let openSettingsLink = app.buttons["settings-open-ios-settings"]
+        XCTAssertTrue(
+            openSettingsLink.waitForExistence(timeout: 10),
+            "the footer carries a tappable Open iOS Settings deeplink"
+        )
+        XCTAssertEqual(openSettingsLink.label, "Open iOS Settings", "the deeplink reads 'Open iOS Settings'")
+
+        // The former toggle-description blurb is gone — the hint replaced it.
+        XCTAssertFalse(
+            app.staticTexts.containing(
+                NSPredicate(format: "label CONTAINS %@", "Clipboard prefill offers to paste what you copied")
+            ).firstMatch.exists,
+            "the old toggle-description footer blurb is replaced by the hint"
+        )
+    }
+
     /// Turning off Clipboard prefill suppresses the paste chip on Home (issue #65
     /// AC #2): with text on the clipboard the chip is offered (the control leg),
     /// and after flipping the toggle off it stays gone even though the clipboard

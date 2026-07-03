@@ -4,11 +4,20 @@ import UIKit
 /// The icon-only paste control offered to the *right of the input* on Home when
 /// the clipboard holds text (CONTEXT.md → Clipboard prefill; ADR 0002). It is
 /// backed by the system paste control — `UIPasteControl`, the front-end SwiftUI's
-/// `PasteButton` also wraps — which reads the clipboard *only* when tapped and
-/// never raises the "pasted from…" banner. Nothing here touches
-/// `UIPasteboard.string`; the content arrives only through the user's tap, then
-/// seeds the input and the button retires for the session (the seeded, non-empty
-/// query leaves Home).
+/// `PasteButton` also wraps — which reads the clipboard *only* when tapped:
+/// nothing here touches `UIPasteboard.string`, the content arrives only through
+/// the user's tap, then seeds the input and the button retires for the session
+/// (the seeded, non-empty query leaves Home).
+///
+/// **Do not describe this chip as prompt-free or banner-free.** The bare system
+/// paste control is exempt from the iOS paste-permission alert, but *only while
+/// shown untouched*; dressing it in the input bar's Liquid Glass (below) forfeits
+/// that exemption, so tapping the chip **does** raise the alert. That is a
+/// deliberate, accepted trade-off — the glass look over the exemption — recorded
+/// in the glossary (CONTEXT.md → Clipboard prefill), not a bug to "fix" by
+/// stripping the dressing; the mitigation is the [[Paste permission hint]] in
+/// Settings, which tells the user how to silence the alert for good. Only the
+/// launch-time *has-text* metadata check (`UIPasteboard.hasStrings`) is silent.
 ///
 /// Neither SwiftUI's `PasteButton` nor `UIPasteControl` lets us clear its own
 /// opaque platter — `.tint(.clear)` / `baseBackgroundColor = .clear` are ignored
@@ -18,7 +27,8 @@ import UIKit
 /// we draw our own icon over our own `glassEffect`. That single glass shape, paired
 /// by `glassEffectID` with the input's (`InputBar.glassID`) inside the bottom
 /// `GlassEffectContainer`, is what lets the button *morph out of and back into* the
-/// input's capsule as it is offered and withdrawn.
+/// input's capsule as it is offered and withdrawn — and, per the trade-off above,
+/// is exactly what costs the bare control its paste-permission-alert exemption.
 ///
 /// It is a fixed circle of `InputBar.barHeight` — exactly the input's height — so
 /// the two read as one consistent body and the row never changes height as the
@@ -57,8 +67,11 @@ struct ClipboardPasteButton: View {
 /// A thin wrapper over `UIPasteControl`, kept as an invisible tap target beneath
 /// the host's own icon and Liquid Glass (its platter can't be made transparent, so
 /// we hide it rather than show it). The control still does the privacy-preserving
-/// work: it reads the pasteboard only on the user's tap (no "pasted from…" banner),
-/// then delivers the text to its `target`, `PasteReceiverView.paste(itemProviders:)`.
+/// work: it reads the pasteboard only on the user's tap, then delivers the text to
+/// its `target`, `PasteReceiverView.paste(itemProviders:)`. Hiding the bare control
+/// behind our own glass is exactly what forfeits its exemption from the iOS
+/// paste-permission alert — a deliberate, accepted trade-off (CONTEXT.md →
+/// Clipboard prefill, Paste permission hint), so the tap is *not* prompt-free.
 private struct SystemPasteControl: UIViewRepresentable {
     let onPaste: (String) -> Void
 
