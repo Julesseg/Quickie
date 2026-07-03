@@ -34,74 +34,9 @@ jobs:
         working-directory: Core
         run: swift test
 
-  # Partition the XCUITest classes into shards so the (slow) UI suite can run
-  # across several macOS runners in parallel. One sim-per-runner sidesteps the
-  # contention that made same-runner `-parallel-testing-enabled` *slower* and
-  # crash SwiftUI under CPU starvation on the ~3-core/7 GB hosted boxes.
-  #
-  # The split is computed from source, not hand-maintained: every UI suite is a
-  # `class <Name>UITests: XCTestCase` in its own file, so a newly added suite is
-  # always assigned to a shard automatically — it can never silently run in none.
-  ui-test-plan:
-    name: Plan UI test shards
-    runs-on: ubuntu-24.04
-    outputs:
-      matrix: ${{ steps.plan.outputs.matrix }}
-    steps:
-      - uses: actions/checkout@v4
-      - id: plan
-        name: Partition test classes into shards
-        run: |
-          set -euo pipefail
-          # Bump SHARD_COUNT to trade billed macOS minutes for wall-clock: each
-          # shard is a separate runner doing its own build + its slice of the suite.
-          SHARD_COUNT=3
-          # Balance shards by *test-method* count, not class count: a class holds
-          # anywhere from 1 to 6 `func test`s, so round-robining classes lands
-          # ~2/3 of the work on one runner and the wall clock barely moves. Instead
-          # weigh each class by its test count and greedily pack the heaviest into
-          # the currently-lightest shard (longest-processing-time bin packing).
-          # Reading from source means a newly added suite is always assigned.
-          python3 - "$SHARD_COUNT" <<'PY' >> "$GITHUB_OUTPUT"
-          import glob, json, re, sys
-          n = int(sys.argv[1])
-          weights = []
-          for path in sorted(glob.glob("App/QuickieUITests/*.swift")):
-              src = open(path).read()
-              m = re.search(r'class\s+([A-Za-z0-9_]+UITests)\b', src)
-              if not m:
-                  continue
-              # `or 1` so a class with no test methods still occupies a slot.
-              weights.append((len(re.findall(r'func\s+test', src)) or 1, m.group(1)))
-          if not weights:
-              sys.stderr.write("No XCUITest classes found under App/QuickieUITests.\n")
-              sys.exit(1)
-          weights.sort(reverse=True)
-          buckets = [{"tests": 0, "classes": []} for _ in range(n)]
-          for count, cls in weights:
-              b = min(buckets, key=lambda x: x["tests"])
-              b["tests"] += count
-              b["classes"].append(cls)
-          include = []
-          for idx, b in enumerate(buckets, start=1):
-              if not b["classes"]:
-                  continue
-              only = " ".join(f"-only-testing:QuickieUITests/{c}" for c in b["classes"])
-              include.append({"shard": str(idx), "of": str(n), "only": only, "tests": str(b["tests"])})
-          for e in include:
-              sys.stderr.write(f"shard {e['shard']}/{e['of']}: {e['tests']} tests — {e['only']}\n")
-          print("matrix=" + json.dumps({"include": include}))
-          PY
-
   app-ui-tests:
-    name: App · XCUITest (macOS) [shard ${{ matrix.shard }}/${{ matrix.of }}]
-    needs: ui-test-plan
+    name: App · XCUITest (macOS)
     runs-on: macos-15
-    strategy:
-      # Don't cancel the other shards when one fails — a red shard shouldn't hide
-      # whether the rest are green, and it keeps each shard's crash log available.
-      fail-fast: false
-      matrix: ${{ fromJSON(needs.ui-test-plan.outputs.matrix) }}
     steps:
       - uses: actions/checkout@v4
 
@@ -132,18 +67,13 @@ jobs:
           # "Failed to get background assertion for target app", which strikes at
           # `app.launch()` on a fresh sim) without masking real regressions — a
           # genuinely broken test fails all three attempts and still reports failure.
-          #
-          # This shard runs only its assigned classes (`-only-testing:` from the
-          # plan job) on a single simulator — no `-parallel-testing-enabled`, since
-          # the parallelism here is across runners, not within one starved box.
           xcodebuild test \
             -project Quickie.xcodeproj \
             -scheme Quickie \
             -destination "platform=iOS Simulator,name=${{ steps.sim.outputs.name }},OS=latest" \
-            -resultBundlePath "TestResults-shard-${{ matrix.shard }}.xcresult" \
+            -resultBundlePath TestResults.xcresult \
             -retry-tests-on-failure \
             -test-iterations 3 \
-            ${{ matrix.only }} \
             CODE_SIGNING_ALLOWED=NO
 
       - name: Dump app crash reports on failure
@@ -171,6 +101,6 @@ jobs:
         if: ${{ !cancelled() }}
         uses: actions/upload-artifact@v4
         with:
-          name: ui-test-results-shard-${{ matrix.shard }}
-          path: App/TestResults-shard-${{ matrix.shard }}.xcresult
+          name: ui-test-results
+          path: App/TestResults.xcresult
           if-no-files-found: ignore
