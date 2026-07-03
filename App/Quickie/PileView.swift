@@ -3,17 +3,22 @@ import SwiftData
 
 /// The Pile **entries** page (CONTEXT.md → Pile; ADR 0018): every
 /// saved-for-later query text, newest first, reached by the typed "Pile"
-/// command row. The entries are temporary, so this page is purely content to
-/// view and act on — tapping an entry **stages** it, exactly like its result
-/// row (the launcher pops back, the input becomes the saved text, and the
-/// entry leaves the Pile), and swipe-to-delete is the counterpart, **discard
-/// without staging**. Deliberately NOT the Pile provider's settings page
-/// (reached from the Settings hub's Providers list), and so no Options
-/// section: content here, configuration there.
+/// command row. The entries are temporary storage to act on, so every
+/// per-entry verb lives here — tapping an entry **stages** it, exactly like
+/// its result row (the launcher pops back, the input becomes the saved text,
+/// and the entry leaves the Pile), swipe-to-delete **discards without
+/// staging**, and the row's Enabled toggle **disables** it (issue #68):
+/// reversibly hidden from results/Recents/Favorites while it stays in the
+/// Pile. Deliberately NOT the Pile provider's settings page (reached from the
+/// Settings hub's Providers list), and so no Options section: content and its
+/// per-entry controls here, kind-level configuration there.
 struct PileView: View {
     @Environment(\.modelContext) private var context
 
     @Query(sort: \StoredPileEntry.createdAt, order: .reverse) private var entries: [StoredPileEntry]
+
+    /// The instance-level Disabled state each row's toggle flips (issue #68).
+    let enablement: EnablementStore
 
     /// The rows safe to render this instant, mirroring the launcher's
     /// `livePileEntries`: a deleted entry can linger in the `@Query` snapshot
@@ -42,17 +47,38 @@ struct PileView: View {
             } else {
                 List {
                     ForEach(liveEntries) { entry in
-                        Button {
-                            onStage(entry)
-                        } label: {
-                            Text(entry.text)
-                                .font(.body)
-                                .lineLimit(3)
-                                .frame(maxWidth: .infinity, alignment: .leading)
-                                .contentShape(Rectangle())
+                        // The stage tap stays a Button *beside* the toggle, not
+                        // wrapping it: an identifier-bearing container around a
+                        // switch reads as one accessibility element and swallows
+                        // the toggle (the snippet-row CI lesson).
+                        HStack(spacing: 12) {
+                            Button {
+                                onStage(entry)
+                            } label: {
+                                Text(entry.text)
+                                    .font(.body)
+                                    .lineLimit(3)
+                                    .foregroundStyle(enablement.isDisabled(entry.actionID) ? .secondary : .primary)
+                                    .frame(maxWidth: .infinity, alignment: .leading)
+                                    .contentShape(Rectangle())
+                            }
+                            .buttonStyle(.plain)
+                            .accessibilityIdentifier("pile-row-\(entry.id)")
+                            Spacer(minLength: 8)
+                            // Disabling keeps the entry in the Pile but hides it
+                            // from results until staged or re-enabled — the
+                            // reversible middle ground between stage (consume)
+                            // and swipe-to-delete (destroy).
+                            Toggle(
+                                "Enabled",
+                                isOn: Binding(
+                                    get: { !enablement.isDisabled(entry.actionID) },
+                                    set: { _ in enablement.toggleDisabled(entry.actionID) }
+                                )
+                            )
+                            .labelsHidden()
+                            .accessibilityIdentifier("pile-enabled.\(entry.id)")
                         }
-                        .buttonStyle(.plain)
-                        .accessibilityIdentifier("pile-row-\(entry.id)")
                     }
                     .onDelete(perform: delete)
                 }

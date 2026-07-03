@@ -646,10 +646,12 @@ struct RootView: View {
                 SettingsView()
             }
         case .pile:
-            // The Pile *entries* page (ADR 0018): pure content to view and act
-            // on — distinct from the Pile provider's settings page above, which
-            // the hub's Providers list reaches via `.settings(panel: .pile)`.
-            PileView(onStage: stage)
+            // The Pile *entries* page (ADR 0018): the temporary storage to act
+            // on, carrying every per-entry verb — stage, discard, and the
+            // Enabled toggle (issue #68) — distinct from the Pile provider's
+            // options-only settings page, which the hub's Providers list
+            // reaches via `.settings(panel: .pile)`.
+            PileView(enablement: instanceEnablement, onStage: stage)
         }
     }
 
@@ -669,12 +671,11 @@ struct RootView: View {
         case .shortcuts: ShortcutsView(store: shortcuts, enablement: instanceEnablement)
         case .events: EventSettingsView()
         case .fileSearch: IndexedFoldersView(store: indexedFolders)
-        // The Pile's Management page carries its entries as the actions section
-        // (issue #68) — per-entry enable toggles and swipe-to-delete — while
-        // the *entries* page (`.pile`, for staging) stays pure content: the
-        // configuration/content split of ADR 0018's carve-out.
-        case .pile: PileProviderPage(enablement: instanceEnablement)
-        case .reminders, .calculator: ProviderOptionsPage(provider: provider)
+        // The Pile's settings page stays options-only (ADR 0018): its entries
+        // are temporary content whose per-entry verbs — stage, discard, and
+        // the Enabled toggle (issue #68) — all live on the `.pile` entries
+        // page, the carve-out from the unified content-under-options shape.
+        case .pile, .reminders, .calculator: ProviderOptionsPage(provider: provider)
         }
     }
 

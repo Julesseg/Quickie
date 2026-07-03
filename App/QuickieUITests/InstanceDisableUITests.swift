@@ -144,11 +144,13 @@ final class InstanceDisableUITests: XCTestCase {
         XCTAssertTrue(resultRow.waitForExistence(timeout: 5), "re-enabling restores the snippet to results")
     }
 
-    /// The Pile provider's Management page (reached from the Settings hub, not
-    /// the entries page) lists each entry in its Actions section with an
-    /// Enabled toggle and swipe-to-delete (issue #68 AC #1, #2).
+    /// Each row on the Pile **entries** page — the temporary storage to act on
+    /// — carries its own Enabled toggle beside stage and swipe-to-delete
+    /// (issue #68): disabling hides the entry from results while it stays in
+    /// the Pile, and re-enabling restores it. Stage and delete themselves are
+    /// covered by PileUITests.
     @MainActor
-    func testPileProviderPageListsEntriesWithToggleAndSwipeToDelete() throws {
+    func testPileEntryRowTogglesDisableFromTheEntriesPage() throws {
         let app = launchApp()
 
         // Seed one Pile entry through the silent Save for later capture.
@@ -161,31 +163,23 @@ final class InstanceDisableUITests: XCTestCase {
         XCTAssertTrue(saveForLater.waitForExistence(timeout: 5))
         saveForLater.tap()
 
-        // The provider page is reached from the Settings hub's Providers list —
-        // distinct from the entries page the "pile" command opens.
+        // Control leg: enabled, the entry surfaces as a result row.
         XCTAssertTrue(input.waitForExistence(timeout: 10))
         input.tap()
-        input.typeText("settings")
-        let settingsCommand = app.buttons["builtin.settings"]
-        XCTAssertTrue(settingsCommand.waitForExistence(timeout: 5))
-        settingsCommand.tap()
+        input.typeText("garage")
+        let resultRow = app.buttons.matching(
+            NSPredicate(format: "label CONTAINS[c] %@", thought)
+        ).firstMatch
+        XCTAssertTrue(resultRow.waitForExistence(timeout: 5), "an enabled Pile entry surfaces in results")
 
-        let pileRow = app.descendants(matching: .any)["settings-provider-pile"].firstMatch
-        XCTAssertTrue(pileRow.waitForExistence(timeout: 10), "the hub lists a Pile provider row")
-        var swipes = 5
-        while !pileRow.isHittable && swipes > 0 {
-            app.swipeUp()
-            swipes -= 1
-        }
-        pileRow.tap()
+        // Open the Pile entries page — the typed "pile" command — and flip the
+        // row's Enabled toggle off. The entry must stay in the Pile.
+        clearInput(app, count: "garage".count)
+        input.typeText("pile")
+        let pileCommand = app.buttons["builtin.pile-page"]
+        XCTAssertTrue(pileCommand.waitForExistence(timeout: 5))
+        pileCommand.tap()
 
-        // The unified page shape: Options lead — headed by the kind-level
-        // Enabled toggle (issue #67) — and the entries follow as the actions
-        // section, each row wearing its own instance toggle.
-        XCTAssertTrue(
-            app.switches["provider-enabled-pile"].waitForExistence(timeout: 10),
-            "the Pile provider page leads with its Options section's Enabled toggle"
-        )
         let toggle = app.switches.matching(
             NSPredicate(format: "identifier BEGINSWITH %@", "pile-enabled.")
         ).firstMatch
@@ -193,20 +187,32 @@ final class InstanceDisableUITests: XCTestCase {
         XCTAssertEqual(toggle.value as? String, "1", "a fresh entry starts enabled")
         flip(toggle, to: false)
 
-        // A Pile entry is deletable, so its row exposes swipe-to-delete —
-        // delete destroys, distinct from the reversible toggle above.
-        let entryText = app.staticTexts.matching(
-            NSPredicate(format: "label CONTAINS[c] %@", thought)
+        // Hidden from typed results — the always-present Fallbacks prove the
+        // result list rendered before the absence is asserted.
+        goBackHome(app)
+        XCTAssertTrue(input.waitForExistence(timeout: 10))
+        input.tap()
+        input.typeText("garage")
+        let fallback = app.buttons.matching(
+            NSPredicate(format: "label CONTAINS[c] %@", "New Snippet")
         ).firstMatch
-        XCTAssertTrue(entryText.waitForExistence(timeout: 5), "the actions section lists the entry's text")
-        entryText.swipeLeft()
-        let delete = app.buttons["Delete"]
-        XCTAssertTrue(delete.waitForExistence(timeout: 5), "a deletable action exposes swipe-to-delete")
-        delete.tap()
-        XCTAssertTrue(
-            app.staticTexts["The Pile is empty"].waitForExistence(timeout: 5),
-            "deleting the only entry empties the actions section"
-        )
+        XCTAssertTrue(fallback.waitForExistence(timeout: 5), "results rendered for the query")
+        XCTAssertFalse(resultRow.exists, "a disabled Pile entry is hidden from results")
+
+        // Re-enable from the same row — the entry never left the Pile.
+        clearInput(app, count: "garage".count)
+        input.typeText("pile")
+        XCTAssertTrue(pileCommand.waitForExistence(timeout: 5))
+        pileCommand.tap()
+        XCTAssertTrue(toggle.waitForExistence(timeout: 10), "the disabled entry stays on the Pile page")
+        XCTAssertEqual(toggle.value as? String, "0", "the disable persisted")
+        flip(toggle, to: true)
+
+        goBackHome(app)
+        XCTAssertTrue(input.waitForExistence(timeout: 10))
+        input.tap()
+        input.typeText("garage")
+        XCTAssertTrue(resultRow.waitForExistence(timeout: 5), "re-enabling restores the entry to results")
     }
 
     /// Disabling an Indexed Folder on the File Search page hides its files from
