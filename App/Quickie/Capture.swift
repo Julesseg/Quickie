@@ -153,6 +153,14 @@ final class CaptureModel {
     /// The Return-key label for the current step — `.done` on the final Argument
     /// (the auto-create), `.next` otherwise.
     var returnKey: UIReturnKeyType { (session?.isFinalStep ?? false) ? .done : .next }
+    /// The keyboard the current text step raises — the number pad for a `number`
+    /// Argument's numeric keyboard variant, the default alphanumeric layout otherwise
+    /// (issue #96). Only the keyboard input method reaches the text field, so any
+    /// non-numeric variant (and the date/choice steps, which don't use this) map to
+    /// the default layout.
+    var keyboardType: UIKeyboardType {
+        currentArgument?.inputMethod == .keyboard(.number) ? .numberPad : .default
+    }
     /// The current capture's affordance wording, for the primer/denial bars.
     var copy: CaptureCopy { capture?.copy ?? CaptureCopy() }
 
@@ -594,6 +602,7 @@ struct CaptureBar: View {
                     text: $model.stepText,
                     placeholder: model.currentArgument?.label ?? "",
                     returnKey: model.returnKey,
+                    keyboardType: model.keyboardType,
                     onSubmit: submitText,
                     onBackspaceWhenEmpty: { model.backspaceOnEmpty() }
                 )

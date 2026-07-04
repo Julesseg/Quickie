@@ -5,7 +5,7 @@ import Foundation
 /// config *beside* the URL — never inside the `{name}` token, which stays plain so
 /// the grammar never grows. `text` is the default; `number` raises the numeric
 /// keyboard variant, `date` the in-place picker, and `choice` the fuzzy option list.
-public enum ArgumentType: String, Equatable, Sendable, CaseIterable {
+public enum ArgumentType: String, Equatable, Sendable, CaseIterable, Codable {
     case text
     case number
     case date
@@ -17,7 +17,7 @@ public enum ArgumentType: String, Equatable, Sendable, CaseIterable {
 /// `choice`'s inline `options`, and a `date`'s optional output-format overrides.
 /// Keyed by token name in the definition so a reorder leaves it untouched, and
 /// dropped hard when its token leaves the URL (no stashing).
-public struct ArgumentSpec: Equatable, Sendable {
+public struct ArgumentSpec: Equatable, Sendable, Codable {
     /// The slot's argument type — what input method the breadcrumb morphs to.
     public var type: ArgumentType
     /// A `choice` slot's options exactly as the user entered them (id = label; the

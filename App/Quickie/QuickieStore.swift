@@ -93,6 +93,11 @@ final class StoredCustomAction {
     /// value) means URL-appearance order — `CustomActionDefinition` reconciles it hard
     /// against the live template on read.
     var fillOrder: [String] = []
+    /// The per-slot **type config** (CONTEXT.md → Argument; ADR 0021, issue #96),
+    /// keyed by token name: each slot's type (text/number/date/choice), a choice's
+    /// inline options, and a date's optional output-format overrides. Defaulted to
+    /// empty so existing rows migrate without a value (every slot is then free text).
+    var argumentSpecs: [String: ArgumentSpec] = [:]
     var createdAt: Date
 
     init(
@@ -102,6 +107,7 @@ final class StoredCustomAction {
         alias: String? = nil,
         isFallback: Bool = true,
         fillOrder: [String] = [],
+        argumentSpecs: [String: ArgumentSpec] = [:],
         createdAt: Date = Date()
     ) {
         self.id = id
@@ -110,6 +116,7 @@ final class StoredCustomAction {
         self.alias = alias
         self.isFallback = isFallback
         self.fillOrder = fillOrder
+        self.argumentSpecs = argumentSpecs
         self.createdAt = createdAt
     }
 }

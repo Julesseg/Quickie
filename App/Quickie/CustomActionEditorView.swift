@@ -112,7 +112,7 @@ struct CustomActionEditorView: View {
             // Keyed by fill-order position (`\.offset`), not token name: a name-keyed
             // row changes identity on every keystroke and drops the field's focus.
             ForEach(Array(def.rows.enumerated()), id: \.offset) { item in
-                argumentRow(index: item.offset, row: item.element)
+                ArgumentRowEditor(def: $def, index: item.offset, row: item.element)
             }
             .onMove { offsets, destination in
                 def.moveArguments(fromOffsets: offsets, toOffset: destination)
@@ -126,27 +126,6 @@ struct CustomActionEditorView: View {
             }
         } footer: {
             Text("The breadcrumb asks for these in this order — drag to reorder. This fill order is independent of where the slots sit in the URL. Rename a row to rewrite its {token}.")
-        }
-    }
-
-    /// One argument row: a `{token}` glyph and a text field bound to the model by
-    /// **position**, so typing rewrites the URL token live while the cursor stays put.
-    private func argumentRow(index: Int, row: ArgumentRow) -> some View {
-        HStack(spacing: 8) {
-            Image(systemName: "curlybraces")
-                .foregroundStyle(.secondary)
-                .font(.caption)
-            TextField(row.label, text: Binding(
-                // A numeric auto-labeled token (`{1}`) shows blank under its
-                // "Argument 1" placeholder — its name isn't a real label — while a
-                // named token shows its name. Writing goes by position, so it needs no
-                // stale captured name.
-                get: { row.label == row.name ? row.name : "" },
-                set: { def.setArgumentName(at: index, to: $0) }
-            ))
-            .textInputAutocapitalization(.never)
-            .autocorrectionDisabled()
-            .accessibilityIdentifier("custom-action-arg.\(row.name)")
         }
     }
 
@@ -178,6 +157,166 @@ struct CustomActionEditorView: View {
     }
 }
 
+/// One live-mirrored argument row (CONTEXT.md → Argument; ADR 0021, issue #96): a
+/// `{token}` name field, a **type picker** (text / number / date / choice), and the
+/// per-type config it reveals — a choice's inline options, or a date's optional
+/// output-format overrides. Every control binds to the `CustomActionDefinition` by
+/// fill-order **position**, so a rename rewrites the URL token live (the row keeps
+/// its identity and focus) and the type config tracks the slot.
+private struct ArgumentRowEditor: View {
+    @Binding var def: CustomActionDefinition
+    let index: Int
+    let row: ArgumentRow
+
+    /// The slot's current spec — its type and per-type config.
+    private var spec: ArgumentSpec { def.spec(at: index) }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            nameField
+            typePicker
+            switch spec.type {
+            case .choice: choiceOptionsEditor
+            case .date: dateFormatFields
+            case .text, .number: EmptyView()
+            }
+        }
+        .padding(.vertical, 2)
+    }
+
+    /// The `{token}` glyph and the name field, bound by position so typing rewrites
+    /// the URL token live while the cursor stays put.
+    private var nameField: some View {
+        HStack(spacing: 8) {
+            Image(systemName: "curlybraces")
+                .foregroundStyle(.secondary)
+                .font(.caption)
+            TextField(row.label, text: Binding(
+                // A numeric auto-labeled token (`{1}`) shows blank under its
+                // "Argument 1" placeholder — its name isn't a real label — while a
+                // named token shows its name. Writing goes by position, so it needs no
+                // stale captured name.
+                get: { row.label == row.name ? row.name : "" },
+                set: { def.setArgumentName(at: index, to: $0) }
+            ))
+            .textInputAutocapitalization(.never)
+            .autocorrectionDisabled()
+            .accessibilityIdentifier("custom-action-arg.\(row.name)")
+        }
+    }
+
+    /// The type picker. Setting a slot to **choice** seeds one empty option so there
+    /// is a field to type into; the other config is left intact across type changes.
+    private var typePicker: some View {
+        Picker("Type", selection: Binding(
+            get: { spec.type },
+            set: { newType in
+                var updated = spec
+                updated.type = newType
+                if newType == .choice && updated.options.isEmpty { updated.options = [""] }
+                def.setSpec(at: index, to: updated)
+            }
+        )) {
+            Text("Text").tag(ArgumentType.text)
+            Text("Number").tag(ArgumentType.number)
+            Text("Date").tag(ArgumentType.date)
+            Text("Choice").tag(ArgumentType.choice)
+        }
+        .pickerStyle(.segmented)
+        .accessibilityIdentifier("custom-action-type.\(row.name)")
+    }
+
+    /// The inline **choice options** editor: one text field per user-entered option
+    /// (id = label; the chosen label fills the slot), each removable, plus an add
+    /// button. Save is gated on at least one non-blank option.
+    private var choiceOptionsEditor: some View {
+        VStack(alignment: .leading, spacing: 6) {
+            ForEach(Array(spec.options.enumerated()), id: \.offset) { item in
+                HStack(spacing: 8) {
+                    Image(systemName: "circle")
+                        .foregroundStyle(.secondary)
+                        .font(.caption)
+                    TextField("Option", text: Binding(
+                        get: { optionAt(item.offset) },
+                        set: { setOption(item.offset, to: $0) }
+                    ))
+                    .accessibilityIdentifier("custom-action-choice-option.\(row.name).\(item.offset)")
+                    Button {
+                        removeOption(item.offset)
+                    } label: {
+                        Image(systemName: "minus.circle.fill").foregroundStyle(.red)
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityIdentifier("custom-action-remove-option.\(row.name).\(item.offset)")
+                }
+            }
+            Button {
+                var updated = spec
+                updated.options.append("")
+                def.setSpec(at: index, to: updated)
+            } label: {
+                Label("Add option", systemImage: "plus.circle")
+            }
+            .accessibilityIdentifier("custom-action-add-option.\(row.name)")
+        }
+        .padding(.leading, 20)
+    }
+
+    /// The optional **date output-format** overrides — one for a date-only picked
+    /// value, one for a timed value — each defaulting to its ISO format when blank.
+    private var dateFormatFields: some View {
+        VStack(alignment: .leading, spacing: 6) {
+            TextField(ArgumentSpec.defaultDateOnlyFormat, text: formatBinding(\.dateOnlyFormat))
+                .textInputAutocapitalization(.never)
+                .autocorrectionDisabled()
+                .accessibilityIdentifier("custom-action-date-format.\(row.name)")
+            TextField(ArgumentSpec.defaultTimedFormat, text: formatBinding(\.timedFormat))
+                .textInputAutocapitalization(.never)
+                .autocorrectionDisabled()
+                .accessibilityIdentifier("custom-action-timed-format.\(row.name)")
+            Text("Blank uses the ISO default. A time in the picked value chooses the second format.")
+                .font(.caption)
+                .foregroundStyle(.secondary)
+        }
+        .padding(.leading, 20)
+    }
+
+    // MARK: - Option + format bindings (by position, through the definition)
+
+    private func optionAt(_ i: Int) -> String {
+        let options = spec.options
+        return options.indices.contains(i) ? options[i] : ""
+    }
+
+    private func setOption(_ i: Int, to value: String) {
+        var updated = spec
+        guard updated.options.indices.contains(i) else { return }
+        updated.options[i] = value
+        def.setSpec(at: index, to: updated)
+    }
+
+    private func removeOption(_ i: Int) {
+        var updated = spec
+        guard updated.options.indices.contains(i) else { return }
+        updated.options.remove(at: i)
+        def.setSpec(at: index, to: updated)
+    }
+
+    /// A `String` binding over one optional format field, mapping blank ↔ `nil` so an
+    /// empty field falls back to the ISO default.
+    private func formatBinding(_ keyPath: WritableKeyPath<ArgumentSpec, String?>) -> Binding<String> {
+        Binding(
+            get: { spec[keyPath: keyPath] ?? "" },
+            set: { newValue in
+                var updated = spec
+                let trimmed = newValue.trimmingCharacters(in: .whitespacesAndNewlines)
+                updated[keyPath: keyPath] = trimmed.isEmpty ? nil : newValue
+                def.setSpec(at: index, to: updated)
+            }
+        )
+    }
+}
+
 extension CustomActionDefinition {
     /// A save-ready copy: name and template trimmed, and the resolved fill order
     /// baked into `fillOrder` so the persisted order survives even if the stored
@@ -188,7 +327,10 @@ extension CustomActionDefinition {
             aliases: aliases,
             template: template.trimmingCharacters(in: .whitespacesAndNewlines),
             isFallback: isFallback,
-            fillOrder: orderedTokenNames
+            fillOrder: orderedTokenNames,
+            // Prune config for any token the template dropped (hard mirror) before it
+            // is persisted, so a deleted slot leaves nothing behind.
+            argumentSpecs: reconciledSpecs
         )
     }
 }
@@ -201,7 +343,8 @@ extension StoredCustomAction {
             aliases: alias.map { [$0] } ?? [],
             template: urlString,
             isFallback: isFallback,
-            fillOrder: fillOrder
+            fillOrder: fillOrder,
+            argumentSpecs: argumentSpecs
         )
     }
 
@@ -212,6 +355,7 @@ extension StoredCustomAction {
         alias = def.aliases.first
         isFallback = def.isFallback
         fillOrder = def.orderedTokenNames
+        argumentSpecs = def.reconciledSpecs
     }
 
     /// A fresh stored row from a saved definition — the create path's insert.
@@ -221,7 +365,8 @@ extension StoredCustomAction {
             urlString: def.template,
             alias: def.aliases.first,
             isFallback: def.isFallback,
-            fillOrder: def.orderedTokenNames
+            fillOrder: def.orderedTokenNames,
+            argumentSpecs: def.reconciledSpecs
         )
     }
 }
