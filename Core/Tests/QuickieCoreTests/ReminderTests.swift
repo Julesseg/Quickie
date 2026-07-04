@@ -24,7 +24,7 @@ struct ReminderTests {
         // Input method is chosen by content type / option set (ADR 0013): free
         // text uses the keyboard, a date uses the in-place picker, and a fixed
         // option set uses the fuzzy choice list.
-        #expect(args[0].inputMethod == .keyboard)
+        #expect(args[0].inputMethod == .keyboard(.text))
         #expect(args[1].inputMethod == .datePicker)
         #expect(args[2].inputMethod == .choice(lists))
     }
