@@ -190,7 +190,8 @@ struct RootView: View {
                 name: custom.title,
                 aliases: custom.alias.map { [$0] } ?? [],
                 template: custom.urlString,
-                isFallback: custom.isFallback
+                isFallback: custom.isFallback,
+                fillOrder: custom.fillOrder
             ).makeAction(id: custom.id)
         }
         let storedSnippets = snippets.map { snippet in
@@ -237,7 +238,12 @@ struct RootView: View {
                 // Enabled toggle and each action's instance switch (issue #68)
                 // against it.
                 IndexedProvider(catalog: storedLinks, id: .quicklinks),
-                IndexedProvider(catalog: storedCustomActions, id: .fallbacks),
+                // Custom Actions are their own configurable kind now (ADR 0021; issue
+                // #94): the catalog attributes to `.customActions`, so the Custom
+                // Actions page's Enabled toggle governs them all — fallback-flagged or
+                // not. The Fallbacks page still orders/disables the fallback-flagged
+                // ones through `FallbacksStore`, an independent region axis.
+                IndexedProvider(catalog: storedCustomActions, id: .customActions),
                 IndexedProvider(catalog: storedSnippets + [.newSnippet()], id: .snippets),
                 IndexedProvider(catalog: storedPileEntries + [.saveForLater()], id: .pile),
                 // Imported Shortcut Actions, matched by name (issue #45).
@@ -695,6 +701,7 @@ struct RootView: View {
     private func providerPage(for provider: ProviderID) -> some View {
         switch provider {
         case .quicklinks: QuicklinksView(enablement: instanceEnablement)
+        case .customActions: CustomActionsView(enablement: instanceEnablement)
         case .fallbacks: FallbacksView(store: fallbacks)
         case .snippets: SnippetManagerView(enablement: instanceEnablement)
         case .shortcuts: ShortcutsView(store: shortcuts, enablement: instanceEnablement)
