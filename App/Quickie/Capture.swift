@@ -659,43 +659,70 @@ private struct BreadcrumbSteps: View {
 
     var body: some View {
         let steps = model.steps
-        ScrollView(.horizontal, showsIndicators: false) {
-            // No GlassEffectContainer: its fluid morph resizes the glass on its
-            // own slower curve, so the step width visibly lagged the chevron (which
-            // is plain layout). Standalone glass redraws at its frame each tick, so
-            // the width tracks the chevron exactly.
-            HStack(spacing: rowSpacing) {
-                ForEach(steps) { step in
-                    let display = displayValue(for: step)
-                    StepCrumb(
-                        step: step,
-                        width: width(for: step, in: steps),
-                        displayText: display.text,
-                        isPlaceholder: display.isPlaceholder,
-                        onEdit: { model.editPill(at: step.index) }
-                    )
-                    if step.index < steps.count - 1 {
-                        Image(systemName: "chevron.right")
-                            .font(.caption.weight(.semibold))
-                            .foregroundStyle(.secondary)
-                            .frame(width: chevronWidth)
+        // The step the cursor sits on — the crumb we keep in view. When many steps
+        // overflow the viewport, we scroll it toward the centre; `anchor: .center`
+        // clamps at the content edges on its own, so the first step stays pinned to
+        // the left and the last to the right rather than the row over-scrolling past
+        // them.
+        let currentIndex = steps.first(where: \.isCurrent)?.index
+        ScrollViewReader { proxy in
+            ScrollView(.horizontal, showsIndicators: false) {
+                // No GlassEffectContainer: its fluid morph resizes the glass on its
+                // own slower curve, so the step width visibly lagged the chevron (which
+                // is plain layout). Standalone glass redraws at its frame each tick, so
+                // the width tracks the chevron exactly.
+                HStack(spacing: rowSpacing) {
+                    ForEach(steps) { step in
+                        let display = displayValue(for: step)
+                        StepCrumb(
+                            step: step,
+                            width: width(for: step, in: steps),
+                            displayText: display.text,
+                            isPlaceholder: display.isPlaceholder,
+                            onEdit: { model.editPill(at: step.index) }
+                        )
+                        // The scroll target for auto-centring the active crumb.
+                        .id(step.index)
+                        if step.index < steps.count - 1 {
+                            Image(systemName: "chevron.right")
+                                .font(.caption.weight(.semibold))
+                                .foregroundStyle(.secondary)
+                                .frame(width: chevronWidth)
+                        }
                     }
                 }
+                // Breathing room around the crumbs so their glass shadows have space to
+                // fall rather than crowding the title above and the content below.
+                .padding(.vertical, 10)
+                // Glide the crumbs between their old and new widths as the cursor
+                // advances (degraded to no animation under Reduce Motion).
+                .animation(reduceMotion ? nil : .snappy, value: steps)
             }
-            // Breathing room around the crumbs so their glass shadows have space to
-            // fall rather than crowding the title above and the content below.
-            .padding(.vertical, 10)
-            // Glide the crumbs between their old and new widths as the cursor
-            // advances (degraded to no animation under Reduce Motion).
-            .animation(reduceMotion ? nil : .snappy, value: steps)
+            // A ScrollView clips to its viewport, which sheared off the crumbs' glass
+            // shadows (most visibly along the bottom edge). The steps fit without
+            // scrolling in practice, so disabling the clip lets the shadows render in
+            // full; only a genuine overflow would scroll, and then off-screen crumbs
+            // simply aren't clipped — an acceptable trade for un-clipped shadows.
+            .scrollClipDisabled()
+            .onGeometryChange(for: CGFloat.self) { $0.size.width } action: { containerWidth = $0 }
+            // Follow the cursor: when the active step changes (advancing, backspacing,
+            // or tapping a pill to re-edit) glide it toward the centre so a long
+            // breadcrumb never strands the step you're filling off-screen to the
+            // right. Degrades to a snap under Reduce Motion (ADR 0010 motion budget).
+            .onChange(of: currentIndex) { _, index in
+                guard let index else { return }
+                withAnimation(reduceMotion ? nil : .snappy) {
+                    proxy.scrollTo(index, anchor: .center)
+                }
+            }
+            // A capture can open already past step 1 — a multi-slot fallback seeds its
+            // first pill and lands on step 2 — so centre the active step on appear too,
+            // not only on later changes.
+            .onAppear {
+                guard let currentIndex else { return }
+                proxy.scrollTo(currentIndex, anchor: .center)
+            }
         }
-        // A ScrollView clips to its viewport, which sheared off the crumbs' glass
-        // shadows (most visibly along the bottom edge). The steps fit without
-        // scrolling in practice, so disabling the clip lets the shadows render in
-        // full; only a genuine overflow would scroll, and then off-screen crumbs
-        // simply aren't clipped — an acceptable trade for un-clipped shadows.
-        .scrollClipDisabled()
-        .onGeometryChange(for: CGFloat.self) { $0.size.width } action: { containerWidth = $0 }
     }
 
     /// What a crumb shows: the **live** input for the current step — the typed
