@@ -155,7 +155,9 @@ public struct CustomActionDefinition: Equatable, Sendable {
             case .number:
                 return Argument(label: row.label, contentType: .number)
             case .date:
-                return Argument(label: row.label, contentType: .date)
+                // The format's meaning fixes whether the picker collects a time
+                // (issue #96) — no in-picker toggle for a Custom Action date slot.
+                return Argument(label: row.label, contentType: .date, dateIncludesTime: spec.dateIncludesTime)
             case .choice:
                 return Argument(label: row.label, contentType: .text, options: spec.effectiveOptions)
             }
@@ -416,7 +418,7 @@ public struct CustomActionDefinition: Equatable, Sendable {
         case .date(let date, let hasTime):
             let formatter = DateFormatter()
             formatter.locale = Locale(identifier: "en_US_POSIX")
-            formatter.dateFormat = spec.dateFormat(hasTime: hasTime)
+            formatter.dateFormat = spec.outputFormat(hasTime: hasTime)
             return formatter.string(from: date)
         }
     }

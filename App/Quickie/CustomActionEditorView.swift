@@ -172,21 +172,22 @@ private struct ArgumentRowEditor: View {
     private var spec: ArgumentSpec { def.spec(at: index) }
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            nameField
-            typePicker
+        VStack(alignment: .leading, spacing: 10) {
+            nameAndTypeRow
             switch spec.type {
             case .choice: choiceOptionsEditor
-            case .date: dateFormatFields
+            case .date: dateFormatField
             case .text, .number: EmptyView()
             }
         }
-        .padding(.vertical, 2)
+        .padding(.vertical, 4)
     }
 
-    /// The `{token}` glyph and the name field, bound by position so typing rewrites
-    /// the URL token live while the cursor stays put.
-    private var nameField: some View {
+    /// The `{token}` glyph, the name field (bound by position so typing rewrites the
+    /// URL token live while the cursor stays put), and a compact **type menu** on the
+    /// trailing edge — the same menu-style `Picker` the Appearance setting uses, which
+    /// fits the row where the four-segment control was cramped.
+    private var nameAndTypeRow: some View {
         HStack(spacing: 8) {
             Image(systemName: "curlybraces")
                 .foregroundStyle(.secondary)
@@ -202,12 +203,14 @@ private struct ArgumentRowEditor: View {
             .textInputAutocapitalization(.never)
             .autocorrectionDisabled()
             .accessibilityIdentifier("custom-action-arg.\(row.name)")
+            Spacer(minLength: 8)
+            typeMenu
         }
     }
 
-    /// The type picker. Setting a slot to **choice** seeds one empty option so there
+    /// The type menu. Setting a slot to **choice** seeds one empty option so there
     /// is a field to type into; the other config is left intact across type changes.
-    private var typePicker: some View {
+    private var typeMenu: some View {
         Picker("Type", selection: Binding(
             get: { spec.type },
             set: { newType in
@@ -222,17 +225,19 @@ private struct ArgumentRowEditor: View {
             Text("Date").tag(ArgumentType.date)
             Text("Choice").tag(ArgumentType.choice)
         }
-        .pickerStyle(.segmented)
+        .pickerStyle(.menu)
+        .labelsHidden()
         .accessibilityIdentifier("custom-action-type.\(row.name)")
     }
 
     /// The inline **choice options** editor: one text field per user-entered option
     /// (id = label; the chosen label fills the slot), each removable, plus an add
-    /// button. Save is gated on at least one non-blank option.
+    /// button. Rows are spaced so the fields don't read as cramped. Save is gated on
+    /// at least one non-blank option.
     private var choiceOptionsEditor: some View {
-        VStack(alignment: .leading, spacing: 6) {
+        VStack(alignment: .leading, spacing: 12) {
             ForEach(Array(spec.options.enumerated()), id: \.offset) { item in
-                HStack(spacing: 8) {
+                HStack(spacing: 10) {
                     Image(systemName: "circle")
                         .foregroundStyle(.secondary)
                         .font(.caption)
@@ -260,21 +265,20 @@ private struct ArgumentRowEditor: View {
             .accessibilityIdentifier("custom-action-add-option.\(row.name)")
         }
         .padding(.leading, 20)
+        .padding(.top, 2)
     }
 
-    /// The optional **date output-format** overrides — one for a date-only picked
-    /// value, one for a timed value — each defaulting to its ISO format when blank.
-    private var dateFormatFields: some View {
+    /// The single optional **date output-format** field (issue #96): its meaning
+    /// decides whether the slot collects a date or a date-and-time — a format with a
+    /// time raises a date+time picker, one without keeps it date-only — so there is no
+    /// separate toggle. Blank uses the ISO `yyyy-MM-dd` default.
+    private var dateFormatField: some View {
         VStack(alignment: .leading, spacing: 6) {
-            TextField(ArgumentSpec.defaultDateOnlyFormat, text: formatBinding(\.dateOnlyFormat))
+            TextField(ArgumentSpec.defaultDateOnlyFormat, text: formatBinding(\.dateFormat))
                 .textInputAutocapitalization(.never)
                 .autocorrectionDisabled()
                 .accessibilityIdentifier("custom-action-date-format.\(row.name)")
-            TextField(ArgumentSpec.defaultTimedFormat, text: formatBinding(\.timedFormat))
-                .textInputAutocapitalization(.never)
-                .autocorrectionDisabled()
-                .accessibilityIdentifier("custom-action-timed-format.\(row.name)")
-            Text("Blank uses the ISO default. A time in the picked value chooses the second format.")
+            Text("Blank uses \(ArgumentSpec.defaultDateOnlyFormat) (date only). Add a time — e.g. \(ArgumentSpec.defaultTimedFormat) — to pick a date and time.")
                 .font(.caption)
                 .foregroundStyle(.secondary)
         }

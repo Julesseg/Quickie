@@ -161,6 +161,13 @@ final class CaptureModel {
     var keyboardType: UIKeyboardType {
         currentArgument?.inputMethod == .keyboard(.number) ? .numberPad : .default
     }
+    /// Whether the current date step collects a **time**. A Custom Action's date slot
+    /// fixes this from its format's meaning (issue #96); a reminder/event leaves it to
+    /// the user's toggle (`includeTime`).
+    var dateStepIncludesTime: Bool { currentArgument?.dateIncludesTime ?? includeTime }
+    /// Whether the date step offers its "Include a time" toggle — only when the current
+    /// date Argument leaves the choice to the user (the format hasn't fixed it).
+    var dateStepAllowsTimeToggle: Bool { currentArgument?.dateIncludesTime == nil }
     /// The current capture's affordance wording, for the primer/denial bars.
     var copy: CaptureCopy { capture?.copy ?? CaptureCopy() }
 
@@ -246,7 +253,7 @@ final class CaptureModel {
     /// Commits the current date step with whether a time was included (the alarm
     /// signal).
     func commitDate() {
-        apply { $0.commit(.date(pickedDate, hasTime: includeTime)) }
+        apply { $0.commit(.date(pickedDate, hasTime: dateStepIncludesTime)) }
     }
 
     /// Commits a chosen option for the current choice step.
@@ -466,7 +473,7 @@ private struct DateStep: View {
     private static let dateHeight: CGFloat = 350
     private static let dateTimeHeight: CGFloat = 400
 
-    private var pickerHeight: CGFloat { model.includeTime ? Self.dateTimeHeight : Self.dateHeight }
+    private var pickerHeight: CGFloat { model.dateStepIncludesTime ? Self.dateTimeHeight : Self.dateHeight }
 
     var body: some View {
         VStack {
@@ -483,14 +490,19 @@ private struct DateStep: View {
                 // explicit toggle, so its resize reads as intentional).
                 InlineDatePicker(
                     date: $model.pickedDate,
-                    includeTime: model.includeTime,
+                    includeTime: model.dateStepIncludesTime,
                     height: pickerHeight
                 )
                 .frame(height: pickerHeight)
 
-                Toggle("Include a time", isOn: $model.includeTime)
-                    .font(.subheadline)
-                    .padding(.horizontal, 4)
+                // The toggle appears only when the step leaves the date/time choice to
+                // the user (reminders/events). A Custom Action date slot fixes it from
+                // its format, so the toggle is hidden — the picker is already restricted.
+                if model.dateStepAllowsTimeToggle {
+                    Toggle("Include a time", isOn: $model.includeTime)
+                        .font(.subheadline)
+                        .padding(.horizontal, 4)
+                }
             }
             .padding(16)
             .glassEffect(.regular, in: RoundedRectangle(cornerRadius: 24, style: .continuous))
@@ -786,7 +798,7 @@ private struct BreadcrumbSteps: View {
             case .datePicker:
                 // A date always has a value (defaults to now), so it shows straight
                 // away and changes live as the picker moves.
-                return (pillText(.date(model.pickedDate, hasTime: model.includeTime)), false)
+                return (pillText(.date(model.pickedDate, hasTime: model.dateStepIncludesTime)), false)
             case .choice:
                 // Preview the option Enter will commit — the best (highlighted)
                 // match — rather than the raw filter text, so the crumb always

@@ -256,12 +256,26 @@ final class CustomActionUITests: XCTestCase {
         )
     }
 
-    /// Sets an argument row's type via its segmented type picker (issue #96).
+    /// Sets an argument row's type via its menu type picker (issue #96): tap the menu,
+    /// then the option. Element-type-agnostic on the picker, since a Form menu Picker
+    /// surfaces as a button on most OS versions but not all.
     @MainActor
     private func setType(_ app: XCUIApplication, token: String, to label: String) {
-        let picker = app.segmentedControls["custom-action-type.\(token)"]
+        let picker = app.descendants(matching: .any)
+            .matching(identifier: "custom-action-type.\(token)").firstMatch
         XCTAssertTrue(picker.waitForExistence(timeout: 5), "the \(token) row shows a type picker")
-        picker.buttons[label].tap()
+        picker.tap()
+        // A menu Picker's options surface as buttons on most OS versions, menu items on
+        // some — take whichever appears.
+        let button = app.buttons[label]
+        let menuItem = app.menuItems[label]
+        if button.waitForExistence(timeout: 3) {
+            button.tap()
+        } else if menuItem.waitForExistence(timeout: 3) {
+            menuItem.tap()
+        } else {
+            XCTFail("the \(label) type option did not appear in the menu")
+        }
     }
 
     // MARK: - Editor: per-row type picker + choice/date config
@@ -313,8 +327,8 @@ final class CustomActionUITests: XCTestCase {
         // Switch the (only, first) slot to Date → format fields appear and the
         // fallback flag is disabled (a date-first action has nowhere to seed the query).
         setType(app, token: "when", to: "Date")
-        XCTAssertTrue(app.textFields["custom-action-timed-format.when"].waitForExistence(timeout: 5),
-                      "a date slot reveals its output-format override fields")
+        XCTAssertTrue(app.textFields["custom-action-date-format.when"].waitForExistence(timeout: 5),
+                      "a date slot reveals its single output-format field")
         XCTAssertFalse(toggle.isEnabled, "a date first argument disables the fallback flag")
     }
 

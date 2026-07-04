@@ -61,6 +61,13 @@ public struct Argument: Equatable, Sendable {
     /// declared with the step rather than hard-coded in the view; `nil` for non-choice
     /// steps, and the app falls back to a sensible default when a choice step omits it.
     public let optionSymbol: String?
+    /// For a `date` Argument, whether the picker collects a **time** as well —
+    /// restricting the control with no in-picker toggle (issue #96): a Custom Action's
+    /// date slot sets this from its format's meaning (date vs datetime). `nil` (the
+    /// default) leaves it **user-choosable** — the New Reminder / Event date steps keep
+    /// their "Include a time" toggle, which decides a reminder's alarm. Ignored by
+    /// non-date Arguments.
+    public let dateIncludesTime: Bool?
     /// Whether this Argument may be **committed empty** (issue #46): the user can
     /// submit the step with no value and the Action still runs — a Shortcut Action's
     /// optional `text` input. Defaults to `false`: most Arguments are required, so an
@@ -74,10 +81,12 @@ public struct Argument: Equatable, Sendable {
         contentType: ContentType,
         options: [ChoiceOption] = [],
         optionSymbol: String? = nil,
+        dateIncludesTime: Bool? = nil,
         isOptional: Bool = false
     ) {
         self.label = label
         self.contentType = contentType
+        self.dateIncludesTime = dateIncludesTime
         self.options = options
         self.optionSymbol = optionSymbol
         self.isOptional = isOptional

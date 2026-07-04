@@ -105,47 +105,71 @@ struct CustomActionTypesTests {
                 == .completed(.openURL(URL(string: "app://x?d=2026-07-04T09:05")!)))
     }
 
-    @Test("custom date format overrides replace the matching ISO default")
-    func dateSerializesCustomFormats() {
-        // A timed override (Things' yyyy-MM-dd@HH:mm) applies only to a timed value;
-        // a date-only override applies only to a date-only value.
-        let action = CustomActionDefinition(
+    @Test("a single custom date format replaces the ISO default")
+    func dateSerializesCustomFormat() {
+        // A timed format (Things' yyyy-MM-dd@HH:mm) serializes a timed value; the `@`
+        // and `:` are query-legal, so they stay literal.
+        let timedAction = CustomActionDefinition(
             name: "When", template: "things:///add?when={when}",
-            argumentSpecs: ["when": ArgumentSpec(
-                type: .date, dateOnlyFormat: "dd/MM/yyyy", timedFormat: "yyyy-MM-dd@HH:mm"
-            )]
+            argumentSpecs: ["when": ArgumentSpec(type: .date, dateFormat: "yyyy-MM-dd@HH:mm")]
         ).makeAction(id: "when")!
-
-        var timed = MultiStepAction(action: action)
+        var timed = MultiStepAction(action: timedAction)
         #expect(timed.commit(.date(date(2026, 7, 4, 14, 30), hasTime: true))
                 == .completed(.openURL(URL(string: "things:///add?when=2026-07-04@14:30")!)))
 
-        var dateOnly = MultiStepAction(action: action)
-        // A slash is query-legal, so it stays literal.
+        // A date-only format (a slash is query-legal, so it stays literal).
+        let dateOnlyAction = CustomActionDefinition(
+            name: "When", template: "things:///add?when={when}",
+            argumentSpecs: ["when": ArgumentSpec(type: .date, dateFormat: "dd/MM/yyyy")]
+        ).makeAction(id: "when")!
+        var dateOnly = MultiStepAction(action: dateOnlyAction)
         #expect(dateOnly.commit(.date(date(2026, 7, 4), hasTime: false))
                 == .completed(.openURL(URL(string: "things:///add?when=04/07/2026")!)))
     }
 
-    @Test("a date format override is trimmed of edge whitespace before formatting")
-    func dateFormatOverrideTrimsEdgeWhitespace() {
+    @Test("a date format's meaning decides whether the slot collects a time")
+    func dateFormatMeaningDecidesTimeCollection() {
+        // The format is the single source: a time-bearing format makes the slot a
+        // datetime (the picker offers a time), a date-only one keeps it date-only, and
+        // a blank format defaults to date-only — no separate toggle.
+        func timeFlag(_ format: String?) -> Bool? {
+            let def = CustomActionDefinition(
+                name: "x", template: "app://x?d={d}",
+                argumentSpecs: ["d": ArgumentSpec(type: .date, dateFormat: format)]
+            )
+            return def.arguments.first?.dateIncludesTime
+        }
+        #expect(timeFlag(nil) == false)                    // blank → date-only
+        #expect(timeFlag("yyyy-MM-dd") == false)           // date tokens only
+        #expect(timeFlag("dd/MM/yyyy") == false)           // uppercase M is month, not minute
+        #expect(timeFlag("yyyy-MM-dd@HH:mm") == true)      // HH:mm → timed
+        #expect(timeFlag("yyyy-MM-dd'T'HH:mm") == true)    // quoted T is a literal; HH:mm still counts
+        #expect(timeFlag("MMM d, yyyy") == false)          // internal spaces, no time tokens
+        // A non-date type never carries the flag.
+        let text = CustomActionDefinition(name: "x", template: "app://x?d={d}")
+        #expect(text.arguments.first?.dateIncludesTime == nil)
+    }
+
+    @Test("a date format is trimmed of edge whitespace before formatting")
+    func dateFormatTrimsEdgeWhitespace() {
         // The editor keeps the raw text for typing fidelity, but stray leading/trailing
         // whitespace must never reach DateFormatter and leak a literal space into the
         // filled URL. Internal spaces (a legitimate part of a format) are preserved.
         let action = CustomActionDefinition(
             name: "When", template: "app://x?d={d}",
-            argumentSpecs: ["d": ArgumentSpec(type: .date, dateOnlyFormat: "  yyyy-MM-dd  ")]
+            argumentSpecs: ["d": ArgumentSpec(type: .date, dateFormat: "  yyyy-MM-dd  ")]
         ).makeAction(id: "d")!
         var s = MultiStepAction(action: action)
         #expect(s.commit(.date(date(2026, 7, 4), hasTime: false))
                 == .completed(.openURL(URL(string: "app://x?d=2026-07-04")!)))
 
-        // An all-whitespace override formats to nothing, so it falls back to the ISO
+        // An all-whitespace format formats to nothing, so it falls back to the ISO
         // default rather than producing a blank date value.
-        #expect(ArgumentSpec(type: .date, timedFormat: "   ").dateFormat(hasTime: true)
+        #expect(ArgumentSpec(type: .date, dateFormat: "   ").outputFormat(hasTime: true)
                 == ArgumentSpec.defaultTimedFormat)
 
         // An internal space is kept — the trim is edge-only.
-        #expect(ArgumentSpec(type: .date, dateOnlyFormat: " MMM d yyyy ").dateFormat(hasTime: false)
+        #expect(ArgumentSpec(type: .date, dateFormat: " MMM d yyyy ").outputFormat(hasTime: false)
                 == "MMM d yyyy")
     }
 
@@ -216,10 +240,10 @@ struct CustomActionTypesTests {
     func renameCarriesSpec() {
         var def = CustomActionDefinition(
             name: "X", template: "app://x?d={1}",
-            argumentSpecs: ["1": ArgumentSpec(type: .date, timedFormat: "yyyy-MM-dd@HH:mm")]
+            argumentSpecs: ["1": ArgumentSpec(type: .date, dateFormat: "yyyy-MM-dd@HH:mm")]
         )
         def.renameArgument("1", to: "when")
-        #expect(def.spec(for: "when") == ArgumentSpec(type: .date, timedFormat: "yyyy-MM-dd@HH:mm"))
+        #expect(def.spec(for: "when") == ArgumentSpec(type: .date, dateFormat: "yyyy-MM-dd@HH:mm"))
         #expect(def.arguments.first?.inputMethod == .datePicker)
     }
 
@@ -240,10 +264,10 @@ struct CustomActionTypesTests {
     func setArgumentTypeByPosition() {
         var def = CustomActionDefinition(
             name: "X", template: "app://x?when={when}",
-            argumentSpecs: ["when": ArgumentSpec(timedFormat: "yyyy-MM-dd@HH:mm")]
+            argumentSpecs: ["when": ArgumentSpec(dateFormat: "yyyy-MM-dd@HH:mm")]
         )
         def.setArgumentType(at: 0, to: .date)
-        #expect(def.spec(at: 0) == ArgumentSpec(type: .date, timedFormat: "yyyy-MM-dd@HH:mm"))
+        #expect(def.spec(at: 0) == ArgumentSpec(type: .date, dateFormat: "yyyy-MM-dd@HH:mm"))
     }
 
     // MARK: - The flagship acceptance example (ADR 0021 / issue #96)
@@ -259,7 +283,7 @@ struct CustomActionTypesTests {
             isFallback: true,
             fillOrder: ["title", "when", "deadline", "list", "notes"],
             argumentSpecs: [
-                "when": ArgumentSpec(type: .date, timedFormat: "yyyy-MM-dd@HH:mm"),
+                "when": ArgumentSpec(type: .date, dateFormat: "yyyy-MM-dd@HH:mm"),
                 "deadline": ArgumentSpec(type: .date),
                 "list": ArgumentSpec(type: .choice, options: ["Today", "Inbox"]),
             ]
