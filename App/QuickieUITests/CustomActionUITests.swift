@@ -332,6 +332,37 @@ final class CustomActionUITests: XCTestCase {
         XCTAssertFalse(toggle.isEnabled, "a date first argument disables the fallback flag")
     }
 
+    // MARK: - Duplicate swipe action
+
+    /// Swiping a Custom Action row offers a **Duplicate** action that forks a ` copy`
+    /// alongside the original — a fast way to author a near-identical variant.
+    @MainActor
+    func testDuplicateSwipeActionForksTheRow() throws {
+        let app = launchApp()
+        openCustomActionsPage(app)
+        openNewEditor(app)
+
+        setText("Dupe Me", in: app.textFields["custom-action-name-field"])
+        setText("https://example.com/?q={q}", in: app.textFields["custom-action-url-field"])
+        let save = app.buttons["save-custom-action"]
+        XCTAssertTrue(save.isEnabled)
+        save.tap()
+
+        let original = app.staticTexts["Dupe Me"]
+        XCTAssertTrue(original.waitForExistence(timeout: 10), "the authored action is listed")
+
+        // Reveal the row's swipe actions and tap Duplicate.
+        original.swipeLeft()
+        let duplicate = app.buttons["Duplicate"]
+        XCTAssertTrue(duplicate.waitForExistence(timeout: 5), "the row offers a Duplicate swipe action")
+        duplicate.tap()
+
+        // A ` copy` forks alongside the original, which remains.
+        XCTAssertTrue(app.staticTexts["Dupe Me copy"].waitForExistence(timeout: 5),
+                      "duplicating forks a ' copy' row")
+        XCTAssertTrue(app.staticTexts["Dupe Me"].exists, "the original remains")
+    }
+
     // MARK: - End-to-end: typed arguments run through the breadcrumb
 
     /// A Custom Action mixing a text, a date, and a choice slot runs end to end: the
