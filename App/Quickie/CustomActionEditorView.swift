@@ -67,6 +67,10 @@ struct CustomActionEditorView: View {
                         .accessibilityIdentifier("custom-action-alias-field")
                 }
             }
+            // Dragging the form dismisses the keyboard, so the lower sections (the
+            // fallback toggle, the alias field) are reachable after typing the URL
+            // rather than staying pinned under the keyboard.
+            .scrollDismissesKeyboard(.immediately)
             .navigationTitle(isNew ? "New Custom Action" : "Edit Custom Action")
             .toolbar {
                 ToolbarItem(placement: .topBarLeading) {
