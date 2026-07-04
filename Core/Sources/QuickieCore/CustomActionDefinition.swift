@@ -162,14 +162,28 @@ public struct CustomActionDefinition: Equatable, Sendable {
     /// fan-out — so the name link between form row and URL stays intact without
     /// hand-editing (ADR 0021, issue #94). The row keeps its fill-order slot. A no-op
     /// when `old` isn't a live token.
+    /// Renames the argument at fill-order position `index` — the editor's live,
+    /// per-keystroke rename (issue #94 follow-up). Binding a row's text field to this
+    /// by *position* (rather than by the token name, which changes on every keystroke
+    /// and would drop focus) lets the URL token track the field as it is typed. Guards
+    /// are `renameArgument`'s: a no-op on an out-of-range index, an empty name (which
+    /// would collapse the token to an invalid `{}` and drop the row mid-edit), or a
+    /// collision with another live token.
+    public mutating func setArgumentName(at index: Int, to new: String) {
+        let names = orderedTokenNames
+        guard names.indices.contains(index) else { return }
+        renameArgument(names[index], to: new)
+    }
+
     public mutating func renameArgument(_ old: String, to new: String) {
-        // No-op unless `old` is a live token being renamed to a genuinely different
-        // name that doesn't already belong to *another* live token. Renaming onto a
-        // live name would merge two arguments into one: `tokenNames` dedupes the
+        // No-op unless `old` is a live token being renamed to a genuinely different,
+        // non-empty name that doesn't already belong to *another* live token. An empty
+        // name would rewrite the token to an invalid `{}` and drop the row; renaming
+        // onto a live name would merge two arguments into one (`tokenNames` dedupes the
         // rewritten template but the fill order wouldn't, so the breadcrumb would keep
         // two rows while the fill wrote the first answer into both slots and silently
-        // dropped the second. Rejecting the collision keeps rows and fill in step.
-        guard old != new, tokenNames.contains(old), !tokenNames.contains(new) else { return }
+        // dropped the second). Rejecting both keeps rows and fill in step.
+        guard old != new, !new.isEmpty, tokenNames.contains(old), !tokenNames.contains(new) else { return }
         // Rename within the resolved fill order first — against the still-current
         // template — so the row keeps its slot; then rewrite the URL token. Doing it
         // the other way drops `old` before the order is captured, sending the renamed

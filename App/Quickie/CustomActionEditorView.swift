@@ -102,14 +102,17 @@ struct CustomActionEditorView: View {
     }
 
     /// The live-mirrored argument rows in **fill order**, drag-to-reorder, each
-    /// renaming its URL token. The footer states the order rule explicitly.
+    /// renaming its URL token **per keystroke**. The rows are keyed by fill-order
+    /// *position*, not by token name — a name-keyed row would change identity on
+    /// every character and drop the field's focus — and each field binds straight to
+    /// the model by position, so typing a name rewrites the `{token}` live while the
+    /// cursor stays put. The footer states the order rule explicitly.
     private var argumentsSection: some View {
         Section {
-            ForEach(def.rows) { row in
-                ArgumentRowField(
-                    row: row,
-                    onRename: { newName in def.renameArgument(row.name, to: newName) }
-                )
+            // Keyed by fill-order position (`\.offset`), not token name: a name-keyed
+            // row changes identity on every keystroke and drops the field's focus.
+            ForEach(Array(def.rows.enumerated()), id: \.offset) { item in
+                argumentRow(index: item.offset, row: item.element)
             }
             .onMove { offsets, destination in
                 def.moveArguments(fromOffsets: offsets, toOffset: destination)
@@ -123,6 +126,27 @@ struct CustomActionEditorView: View {
             }
         } footer: {
             Text("The breadcrumb asks for these in this order — drag to reorder. This fill order is independent of where the slots sit in the URL. Rename a row to rewrite its {token}.")
+        }
+    }
+
+    /// One argument row: a `{token}` glyph and a text field bound to the model by
+    /// **position**, so typing rewrites the URL token live while the cursor stays put.
+    private func argumentRow(index: Int, row: ArgumentRow) -> some View {
+        HStack(spacing: 8) {
+            Image(systemName: "curlybraces")
+                .foregroundStyle(.secondary)
+                .font(.caption)
+            TextField(row.label, text: Binding(
+                // A numeric auto-labeled token (`{1}`) shows blank under its
+                // "Argument 1" placeholder — its name isn't a real label — while a
+                // named token shows its name. Writing goes by position, so it needs no
+                // stale captured name.
+                get: { row.label == row.name ? row.name : "" },
+                set: { def.setArgumentName(at: index, to: $0) }
+            ))
+            .textInputAutocapitalization(.never)
+            .autocorrectionDisabled()
+            .accessibilityIdentifier("custom-action-arg.\(row.name)")
         }
     }
 
@@ -151,47 +175,6 @@ struct CustomActionEditorView: View {
                 def.aliases = trimmed.isEmpty ? [] : [trimmed]
             }
         )
-    }
-}
-
-/// One argument row's rename field (ADR 0021, issue #94): edits the URL **token
-/// name** in place. A numeric auto-labeled token (`{1}`) starts blank under its
-/// "Argument 1" placeholder — its name isn't a real label — while a named token
-/// shows its name. Committing a non-empty change rewrites the token. Local `@State`
-/// holds the in-progress text so a per-keystroke token rewrite (which would change
-/// the row's identity and end the edit) is avoided; the rename lands on submit or
-/// when the field loses focus.
-private struct ArgumentRowField: View {
-    let row: ArgumentRow
-    let onRename: (String) -> Void
-
-    @State private var text: String
-
-    init(row: ArgumentRow, onRename: @escaping (String) -> Void) {
-        self.row = row
-        self.onRename = onRename
-        // A numeric auto-labeled row (label differs from the raw name) starts blank;
-        // a named row seeds the field with its current name.
-        _text = State(initialValue: row.label == row.name ? row.name : "")
-    }
-
-    var body: some View {
-        HStack(spacing: 8) {
-            Image(systemName: "curlybraces")
-                .foregroundStyle(.secondary)
-                .font(.caption)
-            TextField(row.label, text: $text)
-                .textInputAutocapitalization(.never)
-                .autocorrectionDisabled()
-                .accessibilityIdentifier("custom-action-arg.\(row.name)")
-                .onSubmit(commit)
-        }
-    }
-
-    private func commit() {
-        let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !trimmed.isEmpty, trimmed != row.name else { return }
-        onRename(trimmed)
     }
 }
 

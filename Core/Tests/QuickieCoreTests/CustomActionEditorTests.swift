@@ -123,6 +123,31 @@ struct CustomActionEditorTests {
         #expect(def.arguments.count == 2)
     }
 
+    @Test("renaming an argument by position rewrites its token live")
+    func setArgumentNameByPosition() {
+        // The editor binds each row's text field to this by fill-order position, so
+        // the URL token tracks the field per keystroke without needing the old name.
+        var def = CustomActionDefinition(name: "x", template: "app://a?t={1}&n={notes}")
+        def.setArgumentName(at: 0, to: "title")
+        #expect(def.template == "app://a?t={title}&n={notes}")
+        #expect(def.orderedTokenNames == ["title", "notes"])
+    }
+
+    @Test("setting an argument name to empty or a colliding name is a no-op")
+    func setArgumentNameGuards() {
+        var def = CustomActionDefinition(name: "x", template: "app://a?t={title}&n={notes}")
+        // Empty would collapse {notes} to an invalid {} and drop the row mid-edit.
+        def.setArgumentName(at: 1, to: "")
+        #expect(def.template == "app://a?t={title}&n={notes}")
+        // Colliding with the other live token would merge two arguments into one.
+        def.setArgumentName(at: 1, to: "title")
+        #expect(def.template == "app://a?t={title}&n={notes}")
+        #expect(def.rows.map(\.name) == ["title", "notes"])
+        // An out-of-range position is harmless.
+        def.setArgumentName(at: 5, to: "x")
+        #expect(def.template == "app://a?t={title}&n={notes}")
+    }
+
     @Test("a duplicated fill order still collapses to one row")
     func duplicatedFillOrderCollapses() {
         // Defensive: even a stored fill order carrying a duplicate (a corrupt or
