@@ -18,7 +18,6 @@ struct FallbacksView: View {
     let store: FallbacksStore
 
     @State private var editing: StoredCustomAction?
-    @State private var creatingNew = false
 
     /// The display rows, in the user's reconciled order (most-important-first): each
     /// persisted id resolved to its fallback-flagged Custom Action or built-in. Only
@@ -60,30 +59,21 @@ struct FallbacksView: View {
                     .onMove(perform: move)
                     .onDelete(perform: delete)
                 } footer: {
-                    Text("Top is most important — nearest the input in results. Disable to hide a fallback without removing it. Tap Edit to reorder. Save for later and New Snippet can't be deleted.")
+                    Text("Top is most important — nearest the input in results. Disable to hide a fallback without removing it. Tap Edit to reorder. Save for later and New Snippet can't be deleted. Create a Custom Action on the Custom Actions page.")
                 }
             }
             .navigationTitle("Fallbacks")
             .toolbar {
-                ToolbarItemGroup(placement: .topBarTrailing) {
+                ToolbarItem(placement: .topBarTrailing) {
                     EditButton()
-                    Button {
-                        creatingNew = true
-                    } label: {
-                        Image(systemName: "plus")
-                    }
-                    .accessibilityIdentifier("add-fallback-query")
-                    .accessibilityLabel("Add Fallback query")
                 }
             }
-            .sheet(isPresented: $creatingNew) {
-                CustomActionEditorView(query: nil) { draft in
-                    modelContext.insert(draft.makeModel())
-                }
-            }
-            .sheet(item: $editing) { query in
-                CustomActionEditorView(query: query) { draft in
-                    draft.apply(to: query)
+            // A Custom Action row taps into the shared editor (ADR 0021; issue #94) —
+            // the interim add/edit sheet is gone. Creating a new one lives on the
+            // Custom Actions Management page; this page only orders and disables.
+            .sheet(item: $editing) { action in
+                CustomActionEditorView(definition: action.definition, isNew: false) { def in
+                    action.apply(def)
                 }
             }
     }
@@ -175,111 +165,3 @@ private struct FallbackRowView: View {
     }
 }
 
-/// A plain value carrying the fields the interim Custom Action editor collects
-/// (name + URL template). All detected `{name}` slots are text Arguments; the real
-/// per-argument editor is the next slice (ADR 0021).
-struct CustomActionDraft {
-    var title: String = ""
-    var urlString: String = ""
-    var alias: String = ""
-
-    func makeModel() -> StoredCustomAction {
-        // Authored on the Fallbacks page, so it is a fallback-flagged Custom Action
-        // (CONTEXT.md → Fallback Action).
-        StoredCustomAction(title: trimmedTitle, urlString: trimmedURL, alias: normalizedAlias, isFallback: true)
-    }
-
-    func apply(to model: StoredCustomAction) {
-        model.title = trimmedTitle
-        model.urlString = trimmedURL
-        model.alias = normalizedAlias
-    }
-
-    private var trimmedTitle: String { title.trimmingCharacters(in: .whitespacesAndNewlines) }
-    private var trimmedURL: String { urlString.trimmingCharacters(in: .whitespacesAndNewlines) }
-
-    private var normalizedAlias: String? {
-        let trimmed = alias.trimmingCharacters(in: .whitespacesAndNewlines)
-        return trimmed.isEmpty ? nil : trimmed
-    }
-}
-
-/// The interim create/edit form for a Custom Action (ADR 0021). A templated URL is
-/// **required** — it must contain at least one `{name}` slot the breadcrumb fills
-/// (mirroring `CustomActionDefinition`), the inverse of the Quicklinks editor's rule.
-struct CustomActionEditorView: View {
-    @Environment(\.dismiss) private var dismiss
-
-    let query: StoredCustomAction?
-    let onSave: (CustomActionDraft) -> Void
-
-    @State private var draft: CustomActionDraft
-
-    init(query: StoredCustomAction?, onSave: @escaping (CustomActionDraft) -> Void) {
-        self.query = query
-        self.onSave = onSave
-        if let query {
-            _draft = State(initialValue: CustomActionDraft(
-                title: query.title,
-                urlString: query.urlString,
-                alias: query.alias ?? ""
-            ))
-        } else {
-            _draft = State(initialValue: CustomActionDraft())
-        }
-    }
-
-    private var hasPlaceholder: Bool {
-        Action.templateContainsPlaceholder(draft.urlString)
-    }
-
-    private var canSave: Bool {
-        !draft.title.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
-            && hasPlaceholder
-    }
-
-    var body: some View {
-        NavigationStack {
-            Form {
-                Section("Name") {
-                    TextField("Search the web", text: $draft.title)
-                        .accessibilityIdentifier("fallback-title-field")
-                }
-                Section {
-                    TextField("https://duckduckgo.com/?q={query}", text: $draft.urlString)
-                        .textInputAutocapitalization(.never)
-                        .autocorrectionDisabled()
-                        .accessibilityIdentifier("fallback-url-field")
-                } header: {
-                    Text("URL template")
-                } footer: {
-                    Text(hasPlaceholder
-                         ? "Replaces {…} with whatever you type."
-                         : "Add a {placeholder} — a Fallback query must consume your typed text.")
-                    .foregroundStyle(hasPlaceholder || draft.urlString.isEmpty
-                                     ? AnyShapeStyle(.secondary) : AnyShapeStyle(.red))
-                }
-                Section("Alias (optional)") {
-                    TextField("search", text: $draft.alias)
-                        .textInputAutocapitalization(.never)
-                        .autocorrectionDisabled()
-                        .accessibilityIdentifier("fallback-alias-field")
-                }
-            }
-            .navigationTitle(query == nil ? "New Fallback query" : "Edit Fallback query")
-            .toolbar {
-                ToolbarItem(placement: .topBarLeading) {
-                    Button("Cancel") { dismiss() }
-                }
-                ToolbarItem(placement: .topBarTrailing) {
-                    Button("Save") {
-                        onSave(draft)
-                        dismiss()
-                    }
-                    .disabled(!canSave)
-                    .accessibilityIdentifier("save-fallback-query")
-                }
-            }
-        }
-    }
-}

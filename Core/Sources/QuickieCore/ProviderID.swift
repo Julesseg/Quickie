@@ -12,6 +12,11 @@ import Foundation
 /// (there is no identity for a disable switch to key off).
 public enum ProviderID: String, CaseIterable, Equatable, Hashable, Sendable {
     case quicklinks
+    /// User-authored **Custom Actions** (CONTEXT.md → Custom Action; ADR 0021):
+    /// URL-template Actions whose `{name}` slots the breadcrumb fills. Its own
+    /// configurable kind — the authoring surface is the Custom Actions Management
+    /// page (issue #94); the Fallbacks page stays the fallback-region ordering surface.
+    case customActions = "custom-actions"
     case fallbacks
     case snippets
     /// The Pile (CONTEXT.md → Pile; ADR 0018): the saved-for-later queries,
@@ -27,6 +32,7 @@ public enum ProviderID: String, CaseIterable, Equatable, Hashable, Sendable {
     public var displayName: String {
         switch self {
         case .quicklinks: return "Quicklinks"
+        case .customActions: return "Custom Actions"
         case .fallbacks: return "Fallbacks"
         case .snippets: return "Snippets"
         case .pile: return "Pile"

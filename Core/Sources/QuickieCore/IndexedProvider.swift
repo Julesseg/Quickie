@@ -51,6 +51,7 @@ extension IndexedProvider {
         IndexedProvider(catalog: [
             .openSettings(),
             .openQuicklinksPage(),
+            .openCustomActionsPage(),
             .openFallbacksPage(),
             .searchFiles(),
             // The Settings command rows of the providers that never had a typed

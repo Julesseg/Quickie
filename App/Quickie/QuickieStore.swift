@@ -87,6 +87,12 @@ final class StoredCustomAction {
     /// authors fallback-flagged rows. Defaulted so a future non-fallback row (the
     /// next slice's Custom Actions page) migrates without a value.
     var isFallback: Bool = true
+    /// The **fill order** (CONTEXT.md → Custom Action; ADR 0021, issue #94): the
+    /// token names in the order the breadcrumb asks them, which the editor's
+    /// drag-to-reorder sets. Empty (the default, so existing rows migrate without a
+    /// value) means URL-appearance order — `CustomActionDefinition` reconciles it hard
+    /// against the live template on read.
+    var fillOrder: [String] = []
     var createdAt: Date
 
     init(
@@ -95,6 +101,7 @@ final class StoredCustomAction {
         urlString: String,
         alias: String? = nil,
         isFallback: Bool = true,
+        fillOrder: [String] = [],
         createdAt: Date = Date()
     ) {
         self.id = id
@@ -102,6 +109,7 @@ final class StoredCustomAction {
         self.urlString = urlString
         self.alias = alias
         self.isFallback = isFallback
+        self.fillOrder = fillOrder
         self.createdAt = createdAt
     }
 }

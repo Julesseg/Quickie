@@ -1,18 +1,19 @@
 import XCTest
 
-/// The UI-only acceptance criteria for the Custom Action unification slice
-/// (CONTEXT.md → Custom Action; ADR 0021) that can only be verified by driving the
-/// real app on a simulator: the interim Fallbacks add/edit sheet **reads and writes
-/// the new Custom Action storage**, and a **multi-slot** text template authored
-/// there runs through the breadcrumb — seed-and-commit sealing the first slot, the
-/// remaining slot collected, and the final commit opening the fully-formed URL.
+/// The UI-only acceptance criteria for the Custom Actions authoring surface
+/// (CONTEXT.md → Custom Action; ADR 0021, issue #94) that can only be verified by
+/// driving the real app on a simulator: the **live-mirroring editor** (typing the
+/// URL grows argument rows, renaming a row rewrites the URL token, drag sets the
+/// fill order, the fallback toggle gates on a slot, and Save is gated), and one
+/// **end-to-end** breadcrumb run of a multi-argument Custom Action authored through
+/// the new Management page.
 ///
-/// The token detection, percent-encoding fill, duplicate fan-out, and seed-and-commit
-/// *logic* are covered deterministically by QuickieCore's CustomActionTests; these
-/// prove the store + sheet + engine + capture wiring around them. Like the Shortcut
-/// tests, the actual URL open leaves the app (or no-ops in a simulator without the
-/// target app), so the reliable end-of-run signal is the breadcrumb dismissing —
-/// the capture completed rather than trapping the user mid-slot.
+/// The reconciliation, rename, reorder, and validation *logic* are covered
+/// deterministically by QuickieCore's CustomActionEditorTests; these prove the
+/// store + editor + engine + capture wiring around them. Like the Shortcut tests,
+/// the actual URL open leaves the app (or no-ops in a simulator without the target
+/// app), so the reliable end-of-run signal is the breadcrumb dismissing — the
+/// capture completed rather than trapping the user mid-slot.
 final class CustomActionUITests: XCTestCase {
 
     override func setUpWithError() throws {
@@ -29,40 +30,41 @@ final class CustomActionUITests: XCTestCase {
         return app
     }
 
-    /// Opens the Fallbacks page and authors a Custom Action through the interim
-    /// add sheet (name + URL template). The whole point of this slice's interim
-    /// authoring: the sheet writes to the new `StoredCustomAction` storage.
+    /// Opens the Custom Actions Management page by typing its name and tapping the
+    /// command row — the same typed route a user reaches it through.
     @MainActor
-    private func authorCustomAction(_ app: XCUIApplication, title: String, template: String) {
+    private func openCustomActionsPage(_ app: XCUIApplication) {
         let input = app.textFields["search-input"]
         XCTAssertTrue(input.waitForExistence(timeout: 30))
         input.tap()
-        input.typeText("fallbacks")
+        input.typeText("custom actions")
 
-        let command = app.buttons["builtin.fallbacks-page"]
-        XCTAssertTrue(command.waitForExistence(timeout: 5), "typing 'fallbacks' surfaces the Fallbacks command")
+        let command = app.buttons["builtin.custom-actions-page"]
+        XCTAssertTrue(command.waitForExistence(timeout: 5), "typing 'custom actions' surfaces the command row")
         command.tap()
-
-        let add = app.buttons["add-fallback-query"]
-        XCTAssertTrue(add.waitForExistence(timeout: 10), "the Fallbacks page offers an add button")
-        add.tap()
-
-        let titleField = app.textFields["fallback-title-field"]
-        XCTAssertTrue(titleField.waitForExistence(timeout: 5), "the interim editor sheet has a name field")
-        titleField.tap()
-        titleField.typeText(title)
-
-        let urlField = app.textFields["fallback-url-field"]
-        XCTAssertTrue(urlField.waitForExistence(timeout: 5))
-        urlField.tap()
-        urlField.typeText(template)
-
-        let save = app.buttons["save-fallback-query"]
-        XCTAssertTrue(save.waitForExistence(timeout: 5))
-        save.tap()
     }
 
-    /// Pops the pushed Fallbacks page back to the launcher.
+    /// Opens the editor for a brand-new Custom Action via the page's Add button.
+    @MainActor
+    private func openNewEditor(_ app: XCUIApplication) {
+        let add = app.buttons["add-custom-action"]
+        XCTAssertTrue(add.waitForExistence(timeout: 10), "the Custom Actions page offers an Add button")
+        add.tap()
+        XCTAssertTrue(app.textFields["custom-action-name-field"].waitForExistence(timeout: 5),
+                      "the editor sheet has a name field")
+    }
+
+    /// Types into a field, first clearing whatever it already holds.
+    @MainActor
+    private func setText(_ text: String, in field: XCUIElement) {
+        field.tap()
+        if let value = field.value as? String, !value.isEmpty {
+            field.typeText(String(repeating: XCUIKeyboardKey.delete.rawValue, count: value.count))
+        }
+        field.typeText(text)
+    }
+
+    /// Pops the pushed page back to the launcher.
     @MainActor
     private func goBackHome(_ app: XCUIApplication) {
         let back = app.navigationBars.buttons.firstMatch
@@ -70,33 +72,146 @@ final class CustomActionUITests: XCTestCase {
         back.tap()
     }
 
-    /// The interim add/edit sheet reads and writes the new Custom Action storage
-    /// (ADR 0021): a multi-slot template authored through it persists and appears as
-    /// a deletable row on the Fallbacks page alongside the seeded web search.
-    @MainActor
-    func testInterimSheetWritesMultiSlotCustomActionToStorage() throws {
-        let app = launchApp()
-        authorCustomAction(app, title: "Add Todo", template: "things:///add?title={title}&notes={notes}")
+    // MARK: - Editor: live slot detection + rename rewrites the token
 
-        // Back on the Fallbacks page after the sheet dismissed: the new row is listed
-        // (the sheet wrote to the new storage), next to the default web search.
-        let row = app.staticTexts["Add Todo"]
-        XCTAssertTrue(row.waitForExistence(timeout: 10), "the authored Custom Action is listed on the Fallbacks page")
-        XCTAssertTrue(app.staticTexts["Search the web"].exists, "the default web-search Custom Action is still seeded")
+    /// Typing the URL grows an argument row per `{name}` slot, deleting a token drops
+    /// its row immediately (hard mirror), and renaming a row rewrites the URL token
+    /// **live, per keystroke** — the whole point of the live-mirroring editor (ADR
+    /// 0021). URL edits are driven by backspacing from the end (the cursor sits there
+    /// after typing) and over-deleting to clear, so the field content is deterministic
+    /// without reading it back — a full-field re-type is unreliable when the URL shrinks.
+    @MainActor
+    func testEditorLiveMirrorsSlotsAndRenameRewritesToken() throws {
+        let app = launchApp()
+        openCustomActionsPage(app)
+        openNewEditor(app)
+
+        let urlField = app.textFields["custom-action-url-field"]
+        XCTAssertTrue(urlField.waitForExistence(timeout: 5))
+        urlField.tap()
+
+        // Two slots typed → two argument rows appear, mirroring the template.
+        urlField.typeText("things:///add?title={title}&notes={notes}")
+        XCTAssertTrue(app.textFields["custom-action-arg.title"].waitForExistence(timeout: 5),
+                      "the {title} slot mirrors an argument row")
+        XCTAssertTrue(app.textFields["custom-action-arg.notes"].waitForExistence(timeout: 5),
+                      "the {notes} slot mirrors an argument row")
+
+        // Backspace the "&notes={notes}" suffix from the end → the {notes} row drops
+        // immediately (hard mirror), no stashing.
+        let notesSuffix = "&notes={notes}"
+        urlField.typeText(String(repeating: XCUIKeyboardKey.delete.rawValue, count: notesSuffix.count))
+        XCTAssertTrue(app.textFields["custom-action-arg.title"].waitForExistence(timeout: 5))
+        XCTAssertFalse(app.textFields["custom-action-arg.notes"].exists,
+                       "deleting the token drops its row — no stashing")
+
+        // Clear the field (over-delete is safe) and type a numeric-slot URL: the row
+        // auto-labels, and typing a name into it rewrites the URL token live.
+        urlField.typeText(String(repeating: XCUIKeyboardKey.delete.rawValue, count: 60))
+        urlField.typeText("app://x?a={1}")
+        let numericRow = app.textFields["custom-action-arg.1"]
+        XCTAssertTrue(numericRow.waitForExistence(timeout: 5), "a numeric {1} slot appears as a row")
+        numericRow.tap()
+        numericRow.typeText("title")
+
+        // The token in the URL is rewritten in place, and the row now keys off the
+        // chosen name.
+        XCTAssertTrue(app.textFields["custom-action-arg.title"].waitForExistence(timeout: 5),
+                      "renaming the row rewrites the URL token live")
+        let url = app.textFields["custom-action-url-field"].value as? String ?? ""
+        XCTAssertTrue(url.contains("{title}"), "the URL token was rewritten to {title} (was: \(url))")
+        XCTAssertFalse(url.contains("{1}"), "the old numeric token is gone (was: \(url))")
     }
 
-    /// A multi-slot text template authored via the interim sheet runs through the
-    /// breadcrumb (ADR 0021): selecting it from the fallback region seeds-and-commits
-    /// the typed query as the first slot and continues to the second, and committing
-    /// the last slot completes the run (opening the fully-formed URL at the edge).
+    // MARK: - Editor: Save gating + slot-less Quicklink redirect
+
+    /// Save is gated on a valid definition, and a slot-less URL is redirected toward
+    /// Quicklinks rather than saved (ADR 0021).
     @MainActor
-    func testMultiSlotCustomActionRunsThroughBreadcrumb() throws {
+    func testSaveIsGatedAndSlotlessURLRedirectsToQuicklinks() throws {
         let app = launchApp()
-        authorCustomAction(app, title: "Add Todo", template: "things:///add?title={title}&notes={notes}")
+        openCustomActionsPage(app)
+        openNewEditor(app)
+
+        let save = app.buttons["save-custom-action"]
+        XCTAssertTrue(save.waitForExistence(timeout: 5))
+        XCTAssertFalse(save.isEnabled, "Save is disabled with an empty name and no URL")
+
+        // A slot-less URL: the redirect hint shows, and Save stays disabled.
+        setText("Docs", in: app.textFields["custom-action-name-field"])
+        setText("https://example.com", in: app.textFields["custom-action-url-field"])
+        XCTAssertTrue(app.staticTexts["custom-action-quicklink-redirect"].waitForExistence(timeout: 5),
+                      "a slot-less URL is gently redirected toward Quicklinks")
+        XCTAssertFalse(save.isEnabled, "a slot-less URL can't be saved as a Custom Action")
+
+        // Add a slot → the definition validates and Save enables.
+        setText("https://example.com/search?q={q}", in: app.textFields["custom-action-url-field"])
+        XCTAssertTrue(app.textFields["custom-action-arg.q"].waitForExistence(timeout: 5))
+        XCTAssertTrue(save.isEnabled, "a named, slotted, schemed URL validates for Save")
+    }
+
+    // MARK: - Editor: fallback toggle gating
+
+    /// The fallback toggle appears only once the URL carries a slot (its first
+    /// argument is what a fallback seeds) — with no slot there is nothing to gate on,
+    /// so the toggle isn't offered (ADR 0021).
+    @MainActor
+    func testFallbackToggleAppearsOnlyWithASlot() throws {
+        let app = launchApp()
+        openCustomActionsPage(app)
+        openNewEditor(app)
+
+        // No slot yet → no fallback toggle.
+        setText("https://example.com", in: app.textFields["custom-action-url-field"])
+        XCTAssertFalse(app.switches["custom-action-fallback-toggle"].exists,
+                       "with no slot there is no first argument to seed, so no fallback toggle")
+
+        // Add a free-text slot → the toggle is offered.
+        setText("https://example.com/?q={q}", in: app.textFields["custom-action-url-field"])
+        XCTAssertTrue(app.switches["custom-action-fallback-toggle"].waitForExistence(timeout: 5),
+                      "a free-text first argument enables the fallback toggle")
+    }
+
+    // Note on drag-to-reorder: the fill-order reorder *logic* — that a drag sets the
+    // breadcrumb's asking order, decoupled from URL order, and persists across
+    // template edits — is covered deterministically by QuickieCore's
+    // CustomActionEditorTests (`reorderSetsAskingOrder`,
+    // `reorderPersistsAcrossTemplateEdits`, `fillOrderDrivesAskingOrderNotURLOrder`).
+    // The edit-mode reorder affordance (`custom-action-reorder`) is present in the
+    // editor; a raw drag gesture on the reorder grip is too environment-sensitive to
+    // assert reliably here, so it isn't driven as an XCUITest.
+
+    // MARK: - End-to-end: a multi-argument Custom Action runs through the breadcrumb
+
+    /// Authoring a multi-slot, fallback-flagged Custom Action through the new editor
+    /// and running it: selecting it from the fallback region seeds-and-commits the
+    /// typed query as the first slot and continues to the second, and committing the
+    /// last slot completes the run — opening the fully-formed URL at the edge.
+    @MainActor
+    func testMultiArgumentCustomActionRunsEndToEnd() throws {
+        let app = launchApp()
+        openCustomActionsPage(app)
+        openNewEditor(app)
+
+        setText("Add Todo", in: app.textFields["custom-action-name-field"])
+        setText("things:///add?title={title}&notes={notes}", in: app.textFields["custom-action-url-field"])
+
+        // Flag it as a fallback so the typed query seeds its first slot.
+        let toggle = app.switches["custom-action-fallback-toggle"]
+        XCTAssertTrue(toggle.waitForExistence(timeout: 5))
+        flip(toggle, to: true)
+
+        let save = app.buttons["save-custom-action"]
+        XCTAssertTrue(save.isEnabled, "the authored multi-slot fallback validates for Save")
+        save.tap()
+
+        // The new row is listed on the page (the editor wrote to storage), then pop
+        // back to the launcher.
+        XCTAssertTrue(app.staticTexts["Add Todo"].waitForExistence(timeout: 10),
+                      "the authored Custom Action is listed on the Management page")
         goBackHome(app)
 
-        // Type a query and pick the fallback: a non-matching query surfaces the
-        // fallback region, where the authored Custom Action rides.
+        // Type a query and pick the fallback row.
         let input = app.textFields["search-input"]
         XCTAssertTrue(input.waitForExistence(timeout: 10), "the launcher input is back after popping the page")
         input.tap()
@@ -109,22 +224,38 @@ final class CustomActionUITests: XCTestCase {
         row.tap()
 
         // Seed-and-commit sealed the first slot ("buy milk" → title) and the
-        // breadcrumb continues at the second slot — a multi-slot fallback does *not*
-        // finish in one tap. The sealed first pill and the still-present capture
-        // field together prove it continued rather than completing or trapping.
-        let firstPill = app.buttons["pill-0"]
-        XCTAssertTrue(firstPill.waitForExistence(timeout: 5), "the typed query seeded the first slot as a sealed pill")
+        // breadcrumb continues at the second slot — a multi-slot fallback does not
+        // finish in one tap.
+        XCTAssertTrue(app.buttons["pill-0"].waitForExistence(timeout: 5),
+                      "the typed query seeded the first slot as a sealed pill")
         let captureField = app.textFields["capture-input"]
-        XCTAssertTrue(captureField.waitForExistence(timeout: 5), "a multi-slot fallback continues collecting the next slot")
+        XCTAssertTrue(captureField.waitForExistence(timeout: 5),
+                      "a multi-slot fallback continues collecting the next slot")
 
         // Fill the second slot and commit it (the final step): the run completes and
-        // opens the fully-formed URL at the platform edge, dismissing the breadcrumb.
+        // opens the fully-formed URL, dismissing the breadcrumb.
         captureField.tap()
         captureField.typeText("and eggs\n")
-
         XCTAssertTrue(
             captureField.waitForNonExistence(timeout: 5),
-            "committing the last slot completes the Custom Action run rather than trapping the user mid-slot"
+            "committing the last slot completes the run rather than trapping the user mid-slot"
         )
+    }
+
+    /// Flips a SwiftUI Toggle: tapping the row-spanning switch's center misses the
+    /// control, so tap the nested switch when the OS exposes one, else a trailing-edge
+    /// coordinate tap — the same approach as ProviderDisableUITests.
+    @MainActor
+    private func flip(_ toggle: XCUIElement, to on: Bool) {
+        let landed = NSPredicate(format: "value == %@", on ? "1" : "0")
+        if (toggle.value as? String) == (on ? "1" : "0") { return }
+        let inner = toggle.switches.firstMatch
+        if inner.exists { inner.tap() } else {
+            toggle.coordinate(withNormalizedOffset: CGVector(dx: 0.95, dy: 0.5)).tap()
+        }
+        if XCTWaiter.wait(for: [XCTNSPredicateExpectation(predicate: landed, object: toggle)], timeout: 3) != .completed {
+            toggle.coordinate(withNormalizedOffset: CGVector(dx: 0.95, dy: 0.5)).tap()
+            _ = XCTWaiter.wait(for: [XCTNSPredicateExpectation(predicate: landed, object: toggle)], timeout: 3)
+        }
     }
 }
