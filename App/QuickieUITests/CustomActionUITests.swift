@@ -72,21 +72,26 @@ final class CustomActionUITests: XCTestCase {
         back.tap()
     }
 
-    /// The fallback toggle, scrolled into view first. Typing the URL leaves the
+    /// The fallback toggle, brought reliably into view. Typing the URL leaves the
     /// keyboard up over the lower form, and a multi-slot form's rows push the toggle
-    /// below the fold — SwiftUI's `Form` then drops it from the accessibility tree.
-    /// Swipe up **on the name field** (a known form element in the visible upper area,
-    /// never under the keyboard) so the gesture reliably scrolls the form — which also
-    /// dismisses the keyboard (`.scrollDismissesKeyboard(.immediately)`) — bringing the
-    /// toggle into existence. Swiping on the app as a whole was flaky: the gesture
-    /// could land on the keyboard and never scroll (issue #96).
+    /// below the fold — SwiftUI's `Form` then drops it from the accessibility tree,
+    /// and a swipe can just land on the keyboard and never scroll. So first **dismiss
+    /// the keyboard** by submitting the focused URL field — a single-line SwiftUI
+    /// `TextField` resigns on Return without inserting a newline — which uncovers the
+    /// lower form; then scroll the remainder into view if the form is still long
+    /// (issue #96).
     @MainActor
     private func revealFallbackToggle(_ app: XCUIApplication) -> XCUIElement {
         let toggle = app.switches["custom-action-fallback-toggle"]
-        let anchor = app.textFields["custom-action-name-field"]
+        if toggle.exists { return toggle }
+        let url = app.textFields["custom-action-url-field"]
+        if url.exists {
+            url.tap()
+            app.typeText("\n")
+        }
         for _ in 0..<6 {
             if toggle.exists { return toggle }
-            if anchor.exists { anchor.swipeUp() } else { app.swipeUp() }
+            app.swipeUp()
         }
         _ = toggle.waitForExistence(timeout: 3)
         return toggle
