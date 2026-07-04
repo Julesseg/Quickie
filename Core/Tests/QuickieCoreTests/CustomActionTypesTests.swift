@@ -126,6 +126,29 @@ struct CustomActionTypesTests {
                 == .completed(.openURL(URL(string: "things:///add?when=04/07/2026")!)))
     }
 
+    @Test("a date format override is trimmed of edge whitespace before formatting")
+    func dateFormatOverrideTrimsEdgeWhitespace() {
+        // The editor keeps the raw text for typing fidelity, but stray leading/trailing
+        // whitespace must never reach DateFormatter and leak a literal space into the
+        // filled URL. Internal spaces (a legitimate part of a format) are preserved.
+        let action = CustomActionDefinition(
+            name: "When", template: "app://x?d={d}",
+            argumentSpecs: ["d": ArgumentSpec(type: .date, dateOnlyFormat: "  yyyy-MM-dd  ")]
+        ).makeAction(id: "d")!
+        var s = MultiStepAction(action: action)
+        #expect(s.commit(.date(date(2026, 7, 4), hasTime: false))
+                == .completed(.openURL(URL(string: "app://x?d=2026-07-04")!)))
+
+        // An all-whitespace override formats to nothing, so it falls back to the ISO
+        // default rather than producing a blank date value.
+        #expect(ArgumentSpec(type: .date, timedFormat: "   ").dateFormat(hasTime: true)
+                == ArgumentSpec.defaultTimedFormat)
+
+        // An internal space is kept — the trim is edge-only.
+        #expect(ArgumentSpec(type: .date, dateOnlyFormat: " MMM d yyyy ").dateFormat(hasTime: false)
+                == "MMM d yyyy")
+    }
+
     // MARK: - Validation additions
 
     @Test("Save is gated on non-empty options for every choice argument")

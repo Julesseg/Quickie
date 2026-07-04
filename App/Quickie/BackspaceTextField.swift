@@ -51,6 +51,11 @@ struct BackspaceTextField: UIViewRepresentable {
             configureAccessory(field, context)
             if field.isFirstResponder { field.reloadInputViews() }
         }
+        // Keep the number pad's submit-button title in step with the return key even
+        // when the keyboard itself doesn't change — two consecutive numeric steps can
+        // differ only in whether the current one is the final step ("Done" vs "Next").
+        // A live title change updates in place, so no input-view reload is needed.
+        field.numberSubmitItem?.title = returnKey == .done ? "Done" : "Next"
         field.onBackspaceWhenEmpty = onBackspaceWhenEmpty
         context.coordinator.onSubmit = onSubmit
     }
@@ -62,6 +67,7 @@ struct BackspaceTextField: UIViewRepresentable {
     private func configureAccessory(_ field: EmptyBackspaceTextField, _ context: Context) {
         guard keyboardType == .numberPad else {
             field.inputAccessoryView = nil
+            field.numberSubmitItem = nil
             return
         }
         let toolbar = UIToolbar()
@@ -78,6 +84,9 @@ struct BackspaceTextField: UIViewRepresentable {
             submit,
         ]
         field.inputAccessoryView = toolbar
+        // Held so a later step (same keyboard, different return key) can refresh the
+        // title without rebuilding the whole bar.
+        field.numberSubmitItem = submit
     }
 
     func makeCoordinator() -> Coordinator {
@@ -115,6 +124,9 @@ struct BackspaceTextField: UIViewRepresentable {
 /// for detecting the gesture.
 final class EmptyBackspaceTextField: UITextField {
     var onBackspaceWhenEmpty: (() -> Void)?
+    /// The number pad's accessory-bar submit button, held so its title can track the
+    /// return key across steps that share the numeric keyboard (issue #96).
+    weak var numberSubmitItem: UIBarButtonItem?
 
     override func deleteBackward() {
         if (text ?? "").isEmpty {

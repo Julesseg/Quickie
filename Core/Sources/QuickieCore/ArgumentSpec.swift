@@ -61,9 +61,17 @@ public struct ArgumentSpec: Equatable, Sendable, Codable {
     }
 
     /// The output format a picked date serializes with, branched on whether the user
-    /// included a time: the matching override when set, else the ISO default.
+    /// included a time: the matching override when set, else the ISO default. The
+    /// override is trimmed of leading/trailing whitespace before use — an editor field
+    /// keeps the raw text for typing fidelity (a format may carry *internal* spaces,
+    /// e.g. `MMM d yyyy`), but stray edge whitespace must never reach `DateFormatter`
+    /// and leak a literal space into the filled URL, and an all-whitespace override
+    /// falls back to the default rather than formatting to blank.
     public func dateFormat(hasTime: Bool) -> String {
-        if hasTime { return timedFormat ?? Self.defaultTimedFormat }
-        return dateOnlyFormat ?? Self.defaultDateOnlyFormat
+        let override = hasTime ? timedFormat : dateOnlyFormat
+        if let trimmed = override?.trimmingCharacters(in: .whitespacesAndNewlines), !trimmed.isEmpty {
+            return trimmed
+        }
+        return hasTime ? Self.defaultTimedFormat : Self.defaultDateOnlyFormat
     }
 }
