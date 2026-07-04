@@ -2,28 +2,33 @@ import SwiftUI
 import SwiftData
 import QuickieCore
 
-/// The unified **Fallbacks** page (CONTEXT.md → Fallback list; ADR 0013): one
-/// user-ordered list of every Fallback Action — Fallback queries plus the two
-/// permanent built-ins, Save for later and New Snippet. It reads
+/// The unified **Fallbacks** page (CONTEXT.md → Fallback list; ADR 0021): one
+/// user-ordered list of every Fallback Action — fallback-flagged Custom Actions
+/// plus the two permanent built-ins, Save for later and New Snippet. It reads
 /// most-important-first (top = nearest the input/thumb in results). Rows can be
 /// reordered, each can be **disabled** (kept in the list, hidden from results),
-/// and only Fallback queries can be deleted — Save for later and New Snippet are
+/// and only Custom Actions can be deleted — Save for later and New Snippet are
 /// permanent (disable-only). Reached as the typed "Fallbacks" command row and
-/// presented full-screen.
+/// presented full-screen. This is the interim ordering/disable *and* authoring
+/// surface; the dedicated Custom Actions editor + Management page are the next slice.
 struct FallbacksView: View {
     @Environment(\.modelContext) private var modelContext
-    @Query(sort: \StoredFallbackQuery.createdAt) private var queries: [StoredFallbackQuery]
+    @Query(sort: \StoredCustomAction.createdAt) private var customActions: [StoredCustomAction]
 
     let store: FallbacksStore
 
-    @State private var editing: StoredFallbackQuery?
+    @State private var editing: StoredCustomAction?
     @State private var creatingNew = false
 
-    /// The display rows, in the user's reconciled order (most-important-first):
-    /// each persisted id resolved to its Fallback query or built-in.
+    /// The display rows, in the user's reconciled order (most-important-first): each
+    /// persisted id resolved to its fallback-flagged Custom Action or built-in. Only
+    /// fallback-flagged Custom Actions belong on this ordering/disable surface
+    /// (CONTEXT.md → Fallback list); a future non-fallback one (the next slice's
+    /// Custom Actions page) is filtered out here.
     private var rows: [FallbackRow] {
-        let byID = Dictionary(uniqueKeysWithValues: queries.map { ($0.id, $0) })
-        return store.resolvedOrder(for: queries.map(\.id)).compactMap { id in
+        let fallbackCustomActions = customActions.filter(\.isFallback)
+        let byID = Dictionary(uniqueKeysWithValues: fallbackCustomActions.map { ($0.id, $0) })
+        return store.resolvedOrder(for: fallbackCustomActions.map(\.id)).compactMap { id in
             if let query = byID[id] { return .query(query) }
             switch id {
             case FallbacksStore.saveForLaterID: return .builtin(id: id, title: "Save for later")
@@ -49,7 +54,7 @@ struct FallbacksView: View {
                             onEdit: { if case let .query(q) = row { editing = q } }
                         )
                         // Built-ins (Save for later / New Snippet) are permanent
-                        // — only Fallback queries can be deleted.
+                        // — only Custom Actions can be deleted.
                         .deleteDisabled(!row.isQuery)
                     }
                     .onMove(perform: move)
@@ -72,12 +77,12 @@ struct FallbacksView: View {
                 }
             }
             .sheet(isPresented: $creatingNew) {
-                FallbackQueryEditorView(query: nil) { draft in
+                CustomActionEditorView(query: nil) { draft in
                     modelContext.insert(draft.makeModel())
                 }
             }
             .sheet(item: $editing) { query in
-                FallbackQueryEditorView(query: query) { draft in
+                CustomActionEditorView(query: query) { draft in
                     draft.apply(to: query)
                 }
             }
@@ -91,7 +96,7 @@ struct FallbacksView: View {
         store.setOrder(ids)
     }
 
-    /// Deletes only Fallback queries — Save for later / New Snippet refuse
+    /// Deletes only Custom Actions — Save for later / New Snippet refuse
     /// deletion (CONTEXT.md → Fallback list). A swipe over a built-in row is a
     /// no-op.
     private func delete(_ offsets: IndexSet) {
@@ -104,10 +109,10 @@ struct FallbacksView: View {
     }
 }
 
-/// One entry in the Fallback list: a deletable Fallback query, or a permanent
-/// built-in (Save for later / New Snippet).
+/// One entry in the Fallback list: a deletable fallback-flagged Custom Action, or a
+/// permanent built-in (Save for later / New Snippet).
 enum FallbackRow: Identifiable {
-    case query(StoredFallbackQuery)
+    case query(StoredCustomAction)
     case builtin(id: String, title: String)
 
     var id: String {
@@ -138,7 +143,7 @@ enum FallbackRow: Identifiable {
 }
 
 /// A single Fallbacks-page row: title (+ template for a query), an enable/disable
-/// toggle, and — for a Fallback query — a tap into its editor.
+/// toggle, and — for a Custom Action — a tap into its editor.
 private struct FallbackRowView: View {
     let row: FallbackRow
     let isDisabled: Bool
@@ -170,17 +175,21 @@ private struct FallbackRowView: View {
     }
 }
 
-/// A plain value carrying the fields the Fallback query editor collects.
-struct FallbackQueryDraft {
+/// A plain value carrying the fields the interim Custom Action editor collects
+/// (name + URL template). All detected `{name}` slots are text Arguments; the real
+/// per-argument editor is the next slice (ADR 0021).
+struct CustomActionDraft {
     var title: String = ""
     var urlString: String = ""
     var alias: String = ""
 
-    func makeModel() -> StoredFallbackQuery {
-        StoredFallbackQuery(title: trimmedTitle, urlString: trimmedURL, alias: normalizedAlias)
+    func makeModel() -> StoredCustomAction {
+        // Authored on the Fallbacks page, so it is a fallback-flagged Custom Action
+        // (CONTEXT.md → Fallback Action).
+        StoredCustomAction(title: trimmedTitle, urlString: trimmedURL, alias: normalizedAlias, isFallback: true)
     }
 
-    func apply(to model: StoredFallbackQuery) {
+    func apply(to model: StoredCustomAction) {
         model.title = trimmedTitle
         model.urlString = trimmedURL
         model.alias = normalizedAlias
@@ -195,28 +204,28 @@ struct FallbackQueryDraft {
     }
 }
 
-/// The create/edit form for a Fallback query. A templated URL is **required** —
-/// it must contain a `{placeholder}` the typed text fills (mirroring
-/// `Action.fallbackQuery`), the inverse of the Quicklinks editor's rule.
-struct FallbackQueryEditorView: View {
+/// The interim create/edit form for a Custom Action (ADR 0021). A templated URL is
+/// **required** — it must contain at least one `{name}` slot the breadcrumb fills
+/// (mirroring `CustomActionDefinition`), the inverse of the Quicklinks editor's rule.
+struct CustomActionEditorView: View {
     @Environment(\.dismiss) private var dismiss
 
-    let query: StoredFallbackQuery?
-    let onSave: (FallbackQueryDraft) -> Void
+    let query: StoredCustomAction?
+    let onSave: (CustomActionDraft) -> Void
 
-    @State private var draft: FallbackQueryDraft
+    @State private var draft: CustomActionDraft
 
-    init(query: StoredFallbackQuery?, onSave: @escaping (FallbackQueryDraft) -> Void) {
+    init(query: StoredCustomAction?, onSave: @escaping (CustomActionDraft) -> Void) {
         self.query = query
         self.onSave = onSave
         if let query {
-            _draft = State(initialValue: FallbackQueryDraft(
+            _draft = State(initialValue: CustomActionDraft(
                 title: query.title,
                 urlString: query.urlString,
                 alias: query.alias ?? ""
             ))
         } else {
-            _draft = State(initialValue: FallbackQueryDraft())
+            _draft = State(initialValue: CustomActionDraft())
         }
     }
 

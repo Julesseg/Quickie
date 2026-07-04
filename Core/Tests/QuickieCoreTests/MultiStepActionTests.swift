@@ -96,25 +96,51 @@ struct MultiStepActionTests {
         #expect(session.current == action.arguments[2])
     }
 
-    @Test("backspace on an empty input pops the last pill and returns to that step")
-    func backspacePopsLastPill() {
+    @Test("backspace on an empty input steps back onto the previous pill, keeping its value")
+    func backspaceStepsBackKeepingValue() {
         let action = sample()
         var session = MultiStepAction(action: action)
         _ = session.commit(.text("a"))
-        _ = session.commit(.text("b"))
+        _ = session.commit(.text("b")) // collecting the third step (index 2), pills [a, b]
 
         let step = session.backspaceOnEmpty()
 
         #expect(step == .collecting)
-        #expect(session.pills == [.text("a")])
+        // The pill is kept, not popped — the cursor steps back onto it to re-edit,
+        // and exposes its value so the input can seed with it.
+        #expect(session.pills == [.text("a"), .text("b")])
         #expect(session.current == action.arguments[1])
+        #expect(session.currentValue == .text("b"))
+
+        // Re-committing replaces it in place and resumes at the first unfilled step,
+        // the later pills untouched — the same as editing a pill.
+        #expect(session.commit(.text("B")) == .collecting)
+        #expect(session.pills == [.text("a"), .text("B")])
+        #expect(session.current == action.arguments[2])
     }
 
-    @Test("backspace with no pills abandons the capture back to normal search")
-    func backspaceWithNoPillsAbandons() {
+    @Test("backspace at the first step, with nothing earlier, abandons the capture")
+    func backspaceAtFirstStepAbandons() {
         var session = MultiStepAction(action: sample())
-
+        // Fresh session, cursor on the first step: nothing earlier to step back to.
         #expect(session.backspaceOnEmpty() == .abandoned)
+
+        // Even after re-editing back to the first pill, backspace there abandons.
+        _ = session.commit(.text("a"))
+        session.editPill(at: 0)
+        #expect(session.backspaceOnEmpty() == .abandoned)
+    }
+
+    @Test("currentValue is the committed value of the step under the cursor, else nil")
+    func currentValueReflectsCursor() {
+        let action = sample()
+        var session = MultiStepAction(action: action)
+        // At a fresh, unfilled step there is no value to seed.
+        #expect(session.currentValue == nil)
+        _ = session.commit(.text("a"))
+        #expect(session.currentValue == nil) // now on the second, still unfilled
+        session.editPill(at: 0)
+        #expect(session.currentValue == .text("a")) // back on the filled first pill
     }
 
     @Test("steps exposes every Argument from the start with its value and the cursor")

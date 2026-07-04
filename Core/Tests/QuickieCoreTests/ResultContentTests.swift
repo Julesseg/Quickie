@@ -30,14 +30,14 @@ struct ResultContentTests {
         #expect(link.content == .url)
     }
 
-    @Test("a Fallback query result declares url content")
-    func fallbackQueryContentIsURL() {
-        let search = Action.fallbackQuery(
-            id: "web-search",
-            title: "Search the web",
-            template: "https://duckduckgo.com/?q={query}"
-        )
-        #expect(search?.content == .url)
+    @Test("a Custom Action carries no content — a hand-off, not a value")
+    func customActionHasNoContent() {
+        // A Custom Action's URL only exists once its slots are filled through the
+        // breadcrumb, so — like a Shortcut hand-off — it carries no pre-resolved
+        // value to copy or share (ADR 0021): `.none` content, no secondary actions.
+        let search = Action.webSearchFallback()
+        #expect(search.content == .none)
+        #expect(secondaryActions(for: search.content) == [])
     }
 
     @Test("a file declares file content, carrying its bookmark + relative path")

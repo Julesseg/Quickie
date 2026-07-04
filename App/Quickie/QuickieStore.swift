@@ -29,13 +29,10 @@ enum AppGroup {
 
 /// A user-saved Quicklink: a stored *static* URL that opens directly (CONTEXT.md
 /// → Quicklink; ADR 0013). It carries no `{placeholder}` and consumes no typed
-/// text — the query-consuming behaviour now lives on `StoredFallbackQuery`. The
-/// app persists these in SwiftData and rebuilds the in-memory index from them on
-/// launch (ADR 0006: the store is the source of truth, the index a derived
-/// cache). Quickie ships no default Quicklinks.
-///
-/// The former `isFallback` flag is gone (its rows migrate to Fallback queries —
-/// see `migrateToFallbackQueries`); SwiftData drops the column automatically.
+/// text — the query-consuming, templated behaviour now lives on
+/// `StoredCustomAction`. The app persists these in SwiftData and rebuilds the
+/// in-memory index from them on launch (ADR 0006: the store is the source of truth,
+/// the index a derived cache). Quickie ships no default Quicklinks.
 @Model
 final class StoredQuicklink {
     /// A stable, collision-free identity assigned at creation and persisted with
@@ -64,24 +61,32 @@ final class StoredQuicklink {
     }
 }
 
-/// A user-saved Fallback query: a stored URL template that **requires** a
-/// `{placeholder}` and consumes the typed text as its query (CONTEXT.md →
-/// Fallback query; ADR 0013). One kind of Fallback Action, managed on the
-/// unified Fallbacks page alongside Save for later / New Snippet. Web search is just a
-/// default-seeded, fully deletable instance of this (`migrateToFallbackQueries`
-/// seeds it on first launch).
+/// A user-saved **Custom Action** (CONTEXT.md → Custom Action; ADR 0021): a stored
+/// URL template that **requires** at least one `{name}` slot the breadcrumb fills,
+/// opening the filled URL on commit. It absorbs the retired Fallback query
+/// wholesale — web search is a default-seeded, fully deletable, fallback-flagged
+/// instance (`seedDefaultCustomActions` seeds it on first launch). Managed this
+/// slice on the interim Fallbacks page (the real editor + Custom Actions Management
+/// page are the next slice); its fallback-flagged rows are ordered/disabled there
+/// alongside Save for later / New Snippet.
 ///
 /// `id` is a stable identity assigned at creation — the key the Fallbacks page's
 /// persisted order and disabled set reference, and the id of the Action built
 /// from this row, so reordering/disabling survives relaunches.
 @Model
-final class StoredFallbackQuery {
+final class StoredCustomAction {
     var id: String
     var title: String
-    /// The URL template; always contains at least one `{placeholder}` (the
-    /// editor enforces it, mirroring `Action.fallbackQuery`).
+    /// The URL template; always contains at least one `{name}` slot (the editor
+    /// enforces it, mirroring `CustomActionDefinition`).
     var urlString: String
     var alias: String?
+    /// Whether this is a **Fallback** Custom Action (CONTEXT.md → Fallback Action):
+    /// surfaced in the bottom region, its selection seeding the typed query as
+    /// Argument 1. Web search seeds with this on; the interim Fallbacks sheet
+    /// authors fallback-flagged rows. Defaulted so a future non-fallback row (the
+    /// next slice's Custom Actions page) migrates without a value.
+    var isFallback: Bool = true
     var createdAt: Date
 
     init(
@@ -89,12 +94,14 @@ final class StoredFallbackQuery {
         title: String,
         urlString: String,
         alias: String? = nil,
+        isFallback: Bool = true,
         createdAt: Date = Date()
     ) {
         self.id = id
         self.title = title
         self.urlString = urlString
         self.alias = alias
+        self.isFallback = isFallback
         self.createdAt = createdAt
     }
 }
@@ -191,7 +198,7 @@ final class StoredNote {
 /// CloudKit off for now (M1 is fully local — ADR 0006 / ROADMAP).
 enum QuickieStore {
     static let container: ModelContainer = {
-        let schema = Schema([StoredQuicklink.self, StoredFallbackQuery.self, StoredSnippet.self, StoredPileEntry.self, StoredNote.self])
+        let schema = Schema([StoredQuicklink.self, StoredCustomAction.self, StoredSnippet.self, StoredPileEntry.self, StoredNote.self])
 
         // Only ask SwiftData for the shared App Group container when this build
         // is actually entitled for it — `containerURL(forSecurityApplication…)`
@@ -221,7 +228,7 @@ enum QuickieStore {
     /// idempotent and a capture assertion can't pass on a stale row from a
     /// previous run.
     static func inMemoryContainer() -> ModelContainer {
-        let schema = Schema([StoredQuicklink.self, StoredFallbackQuery.self, StoredSnippet.self, StoredPileEntry.self, StoredNote.self])
+        let schema = Schema([StoredQuicklink.self, StoredCustomAction.self, StoredSnippet.self, StoredPileEntry.self, StoredNote.self])
         let configuration = ModelConfiguration(schema: schema, isStoredInMemoryOnly: true, cloudKitDatabase: .none)
         do {
             return try ModelContainer(for: schema, configurations: [configuration])
@@ -231,60 +238,52 @@ enum QuickieStore {
     }
 
     private static let defaultWebSearchTemplate = "https://duckduckgo.com/?q={query}"
-    private static let migrationFlagKey = "store.didMigrateToFallbackQueries.v1"
+    /// Bumped to `.v2` for the Custom Action unification (ADR 0021): the retired
+    /// `StoredFallbackQuery` table is gone, so a fresh seed of the web-search
+    /// **Custom Action** must run once against the new storage even on a build that
+    /// recorded the old split migration as done.
+    private static let seedFlagKey = "store.didSeedCustomActions.v2"
 
-    /// Exposed so the UI-testing launch path can clear the one-time migration flag
-    /// and let each fresh in-memory store re-seed the default web-search Fallback.
-    static var migrationFlagKeyForTesting: String { migrationFlagKey }
+    /// Exposed so the UI-testing launch path can clear the one-time seed flag and
+    /// let each fresh in-memory store re-seed the default web-search Custom Action.
+    static var migrationFlagKeyForTesting: String { seedFlagKey }
 
-    /// One-time data migration for the Quicklink / Fallback query split (ADR
-    /// 0013), run at launch and guarded by a flag so it happens exactly once.
-    /// Former placeholder-Quicklinks (the only ones that could be Fallbacks)
-    /// become `StoredFallbackQuery` rows; static ones stay Quicklinks. On a store
-    /// with no Fallback queries it also seeds the default, fully deletable
-    /// web-search query — so first launch and a clean migration both leave the
-    /// user able to search, without privileging web search as a built-in.
+    /// Seeds the default, fully deletable web-search **Custom Action** on first
+    /// launch (CONTEXT.md → Custom Action; ADR 0021), run at launch and guarded by a
+    /// flag so it happens exactly once. Web search is an ordinary, deletable,
+    /// fallback-flagged one-slot Custom Action — no longer a privileged built-in —
+    /// so the user can search out of the box while remaining free to delete or edit
+    /// it. No data migration: the retired Fallback query storage is pre-release, so
+    /// there is nothing to convert (ADR 0021).
     ///
-    /// Idempotent and defensive: it never deletes a static link, and the seed is
-    /// gated on "no Fallback queries *and* never migrated", so a user who later
-    /// deletes web search doesn't get it re-seeded.
+    /// Idempotent and defensive: the seed is gated on "no Custom Actions *and* never
+    /// seeded", so a user who later deletes web search doesn't get it re-seeded.
     @MainActor
-    static func migrateToFallbackQueries(
+    static func seedDefaultCustomActions(
         in context: ModelContext,
         defaults: UserDefaults = SignalsStore.sharedDefaults
     ) {
-        guard !defaults.bool(forKey: migrationFlagKey) else { return }
+        guard !defaults.bool(forKey: seedFlagKey) else { return }
 
-        let placeholderLinks = (try? context.fetch(FetchDescriptor<StoredQuicklink>())) ?? []
-        for link in placeholderLinks where Action.templateContainsPlaceholder(link.urlString) {
-            context.insert(StoredFallbackQuery(
-                title: link.title,
-                urlString: link.urlString,
-                alias: link.alias,
-                createdAt: link.createdAt
-            ))
-            context.delete(link)
-        }
-
-        let existingQueries = (try? context.fetchCount(FetchDescriptor<StoredFallbackQuery>())) ?? 0
-        if existingQueries == 0 {
-            context.insert(StoredFallbackQuery(
+        let existing = (try? context.fetchCount(FetchDescriptor<StoredCustomAction>())) ?? 0
+        if existing == 0 {
+            context.insert(StoredCustomAction(
                 title: "Search the web",
                 urlString: defaultWebSearchTemplate,
-                alias: "search"
+                alias: "search",
+                isFallback: true
             ))
         }
 
-        // Only record the migration as done once the save actually persists. If
-        // it throws, leave the flag unset so the migration retries next launch —
-        // otherwise the inserted Fallback queries and deleted placeholder
-        // Quicklinks would be lost with no way to recover (the guard would skip
-        // the retry forever).
+        // Only record the seed as done once the save actually persists. If it
+        // throws, leave the flag unset so the seed retries next launch — otherwise
+        // the inserted Custom Action would be lost with no way to recover (the guard
+        // would skip the retry forever).
         do {
             try context.save()
-            defaults.set(true, forKey: migrationFlagKey)
+            defaults.set(true, forKey: seedFlagKey)
         } catch {
-            // Save failed; migration will retry on the next launch.
+            // Save failed; the seed will retry on the next launch.
         }
     }
 

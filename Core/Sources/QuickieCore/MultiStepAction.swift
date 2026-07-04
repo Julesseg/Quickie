@@ -75,6 +75,14 @@ public struct MultiStepAction {
         return .collecting
     }
 
+    /// The value already committed for the step under the cursor, or `nil` when
+    /// that step is still unfilled. What the input region seeds with when the cursor
+    /// lands on a filled pill to re-edit it — whether reached by tapping the pill or
+    /// by backspacing back onto it — so the value is corrected, never retyped.
+    public var currentValue: ArgumentValue? {
+        index < pills.count ? pills[index] : nil
+    }
+
     /// Moves the cursor back to a filled pill so the next commit re-edits it
     /// (CONTEXT.md → Argument: "tapping a filled pill re-edits it"). Out-of-range
     /// indices are ignored.
@@ -83,13 +91,14 @@ public struct MultiStepAction {
         self.index = index
     }
 
-    /// Backspace pressed on an empty input (CONTEXT.md → Argument): pops the last
-    /// pill and returns to that step, or — with no pills left — `.abandoned`, the
-    /// signal to clear the breadcrumb and return to normal search.
+    /// Backspace pressed on an empty input (CONTEXT.md → Argument): steps the cursor
+    /// back onto the previous pill to **re-edit** it, keeping its value (read via
+    /// `currentValue`) so it is corrected rather than cleared. Returns `.collecting`
+    /// after stepping back, or — already on the first step, with nothing earlier —
+    /// `.abandoned`, the signal to clear the breadcrumb and return to normal search.
     public mutating func backspaceOnEmpty() -> CaptureStep {
-        guard !pills.isEmpty else { return .abandoned }
-        pills.removeLast()
-        index = pills.count
+        guard index > 0 else { return .abandoned }
+        index -= 1
         return .collecting
     }
 

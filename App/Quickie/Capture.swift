@@ -101,6 +101,13 @@ final class CaptureModel {
     /// outcome performer for the in-flight session.
     private var capture: (any Capture)?
 
+    /// A value to **seed-and-commit** as Argument 1 the instant the session begins
+    /// (CONTEXT.md → Fallback Action): a fallback selection commits the typed query
+    /// through the normal engine, so a one-Argument fallback completes in one tap and
+    /// a multi-Argument one continues at step 2 with pill 1 sealed. `nil` for a
+    /// verb-first start (an empty breadcrumb) and for the permission-gated captures.
+    private var seed: String?
+
     /// The active keyboard layout, so a choice step's fuzzy matching weights
     /// adjacent-key typos for the user's real layout — consistent with the Result
     /// list (the Core defaults to QWERTY when this isn't threaded through).
@@ -154,9 +161,14 @@ final class CaptureModel {
     /// session straight away; already-refused shows the inline affordance; an
     /// undetermined status shows a one-line primer first, then `confirmPrimer`
     /// triggers the system dialog.
-    func start(_ capture: any Capture, layout: KeyboardLayout) {
+    ///
+    /// `seed`, when non-nil, is committed as Argument 1 the moment the session
+    /// begins — the fallback seed-and-commit (CONTEXT.md → Fallback Action). A
+    /// verb-first start passes `nil` and the breadcrumb opens empty.
+    func start(_ capture: any Capture, layout: KeyboardLayout, seed: String? = nil) {
         self.capture = capture
         self.layout = layout
+        self.seed = seed
         denied = false
         priming = false
         switch capture.access {
@@ -186,6 +198,7 @@ final class CaptureModel {
         session = nil
         denied = false
         priming = false
+        seed = nil
         resetInputs()
     }
 
@@ -194,6 +207,15 @@ final class CaptureModel {
         let action = await capture.makeAction()
         resetInputs()
         session = MultiStepAction(action: action)
+        // Seed-and-commit (CONTEXT.md → Fallback Action): a fallback selection
+        // commits the typed query as Argument 1 through the same engine. A
+        // one-Argument fallback completes here at once (the outcome performs and the
+        // session clears); a multi-Argument one continues at step 2 with the seeded
+        // first pill sealed and re-editable like any other.
+        if let seed {
+            self.seed = nil
+            apply { $0.commit(.text(seed.trimmingCharacters(in: .whitespacesAndNewlines))) }
+        }
     }
 
     /// The current choice step's options, fuzzy-filtered by the typed text and
@@ -230,26 +252,56 @@ final class CaptureModel {
         commitChoice(best)
     }
 
-    /// Backspace on an empty input pops the last pill, or abandons to search when
-    /// there are none left.
+    /// Commits the current step the way Enter would — the highlighted choice, the
+    /// picked date, or the typed text — so the keyboard Return and a tap on the next
+    /// empty crumb advance identically. A required text step's empty-guard means an
+    /// empty current step stays put, so tapping ahead never commits nothing.
+    func submitCurrent() {
+        switch currentArgument?.inputMethod {
+        case .choice: commitHighlightedChoice()
+        case .datePicker: commitDate()
+        default: commitText()
+        }
+    }
+
+    /// Backspace on an empty input steps back onto the previous pill to **re-edit**
+    /// it — the input seeds with its value so it is corrected, not retyped — or
+    /// abandons to search when the cursor is already on the first step.
     func backspaceOnEmpty() {
-        apply { $0.backspaceOnEmpty() }
+        guard var session else { return }
+        switch session.backspaceOnEmpty() {
+        case .abandoned:
+            cancel()
+        case .collecting:
+            self.session = session
+            seedInput(from: session.currentValue)
+        case .completed:
+            break // backspace never completes a capture
+        }
     }
 
     /// Tapping a filled pill re-edits it: the cursor moves back and the input is
     /// seeded with the pill's current value.
     func editPill(at index: Int) {
         guard var session, session.pills.indices.contains(index) else { return }
-        let existing = session.pills[index]
         session.editPill(at: index)
         self.session = session
-        switch existing {
+        seedInput(from: session.currentValue)
+    }
+
+    /// Seeds the per-step input controls from a committed value — what the cursor
+    /// lands on when re-editing a pill (tapped, or backspaced onto). `nil` (an
+    /// unfilled step) resets the controls to empty.
+    private func seedInput(from value: ArgumentValue?) {
+        switch value {
         case .text(let text): stepText = text
         case .choice(let option): stepText = option.label
         case .date(let date, let hasTime):
             pickedDate = date
             includeTime = hasTime
             stepText = ""
+        case nil:
+            resetInputs()
         }
     }
 
@@ -552,14 +604,10 @@ struct CaptureBar: View {
         }
     }
 
-    /// Enter on a text step commits the typed text; on a choice step it commits
-    /// the best-matching option (the highlighted row).
+    /// Enter commits the current step — the typed text, or the best-matching option
+    /// on a choice step — the same path a tap on the next empty crumb takes.
     private func submitText() {
-        if case .choice = model.currentArgument?.inputMethod {
-            model.commitHighlightedChoice()
-        } else {
-            model.commitText()
-        }
+        model.submitCurrent()
     }
 }
 
@@ -637,43 +685,86 @@ private struct BreadcrumbSteps: View {
 
     var body: some View {
         let steps = model.steps
-        ScrollView(.horizontal, showsIndicators: false) {
-            // No GlassEffectContainer: its fluid morph resizes the glass on its
-            // own slower curve, so the step width visibly lagged the chevron (which
-            // is plain layout). Standalone glass redraws at its frame each tick, so
-            // the width tracks the chevron exactly.
-            HStack(spacing: rowSpacing) {
-                ForEach(steps) { step in
-                    let display = displayValue(for: step)
-                    StepCrumb(
-                        step: step,
-                        width: width(for: step, in: steps),
-                        displayText: display.text,
-                        isPlaceholder: display.isPlaceholder,
-                        onEdit: { model.editPill(at: step.index) }
-                    )
-                    if step.index < steps.count - 1 {
-                        Image(systemName: "chevron.right")
-                            .font(.caption.weight(.semibold))
-                            .foregroundStyle(.secondary)
-                            .frame(width: chevronWidth)
+        // The step the cursor sits on — the crumb we keep in view. When many steps
+        // overflow the viewport, we scroll it toward the centre; `anchor: .center`
+        // clamps at the content edges on its own, so the first step stays pinned to
+        // the left and the last to the right rather than the row over-scrolling past
+        // them.
+        let currentIndex = steps.first(where: \.isCurrent)?.index
+        ScrollViewReader { proxy in
+            ScrollView(.horizontal, showsIndicators: false) {
+                // No GlassEffectContainer: its fluid morph resizes the glass on its
+                // own slower curve, so the step width visibly lagged the chevron (which
+                // is plain layout). Standalone glass redraws at its frame each tick, so
+                // the width tracks the chevron exactly.
+                HStack(spacing: rowSpacing) {
+                    ForEach(steps) { step in
+                        let display = displayValue(for: step)
+                        StepCrumb(
+                            step: step,
+                            width: width(for: step, in: steps),
+                            displayText: display.text,
+                            isPlaceholder: display.isPlaceholder,
+                            onTap: tapHandler(for: step, currentIndex: currentIndex)
+                        )
+                        // The scroll target for auto-centring the active crumb.
+                        .id(step.index)
+                        if step.index < steps.count - 1 {
+                            Image(systemName: "chevron.right")
+                                .font(.caption.weight(.semibold))
+                                .foregroundStyle(.secondary)
+                                .frame(width: chevronWidth)
+                        }
                     }
                 }
+                // Breathing room around the crumbs so their glass shadows have space to
+                // fall rather than crowding the title above and the content below.
+                .padding(.vertical, 10)
+                // Glide the crumbs between their old and new widths as the cursor
+                // advances (degraded to no animation under Reduce Motion).
+                .animation(reduceMotion ? nil : .snappy, value: steps)
             }
-            // Breathing room around the crumbs so their glass shadows have space to
-            // fall rather than crowding the title above and the content below.
-            .padding(.vertical, 10)
-            // Glide the crumbs between their old and new widths as the cursor
-            // advances (degraded to no animation under Reduce Motion).
-            .animation(reduceMotion ? nil : .snappy, value: steps)
+            // A ScrollView clips to its viewport, which sheared off the crumbs' glass
+            // shadows (most visibly along the bottom edge). The steps fit without
+            // scrolling in practice, so disabling the clip lets the shadows render in
+            // full; only a genuine overflow would scroll, and then off-screen crumbs
+            // simply aren't clipped — an acceptable trade for un-clipped shadows.
+            .scrollClipDisabled()
+            .onGeometryChange(for: CGFloat.self) { $0.size.width } action: { containerWidth = $0 }
+            // Follow the cursor: when the active step changes (advancing, backspacing,
+            // or tapping a pill to re-edit) glide it toward the centre so a long
+            // breadcrumb never strands the step you're filling off-screen to the
+            // right. Degrades to a snap under Reduce Motion (ADR 0010 motion budget).
+            .onChange(of: currentIndex) { _, index in
+                guard let index else { return }
+                withAnimation(reduceMotion ? nil : .snappy) {
+                    proxy.scrollTo(index, anchor: .center)
+                }
+            }
+            // A capture can open already past step 1 — a multi-slot fallback seeds its
+            // first pill and lands on step 2 — so centre the active step on appear too,
+            // not only on later changes.
+            .onAppear {
+                guard let currentIndex else { return }
+                proxy.scrollTo(currentIndex, anchor: .center)
+            }
         }
-        // A ScrollView clips to its viewport, which sheared off the crumbs' glass
-        // shadows (most visibly along the bottom edge). The steps fit without
-        // scrolling in practice, so disabling the clip lets the shadows render in
-        // full; only a genuine overflow would scroll, and then off-screen crumbs
-        // simply aren't clipped — an acceptable trade for un-clipped shadows.
-        .scrollClipDisabled()
-        .onGeometryChange(for: CGFloat.self) { $0.size.width } action: { containerWidth = $0 }
+    }
+
+    /// A crumb's tap action, or `nil` when it isn't tappable. A filled pill that
+    /// isn't the current step **re-edits** it. The immediate next (empty) step
+    /// **advances** — the same as pressing Enter (its empty-guard means an empty
+    /// current step stays put, so tapping ahead never commits nothing). Every other
+    /// crumb — the current one, or a not-yet-reached empty step further ahead — is
+    /// inert.
+    private func tapHandler(for step: BreadcrumbStep, currentIndex: Int?) -> (() -> Void)? {
+        if step.value != nil && !step.isCurrent {
+            return { model.editPill(at: step.index) }
+        }
+        if let currentIndex, step.value == nil, step.index == currentIndex + 1 {
+            return { model.submitCurrent() }
+        }
+        return nil
     }
 
     /// What a crumb shows: the **live** input for the current step — the typed
@@ -727,7 +818,8 @@ private struct BreadcrumbSteps: View {
 
 /// One breadcrumb crumb: a Liquid Glass rounded rectangle showing the step's
 /// label and its committed value (word-wrapped), highlighted when it is the
-/// current step and tappable to re-edit once it carries a value.
+/// current step and tappable when it can be re-edited (a filled pill) or advanced
+/// to (the next empty step).
 private struct StepCrumb: View {
     let step: BreadcrumbStep
     let width: CGFloat
@@ -735,24 +827,28 @@ private struct StepCrumb: View {
     let displayText: String
     /// Whether `displayText` is a placeholder (dimmed) rather than a real value.
     let isPlaceholder: Bool
-    var onEdit: () -> Void
+    /// The tap action, or `nil` when this crumb isn't tappable — re-edit a filled
+    /// pill, or advance from the next empty step (the same as Enter).
+    let onTap: (() -> Void)?
 
     private var shape: RoundedRectangle { RoundedRectangle(cornerRadius: 16, style: .continuous) }
 
     /// The crumb's Liquid Glass. The current-step highlight *is* the glass tint —
     /// the accent crossfades out of the old crumb and into the new one as the
-    /// cursor moves — rather than a separate layer. Filled crumbs are interactive
-    /// so a tap to re-edit reads as pressable.
+    /// cursor moves — rather than a separate layer. Tappable crumbs are interactive
+    /// so a tap (to re-edit or advance) reads as pressable.
     private var glass: Glass {
         let base: Glass = step.isCurrent ? .regular.tint(.accentColor.opacity(0.4)) : .regular
-        return step.value != nil ? base.interactive() : base
+        return onTap != nil ? base.interactive() : base
     }
 
     var body: some View {
-        if step.value != nil {
-            Button(action: onEdit) { content }
+        if let onTap {
+            Button(action: onTap) { content }
                 .buttonStyle(.plain)
-                .accessibilityIdentifier("pill-\(step.index)")
+                // A filled pill keeps its `pill-N` identity; a tappable empty step
+                // keeps `step-N` so the next-empty advance target is addressable too.
+                .accessibilityIdentifier(step.value != nil ? "pill-\(step.index)" : "step-\(step.index)")
         } else {
             content
                 .accessibilityIdentifier("step-\(step.index)")

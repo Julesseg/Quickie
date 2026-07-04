@@ -4,17 +4,17 @@ import QuickieCore
 
 /// Owns the unified **Fallback list** state (CONTEXT.md → Fallback list): the
 /// user's explicit, most-important-first order over every Fallback Action
-/// (Fallback queries + Save for later + New Snippet) plus the set of **disabled**
-/// ones. Persisted in the shared App Group's `UserDefaults` so it survives
-/// launches and the future Share Extension reads the same source of truth (ADR
-/// 0006), mirroring `SignalsStore`.
+/// (fallback-flagged Custom Actions + Save for later + New Snippet) plus the set of
+/// **disabled** ones. Persisted in the shared App Group's `UserDefaults` so it
+/// survives launches and the future Share Extension reads the same source of truth
+/// (ADR 0006), mirroring `SignalsStore`.
 ///
-/// Order and disabled state must span both stored Fallback queries *and* the two
+/// Order and disabled state must span both stored Custom Actions *and* the two
 /// permanent built-in Fallbacks (Save for later / New Snippet), which aren't
 /// SwiftData entities — so they live here as id lists rather than as a column on
-/// the query model. The store reconciles its persisted order against the live set
-/// of ids on every read: unknown ids (a freshly added or seeded query) are
-/// appended in a stable order, and ids that no longer exist are pruned.
+/// the Custom Action model. The store reconciles its persisted order against the
+/// live set of ids on every read: unknown ids (a freshly added or seeded Custom
+/// Action) are appended in a stable order, and ids that no longer exist are pruned.
 @MainActor
 @Observable
 final class FallbacksStore {

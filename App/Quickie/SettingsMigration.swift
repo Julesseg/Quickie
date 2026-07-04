@@ -9,8 +9,8 @@ import QuickieCore
 /// silently" configured would read the new key's empty default and silently flip
 /// back to "ask every time" on upgrade.
 ///
-/// Mirrors the repo's existing settings-migration precedent
-/// (`QuickieStore.migrateToFallbackQueries`): flag-gated so it runs once, and
+/// Mirrors the repo's existing one-time-flag precedent
+/// (`QuickieStore.seedDefaultCustomActions`): flag-gated so it runs once, and
 /// idempotent. The routing translation itself lives in Core
 /// (`SettingsChoice.migratedSelection`, covered by `swift test`); this owns only the
 /// `UserDefaults` edge — the same `.standard` store the capture settings' `@AppStorage`

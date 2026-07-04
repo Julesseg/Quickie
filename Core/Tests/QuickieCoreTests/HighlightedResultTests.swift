@@ -34,7 +34,7 @@ struct HighlightedResultTests {
 
     @Test("the Return key reads as .search for a web-query highlight")
     func searchLabelForFallbackQuery() {
-        // "qwerty" matches nothing by name; the web-search Fallback query is the
+        // "qwerty" matches nothing by name; the web-search Custom Action is the
         // highlight, and Enter would search.
         let highlighted = engine().highlighted(for: "qwerty")
         #expect(highlighted?.returnKeyLabel == .search)
