@@ -72,6 +72,20 @@ final class CustomActionUITests: XCTestCase {
         back.tap()
     }
 
+    /// The fallback toggle, scrolled into view first. Each argument row now carries a
+    /// type picker, so a multi-slot form's taller rows can push the toggle below the
+    /// fold — and SwiftUI's `Form` drops off-screen rows from the accessibility tree,
+    /// so it must be scrolled back into existence before it can be found (issue #96).
+    @MainActor
+    private func revealFallbackToggle(_ app: XCUIApplication) -> XCUIElement {
+        let toggle = app.switches["custom-action-fallback-toggle"]
+        for _ in 0..<4 {
+            if toggle.waitForExistence(timeout: 2) { return toggle }
+            app.swipeUp()
+        }
+        return toggle
+    }
+
     // MARK: - Editor: live slot detection + rename rewrites the token
 
     /// Typing the URL grows an argument row per `{name}` slot, deleting a token drops
@@ -197,7 +211,7 @@ final class CustomActionUITests: XCTestCase {
         setText("things:///add?title={title}&notes={notes}", in: app.textFields["custom-action-url-field"])
 
         // Flag it as a fallback so the typed query seeds its first slot.
-        let toggle = app.switches["custom-action-fallback-toggle"]
+        let toggle = revealFallbackToggle(app)
         XCTAssertTrue(toggle.waitForExistence(timeout: 5))
         flip(toggle, to: true)
 
@@ -292,7 +306,7 @@ final class CustomActionUITests: XCTestCase {
         setText("things:///add?when={when}", in: app.textFields["custom-action-url-field"])
 
         // A text first argument leaves the fallback toggle enabled.
-        let toggle = app.switches["custom-action-fallback-toggle"]
+        let toggle = revealFallbackToggle(app)
         XCTAssertTrue(toggle.waitForExistence(timeout: 5))
         XCTAssertTrue(toggle.isEnabled, "a free-text first argument allows the fallback flag")
 
@@ -325,7 +339,7 @@ final class CustomActionUITests: XCTestCase {
         setText("Today", in: app.textFields["custom-action-choice-option.list.0"])
 
         // Flag it as a fallback so the typed query seeds the first (text) slot.
-        let toggle = app.switches["custom-action-fallback-toggle"]
+        let toggle = revealFallbackToggle(app)
         XCTAssertTrue(toggle.waitForExistence(timeout: 5))
         flip(toggle, to: true)
 
