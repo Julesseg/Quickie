@@ -107,6 +107,33 @@ struct CustomActionEditorTests {
         #expect(def.rows.map(\.name) == ["query"])
     }
 
+    @Test("renaming onto another live token's name is a no-op — no silent merge")
+    func renameCollisionIsRejected() {
+        // Renaming `notes` to `title` when `title` is already a live token would merge
+        // two arguments into one: the fill would write the first answer into both
+        // slots and silently drop the second. Guarded — the rename is a no-op, so the
+        // template and rows stay intact (two distinct rows).
+        var def = CustomActionDefinition(
+            name: "Add", template: "things:///add?title={title}&notes={notes}"
+        )
+        def.renameArgument("notes", to: "title")
+        #expect(def.template == "things:///add?title={title}&notes={notes}")
+        #expect(def.orderedTokenNames == ["title", "notes"])
+        #expect(def.rows.map(\.name) == ["title", "notes"])
+        #expect(def.arguments.count == 2)
+    }
+
+    @Test("a duplicated fill order still collapses to one row")
+    func duplicatedFillOrderCollapses() {
+        // Defensive: even a stored fill order carrying a duplicate (a corrupt or
+        // legacy value) reconciles to one row per live token, matching `tokenNames`.
+        let def = CustomActionDefinition(
+            name: "x", template: "app://a?t={title}", fillOrder: ["title", "title"]
+        )
+        #expect(def.orderedTokenNames == ["title"])
+        #expect(def.rows.map(\.name) == ["title"])
+    }
+
     // MARK: - Provider plumbing (ADR 0019/0021, issue #94)
 
     @Test("the Custom Actions provider is its own configurable kind")

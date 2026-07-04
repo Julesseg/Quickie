@@ -97,11 +97,17 @@ public struct CustomActionDefinition: Equatable, Sendable {
 
     /// Reconciles a stored fill order against the template's live tokens (the pure
     /// hard-mirror rule): survivors first in their stored order, then any new tokens
-    /// in URL-appearance order, dropping vanished names.
+    /// in URL-appearance order, dropping vanished names. **Deduped** — one row per
+    /// live token, matching `tokenNames` — so a corrupt or legacy fill order carrying
+    /// a repeated name can never render two rows for one slot.
     static func reconcile(order: [String], tokens: [String]) -> [String] {
         let live = Set(tokens)
-        var result = order.filter(live.contains)
-        for token in tokens where !result.contains(token) { result.append(token) }
+        var seen = Set<String>()
+        var result: [String] = []
+        for name in order where live.contains(name) && seen.insert(name).inserted {
+            result.append(name)
+        }
+        for token in tokens where seen.insert(token).inserted { result.append(token) }
         return result
     }
 
@@ -157,7 +163,13 @@ public struct CustomActionDefinition: Equatable, Sendable {
     /// hand-editing (ADR 0021, issue #94). The row keeps its fill-order slot. A no-op
     /// when `old` isn't a live token.
     public mutating func renameArgument(_ old: String, to new: String) {
-        guard tokenNames.contains(old) else { return }
+        // No-op unless `old` is a live token being renamed to a genuinely different
+        // name that doesn't already belong to *another* live token. Renaming onto a
+        // live name would merge two arguments into one: `tokenNames` dedupes the
+        // rewritten template but the fill order wouldn't, so the breadcrumb would keep
+        // two rows while the fill wrote the first answer into both slots and silently
+        // dropped the second. Rejecting the collision keeps rows and fill in step.
+        guard old != new, tokenNames.contains(old), !tokenNames.contains(new) else { return }
         // Rename within the resolved fill order first — against the still-current
         // template — so the row keeps its slot; then rewrite the URL token. Doing it
         // the other way drops `old` before the order is captured, sending the renamed
