@@ -252,26 +252,56 @@ final class CaptureModel {
         commitChoice(best)
     }
 
-    /// Backspace on an empty input pops the last pill, or abandons to search when
-    /// there are none left.
+    /// Commits the current step the way Enter would — the highlighted choice, the
+    /// picked date, or the typed text — so the keyboard Return and a tap on the next
+    /// empty crumb advance identically. A required text step's empty-guard means an
+    /// empty current step stays put, so tapping ahead never commits nothing.
+    func submitCurrent() {
+        switch currentArgument?.inputMethod {
+        case .choice: commitHighlightedChoice()
+        case .datePicker: commitDate()
+        default: commitText()
+        }
+    }
+
+    /// Backspace on an empty input steps back onto the previous pill to **re-edit**
+    /// it — the input seeds with its value so it is corrected, not retyped — or
+    /// abandons to search when the cursor is already on the first step.
     func backspaceOnEmpty() {
-        apply { $0.backspaceOnEmpty() }
+        guard var session else { return }
+        switch session.backspaceOnEmpty() {
+        case .abandoned:
+            cancel()
+        case .collecting:
+            self.session = session
+            seedInput(from: session.currentValue)
+        case .completed:
+            break // backspace never completes a capture
+        }
     }
 
     /// Tapping a filled pill re-edits it: the cursor moves back and the input is
     /// seeded with the pill's current value.
     func editPill(at index: Int) {
         guard var session, session.pills.indices.contains(index) else { return }
-        let existing = session.pills[index]
         session.editPill(at: index)
         self.session = session
-        switch existing {
+        seedInput(from: session.currentValue)
+    }
+
+    /// Seeds the per-step input controls from a committed value — what the cursor
+    /// lands on when re-editing a pill (tapped, or backspaced onto). `nil` (an
+    /// unfilled step) resets the controls to empty.
+    private func seedInput(from value: ArgumentValue?) {
+        switch value {
         case .text(let text): stepText = text
         case .choice(let option): stepText = option.label
         case .date(let date, let hasTime):
             pickedDate = date
             includeTime = hasTime
             stepText = ""
+        case nil:
+            resetInputs()
         }
     }
 
@@ -574,14 +604,10 @@ struct CaptureBar: View {
         }
     }
 
-    /// Enter on a text step commits the typed text; on a choice step it commits
-    /// the best-matching option (the highlighted row).
+    /// Enter commits the current step — the typed text, or the best-matching option
+    /// on a choice step — the same path a tap on the next empty crumb takes.
     private func submitText() {
-        if case .choice = model.currentArgument?.inputMethod {
-            model.commitHighlightedChoice()
-        } else {
-            model.commitText()
-        }
+        model.submitCurrent()
     }
 }
 
@@ -679,7 +705,7 @@ private struct BreadcrumbSteps: View {
                             width: width(for: step, in: steps),
                             displayText: display.text,
                             isPlaceholder: display.isPlaceholder,
-                            onEdit: { model.editPill(at: step.index) }
+                            onTap: tapHandler(for: step, currentIndex: currentIndex)
                         )
                         // The scroll target for auto-centring the active crumb.
                         .id(step.index)
@@ -723,6 +749,22 @@ private struct BreadcrumbSteps: View {
                 proxy.scrollTo(currentIndex, anchor: .center)
             }
         }
+    }
+
+    /// A crumb's tap action, or `nil` when it isn't tappable. A filled pill that
+    /// isn't the current step **re-edits** it. The immediate next (empty) step
+    /// **advances** — the same as pressing Enter (its empty-guard means an empty
+    /// current step stays put, so tapping ahead never commits nothing). Every other
+    /// crumb — the current one, or a not-yet-reached empty step further ahead — is
+    /// inert.
+    private func tapHandler(for step: BreadcrumbStep, currentIndex: Int?) -> (() -> Void)? {
+        if step.value != nil && !step.isCurrent {
+            return { model.editPill(at: step.index) }
+        }
+        if let currentIndex, step.value == nil, step.index == currentIndex + 1 {
+            return { model.submitCurrent() }
+        }
+        return nil
     }
 
     /// What a crumb shows: the **live** input for the current step — the typed
@@ -776,7 +818,8 @@ private struct BreadcrumbSteps: View {
 
 /// One breadcrumb crumb: a Liquid Glass rounded rectangle showing the step's
 /// label and its committed value (word-wrapped), highlighted when it is the
-/// current step and tappable to re-edit once it carries a value.
+/// current step and tappable when it can be re-edited (a filled pill) or advanced
+/// to (the next empty step).
 private struct StepCrumb: View {
     let step: BreadcrumbStep
     let width: CGFloat
@@ -784,24 +827,28 @@ private struct StepCrumb: View {
     let displayText: String
     /// Whether `displayText` is a placeholder (dimmed) rather than a real value.
     let isPlaceholder: Bool
-    var onEdit: () -> Void
+    /// The tap action, or `nil` when this crumb isn't tappable — re-edit a filled
+    /// pill, or advance from the next empty step (the same as Enter).
+    let onTap: (() -> Void)?
 
     private var shape: RoundedRectangle { RoundedRectangle(cornerRadius: 16, style: .continuous) }
 
     /// The crumb's Liquid Glass. The current-step highlight *is* the glass tint —
     /// the accent crossfades out of the old crumb and into the new one as the
-    /// cursor moves — rather than a separate layer. Filled crumbs are interactive
-    /// so a tap to re-edit reads as pressable.
+    /// cursor moves — rather than a separate layer. Tappable crumbs are interactive
+    /// so a tap (to re-edit or advance) reads as pressable.
     private var glass: Glass {
         let base: Glass = step.isCurrent ? .regular.tint(.accentColor.opacity(0.4)) : .regular
-        return step.value != nil ? base.interactive() : base
+        return onTap != nil ? base.interactive() : base
     }
 
     var body: some View {
-        if step.value != nil {
-            Button(action: onEdit) { content }
+        if let onTap {
+            Button(action: onTap) { content }
                 .buttonStyle(.plain)
-                .accessibilityIdentifier("pill-\(step.index)")
+                // A filled pill keeps its `pill-N` identity; a tappable empty step
+                // keeps `step-N` so the next-empty advance target is addressable too.
+                .accessibilityIdentifier(step.value != nil ? "pill-\(step.index)" : "step-\(step.index)")
         } else {
             content
                 .accessibilityIdentifier("step-\(step.index)")
