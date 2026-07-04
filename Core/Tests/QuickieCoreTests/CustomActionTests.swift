@@ -208,6 +208,27 @@ struct CustomActionTests {
         #expect(verbFirst.returnKeyLabel == .go)
     }
 
+    @Test("the breadcrumb asks in fill order while each value fills its own URL slot")
+    func fillOrderDrivesAskingOrderNotURLOrder() {
+        // The flagship case (ADR 0021): the URL puts title before notes, but the user
+        // dragged notes to ask first. The breadcrumb asks notes then title, yet each
+        // value still fills its own token's URL position — asking order and URL
+        // position are decoupled.
+        var def = CustomActionDefinition(
+            name: "Add to Things",
+            template: "things:///add?title={title}&notes={notes}"
+        )
+        def.moveArguments(fromOffsets: IndexSet(integer: 1), toOffset: 0)
+        let action = def.makeAction(id: "things")!
+        #expect(action.arguments.map(\.label) == ["notes", "title"])
+
+        var session = MultiStepAction(action: action)
+        // First pill is notes (fill order), second is title.
+        #expect(session.commit(.text("call the bank")) == .collecting)
+        #expect(session.commit(.text("Errands"))
+                == .completed(.openURL(URL(string: "things:///add?title=Errands&notes=call%20the%20bank")!)))
+    }
+
     @Test("verb-first collects every Argument from an empty breadcrumb")
     func verbFirstCollectsEveryArgument() {
         // Verb-first entry starts the breadcrumb empty at Argument 1 (CONTEXT.md →

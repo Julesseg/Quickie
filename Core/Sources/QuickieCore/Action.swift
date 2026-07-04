@@ -618,6 +618,22 @@ extension Action {
         ) { _ in .openPage(.settings(panel: .shortcuts)) }
     }
 
+    /// The "Custom Actions" command (CONTEXT.md → Custom Action, Settings command
+    /// row; ADR 0021, issue #94): deeplinks to the Custom Actions provider page under
+    /// the hub — the authoring surface where a URL-template Action is created and
+    /// edited. Distinct from "Fallbacks", which orders the fallback region, and from
+    /// "Quicklinks", which holds static links.
+    public static func openCustomActionsPage() -> Action {
+        Action(
+            id: "builtin.custom-actions-page",
+            kind: .managementPage,
+            title: "Custom Actions",
+            aliases: ["custom action", "url actions", "templates", "url templates"],
+            inputTypes: [],
+            outputType: .text
+        ) { _ in .openPage(.settings(panel: .customActions)) }
+    }
+
     /// The "Fallbacks" command (CONTEXT.md → Fallback list, Settings command
     /// row): deeplinks to the unified, reorderable Fallbacks provider page
     /// (Fallback queries + New Note + New Snippet) under the hub.
