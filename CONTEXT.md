@@ -107,6 +107,10 @@ _Avoid_: Auto-paste, clipboard read; never describe the chip as prompt-free or b
 The footer line under the [[Settings]] app-level section telling the user how to stop the iOS paste-permission alert for good: "To paste without iOS asking each time, set Paste from Other Apps to Allow in iOS Settings.", followed by a tappable **Open iOS Settings** link that deeplinks to Quickie's page in the Settings app (where the *Paste from Other Apps* row lives — the user still flips it to **Allow** themselves). It replaced the footer's former toggle descriptions, which restated what the self-describing toggles already said. Passive and always present — never a popup, banner, or nag (an information popup would fight a popup annoyance with another popup) — and necessarily **blind**: iOS offers no way to read the *Paste from Other Apps* state, so the hint cannot know whether it is still needed.
 _Avoid_: Paste tip popup, permission primer (that is the quick-capture pattern, ADR 0012)
 
+**Share Extension**:
+The iOS share-sheet entry point that turns a shared **URL** or **plain text** into a stored Action written to the shared App Group store (ADR 0006, 0022). A URL becomes a [[Quicklink]]; text becomes a [[Snippet]] (the default) or a [[Pile]] entry, chosen in a small **classification sheet** with quick edit. It only advertises for URL and text — images and files are out of scope, and it does not appear in the share sheet for them. Items it writes surface in the app on the next foreground, when the in-memory index is rebuilt from the store. Distinct from a [[Provider]]: it is a *write* surface (a way in), not a source of Actions in the [[Result list]]. (The epic that introduced it, #14, said "text → Snippet or **Note**"; read that as Snippet or Pile — Note was retired by ADR 0018.)
+_Avoid_: Share sheet action, importer, Add-to-Quickie extension (it is the "Share Extension")
+
 **Provider**:
 A source that contributes Actions to the result list. Every Action originates from exactly one Provider. Providers are either Indexed or Dynamic.
 _Avoid_: Source, Extension (collides with iOS app extensions), plugin
