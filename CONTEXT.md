@@ -72,7 +72,7 @@ A typed or picked value an Action consumes during its lifecycle. An Action decla
 _Avoid_: Parameter, field, input (ambiguous)
 
 **Input method**:
-The input control the single bottom field morphs into for the current Argument, chosen by that Argument's **content type**: the keyboard for `text`, an in-place graphical picker for a `date`, and a fuzzy-find over a fixed option set (reusing the matcher and the reversed result list) for a choice. The mechanism that lets one input region serve every Argument type without modes — the user never types a value the system could pick.
+The input control the single bottom field morphs into for the current Argument, chosen by that Argument's **content type**: the keyboard for `text`, the keyboard in a **numeric variant** (the system number pad) for a `number`, an in-place graphical picker for a `date`, and a fuzzy-find over a fixed option set (reusing the matcher and the reversed result list) for a choice. The number pad is a *variant* of the keyboard method — still the keyboard, only laid out for digits — not a separate method, and like every input method it is derived from the content type, never set by hand. The mechanism that lets one input region serve every Argument type without modes — the user never types a value the system could pick.
 _Avoid_: Input mode, control, widget
 
 **Snippet**:

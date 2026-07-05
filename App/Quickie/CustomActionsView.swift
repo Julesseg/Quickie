@@ -53,6 +53,23 @@ struct CustomActionsView: View {
                         onToggleDisabled: { enablement.toggleDisabled(action.id) },
                         onEdit: { editorTarget = .edit(action) }
                     )
+                    .swipeActions(edge: .trailing) {
+                        // Explicit Delete keeps the destructive full-swipe (the same
+                        // action `.onDelete` gives in edit mode), and Duplicate rides
+                        // alongside it — a fast way to fork a near-identical template.
+                        Button(role: .destructive) {
+                            modelContext.delete(action)
+                        } label: {
+                            Label("Delete", systemImage: "trash")
+                        }
+                        Button {
+                            duplicate(action)
+                        } label: {
+                            Label("Duplicate", systemImage: "plus.square.on.square")
+                        }
+                        .tint(.indigo)
+                        .accessibilityIdentifier("duplicate-custom-action.\(action.id)")
+                    }
                 }
                 .onDelete(perform: delete)
             } header: {
@@ -94,6 +111,27 @@ struct CustomActionsView: View {
         for index in offsets {
             modelContext.delete(customActions[index])
         }
+    }
+
+    /// Inserts a copy of `action` — same template, type specs, fill order, and
+    /// fallback flag, under a fresh identity (so pins/frecency don't alias) and a
+    /// distinct " copy" title. A fast fork for authoring a near-identical variant
+    /// (the PRD's "Things Todo" vs "Things Todo → Inbox").
+    private func duplicate(_ action: StoredCustomAction) {
+        var def = action.definition
+        def.name = duplicateName(for: def.name)
+        modelContext.insert(StoredCustomAction.make(from: def))
+    }
+
+    /// A distinct title for a duplicate — the original with a " copy" suffix, numbered
+    /// if that is already taken — so the list never shows two identical names.
+    private func duplicateName(for name: String) -> String {
+        let base = "\(name) copy"
+        let existing = Set(customActions.map(\.title))
+        guard existing.contains(base) else { return base }
+        var suffix = 2
+        while existing.contains("\(base) \(suffix)") { suffix += 1 }
+        return "\(base) \(suffix)"
     }
 }
 

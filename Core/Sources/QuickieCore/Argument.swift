@@ -24,12 +24,24 @@ public enum ArgumentValue: Equatable, Sendable {
     case choice(ChoiceOption)
 }
 
+/// Which system keyboard a `keyboard` input method raises (issue #96): the
+/// default alphanumeric layout for free `text`, or the numeric layout for a
+/// `number` Argument so it comes up on the number pad. A *variant* of one input
+/// method rather than a separate method — it is still the keyboard, only laid out
+/// differently — and, like every other input method, it is declaration-driven
+/// (derived from the Argument's content type, never set by hand).
+public enum KeyboardVariant: Equatable, Sendable {
+    case text
+    case number
+}
+
 /// The control the single bottom input morphs into for an Argument (CONTEXT.md →
 /// Input method; ADR 0013). Derived from the Argument's content type and option
 /// set so the control can never drift from the data: a fixed option set is always
-/// a fuzzy `choice`, a `date` is the in-place picker, everything else the keyboard.
+/// a fuzzy `choice`, a `date` is the in-place picker, a `number` raises the keyboard
+/// in its numeric variant, and everything else the keyboard in its text variant.
 public enum InputMethod: Equatable, Sendable {
-    case keyboard
+    case keyboard(KeyboardVariant)
     case datePicker
     case choice([ChoiceOption])
 }
@@ -49,6 +61,13 @@ public struct Argument: Equatable, Sendable {
     /// declared with the step rather than hard-coded in the view; `nil` for non-choice
     /// steps, and the app falls back to a sensible default when a choice step omits it.
     public let optionSymbol: String?
+    /// For a `date` Argument, whether the picker collects a **time** as well —
+    /// restricting the control with no in-picker toggle (issue #96): a Custom Action's
+    /// date slot sets this from its format's meaning (date vs datetime). `nil` (the
+    /// default) leaves it **user-choosable** — the New Reminder / Event date steps keep
+    /// their "Include a time" toggle, which decides a reminder's alarm. Ignored by
+    /// non-date Arguments.
+    public let dateIncludesTime: Bool?
     /// Whether this Argument may be **committed empty** (issue #46): the user can
     /// submit the step with no value and the Action still runs — a Shortcut Action's
     /// optional `text` input. Defaults to `false`: most Arguments are required, so an
@@ -62,23 +81,26 @@ public struct Argument: Equatable, Sendable {
         contentType: ContentType,
         options: [ChoiceOption] = [],
         optionSymbol: String? = nil,
+        dateIncludesTime: Bool? = nil,
         isOptional: Bool = false
     ) {
         self.label = label
         self.contentType = contentType
+        self.dateIncludesTime = dateIncludesTime
         self.options = options
         self.optionSymbol = optionSymbol
         self.isOptional = isOptional
     }
 
     /// Which control the input region presents for this Argument (ADR 0013): a
-    /// fixed option set is a fuzzy choice, a `date` is the picker, anything else
-    /// is the keyboard.
+    /// fixed option set is a fuzzy choice, a `date` is the picker, a `number`
+    /// raises the numeric keyboard variant, and anything else the text keyboard.
     public var inputMethod: InputMethod {
         if !options.isEmpty { return .choice(options) }
         switch contentType {
         case .date: return .datePicker
-        default: return .keyboard
+        case .number: return .keyboard(.number)
+        default: return .keyboard(.text)
         }
     }
 }

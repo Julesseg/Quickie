@@ -186,13 +186,11 @@ struct RootView: View {
             )
         }
         let storedCustomActions: [Action] = customActions.compactMap { custom in
-            CustomActionDefinition(
-                name: custom.title,
-                aliases: custom.alias.map { [$0] } ?? [],
-                template: custom.urlString,
-                isFallback: custom.isFallback,
-                fillOrder: custom.fillOrder
-            ).makeAction(id: custom.id)
+            // Build from the row's full `definition` — it carries the per-argument
+            // type specs, so the breadcrumb morphs its control per type (issue #96).
+            // Reconstructing the definition by hand here silently dropped the specs,
+            // leaving every step a plain text field.
+            custom.definition.makeAction(id: custom.id)
         }
         let storedSnippets = snippets.map { snippet in
             Action.snippet(

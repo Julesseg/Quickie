@@ -72,6 +72,31 @@ final class CustomActionUITests: XCTestCase {
         back.tap()
     }
 
+    /// The fallback toggle, brought reliably into view. Typing the URL leaves the
+    /// keyboard up over the lower form, and a multi-slot form's rows push the toggle
+    /// below the fold — SwiftUI's `Form` then drops it from the accessibility tree,
+    /// and a swipe can just land on the keyboard and never scroll. So first **dismiss
+    /// the keyboard** by submitting the focused URL field — a single-line SwiftUI
+    /// `TextField` resigns on Return without inserting a newline — which uncovers the
+    /// lower form; then scroll the remainder into view if the form is still long
+    /// (issue #96).
+    @MainActor
+    private func revealFallbackToggle(_ app: XCUIApplication) -> XCUIElement {
+        let toggle = app.switches["custom-action-fallback-toggle"]
+        if toggle.exists { return toggle }
+        let url = app.textFields["custom-action-url-field"]
+        if url.exists {
+            url.tap()
+            app.typeText("\n")
+        }
+        for _ in 0..<6 {
+            if toggle.exists { return toggle }
+            app.swipeUp()
+        }
+        _ = toggle.waitForExistence(timeout: 3)
+        return toggle
+    }
+
     // MARK: - Editor: live slot detection + rename rewrites the token
 
     /// Typing the URL grows an argument row per `{name}` slot, deleting a token drops
@@ -197,7 +222,7 @@ final class CustomActionUITests: XCTestCase {
         setText("things:///add?title={title}&notes={notes}", in: app.textFields["custom-action-url-field"])
 
         // Flag it as a fallback so the typed query seeds its first slot.
-        let toggle = app.switches["custom-action-fallback-toggle"]
+        let toggle = revealFallbackToggle(app)
         XCTAssertTrue(toggle.waitForExistence(timeout: 5))
         flip(toggle, to: true)
 
@@ -240,6 +265,173 @@ final class CustomActionUITests: XCTestCase {
             captureField.waitForNonExistence(timeout: 5),
             "committing the last slot completes the run rather than trapping the user mid-slot"
         )
+    }
+
+    /// Sets an argument row's type via its menu type picker (issue #96): tap the menu,
+    /// then the option. Element-type-agnostic on the picker, since a Form menu Picker
+    /// surfaces as a button on most OS versions but not all.
+    @MainActor
+    private func setType(_ app: XCUIApplication, token: String, to label: String) {
+        let picker = app.descendants(matching: .any)
+            .matching(identifier: "custom-action-type.\(token)").firstMatch
+        XCTAssertTrue(picker.waitForExistence(timeout: 5), "the \(token) row shows a type picker")
+        picker.tap()
+        // A menu Picker's options surface as buttons on most OS versions, menu items on
+        // some — take whichever appears.
+        let button = app.buttons[label]
+        let menuItem = app.menuItems[label]
+        if button.waitForExistence(timeout: 3) {
+            button.tap()
+        } else if menuItem.waitForExistence(timeout: 3) {
+            menuItem.tap()
+        } else {
+            XCTFail("the \(label) type option did not appear in the menu")
+        }
+    }
+
+    // MARK: - Editor: per-row type picker + choice/date config
+
+    /// Setting an argument to **Choice** reveals the inline options editor, and Save
+    /// stays gated until at least one non-blank option is entered (ADR 0021, issue
+    /// #96) — a choice with no options presents an empty runtime list.
+    @MainActor
+    func testChoiceTypeRevealsOptionsAndGatesSave() throws {
+        let app = launchApp()
+        openCustomActionsPage(app)
+        openNewEditor(app)
+
+        setText("Add Todo", in: app.textFields["custom-action-name-field"])
+        setText("things:///add?list={list}", in: app.textFields["custom-action-url-field"])
+
+        let save = app.buttons["save-custom-action"]
+        XCTAssertTrue(save.isEnabled, "a free-text slot validates before the type changes")
+
+        // Switch the slot to Choice → an empty option field appears and Save is
+        // regated on it (no options yet).
+        setType(app, token: "list", to: "Choice")
+        let option = app.textFields["custom-action-choice-option.list.0"]
+        XCTAssertTrue(option.waitForExistence(timeout: 5), "choosing Choice reveals an inline option field")
+        XCTAssertFalse(save.isEnabled, "a choice with no options can't be saved")
+
+        // Enter an option → Save re-enables.
+        setText("Today", in: option)
+        XCTAssertTrue(save.isEnabled, "a choice with a non-empty option validates for Save")
+    }
+
+    /// Setting an argument to **Date** reveals its output-format override fields, and
+    /// a date/number/choice *first-by-fill-order* argument disables the fallback flag
+    /// — the gate that "now bites" once types land (ADR 0021, issue #96).
+    @MainActor
+    func testDateTypeRevealsFormatsAndDisablesFallback() throws {
+        let app = launchApp()
+        openCustomActionsPage(app)
+        openNewEditor(app)
+
+        setText("When", in: app.textFields["custom-action-name-field"])
+        setText("things:///add?when={when}", in: app.textFields["custom-action-url-field"])
+
+        // A text first argument leaves the fallback toggle enabled.
+        let toggle = revealFallbackToggle(app)
+        XCTAssertTrue(toggle.waitForExistence(timeout: 5))
+        XCTAssertTrue(toggle.isEnabled, "a free-text first argument allows the fallback flag")
+
+        // Switch the (only, first) slot to Date → format fields appear and the
+        // fallback flag is disabled (a date-first action has nowhere to seed the query).
+        setType(app, token: "when", to: "Date")
+        XCTAssertTrue(app.textFields["custom-action-date-format.when"].waitForExistence(timeout: 5),
+                      "a date slot reveals its single output-format field")
+        XCTAssertFalse(toggle.isEnabled, "a date first argument disables the fallback flag")
+    }
+
+    // MARK: - Duplicate swipe action
+
+    /// Swiping a Custom Action row offers a **Duplicate** action that forks a ` copy`
+    /// alongside the original — a fast way to author a near-identical variant.
+    @MainActor
+    func testDuplicateSwipeActionForksTheRow() throws {
+        let app = launchApp()
+        openCustomActionsPage(app)
+        openNewEditor(app)
+
+        setText("Dupe Me", in: app.textFields["custom-action-name-field"])
+        setText("https://example.com/?q={q}", in: app.textFields["custom-action-url-field"])
+        let save = app.buttons["save-custom-action"]
+        XCTAssertTrue(save.isEnabled)
+        save.tap()
+
+        let original = app.staticTexts["Dupe Me"]
+        XCTAssertTrue(original.waitForExistence(timeout: 10), "the authored action is listed")
+
+        // Reveal the row's swipe actions and tap Duplicate.
+        original.swipeLeft()
+        let duplicate = app.buttons["Duplicate"]
+        XCTAssertTrue(duplicate.waitForExistence(timeout: 5), "the row offers a Duplicate swipe action")
+        duplicate.tap()
+
+        // A ` copy` forks alongside the original, which remains.
+        XCTAssertTrue(app.staticTexts["Dupe Me copy"].waitForExistence(timeout: 5),
+                      "duplicating forks a ' copy' row")
+        XCTAssertTrue(app.staticTexts["Dupe Me"].exists, "the original remains")
+    }
+
+    // MARK: - End-to-end: typed arguments run through the breadcrumb
+
+    /// A Custom Action mixing a text, a date, and a choice slot runs end to end: the
+    /// breadcrumb morphs the control per type — keyboard (seed) → date picker →
+    /// fuzzy option list — and committing the final slot opens the filled URL,
+    /// dismissing the breadcrumb (issue #96, the flagship acceptance shape).
+    @MainActor
+    func testTypedArgumentsRunEndToEnd() throws {
+        let app = launchApp()
+        openCustomActionsPage(app)
+        openNewEditor(app)
+
+        setText("Add Todo", in: app.textFields["custom-action-name-field"])
+        // Fill order follows URL order: title (text) → when (date) → list (choice).
+        setText("things:///add?title={title}&when={when}&list={list}",
+                in: app.textFields["custom-action-url-field"])
+        setType(app, token: "when", to: "Date")
+        setType(app, token: "list", to: "Choice")
+        setText("Today", in: app.textFields["custom-action-choice-option.list.0"])
+
+        // Flag it as a fallback so the typed query seeds the first (text) slot.
+        let toggle = revealFallbackToggle(app)
+        XCTAssertTrue(toggle.waitForExistence(timeout: 5))
+        flip(toggle, to: true)
+
+        let save = app.buttons["save-custom-action"]
+        XCTAssertTrue(save.isEnabled, "the typed multi-slot fallback validates for Save")
+        save.tap()
+
+        XCTAssertTrue(app.staticTexts["Add Todo"].waitForExistence(timeout: 10),
+                      "the authored Custom Action is listed on the Management page")
+        goBackHome(app)
+
+        // Type a query and pick the fallback row → seeds the title, advances to the
+        // date step.
+        let input = app.textFields["search-input"]
+        XCTAssertTrue(input.waitForExistence(timeout: 10))
+        input.tap()
+        input.typeText("buy milk")
+        let row = app.buttons.matching(NSPredicate(format: "label CONTAINS[c] %@", "Add Todo")).firstMatch
+        XCTAssertTrue(row.waitForExistence(timeout: 5), "the authored Custom Action surfaces as a fallback row")
+        row.tap()
+
+        XCTAssertTrue(app.buttons["pill-0"].waitForExistence(timeout: 5),
+                      "the typed query seeded the first slot")
+
+        // The date step shows its in-place picker + Set button; commit the default date.
+        let setDate = app.buttons["capture-set-date"]
+        XCTAssertTrue(setDate.waitForExistence(timeout: 5), "the date slot morphs to the date picker")
+        setDate.tap()
+
+        // The choice step shows the fuzzy option list; pick the option to complete.
+        let choice = app.buttons["choice-Today"]
+        XCTAssertTrue(choice.waitForExistence(timeout: 5), "the choice slot morphs to the fuzzy option list")
+        choice.tap()
+
+        XCTAssertTrue(app.textFields["search-input"].waitForExistence(timeout: 5),
+                      "committing the final slot completes the run and returns to the launcher")
     }
 
     /// Flips a SwiftUI Toggle: tapping the row-spanning switch's center misses the

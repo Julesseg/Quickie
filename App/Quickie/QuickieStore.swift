@@ -93,6 +93,15 @@ final class StoredCustomAction {
     /// value) means URL-appearance order — `CustomActionDefinition` reconciles it hard
     /// against the live template on read.
     var fillOrder: [String] = []
+    /// The per-slot **type config** (CONTEXT.md → Argument; ADR 0021, issue #96),
+    /// keyed by token name: each slot's type (text/number/date/choice), a choice's
+    /// inline options, and a date's optional output-format overrides — **JSON-encoded**.
+    /// Stored as `Data` rather than a `[String: ArgumentSpec]` dictionary attribute
+    /// because SwiftData did not round-trip that composite Codable dictionary
+    /// (the persisted types were silently lost on reload); a `Data` blob is a
+    /// primitive it fully supports. Bridged by the `argumentSpecs` computed property.
+    /// Optional so existing rows migrate without a value (every slot is then free text).
+    var argumentSpecsData: Data?
     var createdAt: Date
 
     init(
@@ -102,6 +111,7 @@ final class StoredCustomAction {
         alias: String? = nil,
         isFallback: Bool = true,
         fillOrder: [String] = [],
+        argumentSpecs: [String: ArgumentSpec] = [:],
         createdAt: Date = Date()
     ) {
         self.id = id
@@ -110,7 +120,27 @@ final class StoredCustomAction {
         self.alias = alias
         self.isFallback = isFallback
         self.fillOrder = fillOrder
+        self.argumentSpecsData = Self.encodeSpecs(argumentSpecs)
         self.createdAt = createdAt
+    }
+
+    /// The per-slot type config, decoded from its stored JSON (issue #96). A missing
+    /// or unreadable blob reads as no config — every slot is then plain free text.
+    /// SwiftData ignores this computed property; only `argumentSpecsData` persists.
+    var argumentSpecs: [String: ArgumentSpec] {
+        get {
+            guard let data = argumentSpecsData,
+                  let decoded = try? JSONDecoder().decode([String: ArgumentSpec].self, from: data)
+            else { return [:] }
+            return decoded
+        }
+        set { argumentSpecsData = Self.encodeSpecs(newValue) }
+    }
+
+    /// Encodes the spec map to its stored JSON, collapsing an empty map to `nil` so a
+    /// spec-less action stores no blob (and migrates cleanly).
+    private static func encodeSpecs(_ specs: [String: ArgumentSpec]) -> Data? {
+        specs.isEmpty ? nil : try? JSONEncoder().encode(specs)
     }
 }
 
