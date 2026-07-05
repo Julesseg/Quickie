@@ -1,6 +1,7 @@
 import Foundation
 import Observation
 import QuickieCore
+import QuickieStoreKit
 
 /// Owns the user's ranking signals — pinned **Favorites** and the **Frecency**
 /// of past selections (CONTEXT.md → Favorite, Frecency; issue #9) — and persists

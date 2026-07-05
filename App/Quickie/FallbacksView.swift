@@ -1,6 +1,7 @@
 import SwiftUI
 import SwiftData
 import QuickieCore
+import QuickieStoreKit
 
 /// The unified **Fallbacks** page (CONTEXT.md → Fallback list; ADR 0021): one
 /// user-ordered list of every Fallback Action — fallback-flagged Custom Actions

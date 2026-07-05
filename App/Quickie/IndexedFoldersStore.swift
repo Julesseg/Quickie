@@ -1,5 +1,6 @@
 import Foundation
 import Observation
+import QuickieStoreKit
 
 /// A single **Indexed Folder** grant (CONTEXT.md → Indexed Folder; issue #49): a
 /// folder the user has explicitly allowed Quickie to search, captured as an opaque

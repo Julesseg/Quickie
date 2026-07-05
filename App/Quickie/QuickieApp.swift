@@ -1,5 +1,6 @@
 import SwiftUI
 import SwiftData
+import QuickieStoreKit
 
 /// The app shell. Per ADR 0012 (zero-wall launch) there is no onboarding and
 /// no scene chrome between launch and the input field — the WindowGroup hosts

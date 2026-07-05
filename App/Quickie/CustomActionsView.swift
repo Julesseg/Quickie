@@ -1,6 +1,7 @@
 import SwiftUI
 import SwiftData
 import QuickieCore
+import QuickieStoreKit
 
 /// The **Custom Actions** Management page (CONTEXT.md → Custom Action, Management
 /// page; ADR 0019/0021, issue #94): the authoring surface where a URL-template
