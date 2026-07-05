@@ -8,6 +8,11 @@
 
 /* Begin PBXBuildFile section */
 		1A0000000000000000000012 /* QuickieCore in Frameworks */ = {isa = PBXBuildFile; productRef = 1A0000000000000000000011 /* QuickieCore */; };
+		1A0000000000000000000036 /* QuickieStoreKit.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 1A000000000000000000002B /* QuickieStoreKit.framework */; };
+		1A0000000000000000000038 /* QuickieStoreKit.framework in Embed Frameworks */ = {isa = PBXBuildFile; fileRef = 1A000000000000000000002B /* QuickieStoreKit.framework */; settings = {ATTRIBUTES = (CodeSignOnCopy, RemoveHeadersOnCopy, ); }; };
+		1A0000000000000000000043 /* QuickieStoreKit.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 1A000000000000000000002B /* QuickieStoreKit.framework */; };
+		1A0000000000000000000047 /* QuickieCore in Frameworks */ = {isa = PBXBuildFile; productRef = 1A0000000000000000000046 /* QuickieCore */; };
+		1A0000000000000000000049 /* QuickieShareExtension.appex in Embed Foundation Extensions */ = {isa = PBXBuildFile; fileRef = 1A0000000000000000000039 /* QuickieShareExtension.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -18,12 +23,71 @@
 			remoteGlobalIDString = 1A0000000000000000000005;
 			remoteInfo = Quickie;
 		};
+		1A0000000000000000000035 /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = 1A0000000000000000000001 /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = 1A000000000000000000002D;
+			remoteInfo = QuickieStoreKit;
+		};
+		1A0000000000000000000045 /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = 1A0000000000000000000001 /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = 1A000000000000000000002D;
+			remoteInfo = QuickieStoreKit;
+		};
+		1A000000000000000000004B /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = 1A0000000000000000000001 /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = 1A000000000000000000003C;
+			remoteInfo = QuickieShareExtension;
+		};
 /* End PBXContainerItemProxy section */
+
+/* Begin PBXCopyFilesBuildPhase section */
+		1A0000000000000000000037 /* Embed Frameworks */ = {
+			isa = PBXCopyFilesBuildPhase;
+			buildActionMask = 2147483647;
+			dstPath = "";
+			dstSubfolderSpec = 10;
+			files = (
+				1A0000000000000000000038 /* QuickieStoreKit.framework in Embed Frameworks */,
+			);
+			name = "Embed Frameworks";
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		1A0000000000000000000048 /* Embed Foundation Extensions */ = {
+			isa = PBXCopyFilesBuildPhase;
+			buildActionMask = 2147483647;
+			dstPath = "";
+			dstSubfolderSpec = 13;
+			files = (
+				1A0000000000000000000049 /* QuickieShareExtension.appex in Embed Foundation Extensions */,
+			);
+			name = "Embed Foundation Extensions";
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXCopyFilesBuildPhase section */
 
 /* Begin PBXFileReference section */
 		1A0000000000000000000006 /* Quickie.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = Quickie.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		1A0000000000000000000021 /* QuickieUITests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = QuickieUITests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
+		1A000000000000000000002B /* QuickieStoreKit.framework */ = {isa = PBXFileReference; explicitFileType = wrapper.framework; includeInIndex = 0; path = QuickieStoreKit.framework; sourceTree = BUILT_PRODUCTS_DIR; };
+		1A0000000000000000000039 /* QuickieShareExtension.appex */ = {isa = PBXFileReference; explicitFileType = "wrapper.app-extension"; includeInIndex = 0; path = QuickieShareExtension.appex; sourceTree = BUILT_PRODUCTS_DIR; };
 /* End PBXFileReference section */
+
+/* Begin PBXFileSystemSynchronizedBuildFileExceptionSet section */
+		1A000000000000000000003B /* Exceptions for "QuickieShareExtension" folder in "QuickieShareExtension" target */ = {
+			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
+			membershipExceptions = (
+				Info.plist,
+				QuickieShareExtension.entitlements,
+			);
+			target = 1A000000000000000000003C /* QuickieShareExtension */;
+		};
+/* End PBXFileSystemSynchronizedBuildFileExceptionSet section */
 
 /* Begin PBXFileSystemSynchronizedRootGroup section */
 		1A0000000000000000000004 /* Quickie */ = {
@@ -36,6 +100,19 @@
 			path = QuickieUITests;
 			sourceTree = "<group>";
 		};
+		1A000000000000000000002C /* QuickieStoreKit */ = {
+			isa = PBXFileSystemSynchronizedRootGroup;
+			path = QuickieStoreKit;
+			sourceTree = "<group>";
+		};
+		1A000000000000000000003A /* QuickieShareExtension */ = {
+			isa = PBXFileSystemSynchronizedRootGroup;
+			exceptions = (
+				1A000000000000000000003B /* Exceptions for "QuickieShareExtension" folder in "QuickieShareExtension" target */,
+			);
+			path = QuickieShareExtension;
+			sourceTree = "<group>";
+		};
 /* End PBXFileSystemSynchronizedRootGroup section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -44,6 +121,7 @@
 			buildActionMask = 2147483647;
 			files = (
 				1A0000000000000000000012 /* QuickieCore in Frameworks */,
+				1A0000000000000000000036 /* QuickieStoreKit.framework in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -54,6 +132,22 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
+		1A0000000000000000000030 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		1A000000000000000000003F /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				1A0000000000000000000047 /* QuickieCore in Frameworks */,
+				1A0000000000000000000043 /* QuickieStoreKit.framework in Frameworks */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 /* End PBXFrameworksBuildPhase section */
 
 /* Begin PBXGroup section */
@@ -61,6 +155,8 @@
 			isa = PBXGroup;
 			children = (
 				1A0000000000000000000004 /* Quickie */,
+				1A000000000000000000002C /* QuickieStoreKit */,
+				1A000000000000000000003A /* QuickieShareExtension */,
 				1A0000000000000000000025 /* QuickieUITests */,
 				1A0000000000000000000003 /* Products */,
 			);
@@ -71,11 +167,23 @@
 			children = (
 				1A0000000000000000000006 /* Quickie.app */,
 				1A0000000000000000000021 /* QuickieUITests.xctest */,
+				1A000000000000000000002B /* QuickieStoreKit.framework */,
+				1A0000000000000000000039 /* QuickieShareExtension.appex */,
 			);
 			name = Products;
 			sourceTree = "<group>";
 		};
 /* End PBXGroup section */
+
+/* Begin PBXHeadersBuildPhase section */
+		1A0000000000000000000031 /* Headers */ = {
+			isa = PBXHeadersBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXHeadersBuildPhase section */
 
 /* Begin PBXNativeTarget section */
 		1A0000000000000000000005 /* Quickie */ = {
@@ -85,10 +193,14 @@
 				1A0000000000000000000007 /* Sources */,
 				1A0000000000000000000008 /* Frameworks */,
 				1A0000000000000000000009 /* Resources */,
+				1A0000000000000000000048 /* Embed Foundation Extensions */,
+				1A0000000000000000000037 /* Embed Frameworks */,
 			);
 			buildRules = (
 			);
 			dependencies = (
+				1A0000000000000000000034 /* PBXTargetDependency */,
+				1A000000000000000000004A /* PBXTargetDependency */,
 			);
 			fileSystemSynchronizedGroups = (
 				1A0000000000000000000004 /* Quickie */,
@@ -124,6 +236,53 @@
 			productReference = 1A0000000000000000000021 /* QuickieUITests.xctest */;
 			productType = "com.apple.product-type.bundle.ui-testing";
 		};
+		1A000000000000000000002D /* QuickieStoreKit */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = 1A000000000000000000002E /* Build configuration list for PBXNativeTarget "QuickieStoreKit" */;
+			buildPhases = (
+				1A0000000000000000000031 /* Headers */,
+				1A000000000000000000002F /* Sources */,
+				1A0000000000000000000030 /* Frameworks */,
+				1A000000000000000000004C /* Resources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+			);
+			fileSystemSynchronizedGroups = (
+				1A000000000000000000002C /* QuickieStoreKit */,
+			);
+			name = QuickieStoreKit;
+			packageProductDependencies = (
+			);
+			productName = QuickieStoreKit;
+			productReference = 1A000000000000000000002B /* QuickieStoreKit.framework */;
+			productType = "com.apple.product-type.framework";
+		};
+		1A000000000000000000003C /* QuickieShareExtension */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = 1A000000000000000000003D /* Build configuration list for PBXNativeTarget "QuickieShareExtension" */;
+			buildPhases = (
+				1A000000000000000000003E /* Sources */,
+				1A000000000000000000003F /* Frameworks */,
+				1A0000000000000000000040 /* Resources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+				1A0000000000000000000044 /* PBXTargetDependency */,
+			);
+			fileSystemSynchronizedGroups = (
+				1A000000000000000000003A /* QuickieShareExtension */,
+			);
+			name = QuickieShareExtension;
+			packageProductDependencies = (
+				1A0000000000000000000046 /* QuickieCore */,
+			);
+			productName = QuickieShareExtension;
+			productReference = 1A0000000000000000000039 /* QuickieShareExtension.appex */;
+			productType = "com.apple.product-type.app-extension";
+		};
 /* End PBXNativeTarget section */
 
 /* Begin PBXProject section */
@@ -140,6 +299,12 @@
 					1A0000000000000000000020 = {
 						CreatedOnToolsVersion = 26.0;
 						TestTargetID = 1A0000000000000000000005;
+					};
+					1A000000000000000000002D = {
+						CreatedOnToolsVersion = 26.0;
+					};
+					1A000000000000000000003C = {
+						CreatedOnToolsVersion = 26.0;
 					};
 				};
 			};
@@ -163,6 +328,8 @@
 			targets = (
 				1A0000000000000000000005 /* Quickie */,
 				1A0000000000000000000020 /* QuickieUITests */,
+				1A000000000000000000002D /* QuickieStoreKit */,
+				1A000000000000000000003C /* QuickieShareExtension */,
 			);
 		};
 /* End PBXProject section */
@@ -176,6 +343,20 @@
 			runOnlyForDeploymentPostprocessing = 0;
 		};
 		1A0000000000000000000024 /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		1A0000000000000000000040 /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		1A000000000000000000004C /* Resources */ = {
 			isa = PBXResourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
@@ -199,6 +380,20 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
+		1A000000000000000000002F /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		1A000000000000000000003E /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 /* End PBXSourcesBuildPhase section */
 
 /* Begin PBXTargetDependency section */
@@ -206,6 +401,21 @@
 			isa = PBXTargetDependency;
 			target = 1A0000000000000000000005 /* Quickie */;
 			targetProxy = 1A000000000000000000002A /* PBXContainerItemProxy */;
+		};
+		1A0000000000000000000034 /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = 1A000000000000000000002D /* QuickieStoreKit */;
+			targetProxy = 1A0000000000000000000035 /* PBXContainerItemProxy */;
+		};
+		1A0000000000000000000044 /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = 1A000000000000000000002D /* QuickieStoreKit */;
+			targetProxy = 1A0000000000000000000045 /* PBXContainerItemProxy */;
+		};
+		1A000000000000000000004A /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = 1A000000000000000000003C /* QuickieShareExtension */;
+			targetProxy = 1A000000000000000000004B /* PBXContainerItemProxy */;
 		};
 /* End PBXTargetDependency section */
 
@@ -423,6 +633,118 @@
 			};
 			name = Release;
 		};
+		1A0000000000000000000032 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				APPLICATION_EXTENSION_API_ONLY = YES;
+				BUILD_LIBRARY_FOR_DISTRIBUTION = NO;
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				DEFINES_MODULE = YES;
+				DYLIB_COMPATIBILITY_VERSION = 1;
+				DYLIB_CURRENT_VERSION = 1;
+				DYLIB_INSTALL_NAME_BASE = "@rpath";
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_KEY_NSHumanReadableCopyright = "";
+				INSTALL_PATH = "$(LOCAL_LIBRARY_DIR)/Frameworks";
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@loader_path/Frameworks",
+				);
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = com.julesseguin.quickie.QuickieStoreKit;
+				PRODUCT_NAME = "$(TARGET_NAME:c99extidentifier)";
+				SKIP_INSTALL = YES;
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_VERSION = 6.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
+				VERSIONING_SYSTEM = "apple-generic";
+				VERSION_INFO_PREFIX = "";
+			};
+			name = Debug;
+		};
+		1A0000000000000000000033 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				APPLICATION_EXTENSION_API_ONLY = YES;
+				BUILD_LIBRARY_FOR_DISTRIBUTION = NO;
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				DEFINES_MODULE = YES;
+				DYLIB_COMPATIBILITY_VERSION = 1;
+				DYLIB_CURRENT_VERSION = 1;
+				DYLIB_INSTALL_NAME_BASE = "@rpath";
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_KEY_NSHumanReadableCopyright = "";
+				INSTALL_PATH = "$(LOCAL_LIBRARY_DIR)/Frameworks";
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@loader_path/Frameworks",
+				);
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = com.julesseguin.quickie.QuickieStoreKit;
+				PRODUCT_NAME = "$(TARGET_NAME:c99extidentifier)";
+				SKIP_INSTALL = YES;
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_VERSION = 6.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
+				VERSIONING_SYSTEM = "apple-generic";
+				VERSION_INFO_PREFIX = "";
+			};
+			name = Release;
+		};
+		1A0000000000000000000041 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				CODE_SIGN_ENTITLEMENTS = QuickieShareExtension/QuickieShareExtension.entitlements;
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = QuickieShareExtension/Info.plist;
+				INFOPLIST_KEY_CFBundleDisplayName = Quickie;
+				INFOPLIST_KEY_NSHumanReadableCopyright = "";
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@executable_path/../../Frameworks",
+				);
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = com.julesseguin.quickie.ShareExtension;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SKIP_INSTALL = YES;
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_VERSION = 6.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
+			};
+			name = Debug;
+		};
+		1A0000000000000000000042 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				CODE_SIGN_ENTITLEMENTS = QuickieShareExtension/QuickieShareExtension.entitlements;
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = QuickieShareExtension/Info.plist;
+				INFOPLIST_KEY_CFBundleDisplayName = Quickie;
+				INFOPLIST_KEY_NSHumanReadableCopyright = "";
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@executable_path/../../Frameworks",
+				);
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = com.julesseguin.quickie.ShareExtension;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SKIP_INSTALL = YES;
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_VERSION = 6.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
+			};
+			name = Release;
+		};
 /* End XCBuildConfiguration section */
 
 /* Begin XCConfigurationList section */
@@ -453,6 +775,24 @@
 			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Release;
 		};
+		1A000000000000000000002E /* Build configuration list for PBXNativeTarget "QuickieStoreKit" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				1A0000000000000000000032 /* Debug */,
+				1A0000000000000000000033 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+		1A000000000000000000003D /* Build configuration list for PBXNativeTarget "QuickieShareExtension" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				1A0000000000000000000041 /* Debug */,
+				1A0000000000000000000042 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
 /* End XCConfigurationList section */
 
 /* Begin XCLocalSwiftPackageReference section */
@@ -464,6 +804,10 @@
 
 /* Begin XCSwiftPackageProductDependency section */
 		1A0000000000000000000011 /* QuickieCore */ = {
+			isa = XCSwiftPackageProductDependency;
+			productName = QuickieCore;
+		};
+		1A0000000000000000000046 /* QuickieCore */ = {
 			isa = XCSwiftPackageProductDependency;
 			productName = QuickieCore;
 		};
