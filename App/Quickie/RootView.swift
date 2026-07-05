@@ -602,6 +602,17 @@ struct RootView: View {
                 // @Query catalogs are loaded by the time this launch task runs.
                 signals.reconcileFavorites(against: engine.resolvableHomeIDs())
             }
+            // Re-run the dedup when the Custom Action catalog changes: the
+            // remote-notification background mode lets a CloudKit import land a
+            // duplicate seed *mid-session*, after the launch pass above already
+            // ran — a launcher stays resident between cold starts, so waiting
+            // for the next relaunch could leave two "Search the web" rows
+            // visible for days. A duplicate always changes the row count, the
+            // pass is idempotent and no-op-cheap, and deferring it out of the
+            // view-update tick keeps the store mutation off the render pass.
+            .onChange(of: customActions.count) { _, _ in
+                Task { QuickieStore.dedupeCustomActions(in: modelContext) }
+            }
             // Build the File Search snapshot on launch, then rebuild it whenever the
             // app returns to the foreground or the Indexed-Folder grants change
             // (CONTEXT.md → File Search; ADR 0015). Each rebuild walks the granted

@@ -348,14 +348,16 @@ enum QuickieStore {
         }
     }
 
-    /// The launch-time dedup pass behind the fixed seed id (ADR 0023): CloudKit
-    /// cannot enforce uniqueness, so two devices that each seeded before their
-    /// first import both end up with two "Search the web" rows once sync
-    /// merges the stores. Among rows sharing an id, `StoreDedup` keeps a
-    /// deterministic winner — oldest `createdAt`, synced attributes as the
-    /// stable tie-break, so every device deletes the same rows — and this pass
-    /// deletes the rest. Cheap when there are no duplicates (the common case):
-    /// one fetch, no writes.
+    /// The dedup pass behind the fixed seed id (ADR 0023): CloudKit cannot
+    /// enforce uniqueness, so two devices that each seeded before their first
+    /// import both end up with two "Search the web" rows once sync merges the
+    /// stores. Among rows sharing an id, `StoreDedup` keeps a deterministic
+    /// winner — oldest `createdAt`, synced attributes as the stable tie-break,
+    /// so every device deletes the same rows — and this pass deletes the rest.
+    /// Runs at launch *and* whenever the Custom Action catalog changes (a
+    /// mid-session CloudKit import can land a duplicate long after launch —
+    /// a launcher stays resident between cold starts). Idempotent and cheap
+    /// when there are no duplicates (the common case): one fetch, no writes.
     @MainActor
     static func dedupeCustomActions(in context: ModelContext) {
         let rows = (try? context.fetch(FetchDescriptor<StoredCustomAction>())) ?? []
