@@ -11,6 +11,16 @@
 	  Sync Shortcut returns names on (import) and the run callbacks a triggered
 	  Shortcut Action comes back on (shortcut-result / -error / -cancel) all ride it.
 	-->
+	<!--
+	  CloudKit sync (ADR 0023, issue #107): the remote-notification background
+	  mode lets the system deliver the silent pushes CloudKit sends when another
+	  device changes the private database, so SwiftData can import in the
+	  background instead of only on next foreground.
+	-->
+	<key>UIBackgroundModes</key>
+	<array>
+		<string>remote-notification</string>
+	</array>
 	<key>CFBundleURLTypes</key>
 	<array>
 		<dict>

@@ -587,6 +587,11 @@ struct RootView: View {
             // Seed the default web-search Custom Action once on launch (ADR 0021).
             .task {
                 QuickieStore.seedDefaultCustomActions(in: modelContext)
+                // Collapse same-id Custom Action duplicates to a deterministic
+                // winner (ADR 0023): two devices can each seed the fixed-id web
+                // search before their first CloudKit import lands, so launch
+                // reconciles whatever sync merged in.
+                QuickieStore.dedupeCustomActions(in: modelContext)
                 // Collapse any stored notes from a pre-Pile build into titleless
                 // Pile entries (ADR 0018).
                 QuickieStore.migrateNotesToPile(in: modelContext)

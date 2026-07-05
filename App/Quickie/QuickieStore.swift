@@ -42,11 +42,11 @@ final class StoredQuicklink {
     /// Favorite or its Frecency survives relaunches instead of silently orphaning.
     /// Defaulted at the property so existing rows migrate without a value.
     var id: String = UUID().uuidString
-    var title: String
-    var urlString: String
+    var title: String = ""
+    var urlString: String = ""
     /// An optional alternative name also matched against the query.
     var alias: String?
-    var createdAt: Date
+    var createdAt: Date = Date()
 
     init(
         title: String,
@@ -75,11 +75,11 @@ final class StoredQuicklink {
 /// from this row, so reordering/disabling survives relaunches.
 @Model
 final class StoredCustomAction {
-    var id: String
-    var title: String
+    var id: String = UUID().uuidString
+    var title: String = ""
     /// The URL template; always contains at least one `{name}` slot (the editor
     /// enforces it, mirroring `CustomActionDefinition`).
-    var urlString: String
+    var urlString: String = ""
     var alias: String?
     /// Whether this is a **Fallback** Custom Action (CONTEXT.md → Fallback Action):
     /// surfaced in the bottom region, its selection seeding the typed query as
@@ -102,7 +102,7 @@ final class StoredCustomAction {
     /// primitive it fully supports. Bridged by the `argumentSpecs` computed property.
     /// Optional so existing rows migrate without a value (every slot is then free text).
     var argumentSpecsData: Data?
-    var createdAt: Date
+    var createdAt: Date = Date()
 
     init(
         id: String = UUID().uuidString,
@@ -158,9 +158,9 @@ final class StoredSnippet {
     /// Favorite or its Frecency survives relaunches instead of silently orphaning.
     /// Defaulted at the property so existing rows migrate without a value.
     var id: String = UUID().uuidString
-    var title: String
-    var body: String
-    var createdAt: Date
+    var title: String = ""
+    var body: String = ""
+    var createdAt: Date = Date()
 
     init(title: String, body: String, createdAt: Date = Date()) {
         self.title = title
@@ -182,9 +182,9 @@ final class StoredPileEntry {
     /// collision-free nor stable across launches — is what the index uses to
     /// derive the entry's Action id and what `stagePileEntry(id:)` resolves back
     /// to.
-    var id: String
-    var text: String
-    var createdAt: Date
+    var id: String = UUID().uuidString
+    var text: String = ""
+    var createdAt: Date = Date()
 
     init(id: String = UUID().uuidString, text: String, createdAt: Date = Date()) {
         self.id = id
@@ -217,11 +217,11 @@ extension StoredPileEntry {
 /// migrated, the table stays empty.
 @Model
 final class StoredNote {
-    var id: String
-    var title: String
-    var body: String
-    var createdAt: Date
-    var updatedAt: Date
+    var id: String = UUID().uuidString
+    var title: String = ""
+    var body: String = ""
+    var createdAt: Date = Date()
+    var updatedAt: Date = Date()
 
     init(id: String = UUID().uuidString, title: String, body: String, createdAt: Date = Date(), updatedAt: Date = Date()) {
         self.id = id
@@ -233,7 +233,11 @@ final class StoredNote {
 }
 
 /// Owns the single `ModelContainer`, configured for the shared App Group with
-/// CloudKit off for now (M1 is fully local — ADR 0006 / ROADMAP).
+/// CloudKit private-database sync — on by default, offline-first, covering
+/// exactly this content store and nothing else (ADR 0023). Every stored
+/// attribute above carries a property-level default (or is optional) because
+/// CloudKit requires it. Absence of iCloud or the entitlement degrades
+/// silently to the fully-functional local store.
 enum QuickieStore {
     static let container: ModelContainer = {
         let schema = Schema([StoredQuicklink.self, StoredCustomAction.self, StoredSnippet.self, StoredPileEntry.self, StoredNote.self])
@@ -249,12 +253,25 @@ enum QuickieStore {
         let appGroupAvailable = FileManager.default
             .containerURL(forSecurityApplicationGroupIdentifier: AppGroup.identifier) != nil
 
-        let configuration = appGroupAvailable
+        // CloudKit sync first (ADR 0023): the same store, mirrored to the
+        // user's private database. Container creation throws when the build
+        // isn't entitled for iCloud (CI simulator, signed-out personal-team
+        // builds), so a failure here is the expected "no iCloud" signal — fall
+        // through to the local configuration rather than surfacing anything.
+        let cloudKitConfiguration = appGroupAvailable
+            ? ModelConfiguration(schema: schema, groupContainer: .identifier(AppGroup.identifier), cloudKitDatabase: .automatic)
+            : ModelConfiguration(schema: schema, cloudKitDatabase: .automatic)
+
+        if let synced = try? ModelContainer(for: schema, configurations: [cloudKitConfiguration]) {
+            return synced
+        }
+
+        let localConfiguration = appGroupAvailable
             ? ModelConfiguration(schema: schema, groupContainer: .identifier(AppGroup.identifier), cloudKitDatabase: .none)
             : ModelConfiguration(schema: schema, cloudKitDatabase: .none)
 
         do {
-            return try ModelContainer(for: schema, configurations: [configuration])
+            return try ModelContainer(for: schema, configurations: [localConfiguration])
         } catch {
             fatalError("Failed to create Quickie ModelContainer: \(error)")
         }
@@ -276,6 +293,11 @@ enum QuickieStore {
     }
 
     private static let defaultWebSearchTemplate = "https://duckduckgo.com/?q={query}"
+    /// The seeded web search's fixed, well-known id (ADR 0023). The seed is
+    /// guarded by a *per-device* flag, so a second device can seed before its
+    /// first CloudKit import lands — a fixed id is what lets the launch-time
+    /// dedup pass recognize the two rows as the same seed and collapse them.
+    private static let seedWebSearchID = "seed.web-search"
     /// Bumped to `.v2` for the Custom Action unification (ADR 0021): the retired
     /// `StoredFallbackQuery` table is gone, so a fresh seed of the web-search
     /// **Custom Action** must run once against the new storage even on a build that
@@ -306,6 +328,7 @@ enum QuickieStore {
         let existing = (try? context.fetchCount(FetchDescriptor<StoredCustomAction>())) ?? 0
         if existing == 0 {
             context.insert(StoredCustomAction(
+                id: seedWebSearchID,
                 title: "Search the web",
                 urlString: defaultWebSearchTemplate,
                 alias: "search",
@@ -323,6 +346,31 @@ enum QuickieStore {
         } catch {
             // Save failed; the seed will retry on the next launch.
         }
+    }
+
+    /// The launch-time dedup pass behind the fixed seed id (ADR 0023): CloudKit
+    /// cannot enforce uniqueness, so two devices that each seeded before their
+    /// first import both end up with two "Search the web" rows once sync
+    /// merges the stores. Among rows sharing an id, `StoreDedup` keeps a
+    /// deterministic winner — oldest `createdAt`, synced attributes as the
+    /// stable tie-break, so every device deletes the same rows — and this pass
+    /// deletes the rest. Cheap when there are no duplicates (the common case):
+    /// one fetch, no writes.
+    @MainActor
+    static func dedupeCustomActions(in context: ModelContext) {
+        let rows = (try? context.fetch(FetchDescriptor<StoredCustomAction>())) ?? []
+        let duplicates = StoreDedup.duplicatesToDelete(
+            among: rows,
+            id: \.id,
+            createdAt: \.createdAt,
+            tieBreak: { "\($0.urlString)|\($0.title)|\($0.alias ?? "")" }
+        )
+        guard !duplicates.isEmpty else { return }
+
+        for row in duplicates {
+            context.delete(row)
+        }
+        try? context.save()
     }
 
     /// The launch argument that seeds legacy pre-Pile `StoredNote` rows into the

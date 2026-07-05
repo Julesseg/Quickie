@@ -21,7 +21,7 @@ No extensions, no sync, no system surfaces yet.
 - EventKit quick captures (Reminder, Event); Note capture already native
 - Shortcut Actions + the companion Sync Shortcut
 - Share Extension (URL + text → Quicklink / Snippet / Note)
-- CloudKit sync **on** (per-device Indexed-Folder grants; synced frecency)
+- CloudKit sync **on** for the content store only (ADR 0023 — signals, settings, order, and Indexed-Folder grants stay per-device)
 - Entry surfaces: deep-link widget, interactive Favorites widget, Control Center control, Action Button
 
 ## M3 — Reach & depth
