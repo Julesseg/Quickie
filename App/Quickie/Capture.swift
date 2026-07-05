@@ -470,8 +470,14 @@ private struct DateStep: View {
     /// picker can never use its unstable taller intrinsic height. Date-only is just
     /// the calendar (constant across 5- and 6-row months); date+time adds the inline
     /// time row beneath it, so that mode needs the extra band.
+    ///
+    /// The date+time band is sized for a **freshly created** `dateAndTime` picker
+    /// (issue #96): a Custom Action datetime slot lands on the picker already in
+    /// `.dateAndTime` mode, unlike a reminder/event that only ever grows into it via
+    /// the toggle — and a fresh picker settles a little taller, so a band that fit the
+    /// grown one clipped the Time row when the slot was entered (or re-entered) fresh.
     private static let dateHeight: CGFloat = 350
-    private static let dateTimeHeight: CGFloat = 400
+    private static let dateTimeHeight: CGFloat = 440
 
     private var pickerHeight: CGFloat { model.dateStepIncludesTime ? Self.dateTimeHeight : Self.dateHeight }
 
