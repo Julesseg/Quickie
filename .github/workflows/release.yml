@@ -33,21 +33,23 @@ jobs:
 
       # Without the signing secrets there is nothing to build that you could
       # install, so leave the rest of the job inert and keep the PR check green.
-      # Set the four required secrets (see ci/README.md) to turn it on.
+      # Set the five required secrets (see ci/README.md) to turn it on.
       - name: Check signing secrets
         id: preflight
         env:
           APPLE_CERTIFICATE_P12: ${{ secrets.APPLE_CERTIFICATE_P12 }}
           APPLE_CERTIFICATE_PASSWORD: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
           APPLE_PROVISIONING_PROFILE: ${{ secrets.APPLE_PROVISIONING_PROFILE }}
+          APPLE_PROVISIONING_PROFILE_EXTENSION: ${{ secrets.APPLE_PROVISIONING_PROFILE_EXTENSION }}
           APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
         run: |
           if [ -n "$APPLE_CERTIFICATE_P12" ] && [ -n "$APPLE_CERTIFICATE_PASSWORD" ] \
-             && [ -n "$APPLE_PROVISIONING_PROFILE" ] && [ -n "$APPLE_TEAM_ID" ]; then
+             && [ -n "$APPLE_PROVISIONING_PROFILE" ] && [ -n "$APPLE_PROVISIONING_PROFILE_EXTENSION" ] \
+             && [ -n "$APPLE_TEAM_ID" ]; then
             echo "configured=true" >> "$GITHUB_OUTPUT"
           else
             echo "configured=false" >> "$GITHUB_OUTPUT"
-            echo "::notice title=Release skipped::Signing secrets not set — skipping the installable build. See ci/README.md to enable it."
+            echo "::notice title=Release skipped::Signing secrets not set — skipping the installable build. See ci/README.md to enable it. (Since the Share Extension landed, APPLE_PROVISIONING_PROFILE_EXTENSION is required too.)"
           fi
 
       - name: Select latest stable Xcode
@@ -93,31 +95,49 @@ jobs:
           echo "SIGNING_IDENTITY=$IDENTITY" >> "$GITHUB_ENV"
           echo "Imported identity: $IDENTITY"
 
-      # Drop the ad-hoc profile where Xcode looks for it, and read its name/UUID
-      # out of the profile itself so you never have to copy them into a secret.
-      - name: Install provisioning profile
+      # Drop the two ad-hoc profiles (app + Share Extension — each bundle ID
+      # needs its own) where Xcode looks for them, and read each name/UUID out
+      # of the profile itself. The names must match the specifiers pinned in
+      # the project's Release configs ("Quickie Ad Hoc" for the app, "Quickie
+      # Share Extension Ad Hoc" for the extension) — verified here so a renamed
+      # profile fails with a clear message instead of an opaque archive error.
+      - name: Install provisioning profiles
         if: steps.preflight.outputs.configured == 'true'
         env:
           APPLE_PROVISIONING_PROFILE: ${{ secrets.APPLE_PROVISIONING_PROFILE }}
+          APPLE_PROVISIONING_PROFILE_EXTENSION: ${{ secrets.APPLE_PROVISIONING_PROFILE_EXTENSION }}
         run: |
           set -euo pipefail
-          PP_PATH="$RUNNER_TEMP/profile.mobileprovision"
-          echo -n "$APPLE_PROVISIONING_PROFILE" | base64 --decode -o "$PP_PATH"
-
-          security cms -D -i "$PP_PATH" > "$RUNNER_TEMP/pp.plist"
-          PROFILE_NAME="$(/usr/libexec/PlistBuddy -c 'Print :Name' "$RUNNER_TEMP/pp.plist")"
-          PROFILE_UUID="$(/usr/libexec/PlistBuddy -c 'Print :UUID' "$RUNNER_TEMP/pp.plist")"
-
           PP_DIR="$HOME/Library/MobileDevice/Provisioning Profiles"
           mkdir -p "$PP_DIR"
-          cp "$PP_PATH" "$PP_DIR/$PROFILE_UUID.mobileprovision"
 
-          echo "PROFILE_NAME=$PROFILE_NAME" >> "$GITHUB_ENV"
-          echo "Installed profile: $PROFILE_NAME ($PROFILE_UUID)"
+          install_profile() { # $1 = base64 payload, $2 = expected name, $3 = env var for the name
+            local path="$RUNNER_TEMP/$3.mobileprovision"
+            echo -n "$1" | base64 --decode -o "$path"
+            security cms -D -i "$path" > "$RUNNER_TEMP/$3.plist"
+            local name uuid
+            name="$(/usr/libexec/PlistBuddy -c 'Print :Name' "$RUNNER_TEMP/$3.plist")"
+            uuid="$(/usr/libexec/PlistBuddy -c 'Print :UUID' "$RUNNER_TEMP/$3.plist")"
+            if [ "$name" != "$2" ]; then
+              echo "::error title=Profile name mismatch::Expected a profile named '$2' but got '$name'. The Release build settings pin that exact name — rename the profile (or update project.pbxproj) so they match." >&2
+              exit 1
+            fi
+            cp "$path" "$PP_DIR/$uuid.mobileprovision"
+            echo "$3=$name" >> "$GITHUB_ENV"
+            echo "Installed profile: $name ($uuid)"
+          }
 
-      # Manual signing, pinned to the imported identity + ad-hoc profile. The app
-      # depends on QuickieCore as a local SwiftPM package, which xcodebuild
-      # resolves on its own — there are no CocoaPods here.
+          install_profile "$APPLE_PROVISIONING_PROFILE" "Quickie Ad Hoc" PROFILE_NAME
+          install_profile "$APPLE_PROVISIONING_PROFILE_EXTENSION" "Quickie Share Extension Ad Hoc" PROFILE_NAME_EXTENSION
+
+      # Manual signing, pinned to the imported identity. The per-target ad-hoc
+      # profiles come from the Release build settings in project.pbxproj
+      # (PROVISIONING_PROFILE_SPECIFIER[sdk=iphoneos*]) rather than a command-
+      # line override: an override applies to every target, and the
+      # QuickieStoreKit framework must not get a profile at all while the app
+      # and the extension each need their own. The app depends on QuickieCore
+      # as a local SwiftPM package, which xcodebuild resolves on its own —
+      # there are no CocoaPods here.
       - name: Archive
         if: steps.preflight.outputs.configured == 'true'
         env:
@@ -133,7 +153,6 @@ jobs:
             CODE_SIGN_STYLE=Manual \
             DEVELOPMENT_TEAM="$APPLE_TEAM_ID" \
             CODE_SIGN_IDENTITY="$SIGNING_IDENTITY" \
-            PROVISIONING_PROFILE_SPECIFIER="$PROFILE_NAME" \
             OTHER_CODE_SIGN_FLAGS="--keychain $KEYCHAIN_PATH"
 
       - name: Export .ipa
@@ -152,6 +171,7 @@ jobs:
             echo '<key>compileBitcode</key><false/>'
             echo '<key>provisioningProfiles</key><dict>'
             echo "<key>com.julesseguin.quickie</key><string>${PROFILE_NAME}</string>"
+            echo "<key>com.julesseguin.quickie.ShareExtension</key><string>${PROFILE_NAME_EXTENSION}</string>"
             echo '</dict></dict></plist>'
           } > "$RUNNER_TEMP/ExportOptions.plist"
 
