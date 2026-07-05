@@ -75,6 +75,20 @@ struct ShareClassificationTests {
         #expect(ShareClassification.webURL(fromSharedText: text) == nil)
     }
 
+    @Test(
+        "a well-formed non-web scheme is not the URL branch",
+        arguments: [
+            "javascript:alert(1)",
+            "ftp://example.org/file",
+            "shortcuts://open-shortcut",
+        ]
+    )
+    func nonWebSchemesAreNotTheURLBranch(text: String) {
+        // Pins the http(s) allowlist itself, not just "isn't a URL at all":
+        // these parse fine as URLs (ftp even has a host) and must still refuse.
+        #expect(ShareClassification.webURL(fromSharedText: text) == nil)
+    }
+
     @Test("surrounding whitespace doesn't stop shared text reading as a web URL")
     func sharedTextURLTrimsSurroundingWhitespace() {
         let url = ShareClassification.webURL(fromSharedText: "  https://example.org\n")

@@ -1,3 +1,4 @@
+import SwiftData
 import SwiftUI
 import UIKit
 import UniformTypeIdentifiers
@@ -103,9 +104,13 @@ final class ShareModel {
     }
 
     private func classifyURL(from provider: NSItemProvider, pageTitle: String?) async {
-        guard let url = try? await provider.loadURL(), !url.isFileURL else {
-            // Files are out of scope (the activation rule keeps them away; a
-            // file URL inside an odd mixed payload is refused here).
+        guard let url = try? await provider.loadURL() else {
+            phase = .unsupported("Quickie couldn't read the shared link.")
+            return
+        }
+        // Files are out of scope (the activation rule keeps them away; a
+        // file URL inside an odd mixed payload is refused here).
+        guard !url.isFileURL else {
             phase = .unsupported("Quickie can't save files — share a link instead.")
             return
         }

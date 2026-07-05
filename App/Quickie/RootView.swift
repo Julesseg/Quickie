@@ -644,9 +644,13 @@ struct RootView: View {
                     // Re-fetch the Quicklink catalog so anything the Share
                     // Extension saved while backgrounded appears in results
                     // (ADR 0022: foreground re-index, no cross-process signal).
-                    foregroundQuicklinks = (try? modelContext.fetch(
+                    // A failed fetch keeps the previous catalog — resetting to
+                    // empty would drop already-merged rows from the index.
+                    if let fetched = try? modelContext.fetch(
                         FetchDescriptor<StoredQuicklink>(sortBy: [SortDescriptor(\.createdAt)])
-                    )) ?? []
+                    ) {
+                        foregroundQuicklinks = fetched
+                    }
                 }
             }
             .onChange(of: indexedFolders.grants) { _, _ in
