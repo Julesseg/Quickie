@@ -539,12 +539,24 @@ private struct DateStep: View {
 /// transition avoids the broken layout (both were tried), so the mode is off the
 /// table entirely: when a step collects a time, `DateStep` shows a separate
 /// compact hour-and-minute control beneath this calendar instead.
+///
+/// The picker is **not** the representable's root view — it hangs inside a plain
+/// container, pinned to the top with an exact required height. SwiftUI sets the
+/// root view's frame directly, and when the picker *was* the root, any transient
+/// frame the transition machinery applied (re-entering the step mid keyboard
+/// release handed it a band about a time-row shorter for a beat) collided with
+/// the pinned height, broke it, and the calendar built its grid for the squeezed
+/// box — a blank band on top and compacted rows that `UIDatePicker` never
+/// recomputes once the frame corrects. Inside the container the picker's
+/// geometry comes only from its own constraints, so it lays out at the settled
+/// size on the first pass no matter what frames the transition applies to the
+/// root.
 private struct InlineDatePicker: UIViewRepresentable {
     @Binding var date: Date
     /// The fixed height to pin the picker to — the month grid's settled height.
     var height: CGFloat
 
-    func makeUIView(context: Context) -> UIDatePicker {
+    func makeUIView(context: Context) -> UIView {
         let picker = UIDatePicker()
         picker.preferredDatePickerStyle = .inline
         picker.datePickerMode = .date
@@ -555,21 +567,23 @@ private struct InlineDatePicker: UIViewRepresentable {
             action: #selector(Coordinator.changed(_:)),
             for: .valueChanged
         )
-        // The hard constraint that overrides the unstable intrinsic height; its
-        // constant is updated in `updateUIView` if the pinned height ever changes.
-        let pinned = picker.heightAnchor.constraint(equalToConstant: height)
-        pinned.priority = .required
-        pinned.isActive = true
-        context.coordinator.heightConstraint = pinned
-        picker.setContentHuggingPriority(.required, for: .vertical)
-        return picker
+
+        let container = UIView()
+        container.addSubview(picker)
+        picker.translatesAutoresizingMaskIntoConstraints = false
+        NSLayoutConstraint.activate([
+            picker.topAnchor.constraint(equalTo: container.topAnchor),
+            picker.leadingAnchor.constraint(equalTo: container.leadingAnchor),
+            picker.trailingAnchor.constraint(equalTo: container.trailingAnchor),
+            picker.heightAnchor.constraint(equalToConstant: height),
+        ])
+        context.coordinator.picker = picker
+        return container
     }
 
-    func updateUIView(_ picker: UIDatePicker, context: Context) {
+    func updateUIView(_ container: UIView, context: Context) {
+        guard let picker = context.coordinator.picker else { return }
         if picker.date != date { picker.date = date }
-        if context.coordinator.heightConstraint?.constant != height {
-            context.coordinator.heightConstraint?.constant = height
-        }
         context.coordinator.onChange = { date = $0 }
     }
 
@@ -577,7 +591,7 @@ private struct InlineDatePicker: UIViewRepresentable {
 
     final class Coordinator: NSObject {
         var onChange: (Date) -> Void
-        var heightConstraint: NSLayoutConstraint?
+        weak var picker: UIDatePicker?
         init(_ onChange: @escaping (Date) -> Void) { self.onChange = onChange }
         @objc func changed(_ picker: UIDatePicker) { onChange(picker.date) }
     }
