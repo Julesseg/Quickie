@@ -42,7 +42,11 @@ struct HomeView: View {
                         }
                     }
                     .frame(maxWidth: .infinity, alignment: .leading)
-                    .padding(.vertical, 16)
+                    // Top padding only — the bottom edge stays flush with the
+                    // scroll view, exactly like the Result list, so the lowest
+                    // Recent row sits the same distance above the input bar as
+                    // the highlighted result does.
+                    .padding(.top, 16)
                     // Leave room so the first Recent rows aren't born hidden
                     // beneath the pinned grid.
                     .padding(.top, gridFavorites.isEmpty ? 0 : 168)
@@ -122,30 +126,39 @@ struct HomeView: View {
     }
 
     /// The Frecency list: recently/often-used Actions, best-first, each a full
-    /// row that runs on tap and can be pinned via long-press.
+    /// row that runs on tap and can be pinned via long-press. The rows render
+    /// exactly like the Result list's — the same `GlassEffectContainer` blending
+    /// and the same 6pt spacing — so a remembered Action looks identical whether
+    /// it appears here or as a ranked result.
     private var frecencySection: some View {
-        VStack(alignment: .leading, spacing: 4) {
+        VStack(alignment: .leading, spacing: 8) {
             sectionHeader("Recent")
                 .padding(.horizontal, 20)
-            ForEach(content.frecent) { action in
-                Button {
-                    onRun(action)
-                } label: {
-                    ActionRow(action: action)
+            GlassEffectContainer(spacing: 6) {
+                VStack(spacing: 6) {
+                    ForEach(content.frecent) { action in
+                        Button {
+                            onRun(action)
+                        } label: {
+                            ActionRow(action: action)
+                        }
+                        .buttonStyle(.plain)
+                        .accessibilityIdentifier(action.id)
+                        .resultContextMenu(
+                            secondaryActions: secondaryActions(for: action.content),
+                            onSecondaryAction: { onSecondaryAction(action, $0) },
+                            isFavorite: isFavorite(action),
+                            canPin: canFavorite(action),
+                            toggle: { onToggleFavorite(action) }
+                        ) {
+                            // Lift a copy of the pressed Recent row as the detached
+                            // preview.
+                            ActionRow(action: action)
+                                .frame(maxWidth: .infinity)
+                        }
+                    }
                 }
-                .buttonStyle(.plain)
-                .accessibilityIdentifier(action.id)
-                .resultContextMenu(
-                    secondaryActions: secondaryActions(for: action.content),
-                    onSecondaryAction: { onSecondaryAction(action, $0) },
-                    isFavorite: isFavorite(action),
-                    canPin: canFavorite(action),
-                    toggle: { onToggleFavorite(action) }
-                ) {
-                    // Lift a copy of the pressed Recent row as the detached preview.
-                    ActionRow(action: action)
-                        .frame(maxWidth: .infinity)
-                }
+                .frame(maxWidth: .infinity)
             }
         }
     }
