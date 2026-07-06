@@ -1,10 +1,12 @@
 import Foundation
 
 /// One of the few moments Quickie deliberately animates (ADR 0010): a result row
-/// inserting or reordering as the ranking shifts, and the input gaining focus.
+/// slot appearing or disappearing as the result count changes, and the input
+/// gaining focus. Re-ranking is deliberately *not* a moment — result rows are
+/// keyed by rank, so a keystroke swaps each slot's content in place rather than
+/// moving rows around the screen.
 public enum MotionMoment: Sendable {
     case rowInsert
-    case rowReorder
     case inputFocus
     /// Entering or leaving a multi-step capture (issue #37): the browse list
     /// slides out toward the keyboard while the breadcrumb slides in from the top
@@ -36,7 +38,7 @@ public struct MotionPolicy: Sendable {
             return .fade(duration: 0.15)
         }
         switch moment {
-        case .rowInsert, .rowReorder:
+        case .rowInsert:
             return .spring(response: 0.3, dampingFraction: 0.85)
         case .inputFocus:
             // The moment closest to a keystroke — kept the snappiest so the field

@@ -29,11 +29,8 @@ struct ResultListView: View {
 
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
-    /// The id of the highlighted result — `results[0]`, nearest the thumb.
-    private var highlightedID: String? { results.first?.id }
-
-    /// The tight animation budget (ADR 0010): a subtle spring as rows insert and
-    /// reorder with the ranking, degrading to a fade under Reduce Motion.
+    /// The tight animation budget (ADR 0010): a subtle spring as row slots appear
+    /// and disappear with the result count, degrading to a fade under Reduce Motion.
     private var rowMotion: MotionStyle {
         MotionPolicy(reduceMotion: reduceMotion).style(for: .rowInsert)
     }
@@ -44,11 +41,18 @@ struct ResultListView: View {
             // morph as one Liquid Glass surface rather than stacking flatly.
             GlassEffectContainer(spacing: 6) {
                 VStack(spacing: 6) {
-                    ForEach(results.reversed()) { action in
+                    // Rows are keyed by **rank**, not by the Action they show, so a
+                    // keystroke that re-ranks the results swaps each slot's content
+                    // in place instead of flying rows across the screen — the
+                    // highlighted slot (rank 0) never moves, its text just changes.
+                    // Only a change in *count* inserts or removes a slot, and only
+                    // that transition animates.
+                    ForEach(results.indices.reversed(), id: \.self) { rank in
+                        let action = results[rank]
                         Button {
                             onRun(action)
                         } label: {
-                            ActionRow(action: action, isHighlighted: action.id == highlightedID)
+                            ActionRow(action: action, isHighlighted: rank == 0)
                         }
                         .buttonStyle(.plain)
                         .accessibilityIdentifier(action.id)
@@ -69,9 +73,9 @@ struct ResultListView: View {
                 }
                 .frame(maxWidth: .infinity)
             }
-            // Animate insert/reorder when the set or order of results changes —
-            // keystroke-fast, and never gating the keystroke itself.
-            .animation(rowMotion.animation, value: results.map(\.id))
+            // Animate only when slots appear or disappear — a content swap within
+            // a slot applies instantly, so typing never sets the list in motion.
+            .animation(rowMotion.animation, value: results.count)
         }
         .defaultScrollAnchor(.bottom)
         // Swiping down the list dismisses the keyboard the native iOS way (issue

@@ -113,8 +113,6 @@ struct FileSearchResultList: View {
 
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
-    private var highlightedID: String? { results.first?.id }
-
     private var rowMotion: MotionStyle {
         MotionPolicy(reduceMotion: reduceMotion).style(for: .rowInsert)
     }
@@ -123,11 +121,15 @@ struct FileSearchResultList: View {
         ScrollView {
             GlassEffectContainer(spacing: 6) {
                 VStack(spacing: 6) {
-                    ForEach(results.reversed()) { action in
+                    // Rank-keyed slots, exactly like the root Result list: a
+                    // keystroke that re-filters swaps content in place, and only a
+                    // change in count animates a slot in or out.
+                    ForEach(results.indices.reversed(), id: \.self) { rank in
+                        let action = results[rank]
                         Button {
                             onRun(action)
                         } label: {
-                            ActionRow(action: action, isHighlighted: action.id == highlightedID)
+                            ActionRow(action: action, isHighlighted: rank == 0)
                         }
                         .buttonStyle(.plain)
                         .accessibilityIdentifier(action.id)
@@ -136,7 +138,7 @@ struct FileSearchResultList: View {
                 }
                 .frame(maxWidth: .infinity)
             }
-            .animation(rowMotion.animation, value: results.map(\.id))
+            .animation(rowMotion.animation, value: results.count)
         }
         .defaultScrollAnchor(.bottom)
     }
