@@ -546,17 +546,22 @@ private struct DateStep: View {
 /// begins. Neither assignment order nor a synchronous `.date` → `.dateAndTime`
 /// transition avoids the broken layout (both were tried), so the mode is off the
 /// table entirely: when a step collects a time, `DateStep` shows a separate
-/// compact hour-and-minute control instead — in its own glass card, because even
-/// a *date-only* picker created into a container it shares with the time UI
-/// bakes a ~20pt blank band into its grid and compacts the rows. Clean-install
-/// device tests killed every in-picker countermeasure — a zero safe-area
+/// compact hour-and-minute control instead, in its own glass card.
+///
+/// The picker's **first layout is pre-baked in `makeUIView`**: performed
+/// synchronously, hidden in the real window, at the mid-screen frame the
+/// calendar will actually occupy — before SwiftUI can insert the view anywhere.
+/// The inline calendar permanently adopts the geometry of its first layout
+/// pass, and on the datetime entry paths (backspacing onto a datetime pill, a
+/// Custom Action datetime slot entered forward) that pass ran somewhere it
+/// inherited top insets: a blank band above the month header, rows compacted.
+/// Clean-install device tests eliminated everything else — a zero safe-area
 /// override alone, internal scroll views pinned to `.never` inset adjustment,
-/// deferring the picker's creation until its container had landed in the window,
-/// and swapping to `UICalendarView` — while a bespoke SwiftUI grid in the same
-/// shared container rendered clean, proving the defect is tied to what the
-/// picker's container holds at creation, not to when or where it is created.
-/// `DateStep` therefore hosts this picker in a card of its own so its hosting
-/// hierarchy is identical on every entry path.
+/// deferring creation one runloop turn (still inside the transition's churn),
+/// isolating the picker in its own glass card, and `UICalendarView` all still
+/// rendered the band, while a picker *reused* from a healthy first layout has
+/// never once rendered wrong. Pre-baking the first layout turns every entry
+/// path into that healthy-reuse case.
 ///
 /// The picker reports **zero safe-area insets** (`SafeAreaImmuneDatePicker`) and
 /// hangs inside a plain container rather than being the representable's root,
@@ -581,6 +586,33 @@ private struct InlineDatePicker: UIViewRepresentable {
             action: #selector(Coordinator.changed(_:)),
             for: .valueChanged
         )
+
+        // Bake the picker's first layout at an honest mid-screen frame BEFORE
+        // handing it to SwiftUI. The inline calendar permanently adopts the
+        // geometry of its first layout pass, and on the broken entry paths that
+        // pass runs while the transition machinery has the view parked
+        // somewhere it inherits top insets; a picker whose first layout was
+        // healthy stays healthy when re-hosted (the always-clean reuse path).
+        // So the first layout is performed here, synchronously, hidden in the
+        // real window at the frame the calendar will actually occupy — turning
+        // every entry path into the healthy-reuse case before the transition
+        // machinery ever touches the view.
+        if let window = UIApplication.shared.connectedScenes
+            .compactMap({ ($0 as? UIWindowScene)?.keyWindow })
+            .first {
+            let width = max(window.bounds.width - 64, 280)
+            picker.isHidden = true
+            picker.frame = CGRect(
+                x: (window.bounds.width - width) / 2,
+                y: max(window.bounds.midY - height / 2, 100),
+                width: width,
+                height: height
+            )
+            window.addSubview(picker)
+            picker.layoutIfNeeded()
+            picker.removeFromSuperview()
+            picker.isHidden = false
+        }
 
         let container = UIView()
         container.addSubview(picker)
