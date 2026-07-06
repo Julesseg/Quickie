@@ -644,11 +644,16 @@ struct RootView: View {
                     // Re-fetch the Quicklink catalog so anything the Share
                     // Extension saved while backgrounded appears in results
                     // (ADR 0022: foreground re-index, no cross-process signal).
-                    // A failed fetch keeps the previous catalog — resetting to
-                    // empty would drop already-merged rows from the index.
+                    // Write the @State only when the catalog actually changed:
+                    // an unconditional write invalidates the whole root on
+                    // every activation — including the launch transition,
+                    // where that no-op invalidation raced the first render
+                    // (issue #112's near-deterministic CI crash on this
+                    // branch). A failed fetch keeps the previous catalog —
+                    // resetting to empty would drop already-merged rows.
                     if let fetched = try? modelContext.fetch(
                         FetchDescriptor<StoredQuicklink>(sortBy: [SortDescriptor(\.createdAt)])
-                    ) {
+                    ), fetched.map(\.id) != foregroundQuicklinks.map(\.id) {
                         foregroundQuicklinks = fetched
                     }
                 }
