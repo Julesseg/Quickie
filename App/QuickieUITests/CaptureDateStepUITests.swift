@@ -158,8 +158,8 @@ final class CaptureDateStepUITests: XCTestCase {
         let time = app.descendants(matching: .any)["capture-time"].firstMatch
         XCTAssertTrue(time.waitForExistence(timeout: 5), "including a time adds the Time row")
 
-        // "Next Month" on the inline `UIDatePicker`; match case-insensitively so
-        // `UICalendarView`'s capitalization of the same control also hits.
+        // The bespoke grid labels its forward chevron "Next Month" (matching the
+        // stock pickers' label); match case-insensitively for robustness.
         let header = calendar.buttons
             .matching(NSPredicate(format: "label BEGINSWITH[c] 'next'"))
             .firstMatch
