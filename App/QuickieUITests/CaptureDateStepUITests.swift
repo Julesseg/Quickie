@@ -95,24 +95,25 @@ final class CaptureDateStepUITests: XCTestCase {
     }
 
     /// Backspacing from the list step onto an already-committed **timed** due
-    /// date re-creates the inline picker directly in date+time mode. A
-    /// `UIDatePicker` *built* in `.dateAndTime` settles taller than one grown
-    /// into it via the toggle, so the pinned band used to shove the calendar
-    /// down under a blank band and squash the time row. The picker must lay out
-    /// like the grown one: its month-navigation header sits at the same offset
-    /// from the picker's top on re-entry as it did after the toggle grew it.
+    /// date re-creates the date step already collecting a time. The step used to
+    /// re-enter a `UIDatePicker` *built* in `.dateAndTime`, whose fresh inline
+    /// layout shifts the calendar down under a blank band and squashes the time
+    /// row; the calendar is date-only now with the time as its own compact row,
+    /// so re-entry must be pixel-identical to the forward path: the calendar's
+    /// month-navigation header sits at the same offset inside the picker, and
+    /// the Time row sits fully below the calendar — never squashed into it.
     @MainActor
     func testBackspaceOntoTimedDateKeepsCalendarAligned() throws {
         let app = launchApp()
         advanceToDateStep(app)
 
-        let picker = app.datePickers.firstMatch
-        XCTAssertTrue(picker.waitForExistence(timeout: 5), "the due-date step shows the inline picker")
+        let calendar = app.datePickers["capture-calendar"]
+        XCTAssertTrue(calendar.waitForExistence(timeout: 5), "the due-date step shows the inline calendar")
 
-        // Grow into date+time via the toggle — the known-good layout the pinned
-        // band is sized for. The row-spanning switch element's center can miss
-        // the control, so tap the nested switch when the OS exposes one and fall
-        // back to a trailing-edge coordinate tap otherwise.
+        // Include a time via the toggle — the forward-entered reference layout.
+        // The row-spanning switch element's center can miss the control, so tap
+        // the nested switch when the OS exposes one and fall back to a
+        // trailing-edge coordinate tap otherwise.
         let toggle = app.switches["capture-include-time"]
         XCTAssertTrue(toggle.waitForExistence(timeout: 5), "the reminder date step offers the time toggle")
         let inner = toggle.switches.firstMatch
@@ -128,37 +129,49 @@ final class CaptureDateStepUITests: XCTestCase {
         }
         XCTAssertEqual(toggle.value as? String, "1", "the tap flipped the time toggle on")
 
-        let header = picker.buttons["Next Month"]
-        XCTAssertTrue(header.waitForExistence(timeout: 5), "the inline picker exposes its month-navigation header")
-        // Let the mode-change relayout settle before recording the reference.
+        let time = app.descendants(matching: .any)["capture-time"].firstMatch
+        XCTAssertTrue(time.waitForExistence(timeout: 5), "including a time adds the Time row")
+
+        let header = calendar.buttons["Next Month"]
+        XCTAssertTrue(header.waitForExistence(timeout: 5), "the inline calendar exposes its month-navigation header")
+        // Let the layout settle before recording the reference geometry.
         RunLoop.current.run(until: Date().addingTimeInterval(1))
-        let grownOffset = header.frame.minY - picker.frame.minY
+        let forwardOffset = header.frame.minY - calendar.frame.minY
+        XCTAssertGreaterThanOrEqual(
+            time.frame.minY, calendar.frame.maxY - 1,
+            "the Time row must sit fully below the calendar"
+        )
 
         // Commit the timed date, then backspace on the empty list filter to land
-        // back on the due-date step — the picker is re-created already timed.
+        // back on the due-date step — the timed step is re-entered fresh.
         app.buttons["capture-set-date"].tap()
         let filter = app.textFields["capture-input"]
         XCTAssertTrue(filter.waitForExistence(timeout: 5), "committing the date advances to the list step")
         XCTAssertTrue(app.keyboards.firstMatch.waitForExistence(timeout: 10))
         filter.typeText(XCUIKeyboardKey.delete.rawValue)
 
-        XCTAssertTrue(picker.waitForExistence(timeout: 5), "backspace re-enters the due-date step")
+        XCTAssertTrue(calendar.waitForExistence(timeout: 5), "backspace re-enters the due-date step")
+        XCTAssertTrue(time.waitForExistence(timeout: 5), "a timed date re-enters with its Time row")
         XCTAssertTrue(header.waitForExistence(timeout: 5))
 
         // Poll briefly so the re-entry transition settles before the frame is
-        // judged. The broken fresh-built layout shifted the grid ~40pt, so a
-        // 15pt tolerance separates it cleanly from render jitter.
+        // judged. The broken fresh-built `.dateAndTime` layout shifted the grid
+        // ~40pt, so a 15pt tolerance separates it cleanly from render jitter.
         let deadline = Date().addingTimeInterval(5)
         var reenteredOffset = CGFloat.greatestFiniteMagnitude
         repeat {
-            reenteredOffset = header.frame.minY - picker.frame.minY
-            if abs(reenteredOffset - grownOffset) <= 15 { break }
+            reenteredOffset = header.frame.minY - calendar.frame.minY
+            if abs(reenteredOffset - forwardOffset) <= 15 { break }
             RunLoop.current.run(until: Date().addingTimeInterval(0.2))
         } while Date() < deadline
 
         XCTAssertEqual(
-            reenteredOffset, grownOffset, accuracy: 15,
-            "a re-entered timed date step must lay out like the grown picker — the calendar header sat \(reenteredOffset)pt into the picker vs \(grownOffset)pt (blank band above the grid, squashed time row)"
+            reenteredOffset, forwardOffset, accuracy: 15,
+            "a re-entered timed date step must match the forward-entered layout — the calendar header sat \(reenteredOffset)pt into the picker vs \(forwardOffset)pt (blank band above the grid)"
+        )
+        XCTAssertGreaterThanOrEqual(
+            time.frame.minY, calendar.frame.maxY - 1,
+            "the re-entered Time row must sit fully below the calendar, not squashed into it"
         )
     }
 

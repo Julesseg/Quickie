@@ -467,13 +467,11 @@ private struct DateStep: View {
     @Bindable var model: CaptureModel
 
     /// The settled height of the month grid, pinned with a hard constraint so the
-    /// picker can never use its unstable taller intrinsic height. Date-only is just
-    /// the calendar (constant across 5- and 6-row months); date+time adds the inline
-    /// time row beneath it, so that mode needs the extra band.
+    /// picker can never use its unstable taller intrinsic height. The calendar is
+    /// always date-only (constant across 5- and 6-row months); a collected time is
+    /// its own compact row *beneath* the calendar, never the picker's `.dateAndTime`
+    /// mode — see `InlineDatePicker` for why that mode is off the table.
     private static let dateHeight: CGFloat = 350
-    private static let dateTimeHeight: CGFloat = 400
-
-    private var pickerHeight: CGFloat { model.dateStepIncludesTime ? Self.dateTimeHeight : Self.dateHeight }
 
     var body: some View {
         VStack {
@@ -486,18 +484,31 @@ private struct DateStep: View {
                 // relayout (the capture's slide-in settling) could bounce it back,
                 // making it jump again on a subsequent tap. A hard UIKit height
                 // constraint forces the settled layout from the first frame, so the
-                // grid never moves. The height steps up when a time is included (an
-                // explicit toggle, so its resize reads as intentional).
-                InlineDatePicker(
-                    date: $model.pickedDate,
-                    includeTime: model.dateStepIncludesTime,
-                    height: pickerHeight
-                )
-                .frame(height: pickerHeight)
+                // grid never moves.
+                InlineDatePicker(date: $model.pickedDate, height: Self.dateHeight)
+                    .frame(height: Self.dateHeight)
+
+                // The time, when the step collects one, is its own compact control
+                // riding below the calendar — the same shape as the system picker's
+                // native time row, but built from parts whose layout is
+                // deterministic. It shares `pickedDate`, so the compact control
+                // edits the time-of-day of the same value the calendar edits the
+                // day of.
+                if model.dateStepIncludesTime {
+                    DatePicker(
+                        "Time",
+                        selection: $model.pickedDate,
+                        displayedComponents: .hourAndMinute
+                    )
+                    .font(.subheadline)
+                    .padding(.horizontal, 4)
+                    .accessibilityIdentifier("capture-time")
+                }
 
                 // The toggle appears only when the step leaves the date/time choice to
                 // the user (reminders/events). A Custom Action date slot fixes it from
-                // its format, so the toggle is hidden — the picker is already restricted.
+                // its format, so the toggle is hidden — the time row is already pinned
+                // on or off.
                 if model.dateStepAllowsTimeToggle {
                     Toggle("Include a time", isOn: $model.includeTime)
                         .font(.subheadline)
@@ -517,39 +528,35 @@ private struct DateStep: View {
 /// `DatePicker(.graphical)` over-reports its `intrinsicContentSize` until its first
 /// selection change, so its calendar rows visibly tightened the first time you
 /// tapped a day; pinning a `UIDatePicker` to its settled height with a required
-/// constraint forces that layout from the start, so the grid never jumps. The
-/// pinned height tracks the mode — date-only vs the taller date+time — and the
-/// constraint is updated in place when it changes.
+/// constraint forces that layout from the start, so the grid never jumps.
+///
+/// Always **date-only**. The picker must never be created in — or switched to —
+/// `.dateAndTime`: a `UIDatePicker` whose inline content is built fresh in that
+/// mode lays it out wrong (a blank band above the calendar, the time row squashed
+/// beneath it), and a timed step *is* entered fresh whenever the breadcrumb
+/// backspaces onto a committed datetime pill or a Custom Action datetime slot
+/// begins. Neither assignment order nor a synchronous `.date` → `.dateAndTime`
+/// transition avoids the broken layout (both were tried), so the mode is off the
+/// table entirely: when a step collects a time, `DateStep` shows a separate
+/// compact hour-and-minute control beneath this calendar instead.
 private struct InlineDatePicker: UIViewRepresentable {
     @Binding var date: Date
-    var includeTime: Bool
-    /// The fixed height to pin the picker to — its settled height for the current
-    /// mode (date-only, or the taller date+time with its inline time row).
+    /// The fixed height to pin the picker to — the month grid's settled height.
     var height: CGFloat
 
     func makeUIView(context: Context) -> UIDatePicker {
         let picker = UIDatePicker()
         picker.preferredDatePickerStyle = .inline
-        // Reach `.dateAndTime` only ever *through* a real mode change. It is the
-        // UIKit default, so assigning it directly is a no-op and the picker keeps
-        // the layout it built when the style was applied — which settles taller
-        // than one *grown* into date+time, so the pinned band shoved the calendar
-        // down under a blank band and squashed the time row whenever a timed step
-        // was entered fresh (backspacing onto a committed datetime pill, a Custom
-        // Action datetime slot). Stepping `.date` → `.dateAndTime` rebuilds the
-        // content on the same path as the "Include a time" toggle, whose layout
-        // is the settled one the band is sized for.
         picker.datePickerMode = .date
-        if includeTime { picker.datePickerMode = .dateAndTime }
         picker.date = date
+        picker.accessibilityIdentifier = "capture-calendar"
         picker.addTarget(
             context.coordinator,
             action: #selector(Coordinator.changed(_:)),
             for: .valueChanged
         )
         // The hard constraint that overrides the unstable intrinsic height; its
-        // constant is updated in `updateUIView` when the mode (and so the height)
-        // changes.
+        // constant is updated in `updateUIView` if the pinned height ever changes.
         let pinned = picker.heightAnchor.constraint(equalToConstant: height)
         pinned.priority = .required
         pinned.isActive = true
@@ -559,8 +566,6 @@ private struct InlineDatePicker: UIViewRepresentable {
     }
 
     func updateUIView(_ picker: UIDatePicker, context: Context) {
-        let mode: UIDatePicker.Mode = includeTime ? .dateAndTime : .date
-        if picker.datePickerMode != mode { picker.datePickerMode = mode }
         if picker.date != date { picker.date = date }
         if context.coordinator.heightConstraint?.constant != height {
             context.coordinator.heightConstraint?.constant = height
