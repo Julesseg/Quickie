@@ -467,17 +467,17 @@ private struct DateStep: View {
     @Bindable var model: CaptureModel
 
     /// The settled height of the month grid, pinned with a hard constraint so the
-    /// picker can never use its unstable taller intrinsic height. The calendar is
+    /// calendar can never use an unstable taller intrinsic height. The calendar is
     /// always date-only (constant across 5- and 6-row months); a collected time is
-    /// its own compact row *beneath* the calendar, never the picker's `.dateAndTime`
-    /// mode — see `InlineDatePicker` for why that mode is off the table.
+    /// its own compact row *beneath* the calendar, never a picker's `.dateAndTime`
+    /// mode — see `InlineCalendar` for why that mode is off the table.
     private static let dateHeight: CGFloat = 350
 
     var body: some View {
         VStack {
             Spacer(minLength: 0)
             VStack(spacing: 12) {
-                // A `UIDatePicker` pinned to a fixed height rather than SwiftUI's
+                // A `UICalendarView` pinned to a fixed height rather than SwiftUI's
                 // `DatePicker(.graphical)`. The SwiftUI picker over-reports its
                 // height until its first selection change, so the calendar rows
                 // visibly shrank the first time you tapped a day — and any later
@@ -485,7 +485,7 @@ private struct DateStep: View {
                 // making it jump again on a subsequent tap. A hard UIKit height
                 // constraint forces the settled layout from the first frame, so the
                 // grid never moves.
-                InlineDatePicker(date: $model.pickedDate, height: Self.dateHeight)
+                InlineCalendar(date: $model.pickedDate, height: Self.dateHeight)
                     .frame(height: Self.dateHeight)
 
                 // The time, when the step collects one, is its own compact control
@@ -523,118 +523,132 @@ private struct DateStep: View {
     }
 }
 
-/// The in-place month-grid date picker, a `UIDatePicker` in `.inline` style with a
-/// hard height constraint (CONTEXT.md → Input method). SwiftUI's
+/// The in-place month-grid date picker, a `UICalendarView` with single-date
+/// selection and a hard height constraint (CONTEXT.md → Input method). SwiftUI's
 /// `DatePicker(.graphical)` over-reports its `intrinsicContentSize` until its first
 /// selection change, so its calendar rows visibly tightened the first time you
-/// tapped a day; pinning a `UIDatePicker` to its settled height with a required
+/// tapped a day; pinning the grid to its settled height with a required
 /// constraint forces that layout from the start, so the grid never jumps.
 ///
-/// Always **date-only**. The picker must never be created in — or switched to —
-/// `.dateAndTime`: a `UIDatePicker` whose inline content is built fresh in that
-/// mode lays it out wrong (a blank band above the calendar, the time row squashed
-/// beneath it), and a timed step *is* entered fresh whenever the breadcrumb
-/// backspaces onto a committed datetime pill or a Custom Action datetime slot
-/// begins. Neither assignment order nor a synchronous `.date` → `.dateAndTime`
-/// transition avoids the broken layout (both were tried), so the mode is off the
-/// table entirely: when a step collects a time, `DateStep` shows a separate
-/// compact hour-and-minute control beneath this calendar instead.
+/// `UICalendarView`, **not** `UIDatePicker` — the inline picker is off the table
+/// in every configuration:
 ///
-/// The picker reports **zero safe-area insets** (`SafeAreaImmuneDatePicker`) and
-/// hangs inside a plain container rather than being the representable's root.
-/// A freshly added UIKit view sits at the window's origin — under the status
-/// bar / Dynamic Island — until SwiftUI positions it, and when a step
-/// transition's timing runs the picker's first content layout there (observed
-/// whenever the picker is created alongside the compact Time row, on forward
-/// datetime entry and on backspacing onto a datetime pill alike), the inline
-/// calendar bakes the inherited ~59pt top inset into its grid: content pushed
-/// down by the inset, rows compacted into the remainder, and never recomputed
-/// after the view moves into place — the device screenshots' ~47pt blank band
-/// and ~0.83× row pitch match that inset exactly. The picker always lives
-/// inside the capture's own chrome, clear of every screen edge, so the honest
-/// safe area inside it is always zero; reporting it unconditionally makes the
-/// first layout correct no matter where the transition machinery has parked
-/// the view. The container root additionally keeps SwiftUI's direct frame
-/// writes off the picker so its geometry comes only from its own constraints.
-private struct InlineDatePicker: UIViewRepresentable {
+/// - `.dateAndTime` lays out a freshly built inline picker wrong outright (a
+///   blank band above the calendar, the time row squashed beneath it), and a
+///   timed step *is* entered fresh whenever the breadcrumb backspaces onto a
+///   committed datetime pill or a Custom Action datetime slot begins. Neither
+///   assignment order nor a synchronous `.date` → `.dateAndTime` transition
+///   avoids it (both were tried), so when a step collects a time, `DateStep`
+///   shows a separate compact hour-and-minute control beneath this calendar.
+/// - Even **date-only**, a `UIDatePicker` created alongside that compact Time
+///   row bakes a blank band into its grid: its *first* internal layout
+///   permanently adopts whatever geometry the view has at that moment, and
+///   during the affected transitions it runs while the freshly inserted view is
+///   parked at the window origin — under the status bar / Dynamic Island — and
+///   never recomputes. Every outside-in countermeasure fell short on device:
+///   overriding `safeAreaInsets` to zero removed only the 59pt Dynamic-Island
+///   share of the band (a ~20pt legacy status-bar allowance survived), pinning
+///   the picker's internal scroll views to `.never` inset adjustment changed
+///   nothing (pixel-identical), and deferring the picker's creation until its
+///   container had landed in the window still rendered the band. The internal
+///   metric consuming that last ~20pt is not reachable through public API, so
+///   the `UIDatePicker` goes entirely: `UICalendarView` is the same month grid
+///   as a first-class control, laid out from its own bounds.
+///
+/// The calendar reports **zero safe-area insets** (`SafeAreaImmuneCalendarView`)
+/// — the true value for a control that always renders inside the capture's own
+/// chrome, clear of every screen edge — and hangs inside a plain container
+/// rather than being the representable's root, keeping SwiftUI's direct frame
+/// writes off the grid so its geometry comes only from its own constraints.
+/// Both guards carry over from the `UIDatePicker` iteration, where they were
+/// device-verified to remove the Dynamic-Island share of the band.
+///
+/// The calendar edits only the **day**: selecting one merges the picked
+/// year/month/day into the bound date, preserving its time-of-day, so the
+/// compact Time row below and this grid edit the same value without fighting.
+private struct InlineCalendar: UIViewRepresentable {
     @Binding var date: Date
-    /// The fixed height to pin the picker to — the month grid's settled height.
+    /// The fixed height to pin the calendar to — the month grid's settled height.
     var height: CGFloat
 
     func makeUIView(context: Context) -> UIView {
-        let picker = SafeAreaImmuneDatePicker()
-        picker.preferredDatePickerStyle = .inline
-        picker.datePickerMode = .date
-        picker.date = date
-        picker.accessibilityIdentifier = "capture-calendar"
-        picker.addTarget(
-            context.coordinator,
-            action: #selector(Coordinator.changed(_:)),
-            for: .valueChanged
-        )
+        let calendarView = SafeAreaImmuneCalendarView()
+        calendarView.calendar = Calendar.current
+        calendarView.accessibilityIdentifier = "capture-calendar"
+
+        let selection = UICalendarSelectionSingleDate(delegate: context.coordinator)
+        selection.selectedDate = Calendar.current.dateComponents([.year, .month, .day], from: date)
+        calendarView.selectionBehavior = selection
+        calendarView.visibleDateComponents = Calendar.current.dateComponents([.year, .month], from: date)
+        context.coordinator.latestDate = date
+        context.coordinator.selection = selection
 
         let container = UIView()
-        container.addSubview(picker)
-        picker.translatesAutoresizingMaskIntoConstraints = false
+        container.addSubview(calendarView)
+        calendarView.translatesAutoresizingMaskIntoConstraints = false
         NSLayoutConstraint.activate([
-            picker.topAnchor.constraint(equalTo: container.topAnchor),
-            picker.leadingAnchor.constraint(equalTo: container.leadingAnchor),
-            picker.trailingAnchor.constraint(equalTo: container.trailingAnchor),
-            picker.heightAnchor.constraint(equalToConstant: height),
+            calendarView.topAnchor.constraint(equalTo: container.topAnchor),
+            calendarView.leadingAnchor.constraint(equalTo: container.leadingAnchor),
+            calendarView.trailingAnchor.constraint(equalTo: container.trailingAnchor),
+            calendarView.heightAnchor.constraint(equalToConstant: height),
         ])
-        context.coordinator.picker = picker
         return container
     }
 
     func updateUIView(_ container: UIView, context: Context) {
-        guard let picker = context.coordinator.picker else { return }
-        if picker.date != date { picker.date = date }
+        context.coordinator.latestDate = date
         context.coordinator.onChange = { date = $0 }
+        // Re-seed the selection only when the binding's *day* moved under the
+        // calendar (the Time row edits just the time-of-day, which the grid
+        // doesn't display). Compared component-wise: the delegate hands back
+        // richer DateComponents than the seed, so struct equality would re-set
+        // the same day on every update.
+        let day = Calendar.current.dateComponents([.year, .month, .day], from: date)
+        if let selection = context.coordinator.selection {
+            let selected = selection.selectedDate
+            if selected?.year != day.year || selected?.month != day.month || selected?.day != day.day {
+                selection.setSelected(day, animated: false)
+            }
+        }
     }
 
     func makeCoordinator() -> Coordinator { Coordinator { date = $0 } }
 
-    final class Coordinator: NSObject {
+    @MainActor
+    final class Coordinator: NSObject, UICalendarSelectionSingleDateDelegate {
         var onChange: (Date) -> Void
-        weak var picker: UIDatePicker?
+        /// The binding's current value, kept fresh by `updateUIView`, whose
+        /// time-of-day a picked day is merged onto.
+        var latestDate = Date()
+        weak var selection: UICalendarSelectionSingleDate?
         init(_ onChange: @escaping (Date) -> Void) { self.onChange = onChange }
-        @objc func changed(_ picker: UIDatePicker) { onChange(picker.date) }
+
+        func dateSelection(
+            _ selection: UICalendarSelectionSingleDate,
+            didSelectDate dateComponents: DateComponents?
+        ) {
+            guard var picked = dateComponents else { return }
+            let calendar = Calendar.current
+            let time = calendar.dateComponents([.hour, .minute, .second], from: latestDate)
+            picked.hour = time.hour
+            picked.minute = time.minute
+            picked.second = time.second
+            guard let merged = calendar.date(from: picked) else { return }
+            latestDate = merged
+            onChange(merged)
+        }
     }
 }
 
-/// A `UIDatePicker` that can never bake a status-bar/Dynamic-Island inset into
-/// its inline calendar while the view is still parked at the window's origin —
-/// see `InlineDatePicker`. Two layers, because UIKit resolves safe area
-/// per-view from the window rather than through overridable inheritance:
-///
-/// - `safeAreaInsets` reports zero for anything consulting the picker itself
-///   (device-verified to remove the 59pt Dynamic Island share of the band);
-/// - the picker's internal scroll views (the month grid is a collection view)
-///   still compute their *own* automatic content-inset adjustment, whose
-///   origin-parked fallback is the legacy 20pt status-bar allowance — the
-///   residual band after the first layer. They are lazily created, so every
-///   layout pass walks the subview tree and pins them to `.never`.
-///
-/// Both are the truth, not a workaround's lie: this control always renders
-/// inside the capture's chrome, clear of every screen edge, so no safe-area
-/// or status-bar adjustment can ever be correct inside it.
-private final class SafeAreaImmuneDatePicker: UIDatePicker {
+/// A `UICalendarView` that reports zero safe-area insets — the true value for a
+/// control that always renders inside the capture's chrome, clear of every
+/// screen edge, so no status-bar or Dynamic-Island adjustment can ever be
+/// correct inside it. Carried over from the `UIDatePicker` iteration (see
+/// `InlineCalendar`), where a freshly inserted view running its first layout
+/// parked at the window origin inherited a ~59pt top inset and baked it into
+/// the grid; the override was device-verified to remove that share of the band.
+private final class SafeAreaImmuneCalendarView: UICalendarView {
     override var safeAreaInsets: UIEdgeInsets { .zero }
-
-    override func layoutSubviews() {
-        super.layoutSubviews()
-        Self.neverAdjustContentInsets(in: self)
-    }
-
-    private static func neverAdjustContentInsets(in view: UIView) {
-        for subview in view.subviews {
-            if let scroll = subview as? UIScrollView,
-               scroll.contentInsetAdjustmentBehavior != .never {
-                scroll.contentInsetAdjustmentBehavior = .never
-            }
-            neverAdjustContentInsets(in: subview)
-        }
-    }
 }
 
 // MARK: - Bottom capture bar (the morph control)
