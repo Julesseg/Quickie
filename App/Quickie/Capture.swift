@@ -540,24 +540,29 @@ private struct DateStep: View {
 /// table entirely: when a step collects a time, `DateStep` shows a separate
 /// compact hour-and-minute control beneath this calendar instead.
 ///
-/// The picker is **not** the representable's root view — it hangs inside a plain
-/// container, pinned to the top with an exact required height. SwiftUI sets the
-/// root view's frame directly, and when the picker *was* the root, any transient
-/// frame the transition machinery applied (re-entering the step mid keyboard
-/// release handed it a band about a time-row shorter for a beat) collided with
-/// the pinned height, broke it, and the calendar built its grid for the squeezed
-/// box — a blank band on top and compacted rows that `UIDatePicker` never
-/// recomputes once the frame corrects. Inside the container the picker's
-/// geometry comes only from its own constraints, so it lays out at the settled
-/// size on the first pass no matter what frames the transition applies to the
-/// root.
+/// The picker reports **zero safe-area insets** (`SafeAreaImmuneDatePicker`) and
+/// hangs inside a plain container rather than being the representable's root.
+/// A freshly added UIKit view sits at the window's origin — under the status
+/// bar / Dynamic Island — until SwiftUI positions it, and when a step
+/// transition's timing runs the picker's first content layout there (observed
+/// whenever the picker is created alongside the compact Time row, on forward
+/// datetime entry and on backspacing onto a datetime pill alike), the inline
+/// calendar bakes the inherited ~59pt top inset into its grid: content pushed
+/// down by the inset, rows compacted into the remainder, and never recomputed
+/// after the view moves into place — the device screenshots' ~47pt blank band
+/// and ~0.83× row pitch match that inset exactly. The picker always lives
+/// inside the capture's own chrome, clear of every screen edge, so the honest
+/// safe area inside it is always zero; reporting it unconditionally makes the
+/// first layout correct no matter where the transition machinery has parked
+/// the view. The container root additionally keeps SwiftUI's direct frame
+/// writes off the picker so its geometry comes only from its own constraints.
 private struct InlineDatePicker: UIViewRepresentable {
     @Binding var date: Date
     /// The fixed height to pin the picker to — the month grid's settled height.
     var height: CGFloat
 
     func makeUIView(context: Context) -> UIView {
-        let picker = UIDatePicker()
+        let picker = SafeAreaImmuneDatePicker()
         picker.preferredDatePickerStyle = .inline
         picker.datePickerMode = .date
         picker.date = date
@@ -595,6 +600,15 @@ private struct InlineDatePicker: UIViewRepresentable {
         init(_ onChange: @escaping (Date) -> Void) { self.onChange = onChange }
         @objc func changed(_ picker: UIDatePicker) { onChange(picker.date) }
     }
+}
+
+/// A `UIDatePicker` that reports zero safe-area insets, so its inline calendar
+/// can never bake an inherited status-bar/Dynamic-Island inset into its first
+/// content layout while the view is still parked at the window's origin — see
+/// `InlineDatePicker`. Zero is the *true* safe area for this control: it always
+/// renders inside the capture's chrome, clear of every screen edge.
+private final class SafeAreaImmuneDatePicker: UIDatePicker {
+    override var safeAreaInsets: UIEdgeInsets { .zero }
 }
 
 // MARK: - Bottom capture bar (the morph control)
