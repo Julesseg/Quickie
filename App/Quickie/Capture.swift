@@ -602,13 +602,39 @@ private struct InlineDatePicker: UIViewRepresentable {
     }
 }
 
-/// A `UIDatePicker` that reports zero safe-area insets, so its inline calendar
-/// can never bake an inherited status-bar/Dynamic-Island inset into its first
-/// content layout while the view is still parked at the window's origin — see
-/// `InlineDatePicker`. Zero is the *true* safe area for this control: it always
-/// renders inside the capture's chrome, clear of every screen edge.
+/// A `UIDatePicker` that can never bake a status-bar/Dynamic-Island inset into
+/// its inline calendar while the view is still parked at the window's origin —
+/// see `InlineDatePicker`. Two layers, because UIKit resolves safe area
+/// per-view from the window rather than through overridable inheritance:
+///
+/// - `safeAreaInsets` reports zero for anything consulting the picker itself
+///   (device-verified to remove the 59pt Dynamic Island share of the band);
+/// - the picker's internal scroll views (the month grid is a collection view)
+///   still compute their *own* automatic content-inset adjustment, whose
+///   origin-parked fallback is the legacy 20pt status-bar allowance — the
+///   residual band after the first layer. They are lazily created, so every
+///   layout pass walks the subview tree and pins them to `.never`.
+///
+/// Both are the truth, not a workaround's lie: this control always renders
+/// inside the capture's chrome, clear of every screen edge, so no safe-area
+/// or status-bar adjustment can ever be correct inside it.
 private final class SafeAreaImmuneDatePicker: UIDatePicker {
     override var safeAreaInsets: UIEdgeInsets { .zero }
+
+    override func layoutSubviews() {
+        super.layoutSubviews()
+        Self.neverAdjustContentInsets(in: self)
+    }
+
+    private static func neverAdjustContentInsets(in view: UIView) {
+        for subview in view.subviews {
+            if let scroll = subview as? UIScrollView,
+               scroll.contentInsetAdjustmentBehavior != .never {
+                scroll.contentInsetAdjustmentBehavior = .never
+            }
+            neverAdjustContentInsets(in: subview)
+        }
+    }
 }
 
 // MARK: - Bottom capture bar (the morph control)
