@@ -3,8 +3,8 @@ import Testing
 @testable import QuickieCore
 
 // The tight animation budget from ADR 0010 made into a pure, testable decision:
-// subtle, fast springs on the few moments that move — a result row
-// inserting/reordering and the input gaining focus — degrading to plain fades
+// subtle, fast springs on the few moments that move — a result row slot
+// appearing/disappearing and the input gaining focus — degrading to plain fades
 // whenever Reduce Motion is on. `MotionPolicy` is the platform-agnostic policy;
 // the App feeds it `accessibilityReduceMotion` and maps each `MotionStyle` to a
 // concrete SwiftUI `Animation` at the edge.
@@ -31,7 +31,7 @@ struct MotionPolicyTests {
     @Test("input focus is snappier than a row settling into place")
     func focusIsSnappierThanRowMotion() {
         // Focus is the moment closest to a keystroke; it must feel instant, so it
-        // gets a shorter spring response than a row reordering above it.
+        // gets a shorter spring response than a row slot settling above it.
         let policy = MotionPolicy(reduceMotion: false)
         guard case .spring(let focus, _) = policy.style(for: .inputFocus),
               case .spring(let row, _) = policy.style(for: .rowInsert) else {
@@ -56,7 +56,7 @@ struct MotionPolicyTests {
     }
 
     @Test("every animated moment degrades to a fade under Reduce Motion",
-          arguments: [MotionMoment.rowInsert, .rowReorder, .inputFocus, .captureTransition])
+          arguments: [MotionMoment.rowInsert, .inputFocus, .captureTransition])
     func allMomentsFadeUnderReduceMotion(_ moment: MotionMoment) {
         let policy = MotionPolicy(reduceMotion: true)
         guard case .fade = policy.style(for: moment) else {
@@ -66,7 +66,7 @@ struct MotionPolicyTests {
     }
 
     @Test("springs stay within the tight budget — fast and barely bouncing",
-          arguments: [MotionMoment.rowInsert, .rowReorder, .inputFocus, .captureTransition])
+          arguments: [MotionMoment.rowInsert, .inputFocus, .captureTransition])
     func springsStayWithinBudget(_ moment: MotionMoment) {
         // ADR 0010's "tight animation budget": subtle and fast. A long response or
         // an under-damped, bouncy spring would read as sluggish next to the typing.

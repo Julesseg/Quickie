@@ -113,31 +113,39 @@ struct FileSearchResultList: View {
 
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
-    private var highlightedID: String? { results.first?.id }
-
     private var rowMotion: MotionStyle {
         MotionPolicy(reduceMotion: reduceMotion).style(for: .rowInsert)
     }
 
     var body: some View {
-        ScrollView {
-            GlassEffectContainer(spacing: 6) {
-                VStack(spacing: 6) {
-                    ForEach(results.reversed()) { action in
-                        Button {
-                            onRun(action)
-                        } label: {
-                            ActionRow(action: action, isHighlighted: action.id == highlightedID)
+        // Bottom-pinned exactly like the root Result list: the min-height frame
+        // anchors every slot to the viewport's bottom edge, so a slot animating in
+        // or out at the weak (top) end cannot shift the rows beneath it.
+        GeometryReader { viewport in
+            ScrollView {
+                GlassEffectContainer(spacing: 6) {
+                    VStack(spacing: 6) {
+                        // Rank-keyed slots, exactly like the root Result list: a
+                        // keystroke that re-filters swaps content in place, and only
+                        // a change in count animates a slot in or out — via the
+                        // transition's own animation, never the surrounding layout.
+                        ForEach(results.indices.reversed(), id: \.self) { rank in
+                            let action = results[rank]
+                            Button {
+                                onRun(action)
+                            } label: {
+                                ActionRow(action: action, isHighlighted: rank == 0)
+                            }
+                            .buttonStyle(.plain)
+                            .accessibilityIdentifier(action.id)
+                            .transition(rowMotion.insertionTransition)
                         }
-                        .buttonStyle(.plain)
-                        .accessibilityIdentifier(action.id)
-                        .transition(rowMotion.insertionTransition)
                     }
+                    .frame(maxWidth: .infinity)
                 }
-                .frame(maxWidth: .infinity)
+                .frame(maxWidth: .infinity, minHeight: viewport.size.height, alignment: .bottom)
             }
-            .animation(rowMotion.animation, value: results.map(\.id))
+            .defaultScrollAnchor(.bottom)
         }
-        .defaultScrollAnchor(.bottom)
     }
 }

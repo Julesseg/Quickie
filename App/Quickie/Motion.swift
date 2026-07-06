@@ -49,6 +49,11 @@ extension MotionStyle {
     }
 
     /// The transition that pairs with this style for a result row: it slides in
-    /// from the bottom edge (toward the input/thumb) while fading.
-    var insertionTransition: AnyTransition { edgeTransition(from: .bottom) }
+    /// from the bottom edge (toward the input/thumb) while fading. It carries its
+    /// **own** animation so only the appearing/disappearing row is ever in motion
+    /// — the surrounding layout applies instantly, so the rows that stay never
+    /// drift while a slot animates in or out at the weak end of the list.
+    var insertionTransition: AnyTransition {
+        edgeTransition(from: .bottom).animation(animation)
+    }
 }

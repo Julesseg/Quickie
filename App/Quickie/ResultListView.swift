@@ -29,63 +29,75 @@ struct ResultListView: View {
 
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
-    /// The id of the highlighted result — `results[0]`, nearest the thumb.
-    private var highlightedID: String? { results.first?.id }
-
-    /// The tight animation budget (ADR 0010): a subtle spring as rows insert and
-    /// reorder with the ranking, degrading to a fade under Reduce Motion.
+    /// The tight animation budget (ADR 0010): a subtle spring as row slots appear
+    /// and disappear with the result count, degrading to a fade under Reduce Motion.
     private var rowMotion: MotionStyle {
         MotionPolicy(reduceMotion: reduceMotion).style(for: .rowInsert)
     }
 
     var body: some View {
-        ScrollView {
-            // A single container so the neighbouring glass capsules blend and
-            // morph as one Liquid Glass surface rather than stacking flatly.
-            GlassEffectContainer(spacing: 6) {
-                VStack(spacing: 6) {
-                    ForEach(results.reversed()) { action in
-                        Button {
-                            onRun(action)
-                        } label: {
-                            ActionRow(action: action, isHighlighted: action.id == highlightedID)
+        // The viewport height pins the stack to the ScrollView's bottom edge (the
+        // `minHeight` + `.bottom` frame below), so every slot's position is
+        // measured from a fixed bottom — a slot appearing or disappearing at the
+        // weak (top) end cannot shift the rows beneath it. Without the pin the
+        // undersized content is only bottom-aligned by the scroll anchor, whose
+        // re-alignment during an animated resize sets the whole list adrift.
+        GeometryReader { viewport in
+            ScrollView {
+                // A single container so the neighbouring glass capsules blend and
+                // morph as one Liquid Glass surface rather than stacking flatly.
+                GlassEffectContainer(spacing: 6) {
+                    VStack(spacing: 6) {
+                        // Rows are keyed by **rank**, not by the Action they show,
+                        // so a keystroke that re-ranks the results swaps each slot's
+                        // content in place instead of flying rows across the screen
+                        // — the highlighted slot (rank 0) never moves, its text just
+                        // changes. Only a change in *count* inserts or removes a
+                        // slot, and only that slot animates: its transition carries
+                        // its own animation (Motion.swift), so the layout around it
+                        // applies instantly.
+                        ForEach(results.indices.reversed(), id: \.self) { rank in
+                            let action = results[rank]
+                            Button {
+                                onRun(action)
+                            } label: {
+                                ActionRow(action: action, isHighlighted: rank == 0)
+                            }
+                            .buttonStyle(.plain)
+                            .accessibilityIdentifier(action.id)
+                            .resultContextMenu(
+                                secondaryActions: secondaryActions(for: action.content),
+                                onSecondaryAction: { onSecondaryAction(action, $0) },
+                                isFavorite: isFavorite(action),
+                                canPin: canFavorite(action),
+                                toggle: { onToggleFavorite(action) }
+                            ) {
+                                // The lifted preview: a copy of this row, so the
+                                // long-pressed result detaches as a floating card.
+                                ActionRow(action: action)
+                                    .frame(maxWidth: .infinity)
+                            }
+                            .transition(rowMotion.insertionTransition)
                         }
-                        .buttonStyle(.plain)
-                        .accessibilityIdentifier(action.id)
-                        .resultContextMenu(
-                            secondaryActions: secondaryActions(for: action.content),
-                            onSecondaryAction: { onSecondaryAction(action, $0) },
-                            isFavorite: isFavorite(action),
-                            canPin: canFavorite(action),
-                            toggle: { onToggleFavorite(action) }
-                        ) {
-                            // The lifted preview: a copy of this row, so the
-                            // long-pressed result detaches as a floating card.
-                            ActionRow(action: action)
-                                .frame(maxWidth: .infinity)
-                        }
-                        .transition(rowMotion.insertionTransition)
                     }
+                    .frame(maxWidth: .infinity)
                 }
-                .frame(maxWidth: .infinity)
+                .frame(maxWidth: .infinity, minHeight: viewport.size.height, alignment: .bottom)
             }
-            // Animate insert/reorder when the set or order of results changes —
-            // keystroke-fast, and never gating the keystroke itself.
-            .animation(rowMotion.animation, value: results.map(\.id))
-        }
-        .defaultScrollAnchor(.bottom)
-        // Swiping down the list dismisses the keyboard the native iOS way (issue
-        // #64): the keyboard tracks the drag off-screen, the input bar drops to the
-        // bottom, and the query + results are preserved — no custom gesture, just
-        // the system scroll-dismiss so more results become visible.
-        .scrollDismissesKeyboard(.interactively)
-        // Report drag state so the launcher can tell this swipe-dismiss (drop the
-        // bar) from a context-menu keyboard dismissal (hold the layout in place).
-        // Only an active drag counts — *not* `.tracking`, the finger-down-but-still
-        // state a long-press sits in, which must read as "not scrolling" so the
-        // context menu freezes the layout.
-        .onScrollPhaseChange { _, phase in
-            onScrollActive(phase == .interacting || phase == .decelerating)
+            .defaultScrollAnchor(.bottom)
+            // Swiping down the list dismisses the keyboard the native iOS way (issue
+            // #64): the keyboard tracks the drag off-screen, the input bar drops to
+            // the bottom, and the query + results are preserved — no custom gesture,
+            // just the system scroll-dismiss so more results become visible.
+            .scrollDismissesKeyboard(.interactively)
+            // Report drag state so the launcher can tell this swipe-dismiss (drop
+            // the bar) from a context-menu keyboard dismissal (hold the layout in
+            // place). Only an active drag counts — *not* `.tracking`, the
+            // finger-down-but-still state a long-press sits in, which must read as
+            // "not scrolling" so the context menu freezes the layout.
+            .onScrollPhaseChange { _, phase in
+                onScrollActive(phase == .interacting || phase == .decelerating)
+            }
         }
     }
 }
