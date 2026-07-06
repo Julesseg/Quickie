@@ -107,8 +107,9 @@ final class CaptureDateStepUITests: XCTestCase {
         let app = launchApp()
         advanceToDateStep(app)
 
-        // The calendar is a `UICalendarView`, which XCUITest does not expose as a
-        // date picker — find it by identifier across any element type.
+        // Find the calendar by identifier across any element type, so the query
+        // holds regardless of which control implements it (XCUITest exposed the
+        // various implementations tried here as different element types).
         let calendar = app.descendants(matching: .any)["capture-calendar"].firstMatch
         XCTAssertTrue(calendar.waitForExistence(timeout: 5), "the due-date step shows the inline calendar")
 

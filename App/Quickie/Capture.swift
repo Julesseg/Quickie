@@ -467,267 +467,158 @@ private struct DateStep: View {
     @Bindable var model: CaptureModel
 
     /// The settled height of the month grid, pinned with a hard constraint so the
-    /// calendar can never use an unstable taller intrinsic height. The calendar is
+    /// picker can never use its unstable taller intrinsic height. The calendar is
     /// always date-only (constant across 5- and 6-row months); a collected time is
-    /// its own compact row *beneath* the calendar, never a picker's `.dateAndTime`
-    /// mode — see `InlineCalendar` for why that mode is off the table.
+    /// its own compact row in a *separate glass card* beneath the calendar's,
+    /// never the picker's `.dateAndTime` mode — see `InlineDatePicker` for why
+    /// that mode is off the table.
     private static let dateHeight: CGFloat = 350
 
     var body: some View {
         VStack {
             Spacer(minLength: 0)
-            VStack(spacing: 12) {
-                // A bespoke month grid pinned to a fixed height — see
-                // `InlineCalendar` for why every stock calendar control
-                // (SwiftUI's graphical DatePicker, the inline UIDatePicker, and
-                // UICalendarView alike) is off the table here. Its layout is
-                // pure geometry within this frame, so the grid renders
-                // identically on every entry path and never moves.
-                InlineCalendar(date: $model.pickedDate)
-                    .frame(height: Self.dateHeight)
 
-                // The time, when the step collects one, is its own compact control
-                // riding below the calendar — the same shape as the system picker's
-                // native time row, but built from parts whose layout is
-                // deterministic. It shares `pickedDate`, so the compact control
-                // edits the time-of-day of the same value the calendar edits the
-                // day of.
-                if model.dateStepIncludesTime {
-                    DatePicker(
-                        "Time",
-                        selection: $model.pickedDate,
-                        displayedComponents: .hourAndMinute
-                    )
-                    .font(.subheadline)
-                    .padding(.horizontal, 4)
-                    .accessibilityIdentifier("capture-time")
-                }
+            // The calendar rides ALONE in its glass card. Every broken layout of
+            // the stock inline picker shared one container with the time UI, and
+            // a bespoke month grid in the identical shared container rendered
+            // clean — so the calendar control misresolves only when it is
+            // *created into* a container it shares with the time row. Isolating
+            // the picker in its own card makes its hosting hierarchy identical on
+            // every entry path — date-only, forward datetime, and backspacing
+            // onto a datetime pill alike — the configuration that always
+            // rendered correctly.
+            InlineDatePicker(date: $model.pickedDate, height: Self.dateHeight)
+                .frame(height: Self.dateHeight)
+                .padding(16)
+                .glassEffect(.regular, in: RoundedRectangle(cornerRadius: 24, style: .continuous))
+                .padding(.horizontal, 16)
 
-                // The toggle appears only when the step leaves the date/time choice to
-                // the user (reminders/events). A Custom Action date slot fixes it from
-                // its format, so the toggle is hidden — the time row is already pinned
-                // on or off.
-                if model.dateStepAllowsTimeToggle {
-                    Toggle("Include a time", isOn: $model.includeTime)
+            // The time row and toggle live in their own glass card below, so
+            // their presence never changes what the calendar's container holds.
+            if model.dateStepIncludesTime || model.dateStepAllowsTimeToggle {
+                VStack(spacing: 12) {
+                    // The time, when the step collects one — a compact control
+                    // sharing `pickedDate`, so it edits the time-of-day of the
+                    // same value the calendar edits the day of.
+                    if model.dateStepIncludesTime {
+                        DatePicker(
+                            "Time",
+                            selection: $model.pickedDate,
+                            displayedComponents: .hourAndMinute
+                        )
                         .font(.subheadline)
                         .padding(.horizontal, 4)
-                        .accessibilityIdentifier("capture-include-time")
+                        .accessibilityIdentifier("capture-time")
+                    }
+
+                    // The toggle appears only when the step leaves the date/time
+                    // choice to the user (reminders/events). A Custom Action date
+                    // slot fixes it from its format, so the toggle is hidden —
+                    // the time row is already pinned on or off.
+                    if model.dateStepAllowsTimeToggle {
+                        Toggle("Include a time", isOn: $model.includeTime)
+                            .font(.subheadline)
+                            .padding(.horizontal, 4)
+                            .accessibilityIdentifier("capture-include-time")
+                    }
                 }
+                .padding(16)
+                .glassEffect(.regular, in: RoundedRectangle(cornerRadius: 24, style: .continuous))
+                .padding(.horizontal, 16)
+                .padding(.top, 12)
             }
-            .padding(16)
-            .glassEffect(.regular, in: RoundedRectangle(cornerRadius: 24, style: .continuous))
-            .padding(.horizontal, 16)
         }
     }
 }
 
-/// The in-place month-grid date picker — a bespoke SwiftUI month grid
-/// (CONTEXT.md → Input method), because **every stock calendar control broke
-/// here, the same way**:
+/// The in-place month-grid date picker, a `UIDatePicker` in `.inline` style with
+/// a hard height constraint (CONTEXT.md → Input method). SwiftUI's
+/// `DatePicker(.graphical)` over-reports its `intrinsicContentSize` until its first
+/// selection change, so its calendar rows visibly tightened the first time you
+/// tapped a day; pinning a `UIDatePicker` to its settled height with a required
+/// constraint forces that layout from the start, so the grid never jumps.
 ///
-/// - SwiftUI's `DatePicker(.graphical)` over-reports its intrinsic height until
-///   its first selection change, so the rows visibly tightened on the first
-///   day tap.
-/// - The inline `UIDatePicker` in `.dateAndTime` lays out a fresh picker wrong
-///   outright (a blank band above the calendar, the time row squashed beneath
-///   it), and a timed step *is* entered fresh whenever the breadcrumb
-///   backspaces onto a committed datetime pill or a Custom Action datetime
-///   slot begins — so a collected time is a separate compact row in `DateStep`,
-///   never the picker's mode.
-/// - Even date-only, a `UIDatePicker` *created* alongside that compact Time row
-///   baked a blank band into its grid and compacted the rows, and no outside-in
-///   countermeasure cleared it on device: zero safe-area insets removed only
-///   the 59pt Dynamic-Island share of the band (a ~20pt allowance survived),
-///   pinning internal scroll views to `.never` inset adjustment was
-///   pixel-identical, and deferring creation until the container had landed in
-///   the window changed nothing.
-/// - `UICalendarView` — the control the modern inline picker's month grid is
-///   built on — reproduced the band **identically**, confirming the defect
-///   lives in that shared machinery, unreachable through public API.
+/// Always **date-only**. The picker must never be created in — or switched to —
+/// `.dateAndTime`: a `UIDatePicker` whose inline content is built fresh in that
+/// mode lays it out wrong (a blank band above the calendar, the time row squashed
+/// beneath it), and a timed step *is* entered fresh whenever the breadcrumb
+/// backspaces onto a committed datetime pill or a Custom Action datetime slot
+/// begins. Neither assignment order nor a synchronous `.date` → `.dateAndTime`
+/// transition avoids the broken layout (both were tried), so the mode is off the
+/// table entirely: when a step collects a time, `DateStep` shows a separate
+/// compact hour-and-minute control instead — in its own glass card, because even
+/// a *date-only* picker created into a container it shares with the time UI
+/// bakes a ~20pt blank band into its grid and compacts the rows. Clean-install
+/// device tests killed every in-picker countermeasure — a zero safe-area
+/// override alone, internal scroll views pinned to `.never` inset adjustment,
+/// deferring the picker's creation until its container had landed in the window,
+/// and swapping to `UICalendarView` — while a bespoke SwiftUI grid in the same
+/// shared container rendered clean, proving the defect is tied to what the
+/// picker's container holds at creation, not to when or where it is created.
+/// `DateStep` therefore hosts this picker in a card of its own so its hosting
+/// hierarchy is identical on every entry path.
 ///
-/// So the month grid is ours: a header with month-navigation buttons, a weekday
-/// row, and a fixed 6×7 day grid. Its layout is pure geometry from the frame
-/// SwiftUI hands it — nothing consults safe areas, window position, or a
-/// first-layout snapshot, so the band and row compaction are structurally
-/// impossible, on every entry path alike. The 6-row grid is constant across 5-
-/// and 6-week months, so the height never jumps.
-///
-/// The calendar edits only the **day**: tapping one merges the picked
-/// year/month/day into the bound date, preserving its time-of-day, so the
-/// compact Time row below and this grid edit the same value without fighting.
-/// Month navigation moves only the displayed month, never the bound date.
-private struct InlineCalendar: View {
+/// The picker reports **zero safe-area insets** (`SafeAreaImmuneDatePicker`) and
+/// hangs inside a plain container rather than being the representable's root,
+/// keeping SwiftUI's direct frame writes off the picker so its geometry comes
+/// only from its own constraints. Both are kept as belts: the honest safe area
+/// inside the capture's chrome is always zero, and the override was
+/// device-verified to remove the 59pt Dynamic-Island share of the band in the
+/// shared-container era.
+private struct InlineDatePicker: UIViewRepresentable {
     @Binding var date: Date
+    /// The fixed height to pin the picker to — the month grid's settled height.
+    var height: CGFloat
 
-    /// The first instant of the month the grid is showing. Seeded from the
-    /// bound date and re-synced whenever the bound date's month changes;
-    /// the chevrons move it independently, so browsing months never edits
-    /// the date.
-    @State private var visibleMonth: Date
+    func makeUIView(context: Context) -> UIView {
+        let picker = SafeAreaImmuneDatePicker()
+        picker.preferredDatePickerStyle = .inline
+        picker.datePickerMode = .date
+        picker.date = date
+        picker.accessibilityIdentifier = "capture-calendar"
+        picker.addTarget(
+            context.coordinator,
+            action: #selector(Coordinator.changed(_:)),
+            for: .valueChanged
+        )
 
-    private static let calendar = Calendar.current
-
-    init(date: Binding<Date>) {
-        _date = date
-        _visibleMonth = State(initialValue: Self.startOfMonth(containing: date.wrappedValue))
+        let container = UIView()
+        container.addSubview(picker)
+        picker.translatesAutoresizingMaskIntoConstraints = false
+        NSLayoutConstraint.activate([
+            picker.topAnchor.constraint(equalTo: container.topAnchor),
+            picker.leadingAnchor.constraint(equalTo: container.leadingAnchor),
+            picker.trailingAnchor.constraint(equalTo: container.trailingAnchor),
+            picker.heightAnchor.constraint(equalToConstant: height),
+        ])
+        context.coordinator.picker = picker
+        return container
     }
 
-    var body: some View {
-        VStack(spacing: 6) {
-            header
-            weekdayRow
-            dayGrid
-        }
-        .padding(.horizontal, 4)
-        .accessibilityElement(children: .contain)
-        .accessibilityIdentifier("capture-calendar")
-        .onChange(of: date) { _, newDate in
-            let month = Self.startOfMonth(containing: newDate)
-            if month != visibleMonth { visibleMonth = month }
-        }
+    func updateUIView(_ container: UIView, context: Context) {
+        guard let picker = context.coordinator.picker else { return }
+        if picker.date != date { picker.date = date }
+        context.coordinator.onChange = { date = $0 }
     }
 
-    private var header: some View {
-        HStack(spacing: 16) {
-            Text(visibleMonth.formatted(.dateTime.month(.wide).year()))
-                .font(.headline)
-            Spacer()
-            Button {
-                step(months: -1)
-            } label: {
-                Image(systemName: "chevron.left")
-                    .font(.body.weight(.semibold))
-                    .foregroundStyle(.tint)
-                    .frame(width: 32, height: 32)
-                    .contentShape(Rectangle())
-            }
-            .buttonStyle(.plain)
-            .accessibilityLabel("Previous Month")
-            Button {
-                step(months: 1)
-            } label: {
-                Image(systemName: "chevron.right")
-                    .font(.body.weight(.semibold))
-                    .foregroundStyle(.tint)
-                    .frame(width: 32, height: 32)
-                    .contentShape(Rectangle())
-            }
-            .buttonStyle(.plain)
-            .accessibilityLabel("Next Month")
-        }
-        .padding(.horizontal, 8)
-    }
+    func makeCoordinator() -> Coordinator { Coordinator { date = $0 } }
 
-    private var weekdayRow: some View {
-        HStack(spacing: 0) {
-            ForEach(weekdaySymbols, id: \.self) { symbol in
-                Text(symbol)
-                    .font(.caption2.weight(.semibold))
-                    .foregroundStyle(.secondary)
-                    .frame(maxWidth: .infinity)
-            }
-        }
+    final class Coordinator: NSObject {
+        var onChange: (Date) -> Void
+        weak var picker: UIDatePicker?
+        init(_ onChange: @escaping (Date) -> Void) { self.onChange = onChange }
+        @objc func changed(_ picker: UIDatePicker) { onChange(picker.date) }
     }
+}
 
-    private var dayGrid: some View {
-        let slots = monthSlots
-        return VStack(spacing: 0) {
-            ForEach(0..<6, id: \.self) { row in
-                HStack(spacing: 0) {
-                    ForEach(0..<7, id: \.self) { column in
-                        dayCell(slots[row * 7 + column])
-                            .frame(maxWidth: .infinity, maxHeight: .infinity)
-                    }
-                }
-                .frame(maxHeight: .infinity)
-            }
-        }
-    }
-
-    @ViewBuilder
-    private func dayCell(_ day: Int?) -> some View {
-        if let day {
-            let isSelected = isSelectedDay(day)
-            Button {
-                select(day: day)
-            } label: {
-                Text("\(day)")
-                    .font(.body.monospacedDigit())
-                    .fontWeight(isSelected ? .semibold : .regular)
-                    .foregroundStyle(
-                        isSelected ? AnyShapeStyle(.white)
-                            : isToday(day) ? AnyShapeStyle(.tint)
-                            : AnyShapeStyle(.primary)
-                    )
-                    .frame(width: 38, height: 38)
-                    .background {
-                        if isSelected {
-                            Circle().fill(Color.accentColor)
-                        }
-                    }
-                    .frame(maxWidth: .infinity, maxHeight: .infinity)
-                    .contentShape(Rectangle())
-            }
-            .buttonStyle(.plain)
-        } else {
-            Color.clear
-        }
-    }
-
-    /// The 6×7 grid's contents: `nil` pads outside the month, so the grid's
-    /// geometry is identical for every month and the rows can never shift.
-    private var monthSlots: [Int?] {
-        let calendar = Self.calendar
-        let leading = (calendar.component(.weekday, from: visibleMonth) - calendar.firstWeekday + 7) % 7
-        let dayCount = calendar.range(of: .day, in: .month, for: visibleMonth)?.count ?? 30
-        var slots = [Int?](repeating: nil, count: leading)
-        slots.append(contentsOf: (1...dayCount).map { $0 })
-        slots.append(contentsOf: [Int?](repeating: nil, count: 42 - slots.count))
-        return slots
-    }
-
-    /// The locale's weekday symbols, rotated so the grid's columns start on the
-    /// locale's first weekday.
-    private var weekdaySymbols: [String] {
-        let calendar = Self.calendar
-        let symbols = calendar.veryShortStandaloneWeekdaySymbols
-        let shift = calendar.firstWeekday - 1
-        return Array(symbols[shift...]) + Array(symbols[..<shift])
-    }
-
-    private func isSelectedDay(_ day: Int) -> Bool {
-        let components = Self.calendar.dateComponents([.year, .month, .day], from: date)
-        let month = Self.calendar.dateComponents([.year, .month], from: visibleMonth)
-        return components.year == month.year && components.month == month.month && components.day == day
-    }
-
-    private func isToday(_ day: Int) -> Bool {
-        guard let cellDate = Self.calendar.date(byAdding: .day, value: day - 1, to: visibleMonth) else {
-            return false
-        }
-        return Self.calendar.isDateInToday(cellDate)
-    }
-
-    private func select(day: Int) {
-        let calendar = Self.calendar
-        var components = calendar.dateComponents([.year, .month], from: visibleMonth)
-        components.day = day
-        let time = calendar.dateComponents([.hour, .minute, .second], from: date)
-        components.hour = time.hour
-        components.minute = time.minute
-        components.second = time.second
-        if let merged = calendar.date(from: components) { date = merged }
-    }
-
-    private func step(months: Int) {
-        if let moved = Self.calendar.date(byAdding: .month, value: months, to: visibleMonth) {
-            visibleMonth = moved
-        }
-    }
-
-    private static func startOfMonth(containing date: Date) -> Date {
-        calendar.date(from: calendar.dateComponents([.year, .month], from: date)) ?? date
-    }
+/// A `UIDatePicker` that reports zero safe-area insets — the true value for a
+/// control that always renders inside the capture's chrome, clear of every
+/// screen edge, so no status-bar or Dynamic-Island adjustment can ever be
+/// correct inside it. Kept as a belt alongside the container-isolation fix (see
+/// `InlineDatePicker`): in the shared-container era it was device-verified to
+/// remove the 59pt Dynamic-Island share of the band.
+private final class SafeAreaImmuneDatePicker: UIDatePicker {
+    override var safeAreaInsets: UIEdgeInsets { .zero }
 }
 
 // MARK: - Bottom capture bar (the morph control)
