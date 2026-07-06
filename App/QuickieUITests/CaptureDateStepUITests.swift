@@ -66,8 +66,8 @@ final class CaptureDateStepUITests: XCTestCase {
         let setDate = app.buttons["capture-set-date"]
         XCTAssertTrue(setDate.waitForExistence(timeout: 5), "committing the title advances to the due-date step")
         XCTAssertTrue(
-            app.descendants(matching: .any)["capture-calendar"].firstMatch.waitForExistence(timeout: 5),
-            "the due-date step shows the inline calendar"
+            app.datePickers.firstMatch.waitForExistence(timeout: 5),
+            "the due-date step shows the inline date picker"
         )
         XCTAssertTrue(
             app.keyboards.firstMatch.waitForNonExistence(timeout: 10),
@@ -107,9 +107,7 @@ final class CaptureDateStepUITests: XCTestCase {
         let app = launchApp()
         advanceToDateStep(app)
 
-        // The calendar is a `UICalendarView`, which XCUITest does not expose as a
-        // date picker — find it by identifier across any element type.
-        let calendar = app.descendants(matching: .any)["capture-calendar"].firstMatch
+        let calendar = app.datePickers["capture-calendar"]
         XCTAssertTrue(calendar.waitForExistence(timeout: 5), "the due-date step shows the inline calendar")
 
         // The grid's row pitch on first display — the reference the re-entered
@@ -158,11 +156,7 @@ final class CaptureDateStepUITests: XCTestCase {
         let time = app.descendants(matching: .any)["capture-time"].firstMatch
         XCTAssertTrue(time.waitForExistence(timeout: 5), "including a time adds the Time row")
 
-        // The bespoke grid labels its forward chevron "Next Month" (matching the
-        // stock pickers' label); match case-insensitively for robustness.
-        let header = calendar.buttons
-            .matching(NSPredicate(format: "label BEGINSWITH[c] 'next'"))
-            .firstMatch
+        let header = calendar.buttons["Next Month"]
         XCTAssertTrue(header.waitForExistence(timeout: 5), "the inline calendar exposes its month-navigation header")
         // Let the layout settle before recording the reference geometry.
         RunLoop.current.run(until: Date().addingTimeInterval(1))
@@ -228,20 +222,12 @@ final class CaptureDateStepUITests: XCTestCase {
     }
 
     /// A day-number cell of the inline calendar. The OS has exposed these as
-    /// different element types across versions — and `UICalendarView` labels its
-    /// day cells with more than the bare number (e.g. a weekday or month around
-    /// it) — so match across any element type, accepting the day number either
-    /// as the whole label or as a standalone token inside it. The grid shows
-    /// only the current month, so a day token can't collide with a neighbor
-    /// month's cell.
+    /// different element types across versions, so match by exact label across
+    /// any type rather than assuming staticText.
     @MainActor
     private func dayCell(_ label: String, in calendar: XCUIElement) -> XCUIElement {
         calendar.descendants(matching: .any)
-            .matching(NSPredicate(
-                format: "label == %@ OR label MATCHES %@",
-                label,
-                "(^|.*\\D)\(label)(\\D.*|$)"
-            ))
+            .matching(NSPredicate(format: "label == %@", label))
             .firstMatch
     }
 
