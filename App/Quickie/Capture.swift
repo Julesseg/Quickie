@@ -540,101 +540,115 @@ private struct DateStep: View {
 /// table entirely: when a step collects a time, `DateStep` shows a separate
 /// compact hour-and-minute control beneath this calendar instead.
 ///
-/// The picker reports **zero safe-area insets** (`SafeAreaImmuneDatePicker`) and
-/// hangs inside a plain container rather than being the representable's root.
-/// A freshly added UIKit view sits at the window's origin — under the status
-/// bar / Dynamic Island — until SwiftUI positions it, and when a step
-/// transition's timing runs the picker's first content layout there (observed
-/// whenever the picker is created alongside the compact Time row, on forward
-/// datetime entry and on backspacing onto a datetime pill alike), the inline
-/// calendar bakes the inherited ~59pt top inset into its grid: content pushed
-/// down by the inset, rows compacted into the remainder, and never recomputed
-/// after the view moves into place — the device screenshots' ~47pt blank band
-/// and ~0.83× row pitch match that inset exactly. The picker always lives
-/// inside the capture's own chrome, clear of every screen edge, so the honest
-/// safe area inside it is always zero; reporting it unconditionally makes the
-/// first layout correct no matter where the transition machinery has parked
-/// the view. The container root additionally keeps SwiftUI's direct frame
-/// writes off the picker so its geometry comes only from its own constraints.
+/// The `UIDatePicker` is **instantiated deferred** — one runloop turn after its
+/// container lands in the window — because its inline calendar's *first*
+/// internal layout permanently bakes in whatever geometry the view has at that
+/// moment, and a freshly inserted view sits parked at the window's origin,
+/// under the status bar / Dynamic Island, until SwiftUI commits its real frame.
+/// A picker created inline during a step transition (observed whenever it is
+/// built alongside the compact Time row: forward datetime entry and
+/// backspacing onto a datetime pill alike) laid its grid out at that parked
+/// position and never recomputed: content shifted down, rows compacted.
+/// Device screenshots peeled the poison in layers — overriding the picker's
+/// `safeAreaInsets` to zero removed a 59pt Dynamic-Island band, a residual
+/// ~20pt band from internal metrics survived even
+/// `contentInsetAdjustmentBehavior = .never` — so instead of intercepting
+/// internals one by one, the picker is only created *after* the container's
+/// frame is committed. Its first layout then runs at the true mid-screen
+/// position, so every entry path builds the identical spread calendar. The
+/// zero-safe-area subclass stays as a belt should anything reposition later.
+///
+/// The container reserves the calendar's exact box via `DateStep`'s fixed
+/// frame, so the one-turn deferral is invisible — the glass band is already
+/// its final size while the transition is still in flight.
 private struct InlineDatePicker: UIViewRepresentable {
     @Binding var date: Date
     /// The fixed height to pin the picker to — the month grid's settled height.
     var height: CGFloat
 
-    func makeUIView(context: Context) -> UIView {
-        let picker = SafeAreaImmuneDatePicker()
-        picker.preferredDatePickerStyle = .inline
-        picker.datePickerMode = .date
-        picker.date = date
-        picker.accessibilityIdentifier = "capture-calendar"
-        picker.addTarget(
-            context.coordinator,
-            action: #selector(Coordinator.changed(_:)),
-            for: .valueChanged
-        )
-
-        let container = UIView()
-        container.addSubview(picker)
-        picker.translatesAutoresizingMaskIntoConstraints = false
-        NSLayoutConstraint.activate([
-            picker.topAnchor.constraint(equalTo: container.topAnchor),
-            picker.leadingAnchor.constraint(equalTo: container.leadingAnchor),
-            picker.trailingAnchor.constraint(equalTo: container.trailingAnchor),
-            picker.heightAnchor.constraint(equalToConstant: height),
-        ])
-        context.coordinator.picker = picker
+    func makeUIView(context: Context) -> DeferredCalendarContainer {
+        let container = DeferredCalendarContainer()
+        container.coordinator = context.coordinator
+        container.pinnedHeight = height
+        context.coordinator.latestDate = date
         return container
     }
 
-    func updateUIView(_ container: UIView, context: Context) {
-        guard let picker = context.coordinator.picker else { return }
-        if picker.date != date { picker.date = date }
+    func updateUIView(_ container: DeferredCalendarContainer, context: Context) {
+        context.coordinator.latestDate = date
         context.coordinator.onChange = { date = $0 }
+        if let picker = context.coordinator.picker, picker.date != date {
+            picker.date = date
+        }
     }
 
     func makeCoordinator() -> Coordinator { Coordinator { date = $0 } }
 
     final class Coordinator: NSObject {
         var onChange: (Date) -> Void
+        /// The binding's current value, kept fresh by `updateUIView` so the
+        /// deferred picker seeds correctly however late it is created.
+        var latestDate = Date()
         weak var picker: UIDatePicker?
         init(_ onChange: @escaping (Date) -> Void) { self.onChange = onChange }
         @objc func changed(_ picker: UIDatePicker) { onChange(picker.date) }
     }
 }
 
-/// A `UIDatePicker` that can never bake a status-bar/Dynamic-Island inset into
-/// its inline calendar while the view is still parked at the window's origin —
-/// see `InlineDatePicker`. Two layers, because UIKit resolves safe area
-/// per-view from the window rather than through overridable inheritance:
-///
-/// - `safeAreaInsets` reports zero for anything consulting the picker itself
-///   (device-verified to remove the 59pt Dynamic Island share of the band);
-/// - the picker's internal scroll views (the month grid is a collection view)
-///   still compute their *own* automatic content-inset adjustment, whose
-///   origin-parked fallback is the legacy 20pt status-bar allowance — the
-///   residual band after the first layer. They are lazily created, so every
-///   layout pass walks the subview tree and pins them to `.never`.
-///
-/// Both are the truth, not a workaround's lie: this control always renders
-/// inside the capture's chrome, clear of every screen edge, so no safe-area
-/// or status-bar adjustment can ever be correct inside it.
-private final class SafeAreaImmuneDatePicker: UIDatePicker {
-    override var safeAreaInsets: UIEdgeInsets { .zero }
+/// The calendar's host view: an empty box the size of the month grid that
+/// creates its `UIDatePicker` only after it has been committed into the window
+/// at its real position — see `InlineDatePicker` for why creating the picker
+/// any earlier poisons its first layout.
+private final class DeferredCalendarContainer: UIView {
+    weak var coordinator: InlineDatePicker.Coordinator?
+    var pinnedHeight: CGFloat = 0
+    private var installScheduled = false
 
-    override func layoutSubviews() {
-        super.layoutSubviews()
-        Self.neverAdjustContentInsets(in: self)
-    }
-
-    private static func neverAdjustContentInsets(in view: UIView) {
-        for subview in view.subviews {
-            if let scroll = subview as? UIScrollView,
-               scroll.contentInsetAdjustmentBehavior != .never {
-                scroll.contentInsetAdjustmentBehavior = .never
-            }
-            neverAdjustContentInsets(in: subview)
+    override func didMoveToWindow() {
+        super.didMoveToWindow()
+        guard window != nil, coordinator?.picker == nil, !installScheduled else { return }
+        installScheduled = true
+        // Next runloop turn: the insertion transaction that parked this view at
+        // the window origin has committed and the frame is the real one.
+        DispatchQueue.main.async { [weak self] in
+            guard let self else { return }
+            self.installScheduled = false
+            self.installPicker()
         }
     }
+
+    private func installPicker() {
+        guard let coordinator, coordinator.picker == nil, window != nil else { return }
+        let picker = SafeAreaImmuneDatePicker()
+        picker.preferredDatePickerStyle = .inline
+        picker.datePickerMode = .date
+        picker.date = coordinator.latestDate
+        picker.accessibilityIdentifier = "capture-calendar"
+        picker.addTarget(
+            coordinator,
+            action: #selector(InlineDatePicker.Coordinator.changed(_:)),
+            for: .valueChanged
+        )
+        picker.translatesAutoresizingMaskIntoConstraints = false
+        addSubview(picker)
+        NSLayoutConstraint.activate([
+            picker.topAnchor.constraint(equalTo: topAnchor),
+            picker.leadingAnchor.constraint(equalTo: leadingAnchor),
+            picker.trailingAnchor.constraint(equalTo: trailingAnchor),
+            picker.heightAnchor.constraint(equalToConstant: pinnedHeight),
+        ])
+        coordinator.picker = picker
+    }
+}
+
+/// A `UIDatePicker` that reports zero safe-area insets — the true value for a
+/// control that always renders inside the capture's chrome, clear of every
+/// screen edge. Deferred creation (`DeferredCalendarContainer`) is the real
+/// guard against the parked-at-origin first layout; this override stays as a
+/// belt (it removed the 59pt Dynamic-Island band on device) should anything
+/// ever run a layout pass at a screen edge again.
+private final class SafeAreaImmuneDatePicker: UIDatePicker {
+    override var safeAreaInsets: UIEdgeInsets { .zero }
 }
 
 // MARK: - Bottom capture bar (the morph control)
