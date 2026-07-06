@@ -502,6 +502,7 @@ private struct DateStep: View {
                     Toggle("Include a time", isOn: $model.includeTime)
                         .font(.subheadline)
                         .padding(.horizontal, 4)
+                        .accessibilityIdentifier("capture-include-time")
                 }
             }
             .padding(16)
@@ -529,7 +530,17 @@ private struct InlineDatePicker: UIViewRepresentable {
     func makeUIView(context: Context) -> UIDatePicker {
         let picker = UIDatePicker()
         picker.preferredDatePickerStyle = .inline
-        picker.datePickerMode = includeTime ? .dateAndTime : .date
+        // Reach `.dateAndTime` only ever *through* a real mode change. It is the
+        // UIKit default, so assigning it directly is a no-op and the picker keeps
+        // the layout it built when the style was applied — which settles taller
+        // than one *grown* into date+time, so the pinned band shoved the calendar
+        // down under a blank band and squashed the time row whenever a timed step
+        // was entered fresh (backspacing onto a committed datetime pill, a Custom
+        // Action datetime slot). Stepping `.date` → `.dateAndTime` rebuilds the
+        // content on the same path as the "Include a time" toggle, whose layout
+        // is the settled one the band is sized for.
+        picker.datePickerMode = .date
+        if includeTime { picker.datePickerMode = .dateAndTime }
         picker.date = date
         picker.addTarget(
             context.coordinator,
