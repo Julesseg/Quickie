@@ -18,8 +18,11 @@ final class InstanceDisableUITests: XCTestCase {
         let app = XCUIApplication()
         // A fresh in-memory store and a clean signals slate — the reset flag
         // also clears the persisted Disabled set, so a toggle flipped by one
-        // test can't leak into the next.
-        app.launchArguments = ["--uitesting", "-uitest-reset-signals"]
+        // test can't leak into the next. Instant motion, like every other
+        // suite: animated row transitions at automation speed churn SwiftUI's
+        // DisplayList cache into an internal assertion (issue #79) — this
+        // suite missing the flag is what crashed it under CI.
+        app.launchArguments = ["--uitesting", "-uitest-reset-signals", "-uitest-instant-motion"]
         app.launch()
         return app
     }

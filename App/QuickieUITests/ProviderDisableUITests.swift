@@ -21,7 +21,11 @@ final class ProviderDisableUITests: XCTestCase {
     @MainActor
     private func launchApp(arguments: [String] = []) -> XCUIApplication {
         let app = XCUIApplication()
-        app.launchArguments += ["-uitest-reset-signals"] + arguments
+        // Instant motion, like every other suite: animated row transitions at
+        // automation speed churn SwiftUI's DisplayList cache into an internal
+        // assertion (issue #79) — the two disable suites missing the flag is
+        // what crashed InstanceDisableUITests under CI.
+        app.launchArguments += ["-uitest-reset-signals", "-uitest-instant-motion"] + arguments
         app.launch()
         return app
     }

@@ -587,6 +587,11 @@ struct RootView: View {
             // Seed the default web-search Custom Action once on launch (ADR 0021).
             .task {
                 QuickieStore.seedDefaultCustomActions(in: modelContext)
+                // Collapse same-id Custom Action duplicates to a deterministic
+                // winner (ADR 0023): two devices can each seed the fixed-id web
+                // search before their first CloudKit import lands, so launch
+                // reconciles whatever sync merged in.
+                QuickieStore.dedupeCustomActions(in: modelContext)
                 // Collapse any stored notes from a pre-Pile build into titleless
                 // Pile entries (ADR 0018).
                 QuickieStore.migrateNotesToPile(in: modelContext)
@@ -596,6 +601,17 @@ struct RootView: View {
                 // an invisible pin can't silently occupy a Favorites slot. The
                 // @Query catalogs are loaded by the time this launch task runs.
                 signals.reconcileFavorites(against: engine.resolvableHomeIDs())
+            }
+            // Re-run the dedup when the Custom Action catalog changes: the
+            // remote-notification background mode lets a CloudKit import land a
+            // duplicate seed *mid-session*, after the launch pass above already
+            // ran — a launcher stays resident between cold starts, so waiting
+            // for the next relaunch could leave two "Search the web" rows
+            // visible for days. A duplicate always changes the row count, the
+            // pass is idempotent and no-op-cheap, and deferring it out of the
+            // view-update tick keeps the store mutation off the render pass.
+            .onChange(of: customActions.count) { _, _ in
+                Task { QuickieStore.dedupeCustomActions(in: modelContext) }
             }
             // Build the File Search snapshot on launch, then rebuild it whenever the
             // app returns to the foreground or the Indexed-Folder grants change
