@@ -122,6 +122,17 @@ final class CaptureDateStepUITests: XCTestCase {
             "the pitch measurement must find the calendar's day cells — a 0 here means the cell query broke, not that the layout is fine"
         )
 
+        // An ABSOLUTE floor, not just re-entry equality: the phantom safe-area
+        // inset (#115) compressed the grid identically on the forward path and
+        // on re-entry, so fresh == reentered held while both were squished.
+        // The healthy grid inside the pinned 350pt box measures ~50pt of row
+        // pitch; the inset-poisoned one measured ~44pt. The floor sits between
+        // them, device-independent because the box height is a hard constant.
+        XCTAssertGreaterThan(
+            freshPitch, 47,
+            "the calendar's rows are compacted on first display — pitch \(freshPitch)pt against the pinned 350pt box (phantom safe-area inset regression, #115)"
+        )
+
         // Move the selection off today so the re-entered step seeds a genuinely
         // committed (non-default) date, and record the pitch again — a selection
         // change is the historic trigger for the calendar compacting its rows.

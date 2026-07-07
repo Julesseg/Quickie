@@ -548,28 +548,21 @@ private struct DateStep: View {
 /// table entirely: when a step collects a time, `DateStep` shows a separate
 /// compact hour-and-minute control instead, in its own glass card.
 ///
-/// The picker's **first layout is pre-baked in `makeUIView`**: performed
-/// synchronously, hidden in the real window, at the mid-screen frame the
-/// calendar will actually occupy — before SwiftUI can insert the view anywhere.
-/// The inline calendar permanently adopts the geometry of its first layout
-/// pass, and on the datetime entry paths (backspacing onto a datetime pill, a
-/// Custom Action datetime slot entered forward) that pass ran somewhere it
-/// inherited top insets: a blank band above the month header, rows compacted.
-/// Clean-install device tests eliminated everything else — a zero safe-area
-/// override alone, internal scroll views pinned to `.never` inset adjustment,
-/// deferring creation one runloop turn (still inside the transition's churn),
-/// isolating the picker in its own glass card, and `UICalendarView` all still
-/// rendered the band, while a picker *reused* from a healthy first layout has
-/// never once rendered wrong. Pre-baking the first layout turns every entry
-/// path into that healthy-reuse case.
-///
-/// The picker reports **zero safe-area insets** (`SafeAreaImmuneDatePicker`) and
-/// hangs inside a plain container rather than being the representable's root,
-/// keeping SwiftUI's direct frame writes off the picker so its geometry comes
-/// only from its own constraints. Both are kept as belts: the honest safe area
-/// inside the capture's chrome is always zero, and the override was
-/// device-verified to remove the 59pt Dynamic-Island share of the band in the
-/// shared-container era.
+/// The picker hangs inside the root view of an `InsetCancellingController`,
+/// which **zeroes the real safe area** UIKit propagates into the subtree — the
+/// actual fix for the blank band + compacted rows (#115); see that class for
+/// the full mechanism (SwiftUI's step transition parks the container's *frame*
+/// near the window top and slides it in with a transform, so UIKit hands the
+/// subtree a phantom top inset that the calendar's internals bake into their
+/// first layout). Everything that lied about or dodged the inset from inside
+/// was disproven on device — a zero safe-area override alone, internal scroll
+/// views pinned to `.never` inset adjustment, deferring creation one runloop
+/// turn, isolating the picker in its own glass card, and `UICalendarView` all
+/// still rendered the band — because the *propagated* value stayed nonzero.
+/// Cancelling it at the hosting controller is the one public lever that
+/// changes the value itself. The container root additionally keeps SwiftUI's
+/// direct frame writes off the picker, and the picker's own zero
+/// `safeAreaInsets` override (`SafeAreaImmuneDatePicker`) stays as a belt.
 private struct InlineDatePicker: UIViewRepresentable {
     @Binding var date: Date
     /// The fixed height to pin the picker to — the month grid's settled height.
@@ -587,34 +580,14 @@ private struct InlineDatePicker: UIViewRepresentable {
             for: .valueChanged
         )
 
-        // Bake the picker's first layout at an honest mid-screen frame BEFORE
-        // handing it to SwiftUI. The inline calendar permanently adopts the
-        // geometry of its first layout pass, and on the broken entry paths that
-        // pass runs while the transition machinery has the view parked
-        // somewhere it inherits top insets; a picker whose first layout was
-        // healthy stays healthy when re-hosted (the always-clean reuse path).
-        // So the first layout is performed here, synchronously, hidden in the
-        // real window at the frame the calendar will actually occupy — turning
-        // every entry path into the healthy-reuse case before the transition
-        // machinery ever touches the view.
-        if let window = UIApplication.shared.connectedScenes
-            .compactMap({ ($0 as? UIWindowScene)?.keyWindow })
-            .first {
-            let width = max(window.bounds.width - 64, 280)
-            picker.isHidden = true
-            picker.frame = CGRect(
-                x: (window.bounds.width - width) / 2,
-                y: max(window.bounds.midY - height / 2, 100),
-                width: width,
-                height: height
-            )
-            window.addSubview(picker)
-            picker.layoutIfNeeded()
-            picker.removeFromSuperview()
-            picker.isHidden = false
-        }
-
-        let container = UIView()
+        // The container is the root view of an `InsetCancellingController`,
+        // which zeroes the *real* safe area UIKit propagates into this subtree
+        // (see that class — SwiftUI's step transition hands the container a
+        // phantom top inset that the calendar's internals bake into their
+        // first layout).
+        let host = InsetCancellingController()
+        let container = host.view!
+        container.backgroundColor = .clear
         container.addSubview(picker)
         picker.translatesAutoresizingMaskIntoConstraints = false
         NSLayoutConstraint.activate([
@@ -624,6 +597,7 @@ private struct InlineDatePicker: UIViewRepresentable {
             picker.heightAnchor.constraint(equalToConstant: height),
         ])
         context.coordinator.picker = picker
+        context.coordinator.host = host
         return container
     }
 
@@ -638,17 +612,64 @@ private struct InlineDatePicker: UIViewRepresentable {
     final class Coordinator: NSObject {
         var onChange: (Date) -> Void
         weak var picker: UIDatePicker?
+        /// Retains the inset-cancelling controller whose root view hosts the
+        /// picker — the controller must outlive the view to keep cancelling.
+        var host: UIViewController?
         init(_ onChange: @escaping (Date) -> Void) { self.onChange = onChange }
         @objc func changed(_ picker: UIDatePicker) { onChange(picker.date) }
     }
 }
 
-/// A `UIDatePicker` that reports zero safe-area insets — the true value for a
-/// control that always renders inside the capture's chrome, clear of every
-/// screen edge, so no status-bar or Dynamic-Island adjustment can ever be
-/// correct inside it. Kept as a belt alongside the container-isolation fix (see
-/// `InlineDatePicker`): in the shared-container era it was device-verified to
-/// remove the 59pt Dynamic-Island share of the band.
+/// Zeroes the **real** safe area UIKit propagates into its view's subtree, by
+/// continuously setting `additionalSafeAreaInsets` to the negative of whatever
+/// the system imposes — the one public lever that changes the propagated value
+/// rather than one view's getter.
+///
+/// Why this exists (#115): during the capture's step transitions SwiftUI
+/// positions the date step's UIKit container using a frame near the window's
+/// top plus a translation transform. UIKit computes safe areas from *frames*,
+/// ignoring transforms, so the container inherits a phantom top inset
+/// (measured at 41–46pt mid-transition in the simulator, while sitting
+/// visually mid-screen) — and the inline calendar's internals bake whatever
+/// inset they see at first layout into their grid permanently: the blank band
+/// above the month header and the compacted rows. Overriding `safeAreaInsets`
+/// on the picker itself only lies to callers of that one getter; the children
+/// inherit the real value. Cancelling it at the hosting controller makes the
+/// subtree's truth zero — correct always, since this control renders inside
+/// the capture's chrome, clear of every screen edge.
+private final class InsetCancellingController: UIViewController {
+    override func viewDidLayoutSubviews() {
+        super.viewDidLayoutSubviews()
+        cancelInheritedSafeArea()
+    }
+
+    override func viewSafeAreaInsetsDidChange() {
+        super.viewSafeAreaInsetsDidChange()
+        cancelInheritedSafeArea()
+    }
+
+    private func cancelInheritedSafeArea() {
+        // What the system imposes = what the view reports minus what we last
+        // subtracted; converge by subtracting exactly that.
+        let reported = view.safeAreaInsets
+        let system = UIEdgeInsets(
+            top: reported.top - additionalSafeAreaInsets.top,
+            left: reported.left - additionalSafeAreaInsets.left,
+            bottom: reported.bottom - additionalSafeAreaInsets.bottom,
+            right: reported.right - additionalSafeAreaInsets.right
+        )
+        let cancelling = UIEdgeInsets(
+            top: -system.top, left: -system.left, bottom: -system.bottom, right: -system.right
+        )
+        if additionalSafeAreaInsets != cancelling {
+            additionalSafeAreaInsets = cancelling
+        }
+    }
+}
+
+/// A `UIDatePicker` that reports zero safe-area insets — a belt alongside
+/// `InsetCancellingController`, which zeroes the real propagated value. The
+/// honest safe area inside the capture's chrome is always zero.
 private final class SafeAreaImmuneDatePicker: UIDatePicker {
     override var safeAreaInsets: UIEdgeInsets { .zero }
 }
