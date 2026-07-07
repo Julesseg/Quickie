@@ -253,12 +253,11 @@ final class CaptureDateStepUITests: XCTestCase {
     }
 
     /// A day-number cell of the inline calendar. The OS has exposed these as
-    /// different element types across versions — and `UICalendarView` labels its
-    /// day cells with more than the bare number (e.g. a weekday or month around
-    /// it) — so match across any element type, accepting the day number either
-    /// as the whole label or as a standalone token inside it. The grid shows
-    /// only the current month, so a day token can't collide with a neighbor
-    /// month's cell.
+    /// different element types and label shapes across versions (a bare "15",
+    /// or the number wrapped in weekday/month words), so match across any
+    /// element type, accepting the day number either as the whole label or as
+    /// a standalone token inside it. The grid shows only the current month, so
+    /// a day token can't collide with a neighbor month's cell.
     @MainActor
     private func dayCell(_ label: String, in calendar: XCUIElement) -> XCUIElement {
         calendar.descendants(matching: .any)

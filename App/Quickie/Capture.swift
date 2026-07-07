@@ -537,8 +537,8 @@ private struct DateStep: View {
 /// still rendered the band — because the *propagated* value stayed nonzero.
 /// Cancelling it at the hosting controller is the one public lever that
 /// changes the value itself. The container root additionally keeps SwiftUI's
-/// direct frame writes off the picker, and the picker's own zero
-/// `safeAreaInsets` override (`SafeAreaImmuneDatePicker`) stays as a belt.
+/// direct frame writes off the picker, so its geometry comes only from its
+/// own constraints.
 private struct InlineDatePicker: UIViewRepresentable {
     @Binding var date: Date
     /// Whether the step collects a time — the picker shows its native inline
@@ -549,7 +549,7 @@ private struct InlineDatePicker: UIViewRepresentable {
     var height: CGFloat
 
     func makeUIView(context: Context) -> UIView {
-        let picker = SafeAreaImmuneDatePicker()
+        let picker = UIDatePicker()
         picker.preferredDatePickerStyle = .inline
         picker.datePickerMode = includesTime ? .dateAndTime : .date
         picker.date = date
@@ -653,13 +653,6 @@ private final class InsetCancellingController: UIViewController {
             additionalSafeAreaInsets = cancelling
         }
     }
-}
-
-/// A `UIDatePicker` that reports zero safe-area insets — a belt alongside
-/// `InsetCancellingController`, which zeroes the real propagated value. The
-/// honest safe area inside the capture's chrome is always zero.
-private final class SafeAreaImmuneDatePicker: UIDatePicker {
-    override var safeAreaInsets: UIEdgeInsets { .zero }
 }
 
 // MARK: - Bottom capture bar (the morph control)
