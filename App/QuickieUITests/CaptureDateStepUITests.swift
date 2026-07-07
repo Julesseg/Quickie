@@ -95,13 +95,16 @@ final class CaptureDateStepUITests: XCTestCase {
     }
 
     /// Backspacing from the list step onto an already-committed **timed** due
-    /// date re-creates the date step already collecting a time. The step used to
-    /// re-enter a `UIDatePicker` *built* in `.dateAndTime`, whose fresh inline
-    /// layout shifts the calendar down under a blank band and squashes the time
-    /// row; the calendar is date-only now with the time as its own compact row,
-    /// so re-entry must be pixel-identical to the forward path: the calendar's
-    /// month-navigation header sits at the same offset inside the picker, and
-    /// the Time row sits fully below the calendar — never squashed into it.
+    /// date re-creates the date step already collecting a time — a fresh inline
+    /// `UIDatePicker` built in `.dateAndTime`. That path used to render the
+    /// calendar shifted down under a blank band with its rows compacted and the
+    /// time row squashed: a phantom top safe-area inset handed to the container
+    /// mid-transition, baked into the calendar's first layout (#115, fixed by
+    /// `InsetCancellingController`). Re-entry must match the forward-entered
+    /// timed layout: same header offset inside the picker, same row pitch — and
+    /// the pitch must also clear an absolute floor, because the phantom inset
+    /// squished the forward and re-entered layouts *identically*, so equality
+    /// alone once passed over an evenly compressed grid.
     @MainActor
     func testBackspaceOntoTimedDateKeepsCalendarAligned() throws {
         let app = launchApp()
@@ -167,21 +170,29 @@ final class CaptureDateStepUITests: XCTestCase {
         }
         XCTAssertEqual(toggle.value as? String, "1", "the tap flipped the time toggle on")
 
-        let time = app.descendants(matching: .any)["capture-time"].firstMatch
-        XCTAssertTrue(time.waitForExistence(timeout: 5), "including a time adds the Time row")
+        // The picker switches to `.dateAndTime` and grows its native inline Time
+        // row beneath the calendar — the reference layout the re-entered step
+        // must reproduce.
+        let time = calendar.descendants(matching: .any)
+            .matching(NSPredicate(format: "label BEGINSWITH[c] 'time'"))
+            .firstMatch
+        XCTAssertTrue(time.waitForExistence(timeout: 5), "including a time shows the picker's native Time row")
 
-        // The bespoke grid labels its forward chevron "Next Month" (matching the
-        // stock pickers' label); match case-insensitively for robustness.
         let header = calendar.buttons
             .matching(NSPredicate(format: "label BEGINSWITH[c] 'next'"))
             .firstMatch
         XCTAssertTrue(header.waitForExistence(timeout: 5), "the inline calendar exposes its month-navigation header")
-        // Let the layout settle before recording the reference geometry.
+        // Let the layout settle before recording the reference geometry — the
+        // timed pitch is the re-entry baseline: both sides of that comparison
+        // must be `.dateAndTime` layouts (the timed grid shares its taller box
+        // with the Time row, so its natural pitch differs from date-only's).
         RunLoop.current.run(until: Date().addingTimeInterval(1))
         let forwardOffset = header.frame.minY - calendar.frame.minY
-        XCTAssertGreaterThanOrEqual(
-            time.frame.minY, calendar.frame.maxY - 1,
-            "the Time row must sit fully below the calendar"
+        let timedPitch = rowPitch(in: calendar)
+        NSLog("CAPTURE-CALENDAR-PITCH timed=%.2f", timedPitch)
+        XCTAssertGreaterThan(
+            timedPitch, 46,
+            "the timed calendar's rows are compacted — pitch \(timedPitch)pt against the pinned 400pt box (phantom safe-area inset regression, #115)"
         )
 
         // Commit the timed date, then backspace on the empty list filter to land
@@ -193,7 +204,7 @@ final class CaptureDateStepUITests: XCTestCase {
         filter.typeText(XCUIKeyboardKey.delete.rawValue)
 
         XCTAssertTrue(calendar.waitForExistence(timeout: 5), "backspace re-enters the due-date step")
-        XCTAssertTrue(time.waitForExistence(timeout: 5), "a timed date re-enters with its Time row")
+        XCTAssertTrue(time.waitForExistence(timeout: 5), "a timed date re-enters with the picker's Time row")
         XCTAssertTrue(header.waitForExistence(timeout: 5))
 
         // Poll briefly so the re-entry transition settles before the frame is
@@ -211,19 +222,21 @@ final class CaptureDateStepUITests: XCTestCase {
             reenteredOffset, forwardOffset, accuracy: 15,
             "a re-entered timed date step must match the forward-entered layout — the calendar header sat \(reenteredOffset)pt into the picker vs \(forwardOffset)pt (blank band above the grid)"
         )
-        XCTAssertGreaterThanOrEqual(
-            time.frame.minY, calendar.frame.maxY - 1,
-            "the re-entered Time row must sit fully below the calendar, not squashed into it"
-        )
 
-        // The re-entered grid must keep the first display's row pitch — rows
-        // drawing closer together is the calendar compacting inside its pinned
-        // height.
+        // The re-entered grid must keep the forward timed layout's row pitch —
+        // rows drawing closer together is the calendar compacting inside its
+        // pinned height. Compared against the timed pitch, not the date-only
+        // one: re-entry builds a `.dateAndTime` picker, whose box the Time row
+        // shares.
         let reenteredPitch = rowPitch(in: calendar)
-        NSLog("CAPTURE-CALENDAR-PITCH fresh=%.2f reentered=%.2f", freshPitch, reenteredPitch)
+        NSLog("CAPTURE-CALENDAR-PITCH timed=%.2f reentered=%.2f", timedPitch, reenteredPitch)
         XCTAssertEqual(
-            reenteredPitch, freshPitch, accuracy: 3,
-            "the re-entered calendar compacted its rows — pitch \(freshPitch)pt on first display vs \(reenteredPitch)pt on re-entry"
+            reenteredPitch, timedPitch, accuracy: 3,
+            "the re-entered calendar compacted its rows — pitch \(timedPitch)pt forward vs \(reenteredPitch)pt on re-entry"
+        )
+        XCTAssertGreaterThan(
+            reenteredPitch, 46,
+            "the re-entered timed calendar's rows are compacted — pitch \(reenteredPitch)pt against the pinned 400pt box (phantom safe-area inset regression, #115)"
         )
     }
 

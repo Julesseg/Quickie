@@ -466,34 +466,27 @@ private struct ChoiceRow: View {
 private struct DateStep: View {
     @Bindable var model: CaptureModel
 
-    /// The settled height of the month grid, pinned with a hard constraint so the
-    /// picker can never use its unstable taller intrinsic height. The calendar is
-    /// always date-only (constant across 5- and 6-row months); a collected time is
-    /// its own compact row beneath the calendar, never the picker's `.dateAndTime`
-    /// mode — see `InlineDatePicker` for why that mode is off the table.
+    /// The settled heights of the picker, pinned with a hard constraint so it can
+    /// never use its unstable taller intrinsic height: the month grid alone
+    /// (constant across 5- and 6-row months), plus the native inline time row's
+    /// band when the step collects a time (`.dateAndTime`).
     private static let dateHeight: CGFloat = 350
+    private static let dateTimeHeight: CGFloat = 400
+
+    private var pickerHeight: CGFloat {
+        model.dateStepIncludesTime ? Self.dateTimeHeight : Self.dateHeight
+    }
 
     var body: some View {
         VStack {
             Spacer(minLength: 0)
             VStack(spacing: 12) {
-                InlineDatePicker(date: $model.pickedDate, height: Self.dateHeight)
-                    .frame(height: Self.dateHeight)
-
-                // The time, when the step collects one, is its own compact control
-                // riding below the calendar. It shares `pickedDate`, so the compact
-                // control edits the time-of-day of the same value the calendar
-                // edits the day of.
-                if model.dateStepIncludesTime {
-                    DatePicker(
-                        "Time",
-                        selection: $model.pickedDate,
-                        displayedComponents: .hourAndMinute
-                    )
-                    .font(.subheadline)
-                    .padding(.horizontal, 4)
-                    .accessibilityIdentifier("capture-time")
-                }
+                InlineDatePicker(
+                    date: $model.pickedDate,
+                    includesTime: model.dateStepIncludesTime,
+                    height: pickerHeight
+                )
+                .frame(height: pickerHeight)
 
                 // The toggle appears only when the step leaves the date/time choice to
                 // the user (reminders/events). A Custom Action date slot fixes it from
@@ -520,15 +513,16 @@ private struct DateStep: View {
 /// tapped a day; pinning a `UIDatePicker` to its settled height with a required
 /// constraint forces that layout from the start, so the grid never jumps.
 ///
-/// Always **date-only**. The picker must never be created in — or switched to —
-/// `.dateAndTime`: a `UIDatePicker` whose inline content is built fresh in that
-/// mode lays it out wrong (a blank band above the calendar, the time row squashed
-/// beneath it), and a timed step *is* entered fresh whenever the breadcrumb
-/// backspaces onto a committed datetime pill or a Custom Action datetime slot
-/// begins. Neither assignment order nor a synchronous `.date` → `.dateAndTime`
-/// transition avoids the broken layout (both were tried), so the mode is off the
-/// table entirely: when a step collects a time, `DateStep` shows a separate
-/// compact hour-and-minute control instead, in its own glass card.
+/// A timed step uses the native `.dateAndTime` mode — the calendar with the
+/// picker's own inline time row beneath it. That mode was banned for most of
+/// #113/#115 because a picker built fresh in it (the breadcrumb backspacing
+/// onto a committed datetime pill, a Custom Action datetime slot entered
+/// forward) laid out broken: a blank band above the calendar, the time row
+/// squashed. The ban treated the mode as the culprit; the diagnosis below
+/// exonerated it — the phantom inset broke *every* fresh timed layout, and
+/// with the inset cancelled, fresh `.dateAndTime` creation and live
+/// `.date` ↔ `.dateAndTime` switches both lay out clean (simulator-measured:
+/// identical row pitch forward and on re-entry).
 ///
 /// The picker hangs inside the root view of an `InsetCancellingController`,
 /// which **zeroes the real safe area** UIKit propagates into the subtree — the
@@ -547,13 +541,17 @@ private struct DateStep: View {
 /// `safeAreaInsets` override (`SafeAreaImmuneDatePicker`) stays as a belt.
 private struct InlineDatePicker: UIViewRepresentable {
     @Binding var date: Date
-    /// The fixed height to pin the picker to — the month grid's settled height.
+    /// Whether the step collects a time — the picker shows its native inline
+    /// time row beneath the calendar in `.dateAndTime` mode.
+    var includesTime: Bool
+    /// The fixed height to pin the picker to — the settled month grid, plus the
+    /// native time row when the step collects one.
     var height: CGFloat
 
     func makeUIView(context: Context) -> UIView {
         let picker = SafeAreaImmuneDatePicker()
         picker.preferredDatePickerStyle = .inline
-        picker.datePickerMode = .date
+        picker.datePickerMode = includesTime ? .dateAndTime : .date
         picker.date = date
         picker.accessibilityIdentifier = "capture-calendar"
         picker.addTarget(
@@ -576,15 +574,22 @@ private struct InlineDatePicker: UIViewRepresentable {
             picker.topAnchor.constraint(equalTo: container.topAnchor),
             picker.leadingAnchor.constraint(equalTo: container.leadingAnchor),
             picker.trailingAnchor.constraint(equalTo: container.trailingAnchor),
-            picker.heightAnchor.constraint(equalToConstant: height),
         ])
+        let heightConstraint = picker.heightAnchor.constraint(equalToConstant: height)
+        heightConstraint.isActive = true
         context.coordinator.picker = picker
+        context.coordinator.heightConstraint = heightConstraint
         context.coordinator.host = host
         return container
     }
 
     func updateUIView(_ container: UIView, context: Context) {
         guard let picker = context.coordinator.picker else { return }
+        let mode: UIDatePicker.Mode = includesTime ? .dateAndTime : .date
+        if picker.datePickerMode != mode { picker.datePickerMode = mode }
+        if let constraint = context.coordinator.heightConstraint, constraint.constant != height {
+            constraint.constant = height
+        }
         if picker.date != date { picker.date = date }
         context.coordinator.onChange = { date = $0 }
     }
@@ -594,6 +599,7 @@ private struct InlineDatePicker: UIViewRepresentable {
     final class Coordinator: NSObject {
         var onChange: (Date) -> Void
         weak var picker: UIDatePicker?
+        weak var heightConstraint: NSLayoutConstraint?
         /// Retains the inset-cancelling controller whose root view hosts the
         /// picker — the controller must outlive the view to keep cancelling.
         var host: UIViewController?
