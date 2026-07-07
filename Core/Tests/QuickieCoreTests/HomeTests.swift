@@ -51,19 +51,61 @@ struct HomeTests {
         #expect(engine.home().frecent.isEmpty)
     }
 
-    @Test("Fallbacks never appear on Home")
-    func fallbacksExcludedFromHome() {
+    @Test("a pinned Fallback draws a Favorite card on Home")
+    func pinnedFallbackSurfacesInFavorites() {
+        // A fallback-flagged Indexed Action (a fallback Custom Action, Save for
+        // later, New Snippet) is part of the enumerable catalog: pinning it must
+        // draw a card like any other pin, not silently consume a slot.
+        let engine = SearchEngine(
+            providers: [
+                IndexedProvider(catalog: [.webSearchFallback()]),
+                IndexedProvider(catalog: [.saveForLater()]),
+            ],
+            favorites: ["builtin.web-search", "builtin.save-for-later"]
+        )
+        #expect(engine.home().favorites.map(\.id) == ["builtin.web-search", "builtin.save-for-later"])
+    }
+
+    @Test("Fallbacks stay out of the Recent list")
+    func fallbacksExcludedFromRecents() {
+        // A fallback records frecency like any selection (web search fires on
+        // every fallback search), but it already rides the bottom of every
+        // Result list — auto-surfacing it again on Home would only be noise.
+        // Only a manual pin puts a fallback on Home.
         let now = Date()
         var frecency = Frecency()
         frecency.record("builtin.web-search", at: now)
         let engine = SearchEngine(
             providers: [IndexedProvider(catalog: [.webSearchFallback()])],
-            favorites: ["builtin.web-search"],
             frecency: frecency,
             now: now
         )
-        #expect(engine.home().favorites.isEmpty)
         #expect(engine.home().frecent.isEmpty)
+    }
+
+    @Test("a disabled pinned Fallback drops from the grid but keeps its pin")
+    func disabledPinnedFallbackLeavesTheGridButKeepsResolving() {
+        // Both fallback disable axes hide the card (CONTEXT.md → Disabled,
+        // Fallback list) — the Fallbacks master switch and the Fallback list's
+        // per-instance disabled set — while the id keeps resolving, so the pin
+        // survives reconciliation and the card returns on re-enable.
+        let providers: [Provider] = [IndexedProvider(catalog: [.webSearchFallback()])]
+
+        let masterOff = SearchEngine(
+            providers: providers,
+            favorites: ["builtin.web-search"],
+            enablement: ProviderEnablement(disabled: [.fallbacks])
+        )
+        #expect(masterOff.home().favorites.isEmpty)
+        #expect(masterOff.resolvableHomeIDs().contains("builtin.web-search"))
+
+        let instanceOff = SearchEngine(
+            providers: providers,
+            favorites: ["builtin.web-search"],
+            disabledFallbacks: ["builtin.web-search"]
+        )
+        #expect(instanceOff.home().favorites.isEmpty)
+        #expect(instanceOff.resolvableHomeIDs().contains("builtin.web-search"))
     }
 
     @Test("Show Recents off hides the Recent list but keeps the Favorites grid")
@@ -86,7 +128,7 @@ struct HomeTests {
         #expect(home.favorites.map(\.id) == ["b"])
     }
 
-    @Test("resolvableHomeIDs lists every indexed, non-Fallback id")
+    @Test("resolvableHomeIDs lists every indexed id")
     func resolvableHomeIDsCoversIndexedCatalog() {
         let engine = SearchEngine(
             providers: [IndexedProvider(catalog: [link("a", "Alpha"), link("b", "Bravo")])]
@@ -94,13 +136,13 @@ struct HomeTests {
         #expect(engine.resolvableHomeIDs() == ["a", "b"])
     }
 
-    @Test("resolvableHomeIDs omits Fallbacks, so a Fallback Favorite reconciles away")
-    func resolvableHomeIDsExcludesFallbacks() {
+    @Test("resolvableHomeIDs includes Fallbacks, so a Fallback pin survives reconciliation")
+    func resolvableHomeIDsIncludesFallbacks() {
         let engine = SearchEngine(
             providers: [IndexedProvider(catalog: [link("a", "Alpha"), .webSearchFallback()])]
         )
-        // The web-search Fallback resolves nowhere on Home, so its id is absent —
-        // the App prunes any Favorite pinned to it (and to deleted/stale targets).
-        #expect(engine.resolvableHomeIDs() == ["a"])
+        // A pinned Fallback resolves to a Home card, so its id must be here —
+        // otherwise the App's reconciliation would prune the pin at launch.
+        #expect(engine.resolvableHomeIDs() == ["a", "builtin.web-search"])
     }
 }
