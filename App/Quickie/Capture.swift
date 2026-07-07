@@ -469,64 +469,46 @@ private struct DateStep: View {
     /// The settled height of the month grid, pinned with a hard constraint so the
     /// picker can never use its unstable taller intrinsic height. The calendar is
     /// always date-only (constant across 5- and 6-row months); a collected time is
-    /// its own compact row in a *separate glass card* beneath the calendar's,
-    /// never the picker's `.dateAndTime` mode — see `InlineDatePicker` for why
-    /// that mode is off the table.
+    /// its own compact row beneath the calendar, never the picker's `.dateAndTime`
+    /// mode — see `InlineDatePicker` for why that mode is off the table.
     private static let dateHeight: CGFloat = 350
 
     var body: some View {
         VStack {
             Spacer(minLength: 0)
+            VStack(spacing: 12) {
+                InlineDatePicker(date: $model.pickedDate, height: Self.dateHeight)
+                    .frame(height: Self.dateHeight)
 
-            // The calendar rides ALONE in its glass card. Every broken layout of
-            // the stock inline picker shared one container with the time UI, and
-            // a bespoke month grid in the identical shared container rendered
-            // clean — so the calendar control misresolves only when it is
-            // *created into* a container it shares with the time row. Isolating
-            // the picker in its own card makes its hosting hierarchy identical on
-            // every entry path — date-only, forward datetime, and backspacing
-            // onto a datetime pill alike — the configuration that always
-            // rendered correctly.
-            InlineDatePicker(date: $model.pickedDate, height: Self.dateHeight)
-                .frame(height: Self.dateHeight)
-                .padding(16)
-                .glassEffect(.regular, in: RoundedRectangle(cornerRadius: 24, style: .continuous))
-                .padding(.horizontal, 16)
+                // The time, when the step collects one, is its own compact control
+                // riding below the calendar. It shares `pickedDate`, so the compact
+                // control edits the time-of-day of the same value the calendar
+                // edits the day of.
+                if model.dateStepIncludesTime {
+                    DatePicker(
+                        "Time",
+                        selection: $model.pickedDate,
+                        displayedComponents: .hourAndMinute
+                    )
+                    .font(.subheadline)
+                    .padding(.horizontal, 4)
+                    .accessibilityIdentifier("capture-time")
+                }
 
-            // The time row and toggle live in their own glass card below, so
-            // their presence never changes what the calendar's container holds.
-            if model.dateStepIncludesTime || model.dateStepAllowsTimeToggle {
-                VStack(spacing: 12) {
-                    // The time, when the step collects one — a compact control
-                    // sharing `pickedDate`, so it edits the time-of-day of the
-                    // same value the calendar edits the day of.
-                    if model.dateStepIncludesTime {
-                        DatePicker(
-                            "Time",
-                            selection: $model.pickedDate,
-                            displayedComponents: .hourAndMinute
-                        )
+                // The toggle appears only when the step leaves the date/time choice to
+                // the user (reminders/events). A Custom Action date slot fixes it from
+                // its format, so the toggle is hidden — the time row is already pinned
+                // on or off.
+                if model.dateStepAllowsTimeToggle {
+                    Toggle("Include a time", isOn: $model.includeTime)
                         .font(.subheadline)
                         .padding(.horizontal, 4)
-                        .accessibilityIdentifier("capture-time")
-                    }
-
-                    // The toggle appears only when the step leaves the date/time
-                    // choice to the user (reminders/events). A Custom Action date
-                    // slot fixes it from its format, so the toggle is hidden —
-                    // the time row is already pinned on or off.
-                    if model.dateStepAllowsTimeToggle {
-                        Toggle("Include a time", isOn: $model.includeTime)
-                            .font(.subheadline)
-                            .padding(.horizontal, 4)
-                            .accessibilityIdentifier("capture-include-time")
-                    }
+                        .accessibilityIdentifier("capture-include-time")
                 }
-                .padding(16)
-                .glassEffect(.regular, in: RoundedRectangle(cornerRadius: 24, style: .continuous))
-                .padding(.horizontal, 16)
-                .padding(.top, 12)
             }
+            .padding(16)
+            .glassEffect(.regular, in: RoundedRectangle(cornerRadius: 24, style: .continuous))
+            .padding(.horizontal, 16)
         }
     }
 }
