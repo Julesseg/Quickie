@@ -171,7 +171,7 @@ jobs:
             echo '<key>compileBitcode</key><false/>'
             echo '<key>provisioningProfiles</key><dict>'
             echo "<key>com.julesseguin.quickie</key><string>${PROFILE_NAME}</string>"
-            echo "<key>com.julesseguin.quickie.ShareExtension</key><string>${PROFILE_NAME_EXTENSION}</string>"
+            echo "<key>com.julesseguin.quickie.share</key><string>${PROFILE_NAME_EXTENSION}</string>"
             echo '</dict></dict></plist>'
           } > "$RUNNER_TEMP/ExportOptions.plist"
 

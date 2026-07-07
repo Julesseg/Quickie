@@ -34,13 +34,13 @@ additive.)
 1. Register each test device's **UDID** under *Devices*.
 2. Make sure the **App ID** `com.julesseguin.quickie` exists with the **App Groups**
    capability enabled (the app uses `group.com.julesseguin.quickie`).
-3. Make sure the **App ID** `com.julesseguin.quickie.ShareExtension` exists, also
+3. Make sure the **App ID** `com.julesseguin.quickie.share` exists, also
    with the **App Groups** capability — the Share Extension is its own bundle and
    writes to the same `group.com.julesseguin.quickie` store.
 4. Create an **Ad Hoc** distribution provisioning profile for `com.julesseguin.quickie`
    that includes those devices, **named exactly `Quickie Ad Hoc`**, and download it
    (`.mobileprovision`).
-5. Create a second **Ad Hoc** profile for `com.julesseguin.quickie.ShareExtension`
+5. Create a second **Ad Hoc** profile for `com.julesseguin.quickie.share`
    with the same devices, **named exactly `Quickie Share Extension Ad Hoc`**, and
    download it too. (The Release build settings pin both names; the workflow
    verifies them and fails with a clear message on a mismatch.)
