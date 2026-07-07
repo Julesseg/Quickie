@@ -188,9 +188,13 @@ public struct SearchEngine {
     }
 
     /// Builds the Home state from the engine's indexed Actions and the user's
-    /// signals (issue #9 AC #1, #2). Only **Indexed**, non-Fallback Actions are
-    /// eligible: Home is the enumerable catalog of things to pin and reuse, not
-    /// the query-driven Dynamic results or the raw-text Fallbacks.
+    /// signals (issue #9 AC #1, #2). Only **Indexed** Actions are eligible: Home
+    /// is the enumerable catalog of things to pin and reuse, not the query-driven
+    /// Dynamic results. A fallback-flagged Indexed Action (a fallback Custom
+    /// Action, Save for later, New Snippet) is part of that catalog: pinning it
+    /// draws a card that launches it verb-first. Fallbacks stay out of the
+    /// **Recent** list, though — they already ride the bottom of every Result
+    /// list, so auto-surfacing them again would only be noise.
     ///
     /// - Parameter showRecents: the app-level **Show Recents** toggle
     ///   (CONTEXT.md → Settings; issue #65), default on. Off empties the Frecency
@@ -207,36 +211,45 @@ public struct SearchEngine {
         var frecent: [Action] = []
         if showRecents {
             for id in frecency.ranked(now: now) where !self.favorites.contains(id) {
-                if let action = byId[id] { frecent.append(action) }
+                if let action = byId[id], !action.isFallback { frecent.append(action) }
             }
         }
 
         return HomeContent(favorites: favorites, frecent: frecent)
     }
 
-    /// The Indexed, non-Fallback Actions keyed by id — the enumerable catalog
-    /// `home()` resolves Favorite and Frecency ids against. `home()` reads it
-    /// with disabled kinds *and* disabled instances excluded, so their cards
-    /// and Recent rows vanish; `resolvableHomeIDs()` reads it unfiltered,
-    /// because a disabled action still *exists* — only a deleted one stops
-    /// resolving.
+    /// The Indexed Actions keyed by id — the enumerable catalog `home()` resolves
+    /// Favorite and Frecency ids against, fallback-flagged entries included (a
+    /// pinned fallback draws a card like any other pin). `home()` reads it with
+    /// disabled kinds *and* disabled instances excluded, so their cards and
+    /// Recent rows vanish — a fallback honouring its own disable axes (the
+    /// Fallbacks master switch + the Fallback list's disabled set), mirroring
+    /// `results(for:)`. `resolvableHomeIDs()` reads it unfiltered, because a
+    /// disabled action still *exists* — only a deleted one stops resolving.
     private func indexedActionsByID(includingDisabled: Bool) -> [String: Action] {
         var byId: [String: Action] = [:]
         for provider in providers where provider.kind == .indexed {
             guard includingDisabled || isLive(provider) else { continue }
-            for action in provider.candidates(for: "") where !action.isFallback {
-                if !includingDisabled && disabledInstances.contains(action.id) { continue }
+            for action in provider.candidates(for: "") {
+                if !includingDisabled {
+                    if disabledInstances.contains(action.id) { continue }
+                    if action.isFallback,
+                       !enablement.isEnabled(.fallbacks) || disabledFallbacks.contains(action.id) {
+                        continue
+                    }
+                }
                 if byId[action.id] == nil { byId[action.id] = action }
             }
         }
         return byId
     }
 
-    /// The ids of every Indexed, non-Fallback Action currently in the catalog —
-    /// exactly the set a Favorite or Frecency id can resolve to on Home. The App
-    /// reconciles persisted Favorites against this so an id whose target no longer
-    /// exists (a deleted Snippet, or a stale id from an older build) is pruned
-    /// rather than lingering invisibly and consuming a Favorites slot.
+    /// The ids of every Indexed Action currently in the catalog — fallbacks
+    /// included — exactly the set a Favorite or Frecency id can resolve to on
+    /// Home. The App reconciles persisted Favorites against this so an id whose
+    /// target no longer exists (a deleted Snippet, or a stale id from an older
+    /// build) is pruned rather than lingering invisibly and consuming a
+    /// Favorites slot.
     ///
     /// Deliberately ignores enablement at both levels (issue #67 AC #3, issue
     /// #68): a disabled Favorite — whether its kind or the single instance was

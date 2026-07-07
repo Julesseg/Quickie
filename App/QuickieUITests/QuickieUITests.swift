@@ -138,4 +138,20 @@ final class QuickieUITests: XCTestCase {
             "a pinned Action should appear as a Favorite card on Home"
         )
     }
+
+    /// A pinned **Fallback** renders as a Favorite card too (CONTEXT.md →
+    /// Favorite, Fallback Action): a fallback-flagged Action is part of the
+    /// enumerable catalog, so its pin must draw a card rather than silently
+    /// consuming a slot — and must survive the launch-time reconciliation that
+    /// prunes unresolvable pins. Seeded the same way as the test above, with the
+    /// always-present "Save for later" Fallback (the Pile's permanent capture).
+    @MainActor
+    func testPinnedFallbackSurfacesOnHome() throws {
+        let app = launchApp(extraArguments: ["-uitest-pin-favorite", "builtin.save-for-later"])
+
+        XCTAssertTrue(
+            app.buttons["favorite.builtin.save-for-later"].waitForExistence(timeout: 10),
+            "a pinned Fallback should appear as a Favorite card on Home"
+        )
+    }
 }

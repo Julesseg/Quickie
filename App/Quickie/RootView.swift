@@ -833,12 +833,17 @@ struct RootView: View {
     /// (`seed`), so a one-slot fallback like web search completes in one tap and a
     /// multi-slot one continues at step 2 with the seeded first pill sealed; a
     /// verb-first (name-matched) selection passes no seed, opening the breadcrumb
-    /// empty. Opening a URL needs no permission, so the session starts straight away.
+    /// empty. A fallback run with nothing typed — a pinned Favorite card tapped on
+    /// Home — also opens verb-first: seeding the empty query would instantly commit
+    /// a blank Argument 1, firing a one-slot fallback with an empty value instead of
+    /// asking for one. Opening a URL needs no permission, so the session starts
+    /// straight away.
     private func startCustomActionCapture(_ action: Action) {
+        let trimmed = query.trimmingCharacters(in: .whitespacesAndNewlines)
         capture.start(
             CustomActionCapture(action: action),
             layout: keyboardLayout.layout,
-            seed: action.isFallback ? query : nil
+            seed: action.isFallback && !trimmed.isEmpty ? query : nil
         )
     }
 
