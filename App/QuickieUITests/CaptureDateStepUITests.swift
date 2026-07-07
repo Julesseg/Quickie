@@ -266,12 +266,17 @@ final class CaptureDateStepUITests: XCTestCase {
     /// or the number wrapped in weekday/month words), so match across any
     /// element type, accepting the day number either as the whole label or as
     /// a standalone token inside it. The grid shows only the current month, so
-    /// a day token can't collide with a neighbor month's cell.
+    /// a day token can't collide with a neighbor month's cell — but the compact
+    /// Time row shares the `capture-calendar` container, and its clock label
+    /// ("8:37 PM") carries a standalone hour token: during the 8 o'clock hours
+    /// it answered `dayCell("8")` from *below* the grid, flipping `rowPitch`
+    /// negative and failing the pitch floors 3/3 (main run 303 and PR #118).
+    /// A colon never appears in a day-cell label, so exclude clock text by it.
     @MainActor
     private func dayCell(_ label: String, in calendar: XCUIElement) -> XCUIElement {
         calendar.descendants(matching: .any)
             .matching(NSPredicate(
-                format: "label == %@ OR label MATCHES %@",
+                format: "(label == %@ OR label MATCHES %@) AND NOT (label CONTAINS ':')",
                 label,
                 "(^|.*\\D)\(label)(\\D.*|$)"
             ))

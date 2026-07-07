@@ -58,12 +58,31 @@ final class InstanceDisableUITests: XCTestCase {
         back.tap()
     }
 
-    /// Clears the launcher input by backspacing over whatever was typed.
+    /// Clears the launcher input by backspacing over whatever was typed, then
+    /// waits for Home to actually return before handing control back. Typing
+    /// the next query while the result list is still dismantling is the crash
+    /// window behind #112 — the app trips a SwiftUI `DisplayList` assertion
+    /// under that keystroke storm (it bit main in run 251 and PR #110's runs,
+    /// every time on the `typeText` immediately after this helper). The
+    /// always-offered New Snippet Fallback leaving the tree is the "results
+    /// are gone, Home is back" signal; if it never leaves, a real query-clear
+    /// failure still surfaces on the caller's own assertions, not here.
     @MainActor
     private func clearInput(_ app: XCUIApplication, count: Int) {
         let input = app.textFields["search-input"]
         input.tap()
         input.typeText(String(repeating: XCUIKeyboardKey.delete.rawValue, count: count))
+
+        let fallbackRow = app.buttons.matching(
+            NSPredicate(format: "label CONTAINS[c] %@", "New Snippet")
+        ).firstMatch
+        _ = XCTWaiter.wait(
+            for: [XCTNSPredicateExpectation(
+                predicate: NSPredicate(format: "exists == false"),
+                object: fallbackRow
+            )],
+            timeout: 10
+        )
     }
 
     /// Disabling a single Snippet from its row toggle hides it from typed

@@ -17,7 +17,9 @@ import QuickieCore
 /// resource-limit constraint).
 ///
 /// The walk runs off the main actor so a large folder never stalls typing; its
-/// result is published back on the main actor as a fresh snapshot. A newer rebuild
+/// result is published back on the main actor as a fresh snapshot — but only when
+/// it differs from the current one, so the routine relaunch/foreground rebuilds
+/// don't invalidate observers with an identical index (#112). A newer rebuild
 /// cancels an in-flight one so rapid grant edits settle on the latest state.
 @MainActor
 @Observable
@@ -45,7 +47,16 @@ final class FileIndexModel {
         rebuildTask = Task.detached(priority: .utility) {
             let entries = Self.buildEntries(from: targets)
             guard !Task.isCancelled else { return }
-            await MainActor.run { self.index = FilenameIndex(entries: entries) }
+            await MainActor.run {
+                // Publish only when the walk actually found something different.
+                // Every foreground return triggers a rebuild (see RootView), and
+                // this write lands from a detached task at an unpredictable point
+                // in the scene transition — replacing the snapshot with an equal
+                // one invalidates every observer for nothing, the launch-race
+                // amplifier behind the DisplayList crash in #112.
+                guard entries != self.index.entries else { return }
+                self.index = FilenameIndex(entries: entries)
+            }
         }
     }
 
