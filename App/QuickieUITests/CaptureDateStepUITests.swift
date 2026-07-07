@@ -66,8 +66,8 @@ final class CaptureDateStepUITests: XCTestCase {
         let setDate = app.buttons["capture-set-date"]
         XCTAssertTrue(setDate.waitForExistence(timeout: 5), "committing the title advances to the due-date step")
         XCTAssertTrue(
-            app.datePickers.firstMatch.waitForExistence(timeout: 5),
-            "the due-date step shows the inline date picker"
+            app.descendants(matching: .any)["capture-calendar"].firstMatch.waitForExistence(timeout: 5),
+            "the due-date step shows the inline calendar"
         )
         XCTAssertTrue(
             app.keyboards.firstMatch.waitForNonExistence(timeout: 10),
@@ -92,6 +92,190 @@ final class CaptureDateStepUITests: XCTestCase {
             bottomGap, 120,
             "the date step must take the keyboard's space — the Set button sat \(bottomGap)pt above the bottom (held inset not released)"
         )
+    }
+
+    /// Backspacing from the list step onto an already-committed **timed** due
+    /// date re-creates the date step already collecting a time — a fresh inline
+    /// `UIDatePicker` built in `.dateAndTime`. That path used to render the
+    /// calendar shifted down under a blank band with its rows compacted and the
+    /// time row squashed: a phantom top safe-area inset handed to the container
+    /// mid-transition, baked into the calendar's first layout (#115, fixed by
+    /// `InsetCancellingController`). Re-entry must match the forward-entered
+    /// timed layout: same header offset inside the picker, same row pitch — and
+    /// the pitch must also clear an absolute floor, because the phantom inset
+    /// squished the forward and re-entered layouts *identically*, so equality
+    /// alone once passed over an evenly compressed grid.
+    @MainActor
+    func testBackspaceOntoTimedDateKeepsCalendarAligned() throws {
+        let app = launchApp()
+        advanceToDateStep(app)
+
+        // Find the calendar by identifier across any element type, so the query
+        // holds regardless of which control implements it (XCUITest exposed the
+        // various implementations tried here as different element types).
+        let calendar = app.descendants(matching: .any)["capture-calendar"].firstMatch
+        XCTAssertTrue(calendar.waitForExistence(timeout: 5), "the due-date step shows the inline calendar")
+
+        // The grid's row pitch on first display — the reference the re-entered
+        // calendar must reproduce. Let the entry animation settle first.
+        RunLoop.current.run(until: Date().addingTimeInterval(1))
+        let freshPitch = rowPitch(in: calendar)
+        XCTAssertGreaterThan(
+            freshPitch, 10,
+            "the pitch measurement must find the calendar's day cells — a 0 here means the cell query broke, not that the layout is fine"
+        )
+
+        // An ABSOLUTE floor, not just re-entry equality: the phantom safe-area
+        // inset (#115) compressed the grid identically on the forward path and
+        // on re-entry, so fresh == reentered held while both were squished.
+        // The healthy grid inside the pinned 350pt box measures ~50pt of row
+        // pitch; the inset-poisoned one measured ~44pt. The floor sits between
+        // them, device-independent because the box height is a hard constant.
+        XCTAssertGreaterThan(
+            freshPitch, 47,
+            "the calendar's rows are compacted on first display — pitch \(freshPitch)pt against the pinned 350pt box (phantom safe-area inset regression, #115)"
+        )
+
+        // Move the selection off today so the re-entered step seeds a genuinely
+        // committed (non-default) date, and record the pitch again — a selection
+        // change is the historic trigger for the calendar compacting its rows.
+        let dayLabel = Calendar.current.component(.day, from: Date()) == 15 ? "16" : "15"
+        let day = dayCell(dayLabel, in: calendar)
+        XCTAssertTrue(day.waitForExistence(timeout: 5), "the calendar shows day \(dayLabel) of the current month")
+        day.tap()
+        RunLoop.current.run(until: Date().addingTimeInterval(0.5))
+        let afterTapPitch = rowPitch(in: calendar)
+        NSLog("CAPTURE-CALENDAR-PITCH fresh=%.2f afterTap=%.2f", freshPitch, afterTapPitch)
+        XCTAssertEqual(
+            afterTapPitch, freshPitch, accuracy: 3,
+            "tapping a day must not compact the calendar rows — pitch went \(freshPitch)pt → \(afterTapPitch)pt"
+        )
+
+        // Include a time via the toggle — the forward-entered reference layout.
+        // The row-spanning switch element's center can miss the control, so tap
+        // the nested switch when the OS exposes one and fall back to a
+        // trailing-edge coordinate tap otherwise.
+        let toggle = app.switches["capture-include-time"]
+        XCTAssertTrue(toggle.waitForExistence(timeout: 5), "the reminder date step offers the time toggle")
+        let inner = toggle.switches.firstMatch
+        if inner.exists {
+            inner.tap()
+        } else {
+            toggle.coordinate(withNormalizedOffset: CGVector(dx: 0.95, dy: 0.5)).tap()
+        }
+        let isOn = NSPredicate(format: "value == '1'")
+        if XCTWaiter.wait(for: [XCTNSPredicateExpectation(predicate: isOn, object: toggle)], timeout: 3) != .completed {
+            toggle.coordinate(withNormalizedOffset: CGVector(dx: 0.95, dy: 0.5)).tap()
+            _ = XCTWaiter.wait(for: [XCTNSPredicateExpectation(predicate: isOn, object: toggle)], timeout: 3)
+        }
+        XCTAssertEqual(toggle.value as? String, "1", "the tap flipped the time toggle on")
+
+        // The picker switches to `.dateAndTime` and grows its native inline Time
+        // row beneath the calendar — the reference layout the re-entered step
+        // must reproduce.
+        let time = calendar.descendants(matching: .any)
+            .matching(NSPredicate(format: "label BEGINSWITH[c] 'time'"))
+            .firstMatch
+        XCTAssertTrue(time.waitForExistence(timeout: 5), "including a time shows the picker's native Time row")
+
+        let header = calendar.buttons
+            .matching(NSPredicate(format: "label BEGINSWITH[c] 'next'"))
+            .firstMatch
+        XCTAssertTrue(header.waitForExistence(timeout: 5), "the inline calendar exposes its month-navigation header")
+        // Let the layout settle before recording the reference geometry — the
+        // timed pitch is the re-entry baseline: both sides of that comparison
+        // must be `.dateAndTime` layouts (the timed grid shares its taller box
+        // with the Time row, so its natural pitch differs from date-only's).
+        RunLoop.current.run(until: Date().addingTimeInterval(1))
+        let forwardOffset = header.frame.minY - calendar.frame.minY
+        let timedPitch = rowPitch(in: calendar)
+        NSLog("CAPTURE-CALENDAR-PITCH timed=%.2f", timedPitch)
+        // The `.dateAndTime` grid's natural metrics are TIGHTER than date-only's
+        // by design — the mode compresses the calendar (~0.87×, 44pt of pitch
+        // on the CI simulator) so the total with the time row stays near the
+        // date-only footprint, and it top-aligns at natural size rather than
+        // stretching to fill the box. So the timed floor sits just under that
+        // natural 44, not under date-only's ~50; a phantom-inset regression in
+        // this roomier box shows up as a band above the header (the offset
+        // assertions below), while a drop below 43 means the grid is being
+        // squeezed into less than its natural area again.
+        XCTAssertGreaterThan(
+            timedPitch, 43,
+            "the timed calendar's rows are compacted — pitch \(timedPitch)pt against the .dateAndTime mode's natural 44pt (#115)"
+        )
+
+        // Commit the timed date, then backspace on the empty list filter to land
+        // back on the due-date step — the timed step is re-entered fresh.
+        app.buttons["capture-set-date"].tap()
+        let filter = app.textFields["capture-input"]
+        XCTAssertTrue(filter.waitForExistence(timeout: 5), "committing the date advances to the list step")
+        XCTAssertTrue(app.keyboards.firstMatch.waitForExistence(timeout: 10))
+        filter.typeText(XCUIKeyboardKey.delete.rawValue)
+
+        XCTAssertTrue(calendar.waitForExistence(timeout: 5), "backspace re-enters the due-date step")
+        XCTAssertTrue(time.waitForExistence(timeout: 5), "a timed date re-enters with the picker's Time row")
+        XCTAssertTrue(header.waitForExistence(timeout: 5))
+
+        // Poll briefly so the re-entry transition settles before the frame is
+        // judged. The broken fresh-built `.dateAndTime` layout shifted the grid
+        // ~40pt, so a 15pt tolerance separates it cleanly from render jitter.
+        let deadline = Date().addingTimeInterval(5)
+        var reenteredOffset = CGFloat.greatestFiniteMagnitude
+        repeat {
+            reenteredOffset = header.frame.minY - calendar.frame.minY
+            if abs(reenteredOffset - forwardOffset) <= 15 { break }
+            RunLoop.current.run(until: Date().addingTimeInterval(0.2))
+        } while Date() < deadline
+
+        XCTAssertEqual(
+            reenteredOffset, forwardOffset, accuracy: 15,
+            "a re-entered timed date step must match the forward-entered layout — the calendar header sat \(reenteredOffset)pt into the picker vs \(forwardOffset)pt (blank band above the grid)"
+        )
+
+        // The re-entered grid must keep the forward timed layout's row pitch —
+        // rows drawing closer together is the calendar compacting inside its
+        // pinned height. Compared against the timed pitch, not the date-only
+        // one: re-entry builds a `.dateAndTime` picker, whose box the Time row
+        // shares.
+        let reenteredPitch = rowPitch(in: calendar)
+        NSLog("CAPTURE-CALENDAR-PITCH timed=%.2f reentered=%.2f", timedPitch, reenteredPitch)
+        XCTAssertEqual(
+            reenteredPitch, timedPitch, accuracy: 3,
+            "the re-entered calendar compacted its rows — pitch \(timedPitch)pt forward vs \(reenteredPitch)pt on re-entry"
+        )
+        XCTAssertGreaterThan(
+            reenteredPitch, 43,
+            "the re-entered timed calendar's rows are compacted — pitch \(reenteredPitch)pt against the .dateAndTime mode's natural 44pt (#115)"
+        )
+    }
+
+    /// The vertical distance between consecutive week rows of the inline
+    /// calendar, measured from the day-number cells two weeks apart (present in
+    /// every month layout) so a single missing edge day can't skew it. Returns
+    /// half the 8→22 distance; 0 if the cells can't be found.
+    @MainActor
+    private func rowPitch(in calendar: XCUIElement) -> CGFloat {
+        let top = dayCell("8", in: calendar)
+        let bottom = dayCell("22", in: calendar)
+        guard top.exists, bottom.exists else { return 0 }
+        return (bottom.frame.minY - top.frame.minY) / 2
+    }
+
+    /// A day-number cell of the inline calendar. The OS has exposed these as
+    /// different element types and label shapes across versions (a bare "15",
+    /// or the number wrapped in weekday/month words), so match across any
+    /// element type, accepting the day number either as the whole label or as
+    /// a standalone token inside it. The grid shows only the current month, so
+    /// a day token can't collide with a neighbor month's cell.
+    @MainActor
+    private func dayCell(_ label: String, in calendar: XCUIElement) -> XCUIElement {
+        calendar.descendants(matching: .any)
+            .matching(NSPredicate(
+                format: "label == %@ OR label MATCHES %@",
+                label,
+                "(^|.*\\D)\(label)(\\D.*|$)"
+            ))
+            .firstMatch
     }
 
     /// Committing the date moves on to the list step, whose fuzzy filter brings
