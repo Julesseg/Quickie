@@ -585,15 +585,13 @@ private struct InlineDatePicker: UIViewRepresentable {
 
     func updateUIView(_ container: UIView, context: Context) {
         guard let picker = context.coordinator.picker else { return }
-        // Resize the box BEFORE switching the mode, and commit the new bounds
-        // with an explicit layout pass: assigning `datePickerMode` rebuilds the
-        // inline content synchronously against the picker's *current* bounds,
-        // and that rebuild is a first layout — the kind this picker bakes in
-        // permanently (#115). Flipping the toggle used to switch the mode while
-        // the box still had the date-only height, so the `.dateAndTime` content
-        // compressed itself into 350pt and stayed compressed after the
-        // constraint grew (CI measured 44pt of row pitch inside the 400pt box,
-        // with dead slack below the time row).
+        // Resize the box before switching the mode and commit the new bounds
+        // with an explicit layout pass — defensive ordering so a mode switch's
+        // content rebuild (a first layout, which this picker bakes in
+        // permanently, #115) can never run against stale bounds. Note the
+        // `.dateAndTime` grid is naturally TIGHTER than date-only's (~0.87× row
+        // pitch) and top-aligns at natural size rather than filling the box —
+        // that is the mode's design, not a squeeze; see the geometry test.
         if let constraint = context.coordinator.heightConstraint, constraint.constant != height {
             constraint.constant = height
             container.layoutIfNeeded()

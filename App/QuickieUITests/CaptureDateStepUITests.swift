@@ -190,9 +190,18 @@ final class CaptureDateStepUITests: XCTestCase {
         let forwardOffset = header.frame.minY - calendar.frame.minY
         let timedPitch = rowPitch(in: calendar)
         NSLog("CAPTURE-CALENDAR-PITCH timed=%.2f", timedPitch)
+        // The `.dateAndTime` grid's natural metrics are TIGHTER than date-only's
+        // by design — the mode compresses the calendar (~0.87×, 44pt of pitch
+        // on the CI simulator) so the total with the time row stays near the
+        // date-only footprint, and it top-aligns at natural size rather than
+        // stretching to fill the box. So the timed floor sits just under that
+        // natural 44, not under date-only's ~50; a phantom-inset regression in
+        // this roomier box shows up as a band above the header (the offset
+        // assertions below), while a drop below 43 means the grid is being
+        // squeezed into less than its natural area again.
         XCTAssertGreaterThan(
-            timedPitch, 46,
-            "the timed calendar's rows are compacted — pitch \(timedPitch)pt against the pinned 400pt box (phantom safe-area inset regression, #115)"
+            timedPitch, 43,
+            "the timed calendar's rows are compacted — pitch \(timedPitch)pt against the .dateAndTime mode's natural 44pt (#115)"
         )
 
         // Commit the timed date, then backspace on the empty list filter to land
@@ -235,8 +244,8 @@ final class CaptureDateStepUITests: XCTestCase {
             "the re-entered calendar compacted its rows — pitch \(timedPitch)pt forward vs \(reenteredPitch)pt on re-entry"
         )
         XCTAssertGreaterThan(
-            reenteredPitch, 46,
-            "the re-entered timed calendar's rows are compacted — pitch \(reenteredPitch)pt against the pinned 400pt box (phantom safe-area inset regression, #115)"
+            reenteredPitch, 43,
+            "the re-entered timed calendar's rows are compacted — pitch \(reenteredPitch)pt against the .dateAndTime mode's natural 44pt (#115)"
         )
     }
 
