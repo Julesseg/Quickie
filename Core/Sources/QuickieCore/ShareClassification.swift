@@ -6,6 +6,41 @@ import Foundation
 /// gate. This slice (issue #101) carries the URL branch: naming the Quicklink
 /// a shared URL becomes.
 public enum ShareClassification {
+    /// The branch a shared payload takes once the extension has unpacked it
+    /// (ADR 0022): edit it as a Quicklink seeded from a URL, edit it as a
+    /// Snippet/Pile seeded from text, or refuse an empty payload.
+    public enum Route: Equatable {
+        case quicklink(URL)
+        case text(String)
+        case unsupported
+    }
+
+    /// Decide which branch a shared payload takes from the pieces the extension
+    /// managed to load (ADR 0022). A genuine shared/selected string
+    /// (`sharedText` — a `public.plain-text` attachment or the item's
+    /// `attributedContentText`) **wins over the page `attachedURL`**:
+    /// highlight-and-share in Safari, Books, or Notes hands the extension the
+    /// selected text *and* the page's link, but the user's intent is the text
+    /// they highlighted — the link is incidental. A shared string that is
+    /// *itself* a web URL still takes the Quicklink branch (the "I shared a
+    /// link" reading, `webURL(fromSharedText:)`), so a plain page share — whose
+    /// only "text", if any, is the URL string — still becomes a Quicklink; so
+    /// does a page share carrying no selection at all. An empty payload is
+    /// unsupported. File-URL refusal stays in the shell (it owns the message).
+    public static func route(sharedText: String?, attachedURL: URL?) -> Route {
+        if let text = sharedText,
+           !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+            if let url = webURL(fromSharedText: text) {
+                return .quicklink(url)
+            }
+            return .text(text)
+        }
+        if let url = attachedURL {
+            return .quicklink(url)
+        }
+        return .unsupported
+    }
+
     /// The default name for the Quicklink a shared URL becomes: the shared
     /// page title when one came along, else the URL's host with any bare
     /// `www.` dropped, else the URL string itself (issue #101 — the sheet

@@ -151,4 +151,53 @@ struct ShareClassificationTests {
         // the Save gate keeps the user from saving a titleless Snippet.
         #expect(ShareClassification.snippetTitle(fromSharedText: text) == "")
     }
+
+    // Routing the whole payload (issue #102 follow-up): highlight-and-share in
+    // Safari activates the extension via NSExtensionActivationSupportsText but
+    // *also* hands over the page URL as a public.url attachment. If the URL is
+    // taken first, the user's selected text is lost to the Quicklink branch — so
+    // a genuine text selection must win over the incidental page link. This is a
+    // pure Core decision so `swift test` pins it, not the untested shell.
+
+    @Test("a text selection wins over the page URL that rides along with it")
+    func selectionWinsOverTheRidealongPageURL() {
+        // Safari's highlight-share: the selected prose *and* the page's link.
+        // The user highlighted text — that's the intent; the link is incidental.
+        let route = ShareClassification.route(
+            sharedText: "the mitochondria is the powerhouse of the cell",
+            attachedURL: URL(string: "https://en.wikipedia.org/wiki/Mitochondrion")
+        )
+        #expect(route == .text("the mitochondria is the powerhouse of the cell"))
+    }
+
+    @Test("a shared string that is itself a web URL still routes to the Quicklink branch")
+    func sharedURLStringRoutesToQuicklinkEvenWithAnAttachment() {
+        // A plain page share whose only "text" is the URL string still becomes a
+        // Quicklink — routed from the text, not the attachment, but same branch.
+        let route = ShareClassification.route(
+            sharedText: "https://example.org/a",
+            attachedURL: URL(string: "https://example.org/a")
+        )
+        #expect(route == .quicklink(URL(string: "https://example.org/a")!))
+    }
+
+    @Test("a page share with no selection routes to the Quicklink branch via the URL attachment", arguments: [nil, "", "   \n"])
+    func pageShareWithoutSelectionUsesTheURLAttachment(sharedText: String?) {
+        let route = ShareClassification.route(
+            sharedText: sharedText,
+            attachedURL: URL(string: "https://anthropic.com")
+        )
+        #expect(route == .quicklink(URL(string: "https://anthropic.com")!))
+    }
+
+    @Test("a text selection with no URL attachment routes to the text branch")
+    func selectionWithoutURLRoutesToText() {
+        let route = ShareClassification.route(sharedText: "buy oat milk", attachedURL: nil)
+        #expect(route == .text("buy oat milk"))
+    }
+
+    @Test("an empty payload is unsupported", arguments: [nil, "", "  \n "])
+    func emptyPayloadIsUnsupported(sharedText: String?) {
+        #expect(ShareClassification.route(sharedText: sharedText, attachedURL: nil) == .unsupported)
+    }
 }

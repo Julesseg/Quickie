@@ -127,24 +127,19 @@ final class ShareModel {
             .first
 
         let providers = items.flatMap { $0.attachments ?? [] }
+        let urlProvider = providers.first { $0.hasItemConformingToTypeIdentifier(UTType.url.identifier) }
+        let textProvider = providers.first { $0.hasItemConformingToTypeIdentifier(UTType.plainText.identifier) }
+        // Where a raw *selection* lands when it isn't vended as a plain-text
+        // attachment (Safari, Books, Notes put the highlighted text here).
+        let contentText = firstNonEmptyContentText(in: items)
 
-        // URL wins even when the sharer also supplies plain text (ADR 0022) —
-        // Safari sends both for a page share.
-        if let urlProvider = providers.first(where: { $0.hasItemConformingToTypeIdentifier(UTType.url.identifier) }) {
-            Task { await classifyURL(from: urlProvider, pageTitle: pageTitle) }
-        } else if let textProvider = providers.first(where: { $0.hasItemConformingToTypeIdentifier(UTType.plainText.identifier) }) {
-            Task { await classifyText(from: textProvider) }
-        } else if let selectedText = firstNonEmptyContentText(in: items) {
-            // Selected text shared under `NSExtensionActivationSupportsText`
-            // (highlight-and-share in Safari, Books, Notes…) arrives in the
-            // item's `attributedContentText`, *not* as a `public.plain-text`
-            // attachment — so a text selection never reaches the branch above.
-            // Read it directly rather than refusing a payload we can handle.
-            classify(sharedText: selectedText)
-        } else {
-            // The activation rule shouldn't let anything else in; guard
-            // defensively.
-            phase = .unsupported("Quickie can save a link or text from the share sheet.")
+        Task {
+            await classify(
+                urlProvider: urlProvider,
+                textProvider: textProvider,
+                contentText: contentText,
+                pageTitle: pageTitle
+            )
         }
     }
 
@@ -157,38 +152,51 @@ final class ShareModel {
             .first { !$0.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty }
     }
 
-    private func classifyURL(from provider: NSItemProvider, pageTitle: String?) async {
-        guard let url = try? await provider.loadURL() else {
-            phase = .unsupported("Quickie couldn't read the shared link.")
-            return
-        }
-        // Files are out of scope (the activation rule keeps them away; a
-        // file URL inside an odd mixed payload is refused here).
-        guard !url.isFileURL else {
-            phase = .unsupported("Quickie can't save files — share a link instead.")
-            return
-        }
-        startEditingQuicklink(url: url, pageTitle: pageTitle)
-    }
-
-    private func classifyText(from provider: NSItemProvider) async {
-        guard let text = try? await provider.loadText() else {
-            phase = .unsupported("Quickie couldn't read the shared text.")
-            return
-        }
-        classify(sharedText: text)
-    }
-
-    /// Route a piece of shared text to a branch: text that *is* a web URL takes
-    /// the URL branch (ADR 0022 — the "I shared a link" reading); everything
-    /// else takes the text branch — a sheet defaulting to Snippet with a switch
-    /// to Pile. Shared by the plain-text-attachment path and the selected-text
-    /// (`attributedContentText`) path.
-    private func classify(sharedText text: String) {
-        if let url = ShareClassification.webURL(fromSharedText: text) {
-            startEditingQuicklink(url: url, pageTitle: nil)
+    /// Load whatever the payload carries, then let Core's pure rule pick the
+    /// branch (ADR 0022). A genuine shared/selected string wins over the page
+    /// URL that Safari's highlight-share hands over alongside it — so a text
+    /// selection reaches the text sheet even though a `public.url` attachment
+    /// is also present. A shared string that is itself a web URL, and a page
+    /// share with no selection, both land on the Quicklink branch.
+    private func classify(
+        urlProvider: NSItemProvider?,
+        textProvider: NSItemProvider?,
+        contentText: String?,
+        pageTitle: String?
+    ) async {
+        // Prefer a plain-text attachment (a whole shared `String`) over the
+        // item's content text; either is a genuine selection to Core.
+        let sharedText: String?
+        if let textProvider {
+            sharedText = (try? await textProvider.loadText()) ?? contentText
         } else {
+            sharedText = contentText
+        }
+
+        let attachedURL: URL?
+        if let urlProvider {
+            attachedURL = try? await urlProvider.loadURL()
+        } else {
+            attachedURL = nil
+        }
+
+        switch ShareClassification.route(sharedText: sharedText, attachedURL: attachedURL) {
+        case .text(let text):
             startEditingText(text)
+        case .quicklink(let url):
+            // Files are out of scope (the activation rule keeps them away; a
+            // file URL inside an odd mixed payload is refused here).
+            guard !url.isFileURL else {
+                phase = .unsupported("Quickie can't save files — share a link instead.")
+                return
+            }
+            // A page URL from the attachment keeps its page title; a URL the
+            // shared *text* itself was has none.
+            startEditingQuicklink(url: url, pageTitle: url == attachedURL ? pageTitle : nil)
+        case .unsupported:
+            // The activation rule shouldn't let anything else in; guard
+            // defensively.
+            phase = .unsupported("Quickie can save a link or text from the share sheet.")
         }
     }
 
