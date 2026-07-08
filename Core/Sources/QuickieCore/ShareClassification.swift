@@ -22,6 +22,35 @@ public enum ShareClassification {
         return host
     }
 
+    /// The default title for the [[Snippet]] a piece of shared plain text
+    /// becomes (ADR 0022; issue #102): the first non-empty line of the text,
+    /// trimmed and length-capped to ~40 characters. A Snippet is titled,
+    /// reusable text, so the sheet pre-fills this and the user edits it freely
+    /// before saving; the [[Pile]] alternative is titleless and needs none of
+    /// it. The whole shared text still rides along as the Snippet body — this
+    /// derives only the one-line handle. The cap prefers a word boundary (a
+    /// long first line is cut back to the last whitespace within the limit
+    /// rather than sliced mid-word) and hard-cuts only when the first word
+    /// alone overruns.
+    public static func snippetTitle(fromSharedText text: String, maxLength: Int = 40) -> String {
+        let firstLine = text
+            .split(separator: "\n", omittingEmptySubsequences: true)
+            .lazy
+            .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
+            .first { !$0.isEmpty } ?? ""
+
+        guard firstLine.count > maxLength else { return firstLine }
+
+        let capped = firstLine.prefix(maxLength)
+        // Back up to the last word boundary so a word isn't sliced in half;
+        // fall through to the hard cut when the first word already overruns.
+        if let lastSpace = capped.lastIndex(where: \.isWhitespace) {
+            let atBoundary = capped[..<lastSpace].trimmingCharacters(in: .whitespacesAndNewlines)
+            if !atBoundary.isEmpty { return atBoundary }
+        }
+        return String(capped)
+    }
+
     /// The web URL a piece of shared plain text *is*, when the whole text
     /// parses as one (ADR 0022): shared text that is itself an `http(s)` link
     /// defaults to the URL branch — the "I shared a link" reading. Prose, a

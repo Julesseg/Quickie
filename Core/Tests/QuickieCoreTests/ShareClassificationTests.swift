@@ -94,4 +94,61 @@ struct ShareClassificationTests {
         let url = ShareClassification.webURL(fromSharedText: "  https://example.org\n")
         #expect(url == URL(string: "https://example.org"))
     }
+
+    // The text branch (issue #102): shared plain text defaults to a Snippet,
+    // whose title pre-fills from the first line of the text truncated to ~40
+    // characters (a Pile entry is titleless and needs none of this). The
+    // derivation is a pure Core function so `swift test` covers it, not logic
+    // buried in the extension shell.
+
+    @Test("a short single-line share becomes the Snippet title verbatim")
+    func snippetTitleFromShortLine() {
+        let title = ShareClassification.snippetTitle(fromSharedText: "Home address")
+        #expect(title == "Home address")
+    }
+
+    @Test("only the first line of a multi-line share seeds the Snippet title")
+    func snippetTitleTakesFirstLineOnly() {
+        // The body carries the whole text; the title is just a one-line handle,
+        // so a multi-line paste titles from its opening line alone.
+        let title = ShareClassification.snippetTitle(
+            fromSharedText: "Quarterly plan\n\n- ship the share extension\n- write the docs"
+        )
+        #expect(title == "Quarterly plan")
+    }
+
+    @Test("leading blank lines and surrounding whitespace are skipped")
+    func snippetTitleSkipsLeadingBlanksAndTrims() {
+        let title = ShareClassification.snippetTitle(fromSharedText: "\n  \n   Buy oat milk   \n")
+        #expect(title == "Buy oat milk")
+    }
+
+    @Test("a long first line is capped near 40 characters at a word boundary")
+    func snippetTitleCapsAtWordBoundary() {
+        // "~40 chars" — cut back to the last whole word within the limit rather
+        // than slicing a word in half, so the pre-filled title reads cleanly.
+        let title = ShareClassification.snippetTitle(
+            fromSharedText: "The quick brown fox jumps over the lazy dog by the river"
+        )
+        #expect(title == "The quick brown fox jumps over the lazy")
+        #expect(title.count <= 40)
+    }
+
+    @Test("a first word longer than the cap is hard-truncated at 40 characters")
+    func snippetTitleHardCutsAnOverlongWord() {
+        // No word boundary to fall back to, so the only option is a hard cut —
+        // still bounded, never the whole 60-character monster.
+        let title = ShareClassification.snippetTitle(
+            fromSharedText: "Supercalifragilisticexpialidocioussuperlongword tail"
+        )
+        #expect(title.count == 40)
+        #expect(title == "Supercalifragilisticexpialidocioussuperl")
+    }
+
+    @Test("blank or whitespace-only shared text yields an empty title", arguments: ["", "   ", "\n\n  \n"])
+    func snippetTitleEmptyForBlankText(text: String) {
+        // Nothing to derive: the sheet shows an empty, editable title field and
+        // the Save gate keeps the user from saving a titleless Snippet.
+        #expect(ShareClassification.snippetTitle(fromSharedText: text) == "")
+    }
 }

@@ -38,25 +38,44 @@ final class ShareViewController: UIViewController {
 }
 
 /// The extension's state: classify the shared payload, hold the editable
-/// Quicklink draft, and write it through the shared App Group store — or
-/// refuse with an error when that store isn't there (ADR 0022: a silent write
-/// to a container the app can never read is a fake "saved").
+/// draft for whichever branch it landed in, and write it through the shared App
+/// Group store — or refuse with an error when that store isn't there (ADR 0022:
+/// a silent write to a container the app can never read is a fake "saved").
 @Observable @MainActor
 final class ShareModel {
-    /// The editable fields the classification sheet collects, pre-filled from
-    /// the shared item (name from the page title or host — Core's rule).
+    /// The editable fields the URL branch's sheet collects, pre-filled from the
+    /// shared item (name from the page title or host — Core's rule).
     struct QuicklinkDraft {
         var title = ""
         var urlString = ""
         var alias = ""
     }
 
+    /// Which record the text branch will save (CONTEXT.md → Share Extension):
+    /// a titled, reusable [[Snippet]] (the default) or a titleless [[Pile]]
+    /// entry, chosen by the sheet's segmented switch.
+    enum TextKind: Hashable {
+        case snippet
+        case pile
+    }
+
+    /// The editable fields the text branch's sheet collects. `title` seeds the
+    /// Snippet name from the first line of the shared text (Core's rule) and is
+    /// ignored when the user switches to Pile — a Pile entry is just `text`.
+    struct TextDraft {
+        var kind: TextKind = .snippet
+        var title = ""
+        var text = ""
+    }
+
     enum Phase {
         case loading
-        /// The URL branch's classification sheet is up, editing `draft`.
-        case editing
-        /// The payload has no branch this slice (bare text lands in its own
-        /// slice; odd mixed payloads are guarded here defensively).
+        /// The URL branch's classification sheet is up, editing `quicklinkDraft`.
+        case editingQuicklink
+        /// The text branch's sheet is up (Snippet ⇄ Pile), editing `textDraft`.
+        case editingText
+        /// The payload has no branch (odd mixed payloads are guarded here
+        /// defensively; the activation rule keeps images/files out entirely).
         case unsupported(String)
         /// The shared store refused — App Group missing or the write failed.
         /// Terminal: nothing was saved, and the sheet says so.
@@ -64,7 +83,8 @@ final class ShareModel {
     }
 
     private(set) var phase: Phase = .loading
-    var draft = QuicklinkDraft()
+    var quicklinkDraft = QuicklinkDraft()
+    var textDraft = TextDraft()
 
     private let complete: () -> Void
     private let cancelRequest: () -> Void
@@ -74,12 +94,29 @@ final class ShareModel {
         self.cancelRequest = cancel
     }
 
-    /// Mirrors the in-app Quicklink editor's gate: a name, a URL, and no
-    /// `{placeholder}` (a templated URL is a Custom Action, not a Quicklink).
+    /// Whether the active sheet has enough to save. The URL branch mirrors the
+    /// in-app Quicklink editor's gate (a name, a URL, and no `{placeholder}` —
+    /// a templated URL is a Custom Action, not a Quicklink); the text branch
+    /// mirrors the Snippet editor (a title *and* a body) for a Snippet and just
+    /// non-empty text for a titleless Pile entry.
     var canSave: Bool {
-        !draft.title.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
-            && !draft.urlString.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
-            && !Action.templateContainsPlaceholder(draft.urlString)
+        switch phase {
+        case .editingQuicklink:
+            return !quicklinkDraft.title.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+                && !quicklinkDraft.urlString.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+                && !Action.templateContainsPlaceholder(quicklinkDraft.urlString)
+        case .editingText:
+            let hasText = !textDraft.text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+            switch textDraft.kind {
+            case .snippet:
+                return hasText
+                    && !textDraft.title.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+            case .pile:
+                return hasText
+            }
+        case .loading, .unsupported, .failed:
+            return false
+        }
     }
 
     func load(items: [NSExtensionItem]) {
@@ -114,7 +151,7 @@ final class ShareModel {
             phase = .unsupported("Quickie can't save files — share a link instead.")
             return
         }
-        startEditing(url: url, pageTitle: pageTitle)
+        startEditingQuicklink(url: url, pageTitle: pageTitle)
     }
 
     private func classifyText(from provider: NSItemProvider) async {
@@ -123,44 +160,73 @@ final class ShareModel {
             return
         }
         // Text that *is* a web URL takes the URL branch (ADR 0022 — the
-        // "I shared a link" reading). Bare text becomes a Snippet or Pile
-        // entry in the text-branch slice; until that lands it is refused
-        // honestly rather than half-saved.
+        // "I shared a link" reading). Everything else is the text branch: a
+        // sheet defaulting to Snippet with a switch to Pile.
         if let url = ShareClassification.webURL(fromSharedText: text) {
-            startEditing(url: url, pageTitle: nil)
+            startEditingQuicklink(url: url, pageTitle: nil)
         } else {
-            phase = .unsupported("Saving shared text is coming soon. Quickie can save a link today.")
+            startEditingText(text)
         }
     }
 
-    private func startEditing(url: URL, pageTitle: String?) {
-        draft = QuicklinkDraft(
+    private func startEditingQuicklink(url: URL, pageTitle: String?) {
+        quicklinkDraft = QuicklinkDraft(
             title: ShareClassification.quicklinkName(pageTitle: pageTitle, url: url),
             urlString: url.absoluteString,
             alias: ""
         )
-        phase = .editing
+        phase = .editingQuicklink
     }
 
-    /// Writes the Quicklink through the shared App Group container and
+    private func startEditingText(_ text: String) {
+        // Default to Snippet, its title pre-filled from the first line (Core's
+        // rule) and its body the whole shared text; switching to Pile drops the
+        // title. The body keeps the shared text verbatim apart from trimming the
+        // surrounding whitespace, matching the in-app editors' seed behaviour.
+        textDraft = TextDraft(
+            kind: .snippet,
+            title: ShareClassification.snippetTitle(fromSharedText: text),
+            text: text.trimmingCharacters(in: .whitespacesAndNewlines)
+        )
+        phase = .editingText
+    }
+
+    /// Writes the classified item through the shared App Group container and
     /// completes the request — or surfaces the refusal. The error paths never
     /// call `complete`, so a failure is never reported back as a save.
     func save() {
         do {
             let container = try QuickieStore.appGroupContainer()
             let context = ModelContext(container)
-            let alias = draft.alias.trimmingCharacters(in: .whitespacesAndNewlines)
-            context.insert(StoredQuicklink(
-                title: draft.title.trimmingCharacters(in: .whitespacesAndNewlines),
-                urlString: draft.urlString.trimmingCharacters(in: .whitespacesAndNewlines),
-                alias: alias.isEmpty ? nil : alias
-            ))
+            switch phase {
+            case .editingQuicklink:
+                let alias = quicklinkDraft.alias.trimmingCharacters(in: .whitespacesAndNewlines)
+                context.insert(StoredQuicklink(
+                    title: quicklinkDraft.title.trimmingCharacters(in: .whitespacesAndNewlines),
+                    urlString: quicklinkDraft.urlString.trimmingCharacters(in: .whitespacesAndNewlines),
+                    alias: alias.isEmpty ? nil : alias
+                ))
+            case .editingText:
+                let text = textDraft.text.trimmingCharacters(in: .whitespacesAndNewlines)
+                switch textDraft.kind {
+                case .snippet:
+                    context.insert(StoredSnippet(
+                        title: textDraft.title.trimmingCharacters(in: .whitespacesAndNewlines),
+                        body: text
+                    ))
+                case .pile:
+                    context.insert(StoredPileEntry(text: text))
+                }
+            case .loading, .unsupported, .failed:
+                // No editable draft to save; the Save button isn't shown here.
+                return
+            }
             try context.save()
             complete()
         } catch QuickieStore.AppGroupStoreError.appGroupUnavailable {
-            phase = .failed("Quickie's shared storage isn't available, so the link can't be saved. Nothing was saved.")
+            phase = .failed("Quickie's shared storage isn't available, so nothing could be saved.")
         } catch {
-            phase = .failed("Saving the link failed: \(error.localizedDescription). Nothing was saved.")
+            phase = .failed("Saving failed: \(error.localizedDescription). Nothing was saved.")
         }
     }
 
