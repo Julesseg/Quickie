@@ -303,6 +303,14 @@ public struct SearchEngine {
     /// disabled instance, or a deleted target drops out here exactly as it degrades
     /// to Home there. The Favorites cap (4) is respected implicitly — the set is
     /// drawn from the given Favorites and Custom Actions and never invents a member.
+    ///
+    /// One non-obvious consequence of sharing `action(for:)`'s catalog: that lookup
+    /// also drops an *enabled fallback* when the Fallbacks master switch is off (see
+    /// `isEnabledFallback`). So a bridged member that is fallback-eligible **and**
+    /// active (e.g. the seeded web search) leaves the set entirely while Fallbacks are
+    /// disabled — not just its fallback slot. That is deliberate, not a quirk to work
+    /// around: the whole point of resolving through `action(for:)` is that offered
+    /// ⟺ runnable, so a member the bridge can't run must not be offered.
     public func bridgedActions() -> [BridgedAction] {
         // The live catalog, built **once** — disabled kinds and instances excluded,
         // exactly the map `action(for:)` looks a `quickie://run/<id>` up in, so the
