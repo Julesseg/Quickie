@@ -113,9 +113,13 @@ struct NewEventIntent: AppIntent {
 
 extension AppIntent {
     /// Deposit a foreground verb's Core-built `quickie://` URL for `RootView` to
-    /// dispatch through the single root `onOpenURL` path (ADR 0024). The URL is
-    /// always present for a foreground shortcut; the fatalError only fires if a
-    /// background verb is wired here by mistake, which the Core type prevents.
+    /// dispatch through the single root `onOpenURL` path (ADR 0024). Every foreground
+    /// verb has a non-nil `deeplinkURL`, so the guard below is unreachable in correct
+    /// use; it only trips if a *background* verb (Save for later) is wired here by
+    /// mistake, which the Core type's split shape prevents. That is a programmer
+    /// error, not a runtime condition, so it trips `assertionFailure` — a debug trap
+    /// that is compiled out in Release, where the call then no-ops rather than opening
+    /// anything (acceptable because it cannot happen given the fixed foreground set).
     @MainActor
     func openInApp(_ shortcut: HeadlineAppShortcut) {
         guard let url = shortcut.deeplinkURL else {
@@ -163,12 +167,42 @@ struct SaveForLaterIntent: AppIntent {
 
         // Write through the shared store exactly like the Share Extension (ADR 0022):
         // the App Group container or an honest failure, never a silent private
-        // fallback that the app could never read.
-        let container = try QuickieStore.appGroupContainer()
-        let context = ModelContext(container)
-        context.insert(StoredPileEntry(text: entryText))
-        try context.save()
+        // fallback that the app could never read. Failures are surfaced as
+        // Siri-readable messages that mirror the Share Extension's crafted copy for
+        // the same failure modes, so the two write surfaces tell one consistent story
+        // instead of one leaking a raw thrown error.
+        do {
+            let container = try QuickieStore.appGroupContainer()
+            let context = ModelContext(container)
+            context.insert(StoredPileEntry(text: entryText))
+            try context.save()
+        } catch QuickieStore.AppGroupStoreError.appGroupUnavailable {
+            throw SaveForLaterError.storageUnavailable
+        } catch {
+            throw SaveForLaterError.saveFailed
+        }
 
         return .result()
+    }
+}
+
+/// The Siri-facing failures of the background Save for later write, worded to match
+/// the Share Extension's crafted messages for the same shared-store failure modes
+/// (ADR 0022): the two write surfaces should read the same when the App Group is
+/// missing or the store won't open. Conforms to `CustomLocalizedStringResourceConvertible`
+/// so App Intents surfaces the message to the user rather than a generic error.
+enum SaveForLaterError: Error, CustomLocalizedStringResourceConvertible {
+    /// The App Group isn't provisioned, so there is no shared store to write into.
+    case storageUnavailable
+    /// The shared store exists but the write failed.
+    case saveFailed
+
+    var localizedStringResource: LocalizedStringResource {
+        switch self {
+        case .storageUnavailable:
+            return "Quickie's shared storage isn't available, so nothing could be saved."
+        case .saveFailed:
+            return "Saving to your pile failed, so nothing was saved."
+        }
     }
 }
