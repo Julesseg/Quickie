@@ -45,15 +45,29 @@ in `QuickieCore` and are covered by the Linux `swift test` gate on every PR. The
 extension becomes a thin shell that unpacks `NSItemProvider`s, calls those
 functions, presents a small SwiftUI sheet, and writes through `QuickieStoreKit`.
 
-**Classification rule:**
-- Any attachment conforming to `public.url` → **URL branch → Quicklink** (URL
-  wins even when Safari also supplies `public.plain-text`; the page title, if
-  present, seeds the Quicklink name).
-- Else `public.plain-text` that **parses whole as a web URL** → default to the
-  **URL branch**, with a toggle to treat it as text instead (a plain-text URL is
-  genuinely ambiguous; default to the "I shared a link" reading).
-- Else `public.plain-text` → **text branch**, a sheet defaulting to **Snippet**
-  with a segmented switch to **Pile**.
+**Classification rule** (the pure `ShareClassification.route(sharedText:attachedURL:)`):
+- A **genuine shared/selected string** — a `public.plain-text` attachment, or
+  the item's `attributedContentText` where a raw selection lands — is decided
+  *first*, and **wins over a `public.url` attachment that rides along with it**.
+  Highlight-and-share in Safari/Books/Notes activates the extension via
+  `NSExtensionActivationSupportsText` but *also* hands over the page's link; the
+  user's intent is the text they highlighted, so the selection must not be lost
+  to the Quicklink branch. Within that string:
+  - text that **parses whole as a web URL** → **URL branch → Quicklink** (the "I
+    shared a link" reading). A plain page share whose only "text" is the URL
+    string therefore still becomes a Quicklink.
+  - else → **text branch**, a sheet defaulting to **Snippet** with a segmented
+    switch to **Pile**.
+- Else (no selection) a `public.url` attachment → **URL branch → Quicklink**; the
+  page title, when present, seeds the Quicklink name.
+- Else → unsupported (the activation rule keeps images/files out; a defensive
+  guard only).
+
+  *(Safari delivers a page share as a `public.url` attachment with the title in
+  `attributedContentText`/`attributedTitle`, and a selection share as the
+  selected text plus the page's `public.url`. Preferring the selection when one
+  is present is what distinguishes the two — an earlier "URL attachment wins
+  first" rule silently sent every highlight-share to the Quicklink branch.)*
 
 **Images/files are excluded by the `NSExtensionActivationRule`**, not rejected at
 runtime — the extension only advertises for `public.url` and `public.plain-text`,

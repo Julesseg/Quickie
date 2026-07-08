@@ -6,6 +6,41 @@ import Foundation
 /// gate. This slice (issue #101) carries the URL branch: naming the Quicklink
 /// a shared URL becomes.
 public enum ShareClassification {
+    /// The branch a shared payload takes once the extension has unpacked it
+    /// (ADR 0022): edit it as a Quicklink seeded from a URL, edit it as a
+    /// Snippet/Pile seeded from text, or refuse an empty payload.
+    public enum Route: Equatable {
+        case quicklink(URL)
+        case text(String)
+        case unsupported
+    }
+
+    /// Decide which branch a shared payload takes from the pieces the extension
+    /// managed to load (ADR 0022). A genuine shared/selected string
+    /// (`sharedText` — a `public.plain-text` attachment or the item's
+    /// `attributedContentText`) **wins over the page `attachedURL`**:
+    /// highlight-and-share in Safari, Books, or Notes hands the extension the
+    /// selected text *and* the page's link, but the user's intent is the text
+    /// they highlighted — the link is incidental. A shared string that is
+    /// *itself* a web URL still takes the Quicklink branch (the "I shared a
+    /// link" reading, `webURL(fromSharedText:)`), so a plain page share — whose
+    /// only "text", if any, is the URL string — still becomes a Quicklink; so
+    /// does a page share carrying no selection at all. An empty payload is
+    /// unsupported. File-URL refusal stays in the shell (it owns the message).
+    public static func route(sharedText: String?, attachedURL: URL?) -> Route {
+        if let text = sharedText,
+           !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+            if let url = webURL(fromSharedText: text) {
+                return .quicklink(url)
+            }
+            return .text(text)
+        }
+        if let url = attachedURL {
+            return .quicklink(url)
+        }
+        return .unsupported
+    }
+
     /// The default name for the Quicklink a shared URL becomes: the shared
     /// page title when one came along, else the URL's host with any bare
     /// `www.` dropped, else the URL string itself (issue #101 — the sheet
@@ -20,6 +55,35 @@ public enum ShareClassification {
             return String(host.dropFirst(4))
         }
         return host
+    }
+
+    /// The default title for the [[Snippet]] a piece of shared plain text
+    /// becomes (ADR 0022; issue #102): the first non-empty line of the text,
+    /// trimmed and length-capped to ~40 characters. A Snippet is titled,
+    /// reusable text, so the sheet pre-fills this and the user edits it freely
+    /// before saving; the [[Pile]] alternative is titleless and needs none of
+    /// it. The whole shared text still rides along as the Snippet body — this
+    /// derives only the one-line handle. The cap prefers a word boundary (a
+    /// long first line is cut back to the last whitespace within the limit
+    /// rather than sliced mid-word) and hard-cuts only when the first word
+    /// alone overruns.
+    public static func snippetTitle(fromSharedText text: String, maxLength: Int = 40) -> String {
+        let firstLine = text
+            .split(separator: "\n", omittingEmptySubsequences: true)
+            .lazy
+            .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
+            .first { !$0.isEmpty } ?? ""
+
+        guard firstLine.count > maxLength else { return firstLine }
+
+        let capped = firstLine.prefix(maxLength)
+        // Back up to the last word boundary so a word isn't sliced in half;
+        // fall through to the hard cut when the first word already overruns.
+        if let lastSpace = capped.lastIndex(where: \.isWhitespace) {
+            let atBoundary = capped[..<lastSpace].trimmingCharacters(in: .whitespacesAndNewlines)
+            if !atBoundary.isEmpty { return atBoundary }
+        }
+        return String(capped)
     }
 
     /// The web URL a piece of shared plain text *is*, when the whole text
