@@ -33,23 +33,23 @@ final class DeeplinkUITests: XCTestCase {
         return app
     }
 
-    /// A `quickie://capture/reminder` deeplink lands the warm app directly on the
-    /// Reminder capture's title step — the `capture-input` breadcrumb field, keyboard
-    /// up — without the user typing "reminder" or tapping the row first.
+    /// A `quickie://capture/reminder` deeplink lands the app directly on the Reminder
+    /// capture's title step — the `capture-input` breadcrumb field, keyboard up —
+    /// without the user typing "reminder" or tapping the row first. The launcher
+    /// swaps its search field for the capture breadcrumb the moment the deeplink
+    /// fires, so the assertion is on `capture-input` directly, not the transient
+    /// `search-input`.
     @MainActor
     func testCaptureReminderDeeplinkOpensBreadcrumb() throws {
         let app = launchApp(deeplink: "quickie://capture/reminder")
 
-        // The bottom launcher input exists on launch; we never touch it — the
-        // deeplink alone drives selection.
-        XCTAssertTrue(
-            app.textFields["search-input"].waitForExistence(timeout: 30),
-            "the launcher should come up on launch"
-        )
-
+        // The deeplink alone drives selection — no typing, no row tap. The generous
+        // timeout spans app launch plus the seam's dispatch into the capture; the
+        // launcher never shows its search field to the test because the deeplink
+        // replaces it with the breadcrumb straight away.
         let captureField = app.textFields["capture-input"]
         XCTAssertTrue(
-            captureField.waitForExistence(timeout: 10),
+            captureField.waitForExistence(timeout: 30),
             "the capture deeplink should open the breadcrumb on Argument 1 with no user input"
         )
         XCTAssertTrue(

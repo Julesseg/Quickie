@@ -658,7 +658,10 @@ struct RootView: View {
             // so a UI test seeds one as a launch argument and the app dispatches it
             // through the *real* parse → `handleDeeplink` path once the launcher is on
             // screen — the same "drive the real path" approach the shortcut import and
-            // Favorites pin tests use. Gated on `--uitesting`, latched to fire once.
+            // Favorites pin tests use. A `capture/*` deeplink swaps the search field for
+            // the capture breadcrumb, whose `capture-input` self-focuses
+            // (`BackspaceTextField.becomeFirstResponder`), so it needs no prior search
+            // focus. Gated on `--uitesting`, latched to fire once.
             .onAppear { dispatchUITestDeeplinkIfRequested() }
             // Seed the default web-search Custom Action once on launch (ADR 0021).
             .task {
