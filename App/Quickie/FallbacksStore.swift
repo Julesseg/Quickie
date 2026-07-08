@@ -143,6 +143,17 @@ final class FallbacksStore {
         }
     }
 
+    /// Demotes any enabled id that is currently **instance-disabled**, coupling the
+    /// per-action Disabled switch with the Fallback list: a disabled action leaves the
+    /// Active section for the Available pool, and — removed from the enabled list — a
+    /// later re-enable leaves it in Available rather than restoring its old rank (the
+    /// behavior chosen for the Fallbacks-page toggle). Called whenever the disabled set
+    /// changes, from any surface, so the coupling is uniform. Persists only on a change.
+    func demoteDisabled(_ disabledIDs: Set<String>) {
+        let filtered = enabled.filter { !disabledIDs.contains($0) }
+        if filtered != enabled { setEnabled(filtered) }
+    }
+
     /// Forgets an id's rank once its eligibility is **genuinely lost** (issue #114) —
     /// called when the eligible catalog changes. An id drops only if it was seen
     /// eligible earlier this session (`everEligible`) but no longer is (`liveEligible`):

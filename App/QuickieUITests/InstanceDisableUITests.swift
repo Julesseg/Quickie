@@ -261,4 +261,41 @@ final class InstanceDisableUITests: XCTestCase {
             "a demoted built-in capture lands in the pool — still on the page, never deleted"
         )
     }
+
+    /// Each Fallbacks-page row carries the action's enable/disable toggle, and
+    /// disabling an *active* fallback both hides it everywhere and demotes it into the
+    /// Available pool (issue #114 follow-up): the row leaves Active and gains a promote
+    /// plus in the pool.
+    @MainActor
+    func testDisablingAnActiveFallbackMovesItToTheAvailablePool() throws {
+        let app = launchApp()
+
+        let input = app.textFields["search-input"]
+        XCTAssertTrue(input.waitForExistence(timeout: 30))
+        input.tap()
+        input.typeText("fallbacks")
+        let command = app.buttons["builtin.fallbacks-page"]
+        XCTAssertTrue(command.waitForExistence(timeout: 5))
+        command.tap()
+
+        // Save for later is pre-enabled (Active), so it starts with a demote (red
+        // minus), not a promote. Its enable/disable toggle is on the row.
+        XCTAssertTrue(
+            app.buttons["fallback-demote.builtin.save-for-later"].waitForExistence(timeout: 10),
+            "Save for later starts active"
+        )
+        let toggle = app.switches["fallback-enabled.builtin.save-for-later"]
+        XCTAssertTrue(toggle.waitForExistence(timeout: 5), "each Fallbacks row carries its enable/disable toggle")
+
+        // Disable it → it drops out of Active and lands in the pool with a promote plus.
+        flip(toggle, to: false)
+        XCTAssertTrue(
+            app.buttons["fallback-promote.builtin.save-for-later"].waitForExistence(timeout: 5),
+            "disabling an active fallback demotes it into the Available pool"
+        )
+        XCTAssertFalse(
+            app.buttons["fallback-demote.builtin.save-for-later"].exists,
+            "the disabled fallback no longer sits in the Active section"
+        )
+    }
 }

@@ -672,6 +672,15 @@ struct RootView: View {
                     firstRunDefaults: FallbackActivation.firstRunEnabledIDs(webSearchID: QuickieStore.seedWebSearchID)
                 )
                 everEligibleFallbacks.formUnion(eligibleFallbackIDs)
+                // Couple instance-disable with the Fallback list: a disabled action is
+                // demoted out of the enabled list into the Available pool, so it never
+                // renders as active and re-enabling doesn't restore its old rank.
+                fallbacks.demoteDisabled(instanceEnablement.disabled)
+            }
+            // Keep that coupling live: disabling an action anywhere (its home page or
+            // the Fallbacks page) demotes it from the enabled Fallback list.
+            .onChange(of: instanceEnablement.disabled) { _, disabled in
+                fallbacks.demoteDisabled(disabled)
             }
             // Forget an enabled fallback's rank when its eligibility is *genuinely*
             // lost (a Shortcut whose accepts-input was turned off, a Custom Action
@@ -815,7 +824,7 @@ struct RootView: View {
         switch provider {
         case .quicklinks: QuicklinksView(enablement: instanceEnablement)
         case .customActions: CustomActionsView(enablement: instanceEnablement)
-        case .fallbacks: FallbacksView(store: fallbacks, eligible: eligibleFallbackActions)
+        case .fallbacks: FallbacksView(store: fallbacks, enablement: instanceEnablement, eligible: eligibleFallbackActions)
         case .snippets: SnippetManagerView(enablement: instanceEnablement)
         case .shortcuts: ShortcutsView(store: shortcuts, enablement: instanceEnablement)
         case .fileSearch: IndexedFoldersView(store: indexedFolders)
