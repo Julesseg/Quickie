@@ -78,7 +78,7 @@ extension Action {
         }
 
         return Action(
-            id: "builtin.new-reminder",
+            id: newReminderID,
             kind: .reminder,
             title: "New Reminder",
             aliases: ["reminder", "remind me", "todo"],
@@ -91,6 +91,13 @@ extension Action {
             }
         )
     }
+
+    /// The stable id of the "New Reminder" capture command row. Exposed (like
+    /// `saveForLaterID`) so the outward routes that steer this capture — the
+    /// `quickie://run/<id>` deeplink and the New Reminder headline App Shortcut
+    /// (issue #121; ADR 0024) — reference the same id the factory indexes it under,
+    /// and can never drift from it.
+    public static let newReminderID = "builtin.new-reminder"
 
     /// Builds the `ReminderDraft` from the collected Argument values (issue #37).
     /// Reads each field by value kind so it is robust to the steps a setting skips:
