@@ -111,6 +111,14 @@ _Avoid_: Paste tip popup, permission primer (that is the quick-capture pattern, 
 The iOS share-sheet entry point that turns a shared **URL** or **plain text** into a stored Action written to the shared App Group store (ADR 0006, 0022). A URL becomes a [[Quicklink]]; text becomes a [[Snippet]] (the default) or a [[Pile]] entry, chosen in a small **classification sheet** with quick edit. It only advertises for URL and text — images and files are out of scope, and it does not appear in the share sheet for them. Items it writes surface in the app on the next foreground, when the in-memory index is rebuilt from the store. Distinct from a [[Provider]]: it is a *write* surface (a way in), not a source of Actions in the [[Result list]]. (The epic that introduced it, #14, said "text → Snippet or **Note**"; read that as Snippet or Pile — Note was retired by ADR 0018.)
 _Avoid_: Share sheet action, importer, Add-to-Quickie extension (it is the "Share Extension")
 
+**Favorites widget**:
+The interactive Home-Screen [[Entry surface]] mirroring the [[Favorites grid]]: one button per pinned [[Favorite]], in pin order. A button runs its Favorite's **main action** with as little Quickie as possible: a [[Snippet]] copies **in-place** (no app launch), a [[Quicklink]] or [[Shortcut Action]] **hands off directly** to the browser / Shortcuts app (a Shortcut's output reinjection still lands back in Quickie, exactly as an in-app run), and an Action that needs input or in-app UI (a [[Quick capture]], a slotted [[Custom Action]], [[Search Files context]]) opens the app **pre-selected** — verb-first, breadcrumb at Argument 1, as if its Favorite card had been tapped on [[Home]]. A button whose Favorite no longer resolves degrades to the clean focused Home, never an error.
+_Avoid_: Interactive widget (say which), quick actions widget
+
+**Entry surface**:
+A system surface outside the app that gets the user into Quickie fast — the Home/Lock Screen deep-link widget, the interactive [[Favorites widget]], the Control Center control, and the Action Button. The open-focused surfaces express "I have something new to type *now*": they always land on a clean, focused [[Home]] — a stale query is cleared and a half-filled breadcrumb abandoned — whereas resuming via the app icon or app switcher preserves state. Distinct from the [[Share Extension]] (a write surface, not a way in for typing).
+_Avoid_: Launcher widget, shortcut surface, entry point (ambiguous with code entry points)
+
 **Provider**:
 A source that contributes Actions to the result list. Every Action originates from exactly one Provider. Providers are either Indexed or Dynamic.
 _Avoid_: Source, Extension (collides with iOS app extensions), plugin
