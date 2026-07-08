@@ -132,6 +132,14 @@ struct RootView: View {
     /// dispatches exactly once, even though `onAppear` can fire more than once.
     @State private var didDispatchLaunchDeeplink = false
 
+    /// The foreground headline App Shortcuts' hand-off (issue #121; ADR 0024). A
+    /// Quick Capture / New Reminder / New Event intent deposits its `quickie://` URL
+    /// here after foregrounding the app, and this view drains it through the *same*
+    /// `QuickieDeeplink.parse → handleDeeplink` the root `onOpenURL` runs — no second
+    /// inbound path. Held as the shared instance so both the intent and this view
+    /// see one inbox.
+    @State private var deeplinkInbox = DeeplinkInbox.shared
+
     @State private var query = ""
     /// Whether the **Search Files context** is active (CONTEXT.md → Search Files
     /// context; ADR 0014): entered by selecting the "Search Files" command row, it
@@ -653,6 +661,13 @@ struct RootView: View {
                 if let deeplink = QuickieDeeplink.parse(url) { handleDeeplink(deeplink); return }
                 handleShortcutResult(url)
             }
+            // A foreground headline App Shortcut (issue #121; ADR 0024) deposits its
+            // `quickie://` URL in the shared inbox after foregrounding the app; drain
+            // it through the same parse → dispatch path. `onChange` catches a warm hit
+            // (deposited after this view is on screen); the launcher's `onAppear` below
+            // catches a cold hit (deposited before it existed). Draining consumes the
+            // URL, so a relaunch never replays a stale route.
+            .onChange(of: deeplinkInbox.pending) { _, _ in dispatchPendingDeeplink() }
             // The `-uitest-deeplink` seam: XCUITest can't deliver a `quickie://` URL,
             // so a UI test seeds one as a launch argument and the app dispatches it
             // through the *real* parse → `handleDeeplink` path once the launcher is on
@@ -661,7 +676,13 @@ struct RootView: View {
             // the capture breadcrumb, whose `capture-input` self-focuses
             // (`BackspaceTextField.becomeFirstResponder`), so it needs no prior search
             // focus. Gated on `--uitesting`, latched to fire once.
-            .onAppear { dispatchUITestDeeplinkIfRequested() }
+            .onAppear {
+                dispatchUITestDeeplinkIfRequested()
+                // Drain a cold-launch deposit: a foreground App Shortcut that launched
+                // the app deposited its URL before this view existed, so `onChange`
+                // never saw it.
+                dispatchPendingDeeplink()
+            }
             // Seed the default web-search Custom Action once on launch (ADR 0021).
             .task {
                 QuickieStore.seedDefaultCustomActions(in: modelContext)
@@ -1024,10 +1045,12 @@ struct RootView: View {
         case .saveToPile(let text):
             // The silent "Save for later" capture (CONTEXT.md → Pile; ADR 0018):
             // drop the typed text straight into the Pile — no editor, no confirm,
-            // no app switch — clear to Home, and acknowledge like a copy-out.
-            let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
-            if !trimmed.isEmpty {
-                modelContext.insert(StoredPileEntry(text: trimmed))
+            // no app switch — clear to Home, and acknowledge like a copy-out. The
+            // trim-and-drop-empty guard is the same Core rule the background Save for
+            // later App Shortcut applies (issue #121), so the two write surfaces can't
+            // diverge on what counts as an empty capture.
+            if let entryText = HeadlineAppShortcut.pileText(fromDictated: text) {
+                modelContext.insert(StoredPileEntry(text: entryText))
                 flashConfirmation("Saved for later")
             }
             query = ""
@@ -1315,6 +1338,19 @@ struct RootView: View {
               let deeplink = QuickieDeeplink.parse(url)
         else { return }
         didDispatchLaunchDeeplink = true
+        handleDeeplink(deeplink)
+    }
+
+    /// Drains a foreground headline App Shortcut's pending `quickie://` URL (issue
+    /// #121; ADR 0024) and dispatches it through the real `QuickieDeeplink.parse →
+    /// handleDeeplink` — the same door `onOpenURL` uses, so the routing logic stays
+    /// in Core and there is no second inbound path. Consuming the inbox clears it, so
+    /// this is safe to call from both `onChange` (warm hit) and `onAppear` (cold hit)
+    /// and a stale route is never replayed.
+    private func dispatchPendingDeeplink() {
+        guard let url = deeplinkInbox.take(),
+              let deeplink = QuickieDeeplink.parse(url)
+        else { return }
         handleDeeplink(deeplink)
     }
 

@@ -83,7 +83,7 @@ extension Action {
         }
 
         return Action(
-            id: "builtin.new-event",
+            id: newEventID,
             kind: .event,
             title: "New Event",
             aliases: ["event", "calendar", "meeting", "appointment"],
@@ -97,6 +97,13 @@ extension Action {
             }
         )
     }
+
+    /// The stable id of the "New Event" capture command row. Exposed (like
+    /// `saveForLaterID`) so the outward routes that steer this capture — the
+    /// `quickie://run/<id>` deeplink and the New Event headline App Shortcut
+    /// (issue #121; ADR 0024) — reference the same id the factory indexes it under,
+    /// and can never drift from it.
+    public static let newEventID = "builtin.new-event"
 
     /// The default duration of a timed event (CONTEXT.md → Event): one hour past
     /// the start. A date-only start ignores this and becomes all-day instead.
