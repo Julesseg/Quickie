@@ -42,7 +42,10 @@ struct BridgedActionEntity: AppEntity {
         DisplayRepresentation(title: "\(title)")
     }
 
-    static var defaultQuery = BridgedActionQuery()
+    // A computed property (not a stored `static var`, which Swift 6 rejects as
+    // nonisolated shared mutable state): the query holds no state — it reads the
+    // published snapshot each call — so a fresh value per access is free and safe.
+    static var defaultQuery: BridgedActionQuery { BridgedActionQuery() }
 }
 
 /// The **dynamic** query behind the entity (ADR 0024): it enumerates the current
