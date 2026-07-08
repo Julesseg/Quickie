@@ -646,9 +646,8 @@ struct RootView: View {
             // Sync Shortcut's `quickie://import?names=…`, which the store ingests
             // (parse → auto-prune reconcile → persist); the run callbacks a triggered
             // Shortcut Action comes back on; and the App Intents bridge / entry-surface
-            // deeplink door (capture / run / entry). Each parser claims only its own
-            // hosts, so order is immaterial and an unrecognized URL falls through
-            // untouched.
+            // deeplink door (run / entry). Each parser claims only its own hosts, so
+            // order is immaterial and an unrecognized URL falls through untouched.
             .onOpenURL { url in
                 if shortcuts.handle(url: url) { return }
                 if let deeplink = QuickieDeeplink.parse(url) { handleDeeplink(deeplink); return }
@@ -1082,12 +1081,13 @@ struct RootView: View {
         }
     }
 
-    /// Performs a one-shot **secondary action** on a row's content (CONTEXT.md →
-    /// Secondary action; ADR 0017). Core decides *which* verbs a row's content is
-    /// eligible for; the App resolves the content **at the edge** and runs the verb
-    /// — the same defer-to-the-edge pattern as the main-action outcomes. Only
-    /// content-bearing rows reach here (a `.none` row offers no such menu item), so
-    /// a resolution that comes back empty is a stale reference, not a dead item.
+    /// Performs a one-shot **secondary action** on a row (CONTEXT.md → Secondary
+    /// action; ADR 0017). Core decides *which* verbs a row is eligible for; the App
+    /// resolves the reference **at the edge** and runs the verb — the same
+    /// defer-to-the-edge pattern as the main-action outcomes. The content verbs
+    /// (copy/share/edit/reveal) only reach here for a content-bearing row, so an
+    /// empty resolution is a stale reference, not a dead item; `copyDeeplink` is the
+    /// exception — it rides on every row, keyed by the id, not the content.
     private func performSecondary(_ action: Action, _ kind: SecondaryActionKind) {
         switch kind {
         case .copy:
@@ -1110,6 +1110,12 @@ struct RootView: View {
             default:
                 editSnippet(action)
             }
+        case .copyDeeplink:
+            // Copy the row's tap-equivalent `quickie://run/<id>` URL, built by the
+            // one pure constructor so the id is percent-encoded consistently (issue
+            // #120). Available on every row, a content-less command included.
+            UIPasteboard.general.string = QuickieDeeplink.runURL(id: action.id).absoluteString
+            flashConfirmation("Copied deeplink")
         }
     }
 
@@ -1255,27 +1261,21 @@ struct RootView: View {
 
     /// Dispatches an inbound `quickie://` **deeplink** (issue #120; ADR 0024) — the
     /// door the App Intents bridge (#121) and epic #16's open-focused entry surfaces
-    /// (#124, #125) ride. Every route first **drops any scoped context** — a
+    /// (#124, #125) ride. Both routes first **drop any scoped context** — a
     /// half-filled breadcrumb and the Search Files context — the same reset a
     /// Shortcut-output reinjection performs, so the app lands on the launcher root
     /// before acting:
     ///
-    /// - `capture/*` starts the matching quick capture, breadcrumb at Argument 1
-    ///   (the search field keeps first responder, so the title step's field takes
-    ///   focus seamlessly — the same hand-off a tapped capture row gets).
     /// - `run/<id>` runs the resolved Action **tap-equivalently** (a Favorite's main
-    ///   action, a Custom Action's breadcrumb); an id that no longer resolves —
-    ///   unpinned, deleted, disabled — degrades to the clean Home the reset already
-    ///   left, no error UI.
+    ///   action, a Custom Action's breadcrumb, a quick-capture command row's capture —
+    ///   `run/builtin.new-reminder` *is* "open the Reminder capture"); an id that no
+    ///   longer resolves — unpinned, deleted, disabled — degrades to the clean Home
+    ///   the reset already left, no error UI.
     /// - `entry` is the reset with **nothing selected after**, refocusing the input:
     ///   a fresh, focused Home for a warm app (cold launch already lands there).
     private func handleDeeplink(_ deeplink: QuickieDeeplink) {
         resetToLauncher()
         switch deeplink {
-        case .captureReminder:
-            startReminderCapture()
-        case .captureEvent:
-            startEventCapture()
         case .run(let id):
             // Tap-equivalent: behave exactly as if the user tapped this Action's
             // row. An unresolvable id leaves the clean Home the reset produced.

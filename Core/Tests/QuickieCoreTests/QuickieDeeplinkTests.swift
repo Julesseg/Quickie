@@ -13,28 +13,6 @@ struct QuickieDeeplinkTests {
 
     private func url(_ string: String) -> URL { URL(string: string)! }
 
-    // MARK: Capture routes
-
-    @Test("capture/reminder parses to the Reminder capture route")
-    func captureReminder() {
-        #expect(QuickieDeeplink.parse(url("quickie://capture/reminder")) == .captureReminder)
-    }
-
-    @Test("capture/event parses to the Event capture route")
-    func captureEvent() {
-        #expect(QuickieDeeplink.parse(url("quickie://capture/event")) == .captureEvent)
-    }
-
-    @Test("an unknown capture leaf is ignored")
-    func unknownCaptureLeafIgnored() {
-        #expect(QuickieDeeplink.parse(url("quickie://capture/note")) == nil)
-    }
-
-    @Test("a bare capture host with no leaf is ignored")
-    func bareCaptureIgnored() {
-        #expect(QuickieDeeplink.parse(url("quickie://capture")) == nil)
-    }
-
     // MARK: Run route
 
     @Test("run/<id> parses to a tap-equivalent run carrying the id")
@@ -87,17 +65,20 @@ struct QuickieDeeplinkTests {
         #expect(QuickieDeeplink.parse(url("quickie://frobnicate")) == nil)
     }
 
+    @Test("the retired capture host is no longer a route (reminder/event ride run/builtin.*)")
+    func captureHostRetired() {
+        #expect(QuickieDeeplink.parse(url("quickie://capture/reminder")) == nil)
+        #expect(QuickieDeeplink.parse(url("quickie://capture/event")) == nil)
+        // The uniform replacement resolves through the run route instead.
+        #expect(QuickieDeeplink.parse(url("quickie://run/builtin.new-reminder")) == .run(id: "builtin.new-reminder"))
+        #expect(QuickieDeeplink.parse(url("quickie://run/builtin.new-event")) == .run(id: "builtin.new-event"))
+    }
+
     // MARK: Round-trip through the outbound builders
 
     @Test("the entry builder round-trips to the entry route")
     func entryBuilderRoundTrips() {
         #expect(QuickieDeeplink.parse(QuickieDeeplink.entryURL()) == .entry)
-    }
-
-    @Test("the capture builders round-trip to their routes")
-    func captureBuildersRoundTrip() {
-        #expect(QuickieDeeplink.parse(QuickieDeeplink.captureReminderURL()) == .captureReminder)
-        #expect(QuickieDeeplink.parse(QuickieDeeplink.captureEventURL()) == .captureEvent)
     }
 
     @Test("the run builder round-trips an id with reserved characters")

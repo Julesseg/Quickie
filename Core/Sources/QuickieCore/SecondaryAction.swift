@@ -42,13 +42,14 @@ public enum ResultContent: Equatable, Hashable, Sendable {
 /// A one-shot verb a long-press menu offers for a result's content (ADR 0017).
 /// A bare verb enum — Core decides *eligibility*; the App owns every execution
 /// and edge-resolution (a Pile entry's text in the store, a file behind a
-/// bookmark), so even Copy cannot run in Core. Deliberately narrow this slice: the universal
+/// bookmark), so even Copy cannot run in Core. The content-keyed verbs: the universal
 /// `copy`/`share`, plus `revealInFiles` on a file and `edit` on a Snippet or a
 /// Shortcut — each a per-content verb the App resolves at the edge (open the
 /// Snippet editor seeded from the stored record, or deeplink into the Shortcuts
-/// app's editor by name). Multi-step per-type verbs (Make-Reminder, Convert, …)
-/// are deferred to a later breadcrumb-seeding slice, where `secondaryActions(for:)`
-/// is the extension point.
+/// app's editor by name). Alongside them one **id-keyed** verb, `copyDeeplink`,
+/// eligible on *every* row (§`secondaryActions`). Multi-step per-type verbs
+/// (Make-Reminder, Convert, …) are deferred to a later breadcrumb-seeding slice,
+/// where `secondaryActions(for:)` is the extension point.
 public enum SecondaryActionKind: Equatable, Hashable, Sendable {
     case copy
     case share
@@ -60,32 +61,48 @@ public enum SecondaryActionKind: Equatable, Hashable, Sendable {
     /// App resolves the reference by id/name and performs the open; Core only
     /// declares the verb eligible.
     case edit
+    /// **Copy action deeplink**: put this row's `quickie://run/<id>` URL on the
+    /// pasteboard (issue #120; `QuickieDeeplink.runURL`). Unlike every other verb
+    /// this keys off the Action's **id**, not its Result content, so it is offered on
+    /// *every* row — a content-less command or capture row included — since every
+    /// row is addressable by its id (a Favorite/Custom Action resolves live; other
+    /// ids simply degrade to Home on open, the same graceful-staleness rule). The
+    /// App builds the URL and writes the pasteboard; Core only declares the verb.
+    case copyDeeplink
 }
 
 /// The eligible secondary actions for a result's content (ADR 0017): a pure
-/// switch on `ResultContent`, **not** a `[ContentType: …]` table. `.none`
-/// excludes command / capture rows for free; `.file` adds `revealInFiles`;
-/// `.snippet` adds `edit` on top of copy/share; a `.shortcut` offers `edit`
-/// **alone** (no text to copy or share); every other content-bearing case gets
-/// the universal `copy`/`share`. No dead items — a verb is listed only when it
-/// can run.
+/// switch on `ResultContent`, **not** a `[ContentType: …]` table. The content-keyed
+/// verbs come first — `.file` adds `revealInFiles`; `.snippet` adds `edit` on top of
+/// copy/share; a `.shortcut` offers `edit` **alone** (no text to copy or share); a
+/// `.none` command/capture row has none of them; every other content-bearing case
+/// gets the universal `copy`/`share`. Then **`copyDeeplink` is appended to every
+/// case, `.none` included** (issue #120): it keys off the Action's id, which every
+/// row has, so it is the one verb a content-less row still exposes. Content verbs
+/// stay first so the menu reads value-first; the deeplink utility sits last. No dead
+/// items — every listed verb can run (a copy always succeeds; whether the copied
+/// deeplink later resolves is the open path's graceful-staleness concern).
 public func secondaryActions(for content: ResultContent) -> [SecondaryActionKind] {
+    let contentVerbs: [SecondaryActionKind]
     switch content {
     case .none:
-        return []
+        contentVerbs = []
     case .file:
-        return [.copy, .share, .revealInFiles]
+        contentVerbs = [.copy, .share, .revealInFiles]
     case .snippet:
         // A Snippet is a stored, titled record, so it earns Edit on top of the
         // universal copy/share — resolvable only because `.snippet` carries the
         // record's id, unlike a bare `.text` value.
-        return [.copy, .share, .edit]
+        contentVerbs = [.copy, .share, .edit]
     case .shortcut:
         // A Shortcut carries no textual value to copy or share — it is a pure
         // reference to a launchable item — so it earns only Edit: a deeplink into
         // the Shortcuts app's editor for the named shortcut.
-        return [.edit]
+        contentVerbs = [.edit]
     case .text, .url, .number, .pileEntry:
-        return [.copy, .share]
+        contentVerbs = [.copy, .share]
     }
+    // Every row is addressable by its id, so Copy action deeplink rides on all of
+    // them — the lone verb a content-less command/capture row now exposes.
+    return contentVerbs + [.copyDeeplink]
 }

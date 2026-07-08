@@ -1,12 +1,14 @@
 import XCTest
 
 /// The UI-only acceptance for the `quickie://` deeplink door (issue #120): a
-/// `capture/reminder` deeplink must open the app straight onto the Reminder
+/// `run/builtin.new-reminder` deeplink must open the app straight onto the Reminder
 /// quick-capture breadcrumb at Argument 1 with the keyboard up — no typing, no
 /// row tap, exactly as the App Intents bridge and entry surfaces (#121, #124,
-/// #125) will drive it. The parse grammar itself is covered deterministically by
-/// QuickieCore's `QuickieDeeplinkTests`; this proves the root `onOpenURL` →
-/// `handleDeeplink` wiring around it.
+/// #125) will drive it. Opening a quick capture is a tap-equivalent run of its
+/// built-in command row (ADR 0024 retired the separate `capture/*` routes). The
+/// parse grammar itself is covered deterministically by QuickieCore's
+/// `QuickieDeeplinkTests`; this proves the root `onOpenURL` → `handleDeeplink` →
+/// tap-equivalent `run` wiring around it.
 ///
 /// XCUITest can't open a `quickie://` URL against the app, so the deeplink is
 /// delivered through the *real* parse → dispatch path via the `-uitest-deeplink`
@@ -33,15 +35,15 @@ final class DeeplinkUITests: XCTestCase {
         return app
     }
 
-    /// A `quickie://capture/reminder` deeplink lands the app directly on the Reminder
-    /// capture's title step — the `capture-input` breadcrumb field, keyboard up —
-    /// without the user typing "reminder" or tapping the row first. The launcher
+    /// A `quickie://run/builtin.new-reminder` deeplink lands the app directly on the
+    /// Reminder capture's title step — the `capture-input` breadcrumb field, keyboard
+    /// up — without the user typing "reminder" or tapping the row first. The launcher
     /// swaps its search field for the capture breadcrumb the moment the deeplink
     /// fires, so the assertion is on `capture-input` directly, not the transient
     /// `search-input`.
     @MainActor
     func testCaptureReminderDeeplinkOpensBreadcrumb() throws {
-        let app = launchApp(deeplink: "quickie://capture/reminder")
+        let app = launchApp(deeplink: "quickie://run/builtin.new-reminder")
 
         // The deeplink alone drives selection — no typing, no row tap. The generous
         // timeout spans app launch plus the seam's dispatch into the capture; the
