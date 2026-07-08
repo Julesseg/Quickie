@@ -27,7 +27,7 @@ struct PileTests {
         // slice lands.
         let entry = Action.pileEntry(id: "pile.7", text: "book the campsite")
         #expect(entry.content == .pileEntry(id: "pile.7"))
-        #expect(secondaryActions(for: entry.content) == [.copy, .share])
+        #expect(secondaryActions(for: entry.content) == [.copy, .share, .copyDeeplink])
     }
 
     @Test("a Pile entry's row reads as a stage: its own main action, Enter labelled .go")

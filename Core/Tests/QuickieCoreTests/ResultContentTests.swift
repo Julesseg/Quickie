@@ -34,10 +34,11 @@ struct ResultContentTests {
     func customActionHasNoContent() {
         // A Custom Action's URL only exists once its slots are filled through the
         // breadcrumb, so — like a Shortcut hand-off — it carries no pre-resolved
-        // value to copy or share (ADR 0021): `.none` content, no secondary actions.
+        // value to copy or share (ADR 0021): `.none` content, so no *content* verbs —
+        // only the id-keyed Copy action deeplink every row earns (issue #120).
         let search = Action.webSearchFallback()
         #expect(search.content == .none)
-        #expect(secondaryActions(for: search.content) == [])
+        #expect(secondaryActions(for: search.content) == [.copyDeeplink])
     }
 
     @Test("a file declares file content, carrying its bookmark + relative path")
@@ -46,13 +47,14 @@ struct ResultContentTests {
         #expect(file.content == .file(bookmarkID: "folder-1", relativePath: "docs/report.pdf"))
     }
 
-    @Test("a command row carries no content, so it exposes no secondary actions")
+    @Test("a command row carries no content, so it exposes only the deeplink verb")
     func commandRowHasNoContent() {
         // A Settings command is `.text`-typed but carries no value — exactly the
-        // case a type-keyed table could not tell apart from a text Snippet.
+        // case a type-keyed table could not tell apart from a text Snippet. It earns
+        // no content verbs, only the id-keyed Copy action deeplink (issue #120).
         let settings = Action.openSettings()
         #expect(settings.content == .none)
-        #expect(secondaryActions(for: settings.content) == [])
+        #expect(secondaryActions(for: settings.content) == [.copyDeeplink])
     }
 
     @Test("a Shortcut declares shortcut content, keyed by its name")
@@ -64,25 +66,27 @@ struct ResultContentTests {
         #expect(shortcut.content == .shortcut(name: "Do Thing"))
     }
 
-    @Test("a Shortcut offers Edit alone — no text to copy or share")
+    @Test("a Shortcut offers Edit (then the deeplink) — no text to copy or share")
     func shortcutOffersEditOnly() {
-        // A Shortcut is a launchable reference, not a value, so it earns only Edit
-        // (open the named shortcut in the Shortcuts app) — never copy/share.
+        // A Shortcut is a launchable reference, not a value, so among the content
+        // verbs it earns only Edit (open the named shortcut in the Shortcuts app) —
+        // never copy/share — followed by the universal Copy action deeplink.
         let shortcut = Action.shortcut(name: "Do Thing")
-        #expect(secondaryActions(for: shortcut.content) == [.edit])
+        #expect(secondaryActions(for: shortcut.content) == [.edit, .copyDeeplink])
     }
 
     @Test("acting on a Pile entry offers copy + share via its declared content")
     func actOnPileEntryOffersCopyShare() {
         let entry = Action.pileEntry(id: "pile.7", text: "ideas for the offsite")
-        #expect(secondaryActions(for: entry.content) == [.copy, .share])
+        #expect(secondaryActions(for: entry.content) == [.copy, .share, .copyDeeplink])
     }
 
     @Test("a snippet additionally offers Edit via its declared content")
     func snippetOffersEdit() {
         // The Edit verb rides a Snippet's `.snippet(id:)` content on top of the
-        // universal copy/share, distinguishing it from a value-only `.text` row.
+        // universal copy/share, distinguishing it from a value-only `.text` row; the
+        // id-keyed Copy action deeplink follows last.
         let snippet = Action.snippet(id: "snip.1", title: "Address", body: "1 Infinite Loop")
-        #expect(secondaryActions(for: snippet.content) == [.copy, .share, .edit])
+        #expect(secondaryActions(for: snippet.content) == [.copy, .share, .edit, .copyDeeplink])
     }
 }

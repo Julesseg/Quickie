@@ -78,7 +78,7 @@ struct ShortcutActionTests {
         // add **Edit** — a deeplink into the Shortcuts app's editor.
         let action = Action.shortcut(name: "Start Workout")
         #expect(action.content == .shortcut(name: "Start Workout"))
-        #expect(secondaryActions(for: action.content) == [.edit])
+        #expect(secondaryActions(for: action.content) == [.edit, .copyDeeplink])
     }
 
     @Test("a Shortcut Action's tap reads as running the shortcut")
