@@ -134,10 +134,27 @@ final class ShareModel {
             Task { await classifyURL(from: urlProvider, pageTitle: pageTitle) }
         } else if let textProvider = providers.first(where: { $0.hasItemConformingToTypeIdentifier(UTType.plainText.identifier) }) {
             Task { await classifyText(from: textProvider) }
+        } else if let selectedText = firstNonEmptyContentText(in: items) {
+            // Selected text shared under `NSExtensionActivationSupportsText`
+            // (highlight-and-share in Safari, Books, Notes…) arrives in the
+            // item's `attributedContentText`, *not* as a `public.plain-text`
+            // attachment — so a text selection never reaches the branch above.
+            // Read it directly rather than refusing a payload we can handle.
+            classify(sharedText: selectedText)
         } else {
-            // The activation rule shouldn't let this in; guard defensively.
+            // The activation rule shouldn't let anything else in; guard
+            // defensively.
             phase = .unsupported("Quickie can save a link or text from the share sheet.")
         }
+    }
+
+    /// The first non-empty `attributedContentText` across the shared items —
+    /// where a raw text *selection* lands (as opposed to a `public.plain-text`
+    /// attachment, which is how an app vending a whole `String` delivers it).
+    private func firstNonEmptyContentText(in items: [NSExtensionItem]) -> String? {
+        items.lazy
+            .compactMap { $0.attributedContentText?.string }
+            .first { !$0.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty }
     }
 
     private func classifyURL(from provider: NSItemProvider, pageTitle: String?) async {
@@ -159,9 +176,15 @@ final class ShareModel {
             phase = .unsupported("Quickie couldn't read the shared text.")
             return
         }
-        // Text that *is* a web URL takes the URL branch (ADR 0022 — the
-        // "I shared a link" reading). Everything else is the text branch: a
-        // sheet defaulting to Snippet with a switch to Pile.
+        classify(sharedText: text)
+    }
+
+    /// Route a piece of shared text to a branch: text that *is* a web URL takes
+    /// the URL branch (ADR 0022 — the "I shared a link" reading); everything
+    /// else takes the text branch — a sheet defaulting to Snippet with a switch
+    /// to Pile. Shared by the plain-text-attachment path and the selected-text
+    /// (`attributedContentText`) path.
+    private func classify(sharedText text: String) {
         if let url = ShareClassification.webURL(fromSharedText: text) {
             startEditingQuicklink(url: url, pageTitle: nil)
         } else {
