@@ -196,8 +196,7 @@ final class ShortcutUITests: XCTestCase {
     func testInputAcceptingShortcutRunsAsOneTapFallback() throws {
         let app = launchAppWithInput(seed: "Translate")
 
-        // Activate Translate on the Fallbacks page — its id is derived deterministically
-        // (`shortcut.<lowercased name>`), so target its promote plus directly.
+        // Activate Translate on the Fallbacks page.
         let input = app.textFields["search-input"]
         XCTAssertTrue(input.waitForExistence(timeout: 30))
         input.tap()
@@ -206,17 +205,22 @@ final class ShortcutUITests: XCTestCase {
         XCTAssertTrue(command.waitForExistence(timeout: 5))
         command.tap()
 
-        // The pool sits below the pre-enabled Active section (web search + the two
-        // captures), so its row can start below the fold where a lazy List hasn't
-        // realized it yet — scroll it into view before asserting.
-        let promote = app.buttons["fallback-promote.shortcut.translate"]
+        // Find the Translate row in the Available pool by title and tap its promote
+        // plus *within that row* — the same cell-scoped pattern the Custom Action
+        // activation uses, which resolves reliably where a top-level button-id query
+        // over a lazy List row does not.
+        let poolCell = app.cells.containing(
+            NSPredicate(format: "label CONTAINS[c] %@", "Translate")
+        ).firstMatch
         var scrolls = 0
-        while !promote.exists && scrolls < 6 {
+        while !poolCell.exists && scrolls < 6 {
             app.swipeUp()
             scrolls += 1
         }
-        XCTAssertTrue(promote.waitForExistence(timeout: 10),
+        XCTAssertTrue(poolCell.waitForExistence(timeout: 10),
                       "the accepts-input shortcut waits in the fallback pool")
+        let promote = poolCell.buttons["Add to active fallbacks"]
+        XCTAssertTrue(promote.waitForExistence(timeout: 5), "the pool row offers a promote button")
         promote.tap()
 
         let back = app.navigationBars.buttons.firstMatch
