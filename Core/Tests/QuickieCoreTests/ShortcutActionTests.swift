@@ -27,10 +27,12 @@ struct ShortcutActionTests {
         #expect(action.arguments.isEmpty)
     }
 
-    @Test("a Shortcut Action matches by name and consumes no typed text")
-    func matchesByNameNotFallback() {
+    @Test("a no-input Shortcut Action matches by name and is not fallback-eligible")
+    func matchesByNameNotEligible() {
+        // No accepts-input → no Argument to seed → nowhere for a query to land, so
+        // it is not fallback-eligible and never rides the bottom region.
         let action = Action.shortcut(name: "Start Workout")
-        #expect(action.isFallback == false)
+        #expect(action.isFallbackEligible == false)
         #expect(action.inputTypes.isEmpty)
     }
 
@@ -39,12 +41,14 @@ struct ShortcutActionTests {
         // With `acceptsInput` on (set on the Shortcuts page in #45), the shortcut
         // declares one **optional** `text` Argument and runs through the breadcrumb
         // (issue #46) — optional so the user can submit it empty and still run the
-        // shortcut. Matched by name, it is still not a Fallback.
+        // shortcut. That free-text first Argument makes it **fallback-eligible** by
+        // shape (issue #114) — it can enter the Fallback list's pool — while still
+        // being matched by name and startable verb-first.
         let action = Action.shortcut(name: "Translate", acceptsInput: true)
         #expect(action.arguments.count == 1)
         #expect(action.arguments.first?.contentType == .text)
         #expect(action.arguments.first?.isOptional == true)
-        #expect(action.isFallback == false)
+        #expect(action.isFallbackEligible == true)
     }
 
     @Test("an input-accepting Shortcut Action passes the collected value as input")

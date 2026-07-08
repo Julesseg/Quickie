@@ -29,7 +29,7 @@ struct QuicklinkTests {
     @Test("a Quicklink is never a Fallback")
     func neverFallback() {
         let link = Action.quicklink(id: "a", title: "Apple", url: URL(string: "https://apple.com")!)
-        #expect(link.isFallback == false)
+        #expect(link.isFallbackEligible == false)
         #expect(link.kind == .quicklink)
     }
 

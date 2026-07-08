@@ -186,6 +186,54 @@ final class ShortcutUITests: XCTestCase {
         )
     }
 
+    /// An accepts-input Shortcut promoted to a fallback runs in **one tap** (issue
+    /// #114): its free-text input makes it fallback-eligible, so activating it on the
+    /// Fallbacks page and selecting its fallback row seeds-and-commits the typed query
+    /// as the shortcut's input and fires it immediately — a single-argument fallback
+    /// takes no breadcrumb stop. (The x-callback-url open is pure Core logic; the
+    /// reliable UI signal is that no input breadcrumb traps the user.)
+    @MainActor
+    func testInputAcceptingShortcutRunsAsOneTapFallback() throws {
+        let app = launchAppWithInput(seed: "Translate")
+
+        // Activate Translate on the Fallbacks page — its id is derived deterministically
+        // (`shortcut.<lowercased name>`), so target its promote plus directly.
+        let input = app.textFields["search-input"]
+        XCTAssertTrue(input.waitForExistence(timeout: 30))
+        input.tap()
+        input.typeText("fallbacks")
+        let command = app.buttons["builtin.fallbacks-page"]
+        XCTAssertTrue(command.waitForExistence(timeout: 5))
+        command.tap()
+
+        let promote = app.buttons["fallback-promote.shortcut.translate"]
+        XCTAssertTrue(promote.waitForExistence(timeout: 10),
+                      "the accepts-input shortcut waits in the fallback pool")
+        promote.tap()
+
+        let back = app.navigationBars.buttons.firstMatch
+        XCTAssertTrue(back.waitForExistence(timeout: 10))
+        back.tap()
+
+        // Type a query and pick the promoted shortcut's fallback row.
+        XCTAssertTrue(input.waitForExistence(timeout: 10))
+        input.tap()
+        input.typeText("hola mundo")
+        let row = app.buttons.matching(
+            NSPredicate(format: "label CONTAINS[c] %@", "Translate")
+        ).firstMatch
+        XCTAssertTrue(row.waitForExistence(timeout: 5), "the promoted shortcut rides the fallback region")
+        row.tap()
+
+        // Seed-and-commit fires it in one tap: no input breadcrumb traps the user
+        // (a single-argument fallback completes immediately, unlike a verb-first tap
+        // which would open the breadcrumb to collect the input).
+        XCTAssertTrue(
+            app.textFields["capture-input"].waitForNonExistence(timeout: 5),
+            "a single-argument shortcut fallback runs in one tap — no breadcrumb stop"
+        )
+    }
+
     /// A Shortcut Action with `acceptsInput` **off** fires immediately (issue #46 AC
     /// #1): tapping it hands off via x-callback-url with no input — it must not start
     /// the input breadcrumb. The hand-off leaves the app (or no-ops in a simulator

@@ -4,9 +4,9 @@ import XCTest
 /// (CONTEXT.md → Custom Action; ADR 0021, issue #94) that can only be verified by
 /// driving the real app on a simulator: the **live-mirroring editor** (typing the
 /// URL grows argument rows, renaming a row rewrites the URL token, drag sets the
-/// fill order, the fallback toggle gates on a slot, and Save is gated), and one
-/// **end-to-end** breadcrumb run of a multi-argument Custom Action authored through
-/// the new Management page.
+/// fill order, the derived eligibility note reflects the first argument, and Save is
+/// gated), and one **end-to-end** breadcrumb run of a multi-argument Custom Action
+/// authored through the new Management page and activated on the Fallbacks page.
 ///
 /// The reconciliation, rename, reorder, and validation *logic* are covered
 /// deterministically by QuickieCore's CustomActionEditorTests; these prove the
@@ -72,29 +72,32 @@ final class CustomActionUITests: XCTestCase {
         back.tap()
     }
 
-    /// The fallback toggle, brought reliably into view. Typing the URL leaves the
-    /// keyboard up over the lower form, and a multi-slot form's rows push the toggle
-    /// below the fold — SwiftUI's `Form` then drops it from the accessibility tree,
-    /// and a swipe can just land on the keyboard and never scroll. So first **dismiss
-    /// the keyboard** by submitting the focused URL field — a single-line SwiftUI
-    /// `TextField` resigns on Return without inserting a newline — which uncovers the
-    /// lower form; then scroll the remainder into view if the form is still long
-    /// (issue #96).
+    /// Activates an authored Custom Action as a fallback the way a user now does —
+    /// there is no editor toggle (issue #114): open the Fallbacks page and tap the
+    /// green plus on the action's row in the **Available** pool, promoting it to the
+    /// active section, then pop back to the launcher. Assumes the launcher is showing
+    /// with an empty query (opening the page via its command row clears the query).
     @MainActor
-    private func revealFallbackToggle(_ app: XCUIApplication) -> XCUIElement {
-        let toggle = app.switches["custom-action-fallback-toggle"]
-        if toggle.exists { return toggle }
-        let url = app.textFields["custom-action-url-field"]
-        if url.exists {
-            url.tap()
-            app.typeText("\n")
-        }
-        for _ in 0..<6 {
-            if toggle.exists { return toggle }
-            app.swipeUp()
-        }
-        _ = toggle.waitForExistence(timeout: 3)
-        return toggle
+    private func activateAsFallback(_ app: XCUIApplication, title: String) {
+        let input = app.textFields["search-input"]
+        XCTAssertTrue(input.waitForExistence(timeout: 10))
+        input.tap()
+        input.typeText("fallbacks")
+        let command = app.buttons["builtin.fallbacks-page"]
+        XCTAssertTrue(command.waitForExistence(timeout: 5), "typing 'fallbacks' surfaces the command row")
+        command.tap()
+
+        // The freshly authored action waits in the Available pool (newly eligible
+        // actions are not auto-enabled). Find its row by title and tap its promote plus.
+        let poolCell = app.cells.containing(
+            NSPredicate(format: "label CONTAINS[c] %@", title)
+        ).firstMatch
+        XCTAssertTrue(poolCell.waitForExistence(timeout: 10), "the authored action waits in the fallback pool")
+        let promote = poolCell.buttons["Add to active fallbacks"]
+        XCTAssertTrue(promote.waitForExistence(timeout: 5), "the pool row offers a promote button")
+        promote.tap()
+
+        goBackHome(app)
     }
 
     // MARK: - Editor: live slot detection + rename rewrites the token
@@ -175,26 +178,34 @@ final class CustomActionUITests: XCTestCase {
         XCTAssertTrue(save.isEnabled, "a named, slotted, schemed URL validates for Save")
     }
 
-    // MARK: - Editor: fallback toggle gating
+    // MARK: - Editor: derived fallback eligibility note (no toggle)
 
-    /// The fallback toggle appears only once the URL carries a slot (its first
-    /// argument is what a fallback seeds) — with no slot there is nothing to gate on,
-    /// so the toggle isn't offered (ADR 0021).
+    /// There is no fallback toggle anymore (issue #114) — eligibility is derived from
+    /// shape. The editor shows only an informational note, which appears once the URL
+    /// carries a slot and reads "can be a fallback" while the first argument is free
+    /// text. The slot-less case shows the Quicklink redirect instead of the note.
     @MainActor
-    func testFallbackToggleAppearsOnlyWithASlot() throws {
+    func testEligibilityNoteReflectsFreeTextFirstArgument() throws {
         let app = launchApp()
         openCustomActionsPage(app)
         openNewEditor(app)
 
-        // No slot yet → no fallback toggle.
-        setText("https://example.com", in: app.textFields["custom-action-url-field"])
+        // The retired toggle must be gone entirely.
         XCTAssertFalse(app.switches["custom-action-fallback-toggle"].exists,
-                       "with no slot there is no first argument to seed, so no fallback toggle")
+                       "the fallback toggle is retired — eligibility is derived, not declared")
 
-        // Add a free-text slot → the toggle is offered.
+        // No slot yet → no eligibility note (the Quicklink redirect shows instead).
+        setText("https://example.com", in: app.textFields["custom-action-url-field"])
+        XCTAssertFalse(app.staticTexts["custom-action-eligibility-note"].exists,
+                       "with no slot there is no argument, so no eligibility note")
+
+        // Add a free-text slot → the note appears and reads that it can be a fallback.
         setText("https://example.com/?q={q}", in: app.textFields["custom-action-url-field"])
-        XCTAssertTrue(app.switches["custom-action-fallback-toggle"].waitForExistence(timeout: 5),
-                      "a free-text first argument enables the fallback toggle")
+        let note = app.staticTexts["custom-action-eligibility-note"]
+        XCTAssertTrue(note.waitForExistence(timeout: 5),
+                      "a slotted URL shows the eligibility note")
+        XCTAssertTrue((note.label).localizedCaseInsensitiveContains("can be a fallback"),
+                      "a free-text first argument reads as fallback-eligible (was: \(note.label))")
     }
 
     // Note on drag-to-reorder: the fill-order reorder *logic* — that a drag sets the
@@ -208,10 +219,10 @@ final class CustomActionUITests: XCTestCase {
 
     // MARK: - End-to-end: a multi-argument Custom Action runs through the breadcrumb
 
-    /// Authoring a multi-slot, fallback-flagged Custom Action through the new editor
-    /// and running it: selecting it from the fallback region seeds-and-commits the
-    /// typed query as the first slot and continues to the second, and committing the
-    /// last slot completes the run — opening the fully-formed URL at the edge.
+    /// Authoring a multi-slot Custom Action, activating it on the Fallbacks page, and
+    /// running it: selecting it from the fallback region seeds-and-commits the typed
+    /// query as the first slot and continues to the second, and committing the last
+    /// slot completes the run — opening the fully-formed URL at the edge.
     @MainActor
     func testMultiArgumentCustomActionRunsEndToEnd() throws {
         let app = launchApp()
@@ -221,13 +232,8 @@ final class CustomActionUITests: XCTestCase {
         setText("Add Todo", in: app.textFields["custom-action-name-field"])
         setText("things:///add?title={title}&notes={notes}", in: app.textFields["custom-action-url-field"])
 
-        // Flag it as a fallback so the typed query seeds its first slot.
-        let toggle = revealFallbackToggle(app)
-        XCTAssertTrue(toggle.waitForExistence(timeout: 5))
-        flip(toggle, to: true)
-
         let save = app.buttons["save-custom-action"]
-        XCTAssertTrue(save.isEnabled, "the authored multi-slot fallback validates for Save")
+        XCTAssertTrue(save.isEnabled, "the authored multi-slot Custom Action validates for Save")
         save.tap()
 
         // The new row is listed on the page (the editor wrote to storage), then pop
@@ -235,6 +241,10 @@ final class CustomActionUITests: XCTestCase {
         XCTAssertTrue(app.staticTexts["Add Todo"].waitForExistence(timeout: 10),
                       "the authored Custom Action is listed on the Management page")
         goBackHome(app)
+
+        // Activate it as a fallback on the Fallbacks page (its free-text first slot
+        // makes it eligible; newly eligible actions wait in the pool until promoted).
+        activateAsFallback(app, title: "Add Todo")
 
         // Type a query and pick the fallback row.
         let input = app.textFields["search-input"]
@@ -318,11 +328,11 @@ final class CustomActionUITests: XCTestCase {
         XCTAssertTrue(save.isEnabled, "a choice with a non-empty option validates for Save")
     }
 
-    /// Setting an argument to **Date** reveals its output-format override fields, and
-    /// a date/number/choice *first-by-fill-order* argument disables the fallback flag
-    /// — the gate that "now bites" once types land (ADR 0021, issue #96).
+    /// Setting an argument to **Date** reveals its output-format override fields, and a
+    /// date-first-by-fill-order argument flips the eligibility note to ineligible — the
+    /// derived gate that "now bites" once types land (issue #96, #114).
     @MainActor
-    func testDateTypeRevealsFormatsAndDisablesFallback() throws {
+    func testDateTypeRevealsFormatsAndFlipsEligibilityNote() throws {
         let app = launchApp()
         openCustomActionsPage(app)
         openNewEditor(app)
@@ -330,17 +340,21 @@ final class CustomActionUITests: XCTestCase {
         setText("When", in: app.textFields["custom-action-name-field"])
         setText("things:///add?when={when}", in: app.textFields["custom-action-url-field"])
 
-        // A text first argument leaves the fallback toggle enabled.
-        let toggle = revealFallbackToggle(app)
-        XCTAssertTrue(toggle.waitForExistence(timeout: 5))
-        XCTAssertTrue(toggle.isEnabled, "a free-text first argument allows the fallback flag")
+        // A text first argument reads as fallback-eligible.
+        let note = app.staticTexts["custom-action-eligibility-note"]
+        XCTAssertTrue(note.waitForExistence(timeout: 5))
+        XCTAssertTrue(note.label.localizedCaseInsensitiveContains("can be a fallback"),
+                      "a free-text first argument reads as eligible (was: \(note.label))")
 
-        // Switch the (only, first) slot to Date → format fields appear and the
-        // fallback flag is disabled (a date-first action has nowhere to seed the query).
+        // Switch the (only, first) slot to Date → format fields appear and the note
+        // flips to ineligible (a date-first action has nowhere to seed the query).
         setType(app, token: "when", to: "Date")
         XCTAssertTrue(app.textFields["custom-action-date-format.when"].waitForExistence(timeout: 5),
                       "a date slot reveals its single output-format field")
-        XCTAssertFalse(toggle.isEnabled, "a date first argument disables the fallback flag")
+        let ineligible = app.staticTexts["custom-action-eligibility-note"]
+        XCTAssertTrue(ineligible.waitForExistence(timeout: 5))
+        XCTAssertTrue(ineligible.label.localizedCaseInsensitiveContains("make its first argument free text"),
+                      "a date first argument reads as ineligible (was: \(ineligible.label))")
     }
 
     // MARK: - Duplicate swipe action
@@ -394,18 +408,17 @@ final class CustomActionUITests: XCTestCase {
         setType(app, token: "list", to: "Choice")
         setText("Today", in: app.textFields["custom-action-choice-option.list.0"])
 
-        // Flag it as a fallback so the typed query seeds the first (text) slot.
-        let toggle = revealFallbackToggle(app)
-        XCTAssertTrue(toggle.waitForExistence(timeout: 5))
-        flip(toggle, to: true)
-
         let save = app.buttons["save-custom-action"]
-        XCTAssertTrue(save.isEnabled, "the typed multi-slot fallback validates for Save")
+        XCTAssertTrue(save.isEnabled, "the typed multi-slot Custom Action validates for Save")
         save.tap()
 
         XCTAssertTrue(app.staticTexts["Add Todo"].waitForExistence(timeout: 10),
                       "the authored Custom Action is listed on the Management page")
         goBackHome(app)
+
+        // Activate it as a fallback (its free-text first slot makes it eligible) so the
+        // typed query seeds the first (text) slot.
+        activateAsFallback(app, title: "Add Todo")
 
         // Type a query and pick the fallback row → seeds the title, advances to the
         // date step.
@@ -432,22 +445,5 @@ final class CustomActionUITests: XCTestCase {
 
         XCTAssertTrue(app.textFields["search-input"].waitForExistence(timeout: 5),
                       "committing the final slot completes the run and returns to the launcher")
-    }
-
-    /// Flips a SwiftUI Toggle: tapping the row-spanning switch's center misses the
-    /// control, so tap the nested switch when the OS exposes one, else a trailing-edge
-    /// coordinate tap — the same approach as ProviderDisableUITests.
-    @MainActor
-    private func flip(_ toggle: XCUIElement, to on: Bool) {
-        let landed = NSPredicate(format: "value == %@", on ? "1" : "0")
-        if (toggle.value as? String) == (on ? "1" : "0") { return }
-        let inner = toggle.switches.firstMatch
-        if inner.exists { inner.tap() } else {
-            toggle.coordinate(withNormalizedOffset: CGVector(dx: 0.95, dy: 0.5)).tap()
-        }
-        if XCTWaiter.wait(for: [XCTNSPredicateExpectation(predicate: landed, object: toggle)], timeout: 3) != .completed {
-            toggle.coordinate(withNormalizedOffset: CGVector(dx: 0.95, dy: 0.5)).tap()
-            _ = XCTWaiter.wait(for: [XCTNSPredicateExpectation(predicate: landed, object: toggle)], timeout: 3)
-        }
     }
 }

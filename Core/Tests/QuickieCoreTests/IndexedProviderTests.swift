@@ -55,7 +55,7 @@ struct IndexedProviderTests {
         let actions = IndexedProvider.builtIns().candidates(for: "")
         // The default web-search Custom Action is seeded into the store as
         // ordinary data, not shipped here; the built-ins are command rows only.
-        #expect(actions.allSatisfy { !$0.isFallback })
+        #expect(actions.allSatisfy { !$0.isFallbackEligible })
         // A command row never wears a data kind — so the "Quicklinks" command
         // can't be mistaken for a user's Quicklink, nor "Fallbacks" for a Custom Action, nor
         // the "Search Files" entry point for a file result row.

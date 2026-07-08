@@ -82,9 +82,15 @@ struct RootView: View {
     /// selections — persisted across launches (issue #9).
     @State private var signals = SignalsStore.launch()
 
-    /// The user's Fallback list state — explicit order + disabled set (ADR 0013),
+    /// The user's Fallback list state — the single enabled list (issue #114),
     /// persisted across launches.
     @State private var fallbacks = FallbacksStore.launch()
+
+    /// The fallback ids seen eligible at any point this session — the guard that lets
+    /// the enabled list forget a *genuinely* lost id (a Shortcut's accepts-input turned
+    /// off) without dropping one merely not-yet-loaded at launch (issue #114). Session
+    /// state only; it need not persist.
+    @State private var everEligibleFallbacks: Set<String> = []
 
     /// The kind-level Enabled switches (CONTEXT.md → Disabled; issue #67),
     /// persisted across launches: the engine is rebuilt from this on every
@@ -258,9 +264,9 @@ struct RootView: View {
                 IndexedProvider(catalog: storedLinks, id: .quicklinks),
                 // Custom Actions are their own configurable kind now (ADR 0021; issue
                 // #94): the catalog attributes to `.customActions`, so the Custom
-                // Actions page's Enabled toggle governs them all — fallback-flagged or
-                // not. The Fallbacks page still orders/disables the fallback-flagged
-                // ones through `FallbacksStore`, an independent region axis.
+                // Actions page's Enabled toggle governs them all — eligible for the
+                // Fallback list or not. The Fallbacks page activates the eligible ones
+                // through `FallbacksStore`'s enabled list, an independent region axis.
                 IndexedProvider(catalog: storedCustomActions, id: .customActions),
                 IndexedProvider(catalog: storedSnippets + [.newSnippet()], id: .snippets),
                 IndexedProvider(catalog: storedPileEntries + [.saveForLater()], id: .pile),
@@ -281,12 +287,33 @@ struct RootView: View {
             layout: keyboardLayout.layout,
             favorites: signals.favorites,
             frecency: signals.frecency,
-            fallbackOrder: fallbacks.resolvedOrder(for: customActions.filter(\.isFallback).map(\.id)),
-            disabledFallbacks: fallbacks.disabled,
+            // The single enabled Fallback list (issue #114), reconciled against the
+            // live fallback-eligible catalog so a deleted or now-ineligible action
+            // drops out. Region membership is `Action.isFallbackEligible` ∧ presence
+            // here; the disabled pool is derived, never stored.
+            enabledFallbacks: fallbacks.resolvedEnabled(for: eligibleFallbackIDs),
             enablement: providerEnablement.enablement,
             disabledInstances: instanceEnablement.disabled
         )
     }
+
+    /// Every fallback-eligible Action in the live catalog (CONTEXT.md → Fallback
+    /// Action; issue #114): text-first Custom Actions, accepts-input Shortcuts, and
+    /// the two permanent built-in captures — derived from shape, no stored flag. The
+    /// Fallbacks page splits these into the enabled section and the derived pool, and
+    /// the engine's enabled list is reconciled against their ids.
+    private var eligibleFallbackActions: [Action] {
+        let customs = customActions.compactMap { $0.definition.makeAction(id: $0.id) }
+        let shortcutActions = shortcuts.entries.map {
+            Action.shortcut(name: $0.name, acceptsInput: $0.acceptsInput)
+        }
+        return (customs + shortcutActions + [.saveForLater(), .newSnippet()])
+            .filter(\.isFallbackEligible)
+    }
+
+    /// The ids of `eligibleFallbackActions`, in a stable order — what the enabled
+    /// list reconciles against and the page's pool is derived from.
+    private var eligibleFallbackIDs: [String] { eligibleFallbackActions.map(\.id) }
 
 
     /// The Pile entries that are safe to read this instant. A just-consumed
@@ -621,6 +648,26 @@ struct RootView: View {
                 // an invisible pin can't silently occupy a Favorites slot. The
                 // @Query catalogs are loaded by the time this launch task runs.
                 signals.reconcileFavorites(against: engine.resolvableHomeIDs())
+                // One-time migration to the single enabled Fallback list (issue
+                // #114): enabled = old order minus old disabled, with the pre-enabled
+                // web-search + capture trio seeded for fresh installs. Independent of
+                // the catalog's load timing so the seeded web search is pre-enabled
+                // even before @Query surfaces it.
+                fallbacks.migrateIfNeeded(
+                    firstRunDefaults: FallbackActivation.firstRunEnabledIDs(webSearchID: QuickieStore.seedWebSearchID)
+                )
+                everEligibleFallbacks.formUnion(eligibleFallbackIDs)
+            }
+            // Forget an enabled fallback's rank when its eligibility is *genuinely*
+            // lost (a Shortcut whose accepts-input was turned off, a Custom Action
+            // retyped or deleted, a re-sync that dropped a shortcut) — regaining
+            // eligibility re-enters it as a pool newcomer (issue #114). The
+            // session-accumulated `everEligibleFallbacks` set is what tells a real
+            // loss from a value not-yet-loaded at launch, so the pre-enabled default
+            // is never mistaken for a loss and dropped. No-op before migration.
+            .onChange(of: eligibleFallbackIDs) { _, ids in
+                everEligibleFallbacks.formUnion(ids)
+                fallbacks.pruneToEligible(liveEligible: ids, everEligible: everEligibleFallbacks)
             }
             // Re-run the dedup when the Custom Action catalog changes: the
             // remote-notification background mode lets a CloudKit import land a
@@ -753,7 +800,7 @@ struct RootView: View {
         switch provider {
         case .quicklinks: QuicklinksView(enablement: instanceEnablement)
         case .customActions: CustomActionsView(enablement: instanceEnablement)
-        case .fallbacks: FallbacksView(store: fallbacks)
+        case .fallbacks: FallbacksView(store: fallbacks, eligible: eligibleFallbackActions)
         case .snippets: SnippetManagerView(enablement: instanceEnablement)
         case .shortcuts: ShortcutsView(store: shortcuts, enablement: instanceEnablement)
         case .fileSearch: IndexedFoldersView(store: indexedFolders)
@@ -804,8 +851,11 @@ struct RootView: View {
         // An input-accepting Shortcut Action (its `acceptsInput` toggle on, so it
         // declares a `text` Argument) collects that input through the breadcrumb
         // before firing (issue #46); one with no Arguments fires immediately below.
+        // Selected from the bottom fallback region it seeds-and-commits the typed
+        // query as that input, so it runs in one tap (CONTEXT.md → Fallback Action;
+        // issue #114); verb-first it opens the breadcrumb empty.
         if action.kind == .shortcut && !action.arguments.isEmpty {
-            startShortcutCapture(name: action.title)
+            startShortcutCapture(name: action.title, seed: fallbackSeed(for: action))
             return
         }
         // A Custom Action always runs through the breadcrumb (CONTEXT.md → Custom
@@ -877,27 +927,39 @@ struct RootView: View {
     /// no permission (running a shortcut is always available), so the breadcrumb
     /// starts straight away to collect the one optional `text` input, then fires the
     /// `shortcuts://x-callback-url/run-shortcut` open on commit.
-    private func startShortcutCapture(name: String) {
-        capture.start(ShortcutCapture(name: name), layout: keyboardLayout.layout)
+    private func startShortcutCapture(name: String, seed: String? = nil) {
+        capture.start(ShortcutCapture(name: name), layout: keyboardLayout.layout, seed: seed)
     }
 
     /// Begins the breadcrumb run of a Custom Action (CONTEXT.md → Custom Action; ADR
-    /// 0021). A fallback-flagged one seeds-and-commits the typed query as Argument 1
+    /// 0021). A fallback selection seeds-and-commits the typed query as Argument 1
     /// (`seed`), so a one-slot fallback like web search completes in one tap and a
     /// multi-slot one continues at step 2 with the seeded first pill sealed; a
     /// verb-first (name-matched) selection passes no seed, opening the breadcrumb
-    /// empty. A fallback run with nothing typed — a pinned Favorite card tapped on
-    /// Home — also opens verb-first: seeding the empty query would instantly commit
-    /// a blank Argument 1, firing a one-slot fallback with an empty value instead of
-    /// asking for one. Opening a URL needs no permission, so the session starts
-    /// straight away.
+    /// empty. Opening a URL needs no permission, so the session starts straight away.
     private func startCustomActionCapture(_ action: Action) {
-        let trimmed = query.trimmingCharacters(in: .whitespacesAndNewlines)
         capture.start(
             CustomActionCapture(action: action),
             layout: keyboardLayout.layout,
-            seed: action.isFallback && !trimmed.isEmpty ? query : nil
+            seed: fallbackSeed(for: action)
         )
+    }
+
+    /// The query to **seed-and-commit** as Argument 1 when a fallback row is selected
+    /// from the bottom region (CONTEXT.md → Fallback Action; issue #114) — else `nil`,
+    /// opening the breadcrumb empty. Seeds only when the action is an *enabled*
+    /// fallback (so a pooled, verb-first selection opens empty — an enabled fallback is
+    /// deduped out of name matches, so any selection of it is a region selection) and
+    /// something was actually typed (a pinned Favorite tapped on Home has an empty
+    /// query, and seeding it would instantly fire a one-slot fallback with a blank
+    /// value instead of asking for one).
+    private func fallbackSeed(for action: Action) -> String? {
+        let trimmed = query.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty,
+              action.isFallbackEligible,
+              fallbacks.resolvedEnabled(for: eligibleFallbackIDs).contains(action.id)
+        else { return nil }
+        return query
     }
 
     /// Performs a single-step Action's outcome at the platform edge.

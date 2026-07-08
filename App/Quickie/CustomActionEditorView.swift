@@ -19,7 +19,7 @@ import QuickieStoreKit
 struct CustomActionEditorView: View {
     @Environment(\.dismiss) private var dismiss
 
-    /// Whether this is a fresh action (drives the title and the fallback-default).
+    /// Whether this is a fresh action (drives the navigation title).
     let isNew: Bool
     let onSave: (CustomActionDefinition) -> Void
 
@@ -58,7 +58,7 @@ struct CustomActionEditorView: View {
 
                 if def.hasSlot {
                     argumentsSection
-                    fallbackSection
+                    eligibilityNote
                 }
 
                 Section("Alias (optional)") {
@@ -134,18 +134,19 @@ struct CustomActionEditorView: View {
         }
     }
 
-    /// The **fallback flag**, gated on the first argument by fill order being free
-    /// text (ADR 0021). This slice is text-only, so it is enabled whenever there is a
-    /// first argument; the gate keys off fill order so it stays correct once types land.
-    private var fallbackSection: some View {
+    /// The **fallback-eligibility note** (issue #114): there is no fallback control —
+    /// eligibility is derived from shape, never declared. When the first fill-order
+    /// argument is free text the action *can* be added to the Fallbacks page's pool;
+    /// this line tells the user where activation lives (and, when the first argument
+    /// isn't free text, why it isn't offered). Informational only, so a section footer.
+    private var eligibilityNote: some View {
         Section {
-            Toggle("Show as a fallback", isOn: $def.isFallback)
-                .disabled(!def.canBeFallback)
-                .accessibilityIdentifier("custom-action-fallback-toggle")
+            EmptyView()
         } footer: {
-            Text(def.canBeFallback
-                 ? "On always surfaces this in the fallback region, seeding your typed text as the first argument."
-                 : "A fallback seeds your typed text into its first argument, so the first argument must be free text.")
+            Text(def.isFallbackEligible
+                 ? "This action can be a fallback — add it on the Fallbacks page to have it consume your typed text as the first argument."
+                 : "To use this as a fallback (consuming your typed text), make its first argument free text.")
+                .accessibilityIdentifier("custom-action-eligibility-note")
         }
     }
 
@@ -335,7 +336,6 @@ extension CustomActionDefinition {
             name: name.trimmingCharacters(in: .whitespacesAndNewlines),
             aliases: aliases,
             template: template.trimmingCharacters(in: .whitespacesAndNewlines),
-            isFallback: isFallback,
             fillOrder: orderedTokenNames,
             // Prune config for any token the template dropped (hard mirror) before it
             // is persisted, so a deleted slot leaves nothing behind.
@@ -351,7 +351,6 @@ extension StoredCustomAction {
             name: title,
             aliases: alias.map { [$0] } ?? [],
             template: urlString,
-            isFallback: isFallback,
             fillOrder: fillOrder,
             argumentSpecs: argumentSpecs
         )
@@ -362,7 +361,6 @@ extension StoredCustomAction {
         title = def.name
         urlString = def.template
         alias = def.aliases.first
-        isFallback = def.isFallback
         fillOrder = def.orderedTokenNames
         argumentSpecs = def.reconciledSpecs
     }
@@ -373,7 +371,6 @@ extension StoredCustomAction {
             title: def.name,
             urlString: def.template,
             alias: def.aliases.first,
-            isFallback: def.isFallback,
             fillOrder: def.orderedTokenNames,
             argumentSpecs: def.reconciledSpecs
         )

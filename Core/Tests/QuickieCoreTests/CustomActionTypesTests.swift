@@ -198,40 +198,41 @@ struct CustomActionTypesTests {
         #expect(!def.choiceOptionsAreValid)
     }
 
-    @Test("a number/date/choice first argument disables the fallback flag")
-    func fallbackGateBitesForTypedFirstArgument() {
-        // The gate keys off the first fill-order token's *type* (a choice slot's
-        // content type is also .text, so a naive content-type check would miss it).
+    @Test("a number/date/choice first argument makes it fallback-ineligible")
+    func eligibilityGateBitesForTypedFirstArgument() {
+        // Eligibility is derived from the first fill-order token's *type* (a choice
+        // slot's content type is also .text, so a naive content-type check would miss
+        // it). A typed-first Custom Action still *saves* — Save is no longer gated on
+        // eligibility (issue #114) — it just doesn't enter the Fallback list's pool.
         for type in [ArgumentType.number, .date, .choice] {
             let def = CustomActionDefinition(
                 name: "X", template: "app://x?first={first}",
                 argumentSpecs: ["first": ArgumentSpec(type: type, options: ["A"])]
             )
-            #expect(!def.canBeFallback, "a \(type.rawValue) first argument can't be a fallback")
-            let flagged = CustomActionDefinition(
-                name: "X", template: "app://x?first={first}", isFallback: true,
-                argumentSpecs: ["first": ArgumentSpec(type: type, options: ["A"])]
-            )
-            #expect(!flagged.isValidForSave, "a \(type.rawValue)-first fallback can't be saved")
+            #expect(!def.isFallbackEligible, "a \(type.rawValue) first argument isn't eligible")
+            #expect(def.isValidForSave, "a \(type.rawValue)-first Custom Action still saves")
+            #expect(def.makeAction(id: "x")?.isFallbackEligible == false,
+                    "the produced Action agrees it isn't eligible")
         }
 
-        // A free-text first argument keeps the flag available.
+        // A free-text first argument makes it eligible.
         let text = CustomActionDefinition(name: "X", template: "app://x?first={first}")
-        #expect(text.canBeFallback)
+        #expect(text.isFallbackEligible)
+        #expect(text.makeAction(id: "x")?.isFallbackEligible == true)
     }
 
-    @Test("the fallback gate reads the fill-order first argument, not the URL's first")
-    func fallbackGateReadsFillOrder() {
+    @Test("eligibility reads the fill-order first argument, not the URL's first")
+    func eligibilityReadsFillOrder() {
         // URL order is title then when, but the user dragged the date `when` to ask
-        // first — so the flag is disabled even though the URL's first slot is text.
+        // first — so it's ineligible even though the URL's first slot is text.
         var def = CustomActionDefinition(
             name: "X", template: "things:///add?title={title}&when={when}",
             argumentSpecs: ["when": ArgumentSpec(type: .date)]
         )
-        #expect(def.canBeFallback) // title (text) is first by default
+        #expect(def.isFallbackEligible) // title (text) is first by default
         def.moveArguments(fromOffsets: IndexSet(integer: 1), toOffset: 0) // when leads
         #expect(def.orderedTokenNames == ["when", "title"])
-        #expect(!def.canBeFallback)
+        #expect(!def.isFallbackEligible)
     }
 
     // MARK: - Spec follows rename and reconciles hard against the template
@@ -276,11 +277,11 @@ struct CustomActionTypesTests {
     func flagshipThingsExampleRunsEndToEnd() {
         // things:///add?title={title}&notes={notes}&when={when}&deadline={deadline}&list={list}
         // fill order title → when → deadline → list → notes; `when` a timed date with
-        // Things' format, `deadline` a default date, `list` a choice, fallback-flagged.
+        // Things' format, `deadline` a default date, `list` a choice. Its text-first
+        // `title` makes it fallback-eligible by shape.
         let def = CustomActionDefinition(
             name: "Add to Things",
             template: "things:///add?title={title}&notes={notes}&when={when}&deadline={deadline}&list={list}",
-            isFallback: true,
             fillOrder: ["title", "when", "deadline", "list", "notes"],
             argumentSpecs: [
                 "when": ArgumentSpec(type: .date, dateFormat: "yyyy-MM-dd@HH:mm"),

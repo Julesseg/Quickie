@@ -198,10 +198,6 @@ public struct Action: Identifiable, Sendable {
     public let inputTypes: [ContentType]
     /// The content type this Action produces.
     public let outputType: ContentType
-    /// Whether this Action is a Fallback: always surfaced in the Result list,
-    /// pinned in the bottom fallback region, consuming the raw typed text rather
-    /// than matching by name (CONTEXT.md → Fallback Action).
-    public let isFallback: Bool
     /// The ordered, typed Arguments this Action collects through the breadcrumb
     /// before it runs (CONTEXT.md → Argument; issue #37). Empty for a single-step
     /// Action that runs straight from the typed text.
@@ -229,7 +225,6 @@ public struct Action: Identifiable, Sendable {
         aliases: [String] = [],
         inputTypes: [ContentType] = [],
         outputType: ContentType,
-        isFallback: Bool = false,
         arguments: [Argument] = [],
         content: ResultContent? = nil,
         effect: @escaping @Sendable (String?) -> ActionOutcome,
@@ -242,7 +237,6 @@ public struct Action: Identifiable, Sendable {
         self.aliases = aliases
         self.inputTypes = inputTypes
         self.outputType = outputType
-        self.isFallback = isFallback
         self.arguments = arguments
         // Content is a declared property (ADR 0017). Factories that carry a value
         // pass it explicitly; when omitted it defaults to a derive-from-outcome
@@ -327,18 +321,47 @@ public struct Action: Identifiable, Sendable {
         // A multi-step Action begins its breadcrumb capture rather than performing
         // an outcome, so its label comes from having Arguments, not from `run()`
         // (whose plain outcome is `.none`): Enter on the highlighted row starts it.
-        // A fallback-flagged one whose commit opens a URL — a Custom Action used as
-        // a search, web search the seed — still reads `.search`, matching the way a
-        // one-tap web query has always read; every other multi-step row reads `.go`.
+        // A fallback-eligible one whose commit opens a URL — a text-first Custom Action
+        // used as a search, web search the seed — still reads `.search`, matching the
+        // way a one-tap web query has always read; every other multi-step row reads `.go`.
         if !arguments.isEmpty {
-            if isFallback, case .openURL = run(arguments: []) { return .search }
+            if isFallbackEligible, case .openURL = run(arguments: []) { return .search }
             return .go
         }
         switch run() {
-        case .openURL: return isFallback ? .search : .go
+        case .openURL: return isFallbackEligible ? .search : .go
         case .copyText, .copyAndStage, .saveToPile, .composeSnippet, .createReminder, .createEvent, .composeEvent: return .done
         case .stagePileEntry, .openPage, .openFile, .enterFileSearch, .runShortcut: return .go
         case .none: return .none
+        }
+    }
+
+    /// Whether this Action can ride the bottom fallback region — **derived from
+    /// shape, never declared** (CONTEXT.md → Fallback Action; the retired fallback
+    /// flag). An Action is eligible when its first Argument is free text, so the
+    /// seeded query has somewhere to land: every text-first Custom Action and every
+    /// Shortcut with "accepts input" on qualifies automatically. The two built-in
+    /// captures (Save for later, New Snippet) consume the raw typed text through
+    /// their single-step `effect` rather than a declared Argument, so they are
+    /// eligible by kind. Quicklinks, Snippets, files, commands, and the date/choice-
+    /// or number-first captures (Reminder, Event) have nowhere to put the query and
+    /// are never eligible.
+    ///
+    /// Eligibility only *admits* an Action to the Fallback list's disabled pool; the
+    /// user activates it there. Membership in the user's enabled list — not this
+    /// predicate — decides what actually rides the region (see `SearchEngine`).
+    public var isFallbackEligible: Bool {
+        switch kind {
+        case .saveForLater, .newSnippet:
+            return true
+        case .customAction, .shortcut:
+            guard let first = arguments.first else { return false }
+            // A choice slot's content type is `.text` too, so the option set is
+            // what tells a free-text slot from a picked one — a query can only
+            // seed the keyboard, never a fixed-option or date/number step.
+            return first.contentType == .text && first.options.isEmpty
+        default:
+            return false
         }
     }
 }
@@ -419,15 +442,21 @@ extension Action {
     /// Fallback like New Snippet.
     public static func saveForLater() -> Action {
         Action(
-            id: "builtin.save-for-later",
+            id: saveForLaterID,
             kind: .saveForLater,
             title: "Save for later",
             aliases: ["later", "save", "pile"],
             inputTypes: [.text],
-            outputType: .text,
-            isFallback: true
+            outputType: .text
         ) { input in .saveToPile(text: input ?? "") }
     }
+
+    /// The stable id of the "Save for later" capture — a permanent fallback-eligible
+    /// built-in. Exposed so the App's Fallback list (which orders ids, not Actions)
+    /// and the Core factory can never drift.
+    public static let saveForLaterID = "builtin.save-for-later"
+    /// The stable id of the "New Snippet" capture — the other permanent built-in.
+    public static let newSnippetID = "builtin.new-snippet"
 
     /// The "New Snippet" Fallback (CONTEXT.md → Snippet, Fallback Action): the
     /// snippet counterpart to `newNote`. It rides the bottom region and, when run,
@@ -435,13 +464,12 @@ extension Action {
     /// which the user titles and confirms before it is stored.
     public static func newSnippet() -> Action {
         Action(
-            id: "builtin.new-snippet",
+            id: newSnippetID,
             kind: .newSnippet,
             title: "New Snippet",
             aliases: ["snippet", "clip", "save text"],
             inputTypes: [.text],
-            outputType: .text,
-            isFallback: true
+            outputType: .text
         ) { input in .composeSnippet(seed: input ?? "") }
     }
 

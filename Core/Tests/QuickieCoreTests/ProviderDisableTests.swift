@@ -94,12 +94,15 @@ struct ProviderDisableTests {
             IndexedProvider(catalog: [.saveForLater()], id: .pile),
             IndexedProvider(catalog: [.newSnippet()], id: .snippets),
         ]
+        let enabledIDs = [Action.webSearchFallbackID, Action.saveForLaterID, Action.newSnippetID]
 
-        let enabled = SearchEngine(providers: providers)
-        #expect(enabled.results(for: "anything").filter(\.isFallback).count == 3)
+        let enabled = SearchEngine(providers: providers, enabledFallbacks: enabledIDs)
+        #expect(enabled.results(for: "anything").filter(\.isFallbackEligible).count == 3)
 
-        let engine = SearchEngine(providers: providers, enablement: disabled(.fallbacks))
-        #expect(engine.results(for: "anything").filter(\.isFallback).isEmpty)
+        let engine = SearchEngine(
+            providers: providers, enabledFallbacks: enabledIDs, enablement: disabled(.fallbacks)
+        )
+        #expect(engine.results(for: "anything").filter(\.isFallbackEligible).isEmpty)
     }
 
     @Test("disabling the Pile hides its capture Fallback along with its entries")
@@ -115,7 +118,11 @@ struct ProviderDisableTests {
             ),
         ]
 
-        let engine = SearchEngine(providers: providers, enablement: disabled(.pile))
+        let engine = SearchEngine(
+            providers: providers,
+            enabledFallbacks: [Action.webSearchFallbackID, Action.saveForLaterID],
+            enablement: disabled(.pile)
+        )
         let results = engine.results(for: "call the bank").map(\.id)
         #expect(!results.contains("pile.1"))
         #expect(!results.contains("builtin.save-for-later"))

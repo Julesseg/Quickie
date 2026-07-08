@@ -221,23 +221,19 @@ struct CustomActionEditorTests {
         #expect(!bareText.urlIsSchemedAfterProbe)
     }
 
-    @Test("the fallback flag is allowed only when the first argument by fill order is free text")
-    func fallbackGatedOnFirstArgumentFreeText() {
-        // This slice is text-only, so `canBeFallback` is true whenever there is a
-        // first argument — but the gate keys off the *fill-order* first argument (not
-        // the URL's), so it stays correct once argument types land. A slot-less URL
-        // has no first argument, so it can't be a fallback.
+    @Test("fallback eligibility is derived: a free-text first argument by fill order")
+    func eligibleWhenFirstArgumentFreeText() {
+        // Eligibility is derived from shape, never declared (issue #114): true
+        // whenever the first *fill-order* argument (not the URL's first) is free text.
+        // A slot-less URL has no first argument, so it can't be eligible.
         let text = CustomActionDefinition(name: "Search", template: "https://x.com/?q={q}")
-        #expect(text.canBeFallback)
+        #expect(text.isFallbackEligible)
 
         let slotless = CustomActionDefinition(name: "Static", template: "https://x.com")
-        #expect(!slotless.canBeFallback)
+        #expect(!slotless.isFallbackEligible)
 
-        // A fallback-flagged, otherwise-valid Custom Action saves; the flag rides
-        // through validation because its first fill-order argument is free text.
-        let fallback = CustomActionDefinition(
-            name: "Search", template: "https://x.com/?q={q}", isFallback: true
-        )
-        #expect(fallback.isValidForSave)
+        // Eligibility no longer gates Save — any otherwise-valid Custom Action saves,
+        // whether or not it is eligible; a text-first one simply enters the pool.
+        #expect(text.isValidForSave)
     }
 }

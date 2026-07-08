@@ -31,14 +31,12 @@ public struct SearchEngine {
     /// time each time it rebuilds the engine.
     private let now: Date
 
-    /// The user's explicit Fallback list order, most-important-first (CONTEXT.md
-    /// → Fallback list): fallback ids whose position decides where each rides in
-    /// the bottom region. A `[String: Int]` rank map for O(1) lookup; a fallback
-    /// absent from it sorts after every ordered one, deterministically.
-    private let fallbackRank: [String: Int]
-    /// Fallback ids the user has **disabled** (CONTEXT.md → Fallback list): kept
-    /// in the list but never surfaced in results.
-    private let disabledFallbacks: Set<String>
+    /// The user's single **enabled Fallback list**, most-important-first (CONTEXT.md
+    /// → Fallback list) — the *only* persisted fallback fact. An id's position both
+    /// admits it to the bottom region and decides where it rides; the disabled pool
+    /// is everything eligible but absent here, derived, never stored. A `[String: Int]`
+    /// rank map keyed by id for O(1) membership and ordering.
+    private let enabledRank: [String: Int]
 
     /// The kind-level Enabled switches (CONTEXT.md → Disabled; issue #67): a
     /// disabled provider contributes nothing to typed results, the Frecency
@@ -51,8 +49,10 @@ public struct SearchEngine {
     /// while staying in their Management page's Actions list. A disabled kind
     /// short-circuits its instances (the provider is skipped before any id is
     /// consulted); `resolvableHomeIDs()` ignores this set like it ignores the
-    /// kinds, so a disabled favorite keeps its pin. Fallbacks keep their own
-    /// instance state in `disabledFallbacks` (no migration).
+    /// kinds, so a disabled favorite keeps its pin. Instance-disabling a fallback
+    /// hides its row here yet leaves its rank in `enabledFallbacks` intact, so
+    /// re-enabling restores it to the same position (the Favorites keep-the-pin
+    /// precedent; issue #114).
     private let disabledInstances: Set<String>
 
     /// The boost a Favorite adds to its match score. Tuned to reorder *within* a
@@ -79,8 +79,7 @@ public struct SearchEngine {
         favorites: [String] = [],
         frecency: Frecency = Frecency(),
         now: Date = Date(),
-        fallbackOrder: [String] = [],
-        disabledFallbacks: Set<String> = [],
+        enabledFallbacks: [String] = [],
         enablement: ProviderEnablement = ProviderEnablement(),
         disabledInstances: Set<String> = []
     ) {
@@ -91,9 +90,8 @@ public struct SearchEngine {
         self.frecency = frecency
         self.now = now
         var rank: [String: Int] = [:]
-        for (index, id) in fallbackOrder.enumerated() { rank[id] = index }
-        self.fallbackRank = rank
-        self.disabledFallbacks = disabledFallbacks
+        for (index, id) in enabledFallbacks.enumerated() where rank[id] == nil { rank[id] = index }
+        self.enabledRank = rank
         self.enablement = enablement
         self.disabledInstances = disabledInstances
     }
@@ -134,17 +132,19 @@ public struct SearchEngine {
                 // short-circuits its instances regardless of per-instance
                 // state.
                 guard !disabledInstances.contains(action.id) else { continue }
-                if action.isFallback {
-                    // The Fallbacks kind's Enabled toggle is a *master* switch
-                    // over the whole bottom region (issue #67): the Fallback
-                    // list's instances span three kinds (queries + Save for
-                    // later + New Snippet), and a disabled kind short-circuits
-                    // its instances (CONTEXT.md → Disabled) — even the two
-                    // permanent captures that ride other providers' catalogs.
-                    // Keyed off `isFallback` — the same property that pins the
-                    // region — so no wiring can leak a fallback past it.
-                    if enablement.isEnabled(.fallbacks),
-                       !disabledFallbacks.contains(action.id) { fallbacks.append(action) }
+                if action.isFallbackEligible, enabledRank[action.id] != nil {
+                    // Eligible *and* in the user's enabled list → it rides the
+                    // bottom region (CONTEXT.md → Fallback list). The Fallbacks
+                    // kind's Enabled toggle is the *master* switch over the whole
+                    // region (issue #67): the enabled list spans three kinds
+                    // (Custom Actions + Save for later + New Snippet), and a
+                    // disabled kind short-circuits its instances (CONTEXT.md →
+                    // Disabled) — even the two permanent captures that ride other
+                    // providers' catalogs. Master off drops the row entirely.
+                    // An eligible action *not* in the enabled list falls through to
+                    // name-matching below: a pooled Custom Action / Shortcut is
+                    // still startable verb-first.
+                    if enablement.isEnabled(.fallbacks) { fallbacks.append(action) }
                 } else if provider.kind == .dynamic {
                     // Boosted-dynamic results skip name-matching — the Provider
                     // already decided they apply (Provider.swift: "boosted-dynamic
@@ -190,11 +190,11 @@ public struct SearchEngine {
     /// Builds the Home state from the engine's indexed Actions and the user's
     /// signals (issue #9 AC #1, #2). Only **Indexed** Actions are eligible: Home
     /// is the enumerable catalog of things to pin and reuse, not the query-driven
-    /// Dynamic results. A fallback-flagged Indexed Action (a fallback Custom
+    /// Dynamic results. A fallback-eligible Indexed Action (a text-first Custom
     /// Action, Save for later, New Snippet) is part of that catalog: pinning it
-    /// draws a card that launches it verb-first. Fallbacks stay out of the
-    /// **Recent** list, though — they already ride the bottom of every Result
-    /// list, so auto-surfacing them again would only be noise.
+    /// draws a card that launches it verb-first. An action currently riding the
+    /// fallback region stays out of the **Recent** list, though — it already sits at
+    /// the bottom of every Result list, so auto-surfacing it again would only be noise.
     ///
     /// - Parameter showRecents: the app-level **Show Recents** toggle
     ///   (CONTEXT.md → Settings; issue #65), default on. Off empties the Frecency
@@ -211,21 +211,33 @@ public struct SearchEngine {
         var frecent: [Action] = []
         if showRecents {
             for id in frecency.ranked(now: now) where !self.favorites.contains(id) {
-                if let action = byId[id], !action.isFallback { frecent.append(action) }
+                // An action currently riding the fallback region stays out of the
+                // Recent list — it already sits at the bottom of every Result list,
+                // so auto-surfacing it again would only be noise. A pooled eligible
+                // action isn't in the region, so it recents like any other Action.
+                if let action = byId[id], !isEnabledFallback(action) { frecent.append(action) }
             }
         }
 
         return HomeContent(favorites: favorites, frecent: frecent)
     }
 
+    /// Whether an Action currently rides the bottom fallback region — eligible by
+    /// shape *and* present in the user's enabled list. The one predicate `results`,
+    /// `home`, and `indexedActionsByID` share so a fallback's "is it active?" answer
+    /// can never drift between the Result list and Home. A pooled eligible action is
+    /// not enabled, so it reads as a normal Action everywhere.
+    private func isEnabledFallback(_ action: Action) -> Bool {
+        action.isFallbackEligible && enabledRank[action.id] != nil
+    }
+
     /// The Indexed Actions keyed by id — the enumerable catalog `home()` resolves
-    /// Favorite and Frecency ids against, fallback-flagged entries included (a
-    /// pinned fallback draws a card like any other pin). `home()` reads it with
-    /// disabled kinds *and* disabled instances excluded, so their cards and
-    /// Recent rows vanish — a fallback honouring its own disable axes (the
-    /// Fallbacks master switch + the Fallback list's disabled set), mirroring
-    /// `results(for:)`. `resolvableHomeIDs()` reads it unfiltered, because a
-    /// disabled action still *exists* — only a deleted one stops resolving.
+    /// Favorite and Frecency ids against, fallback entries included (a pinned
+    /// fallback draws a card like any other pin). `home()` reads it with disabled
+    /// kinds *and* disabled instances excluded, so their cards and Recent rows
+    /// vanish; an enabled fallback additionally honours the Fallbacks master switch,
+    /// mirroring `results(for:)`. `resolvableHomeIDs()` reads it unfiltered, because
+    /// a disabled action still *exists* — only a deleted one stops resolving.
     private func indexedActionsByID(includingDisabled: Bool) -> [String: Action] {
         var byId: [String: Action] = [:]
         for provider in providers where provider.kind == .indexed {
@@ -233,10 +245,10 @@ public struct SearchEngine {
             for action in provider.candidates(for: "") {
                 if !includingDisabled {
                     if disabledInstances.contains(action.id) { continue }
-                    if action.isFallback,
-                       !enablement.isEnabled(.fallbacks) || disabledFallbacks.contains(action.id) {
-                        continue
-                    }
+                    // An enabled fallback hidden by the master switch draws no card,
+                    // like any disabled kind. A pooled eligible action isn't riding
+                    // the region, so it keeps its card.
+                    if isEnabledFallback(action), !enablement.isEnabled(.fallbacks) { continue }
                 }
                 if byId[action.id] == nil { byId[action.id] = action }
             }
@@ -293,18 +305,19 @@ public struct SearchEngine {
         return lhs.action.id < rhs.action.id
     }
 
-    /// Orders the bottom fallback region by the user's explicit list order, read
-    /// most-important-first (CONTEXT.md → Fallback list): a fallback's rank in the
-    /// list places it nearest the ranked matches (the thumb). A fallback the user
-    /// hasn't ordered yet (e.g. a freshly seeded one) sorts after every ordered
-    /// one, then by title/id so the result list never reshuffles between runs.
+    /// Orders the bottom fallback region by the user's enabled-list order, read
+    /// most-important-first (CONTEXT.md → Fallback list): an id's position places it
+    /// nearest the ranked matches (the thumb). Every region member carries a rank
+    /// (membership *is* being in the enabled list), so the ranks always decide; the
+    /// title/id tie-break is a defensive fallthrough that keeps results stable if two
+    /// ids ever share a position.
     private func orderFallbacks(_ lhs: Action, _ rhs: Action) -> Bool {
-        let lRank = fallbackRank[lhs.id]
-        let rRank = fallbackRank[rhs.id]
+        let lRank = enabledRank[lhs.id]
+        let rRank = enabledRank[rhs.id]
         if lRank != rRank {
             switch (lRank, rRank) {
             case let (l?, r?): return l < r
-            case (_?, nil): return true   // ordered before unordered
+            case (_?, nil): return true
             case (nil, _?): return false
             case (nil, nil): break
             }

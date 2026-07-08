@@ -135,8 +135,7 @@ struct CustomActionTests {
         // Fallback Action); a single-Argument fallback finishes in one tap.
         let action = CustomActionDefinition(
             name: "Search the web",
-            template: "https://duckduckgo.com/?q={query}",
-            isFallback: true
+            template: "https://duckduckgo.com/?q={query}"
         ).makeAction(id: "web")!
         var session = MultiStepAction(action: action)
         #expect(session.commit(.text("swift"))
@@ -147,8 +146,7 @@ struct CustomActionTests {
     func seedAndCommitMultiArgumentContinues() {
         let action = CustomActionDefinition(
             name: "Add to Things",
-            template: "things:///add?title={title}&notes={notes}",
-            isFallback: true
+            template: "things:///add?title={title}&notes={notes}"
         ).makeAction(id: "things")!
         var session = MultiStepAction(action: action)
 
@@ -167,8 +165,7 @@ struct CustomActionTests {
     func fallbackSeededFirstPillReeditable() {
         let action = CustomActionDefinition(
             name: "Add to Things",
-            template: "things:///add?title={title}&notes={notes}",
-            isFallback: true
+            template: "things:///add?title={title}&notes={notes}"
         ).makeAction(id: "things")!
         var session = MultiStepAction(action: action)
         _ = session.commit(.text("buy milk")) // seed pill 1, now on "notes"
@@ -185,27 +182,30 @@ struct CustomActionTests {
                 == .completed(.openURL(URL(string: "things:///add?title=buy%20oat%20milk&notes=for%20the%20week")!)))
     }
 
-    @Test("a fallback Custom Action reads as .search regardless of slot count")
-    func fallbackReturnKeyIsSearch() {
-        // A fallback whose commit opens a URL reads as `.search` (web search's today
-        // behaviour) — for the one-slot web-search case *and* a multi-slot one, since
-        // the label comes from the fallback flag + openURL fill, not the slot count.
+    @Test("a text-first (fallback-eligible) Custom Action reads as .search regardless of slot count")
+    func eligibleReturnKeyIsSearch() {
+        // Eligibility is derived from shape now (issue #114): a text-first Custom
+        // Action whose commit opens a URL reads `.search` (web search's behaviour) —
+        // for the one-slot web-search case *and* a multi-slot one, since the label
+        // comes from free-text-first eligibility + openURL fill, not the slot count or
+        // any activation state.
         let oneSlot = CustomActionDefinition(
-            name: "Search the web", template: "https://x.com/?q={q}", isFallback: true
+            name: "Search the web", template: "https://x.com/?q={q}"
         ).makeAction(id: "one")!
         #expect(oneSlot.returnKeyLabel == .search)
 
         let multiSlot = CustomActionDefinition(
-            name: "Add to Things", template: "things:///add?title={title}&notes={notes}", isFallback: true
+            name: "Add to Things", template: "things:///add?title={title}&notes={notes}"
         ).makeAction(id: "multi")!
         #expect(multiSlot.returnKeyLabel == .search)
 
-        // A non-fallback multi-slot Custom Action begins its breadcrumb on Enter, so
-        // it reads `.go`, not `.search`.
-        let verbFirst = CustomActionDefinition(
-            name: "Add to Things", template: "things:///add?title={title}&notes={notes}"
+        // A Custom Action whose first slot isn't free text is not eligible, so it
+        // begins its breadcrumb on Enter and reads `.go`, not `.search`.
+        let dateFirst = CustomActionDefinition(
+            name: "Log at", template: "app://log?when={when}&note={note}",
+            argumentSpecs: ["when": ArgumentSpec(type: .date)]
         ).makeAction(id: "verb")!
-        #expect(verbFirst.returnKeyLabel == .go)
+        #expect(dateFirst.returnKeyLabel == .go)
     }
 
     @Test("the breadcrumb asks in fill order while each value fills its own URL slot")

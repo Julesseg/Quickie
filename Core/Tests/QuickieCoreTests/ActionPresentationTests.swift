@@ -88,7 +88,7 @@ struct ActionPresentationTests {
     @Test("New Snippet opens the snippet editor seeded with the typed text")
     func newSnippetComposesSeeded() {
         let action = Action.newSnippet()
-        #expect(action.isFallback)
+        #expect(action.isFallbackEligible)
         #expect(action.kind == .newSnippet)
         #expect(action.run(input: "Hello from Quickie") == .composeSnippet(seed: "Hello from Quickie"))
     }
@@ -102,7 +102,7 @@ struct ActionPresentationTests {
         #expect(Action.openFallbacksPage().run() == .openPage(.settings(panel: .fallbacks)))
         #expect(Action.openFileSearchPage().run() == .openPage(.settings(panel: .fileSearch)))
         // Commands, not Fallbacks — they match by name and don't ride the bottom.
-        #expect(Action.openPilePage().isFallback == false)
-        #expect(Action.openSettings().isFallback == false)
+        #expect(Action.openPilePage().isFallbackEligible == false)
+        #expect(Action.openSettings().isFallbackEligible == false)
     }
 }

@@ -220,11 +220,13 @@ final class InstanceDisableUITests: XCTestCase {
         XCTAssertFalse(fileRow.exists, "a disabled folder's files are hidden from results")
     }
 
-    /// Permanent built-ins are disable-only (issue #68 AC #2): on the Fallbacks
-    /// page a deletable Fallback query exposes swipe-to-delete, while Save for
-    /// later refuses the swipe — its only off-switch is the toggle.
+    /// The Fallbacks page deletes nothing (issue #114): deletion lives on an action's
+    /// home page, so even the seeded web-search Custom Action exposes no swipe-to-delete
+    /// here. And the permanent built-in captures are demotable but never leave the page
+    /// — demoting Save for later moves it to the Available pool, where it can be
+    /// promoted straight back.
     @MainActor
-    func testPermanentBuiltInsExposeNoDeleteOnlyDisable() throws {
+    func testFallbacksPageHasNoDeleteAndBuiltInsArePermanent() throws {
         let app = launchApp()
 
         let input = app.textFields["search-input"]
@@ -235,23 +237,28 @@ final class InstanceDisableUITests: XCTestCase {
         XCTAssertTrue(command.waitForExistence(timeout: 5))
         command.tap()
 
-        // Control leg: the seeded web-search Fallback query is deletable.
+        // No delete affordance anywhere: swiping the seeded web-search row (Active by
+        // default) offers no Delete — deletion is on the Custom Actions page.
         let webSearch = app.staticTexts["Search the web"]
-        XCTAssertTrue(webSearch.waitForExistence(timeout: 10), "the seeded web-search query is listed")
+        XCTAssertTrue(webSearch.waitForExistence(timeout: 10), "the seeded web-search fallback is listed")
         webSearch.swipeLeft()
-        let delete = app.buttons["Delete"]
-        XCTAssertTrue(delete.waitForExistence(timeout: 5), "a Fallback query exposes swipe-to-delete")
-        delete.tap()
-
-        // Save for later keeps its Enabled toggle but refuses the delete swipe.
-        let toggle = app.switches["fallback-enabled.builtin.save-for-later"]
-        XCTAssertTrue(toggle.waitForExistence(timeout: 10), "Save for later carries an Enabled toggle")
-        let saveForLater = app.staticTexts["Save for later"]
-        XCTAssertTrue(saveForLater.waitForExistence(timeout: 5))
-        saveForLater.swipeLeft()
         XCTAssertFalse(
             app.buttons["Delete"].waitForExistence(timeout: 2),
-            "a permanent built-in exposes no swipe-to-delete — disable is its only off-switch"
+            "the Fallbacks page has no delete affordance — deletion lives on the action's home page"
+        )
+
+        // Save for later is pre-enabled (Active) and demotable. Its id is a known
+        // constant, so target its red-minus directly.
+        let demoteSave = app.buttons["fallback-demote.builtin.save-for-later"]
+        XCTAssertTrue(demoteSave.waitForExistence(timeout: 10), "Save for later is active and demotable")
+        demoteSave.tap()
+
+        // Demoting doesn't delete it: it reappears in the Available pool with a green
+        // plus, so a permanent built-in never leaves the page.
+        let promoteSave = app.buttons["fallback-promote.builtin.save-for-later"]
+        XCTAssertTrue(
+            promoteSave.waitForExistence(timeout: 5),
+            "a demoted built-in capture lands in the pool — still on the page, never deleted"
         )
     }
 }
