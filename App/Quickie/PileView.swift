@@ -1,5 +1,6 @@
 import SwiftUI
 import SwiftData
+import QuickieStoreKit
 
 /// The Pile **entries** page (CONTEXT.md → Pile; ADR 0018): every
 /// saved-for-later query text, newest first, reached by the typed "Pile"

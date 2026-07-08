@@ -3,6 +3,7 @@ import SwiftData
 import UIKit
 import Combine
 import QuickieCore
+import QuickieStoreKit
 
 /// The whole screen, and the whole loop made visible: a bottom auto-focused
 /// input, a reversed Result list above it, and tap-to-run. The empty-query state
@@ -19,6 +20,14 @@ struct RootView: View {
     /// User static Quicklinks from the store feed the index alongside the
     /// built-in command rows (ADR 0006: index rebuilt from the source of truth).
     @Query(sort: \StoredQuicklink.createdAt) private var quicklinks: [StoredQuicklink]
+
+    /// The store's Quicklinks as of the last return to `.active` (ADR 0022):
+    /// `@Query` observes only in-process saves, so a Quicklink the Share
+    /// Extension wrote while the app was backgrounded never fires it. Each
+    /// foreground re-fetches the catalog explicitly, and `engine` indexes any
+    /// row `@Query` hasn't seen yet — merged by id, so once `@Query` catches
+    /// up (on the next in-process save) the merge is a no-op.
+    @State private var foregroundQuicklinks: [StoredQuicklink] = []
 
     /// User Custom Actions — templated, slot-filling Actions whose fallback-flagged
     /// rows consume the typed query (CONTEXT.md → Custom Action; ADR 0021). Web
@@ -175,8 +184,19 @@ struct RootView: View {
     /// morph in and out of the input's capsule (see `InputBar`, `ClipboardPasteButton`).
     @Namespace private var glassNamespace
 
+    /// The Quicklink catalog the engine indexes: the live `@Query` snapshot
+    /// plus any foreground-fetched row it hasn't seen yet (a Share Extension
+    /// write — ADR 0022). The `modelContext` guard drops rows deleted in-app
+    /// since the fetch (the same invalidated-snapshot trap `livePileEntries`
+    /// documents).
+    private var indexedQuicklinks: [StoredQuicklink] {
+        let known = Set(quicklinks.map(\.id))
+        let unseen = foregroundQuicklinks.filter { $0.modelContext != nil && !known.contains($0.id) }
+        return quicklinks + unseen
+    }
+
     private var engine: SearchEngine {
-        let storedLinks: [Action] = quicklinks.compactMap { link in
+        let storedLinks: [Action] = indexedQuicklinks.compactMap { link in
             guard let url = URL(string: link.urlString) else { return nil }
             return Action.quicklink(
                 id: link.id,
@@ -619,7 +639,24 @@ struct RootView: View {
             // folders under a per-folder security-scoped bracket, off the main actor.
             .task { fileIndex.rebuild(from: indexedFolders) }
             .onChange(of: scenePhase) { _, phase in
-                if phase == .active { fileIndex.rebuild(from: indexedFolders) }
+                if phase == .active {
+                    fileIndex.rebuild(from: indexedFolders)
+                    // Re-fetch the Quicklink catalog so anything the Share
+                    // Extension saved while backgrounded appears in results
+                    // (ADR 0022: foreground re-index, no cross-process signal).
+                    // Write the @State only when the catalog actually changed:
+                    // an unconditional write invalidates the whole root on
+                    // every activation — including the launch transition,
+                    // where that no-op invalidation raced the first render
+                    // (issue #112's near-deterministic CI crash on this
+                    // branch). A failed fetch keeps the previous catalog —
+                    // resetting to empty would drop already-merged rows.
+                    if let fetched = try? modelContext.fetch(
+                        FetchDescriptor<StoredQuicklink>(sortBy: [SortDescriptor(\.createdAt)])
+                    ), fetched.map(\.id) != foregroundQuicklinks.map(\.id) {
+                        foregroundQuicklinks = fetched
+                    }
+                }
             }
             .onChange(of: indexedFolders.grants) { _, _ in
                 fileIndex.rebuild(from: indexedFolders)

@@ -1,5 +1,6 @@
 import SwiftUI
 import SwiftData
+import QuickieStoreKit
 
 /// The Snippet library: create, list, edit, and delete the reusable copy-out
 /// text that surfaces in the Result list (issue #6, acceptance criterion #1).

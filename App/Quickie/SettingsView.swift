@@ -1,6 +1,7 @@
 import SwiftUI
 import UIKit
 import QuickieCore
+import QuickieStoreKit
 
 extension Appearance {
     /// The SwiftUI `ColorScheme` this preference forces, or `nil` for **System**

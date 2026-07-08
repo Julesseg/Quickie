@@ -1,5 +1,6 @@
 import SwiftUI
 import SwiftData
+import QuickieStoreKit
 
 /// Create or edit a single Snippet — a title and its copy-out body. A `nil`
 /// snippet means "create"; an existing one means "edit", and the same form

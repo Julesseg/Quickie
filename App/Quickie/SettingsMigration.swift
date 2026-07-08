@@ -1,5 +1,6 @@
 import Foundation
 import QuickieCore
+import QuickieStoreKit
 
 /// One-time forward-migration of the Event/Reminder capture settings onto the
 /// declared schema's single dynamic-choice keys (ADR 0020; issue #69). Issue #69

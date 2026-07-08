@@ -1,6 +1,7 @@
 import SwiftUI
 import SwiftData
 import QuickieCore
+import QuickieStoreKit
 
 /// The **Custom Action editor** (CONTEXT.md → Custom Action; ADR 0021, issue #94):
 /// a live-mirroring form whose argument rows *are* the URL template's `{name}`

@@ -1,6 +1,7 @@
 import SwiftUI
 import SwiftData
 import QuickieCore
+import QuickieStoreKit
 
 /// The Quicklinks management page (CONTEXT.md → Quicklink, Management page; ADR
 /// 0013): create / edit / delete user **static** Quicklinks (name, URL, optional

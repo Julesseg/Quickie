@@ -34,9 +34,17 @@ additive.)
 1. Register each test device's **UDID** under *Devices*.
 2. Make sure the **App ID** `com.julesseguin.quickie` exists with the **App Groups**
    capability enabled (the app uses `group.com.julesseguin.quickie`).
-3. Create an **Ad Hoc** distribution provisioning profile for `com.julesseguin.quickie`
-   that includes those devices, and download it (`.mobileprovision`).
-4. Have the matching **Apple Distribution** certificate in your keychain and
+3. Make sure the **App ID** `com.julesseguin.quickie.share` exists, also
+   with the **App Groups** capability — the Share Extension is its own bundle and
+   writes to the same `group.com.julesseguin.quickie` store.
+4. Create an **Ad Hoc** distribution provisioning profile for `com.julesseguin.quickie`
+   that includes those devices, **named exactly `Quickie Ad Hoc`**, and download it
+   (`.mobileprovision`).
+5. Create a second **Ad Hoc** profile for `com.julesseguin.quickie.share`
+   with the same devices, **named exactly `Quickie Share Extension Ad Hoc`**, and
+   download it too. (The Release build settings pin both names; the workflow
+   verifies them and fails with a clear message on a mismatch.)
+6. Have the matching **Apple Distribution** certificate in your keychain and
    export it as a `.p12` (with a password).
 
 > Ad Hoc only installs on the UDIDs baked into the profile. Add a device → it's
@@ -53,14 +61,16 @@ default, which is what we want):
 | --- | --- | --- |
 | `APPLE_CERTIFICATE_P12` | base64 of the `.p12` | `base64 -i cert.p12 \| pbcopy` |
 | `APPLE_CERTIFICATE_PASSWORD` | the `.p12` export password | — |
-| `APPLE_PROVISIONING_PROFILE` | base64 of the `.mobileprovision` | `base64 -i Quickie_AdHoc.mobileprovision \| pbcopy` |
+| `APPLE_PROVISIONING_PROFILE` | base64 of the app's `.mobileprovision` | `base64 -i Quickie_AdHoc.mobileprovision \| pbcopy` |
+| `APPLE_PROVISIONING_PROFILE_EXTENSION` | base64 of the Share Extension's `.mobileprovision` | `base64 -i Quickie_Share_Extension_AdHoc.mobileprovision \| pbcopy` |
 | `APPLE_TEAM_ID` | your 10-char Team ID | Apple Developer → Membership |
 | `NTFY_TOPIC` | *(optional)* ntfy.sh topic for push notifications | — |
 
-The signing identity name and the profile's name/UUID are read out of the cert and
-profile at runtime, so there's nothing else to copy.
+The signing identity name and each profile's UUID are read out of the cert and
+profiles at runtime; only the profile *names* are pinned (in the project's Release
+build settings — see step 1 above).
 
-Until all four required secrets are set, the `build` job no-ops and the PR check
+Until all five required secrets are set, the `build` job no-ops and the PR check
 stays green — the installable build simply doesn't run.
 
 ### 3. Enable GitHub Pages
