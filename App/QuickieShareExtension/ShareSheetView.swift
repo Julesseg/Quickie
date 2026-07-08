@@ -79,6 +79,17 @@ struct ShareSheetView: View {
                     .textInputAutocapitalization(.never)
                     .autocorrectionDisabled()
             }
+            // The shared text was itself a URL, so the sheet defaulted to the
+            // link (issue #103) — but the user may have meant the string as
+            // text; the escape hatch to the Snippet/Pile branch.
+            if model.canSwitchBranch {
+                Section {
+                    Button("Save as text instead") { model.switchToText() }
+                        .accessibilityIdentifier("share-switch-to-text")
+                } footer: {
+                    Text("This looks like a link. Switch to keep the text itself as a Snippet or Pile entry.")
+                }
+            }
         }
     }
 
@@ -123,6 +134,15 @@ struct ShareSheetView: View {
                         .accessibilityIdentifier("share-pile-text")
                 } footer: {
                     Text("Saved to the Pile — a query to deal with later.")
+                }
+            }
+
+            // Reached the text branch by switching away from the link default
+            // (issue #103); offer the way back.
+            if model.canSwitchBranch {
+                Section {
+                    Button("Save as a link instead") { model.switchToQuicklink() }
+                        .accessibilityIdentifier("share-switch-to-link")
                 }
             }
         }

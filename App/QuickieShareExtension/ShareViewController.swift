@@ -86,6 +86,18 @@ final class ShareModel {
     var quicklinkDraft = QuicklinkDraft()
     var textDraft = TextDraft()
 
+    /// Set only for the ambiguous "plain text that is itself a web URL" payload
+    /// (issue #103): the Quicklink branch is the default, but the sheet can flip
+    /// to the text branch and back. These hold the two seeds; both stay `nil`
+    /// for an unambiguous payload (a genuine `public.url` attachment, or non-URL
+    /// text), where no switch is offered.
+    private var switchableURL: URL?
+    private var switchableText: String?
+
+    /// Whether the active sheet offers a switch to the *other* branch — only the
+    /// URL-shaped-plain-text payload does (issue #103).
+    var canSwitchBranch: Bool { switchableURL != nil && switchableText != nil }
+
     private let complete: () -> Void
     private let cancelRequest: () -> Void
 
@@ -183,16 +195,22 @@ final class ShareModel {
         switch ShareClassification.route(sharedText: sharedText, attachedURL: attachedURL) {
         case .text(let text):
             startEditingText(text)
-        case .quicklink(let url):
+        case .quicklink(let url, let textFallback):
             // Files are out of scope (the activation rule keeps them away; a
             // file URL inside an odd mixed payload is refused here).
             guard !url.isFileURL else {
                 phase = .unsupported("Quickie can't save files — share a link instead.")
                 return
             }
+            if let textFallback {
+                // Plain text that is itself a URL: default to the link, but keep
+                // both seeds so the sheet can switch to the text branch (#103).
+                switchableURL = url
+                switchableText = textFallback
+            }
             // A page URL from the attachment keeps its page title; a URL the
-            // shared *text* itself was has none.
-            startEditingQuicklink(url: url, pageTitle: url == attachedURL ? pageTitle : nil)
+            // shared *text* itself was (`textFallback` present) has none.
+            startEditingQuicklink(url: url, pageTitle: textFallback == nil ? pageTitle : nil)
         case .unsupported:
             // The activation rule shouldn't let anything else in; guard
             // defensively.
@@ -220,6 +238,21 @@ final class ShareModel {
             text: text.trimmingCharacters(in: .whitespacesAndNewlines)
         )
         phase = .editingText
+    }
+
+    /// Flip the ambiguous URL-shaped-text payload to the text branch (issue
+    /// #103), re-seeding the Snippet/Pile draft from the original shared string.
+    /// A no-op unless the payload is switchable.
+    func switchToText() {
+        guard let text = switchableText else { return }
+        startEditingText(text)
+    }
+
+    /// Flip back to the Quicklink branch, re-seeding from the URL the shared text
+    /// parsed as. The text-derived URL never carries a page title.
+    func switchToQuicklink() {
+        guard let url = switchableURL else { return }
+        startEditingQuicklink(url: url, pageTitle: nil)
     }
 
     /// Writes the classified item through the shared App Group container and
