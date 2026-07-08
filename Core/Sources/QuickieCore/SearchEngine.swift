@@ -272,6 +272,19 @@ public struct SearchEngine {
         Set(indexedActionsByID(includingDisabled: true).keys)
     }
 
+    /// The **live** Indexed Action for `id`, or `nil` when nothing enabled resolves
+    /// to it — the lookup a `quickie://run/<id>` deeplink (CONTEXT.md → Bridged
+    /// Action; issue #120) resolves to run tap-equivalently. Reads the catalog with
+    /// disabled kinds *and* disabled instances excluded, so a bridged reference that
+    /// was unpinned, deleted, or disabled since the system last synced returns `nil`
+    /// and the app degrades to plain Home — never an error, never a stale run.
+    /// Only Indexed Actions are addressable: the Bridged set is the union of
+    /// Favorites and Custom Actions, both enumerable here, so a live-but-dynamic
+    /// row (a calculator answer, a file hit) is never a run target.
+    public func action(for id: String) -> Action? {
+        indexedActionsByID(includingDisabled: false)[id]
+    }
+
     /// A scored match in flight: the raw matcher score (which fixes its tier)
     /// alongside the blended score the user's signals produce (which orders it
     /// within that tier).

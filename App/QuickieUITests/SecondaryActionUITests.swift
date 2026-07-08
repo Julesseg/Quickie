@@ -4,9 +4,10 @@ import XCTest
 /// CONTEXT.md → Secondary action; ADR 0017) that can only be verified by driving
 /// the real app on a simulator: long-pressing a result shows **one** menu that
 /// combines the row's eligible content verbs (Copy / Share / Reveal in Files)
-/// with the existing Pin/Unpin item, and a content-less row (a command) shows
-/// only Pin/Unpin — no dead verbs. A Pile entry is the content-bearing row
-/// exercised here (its content is its saved text).
+/// with the universal **Copy action deeplink** (issue #120) and the existing
+/// Pin/Unpin item. A content-less row (a command) shows Copy action deeplink +
+/// Pin/Unpin but none of the content verbs — no dead verbs. A Pile entry is the
+/// content-bearing row exercised here (its content is its saved text).
 ///
 /// Eligibility itself is a pure function of `ResultContent`, covered
 /// deterministically by QuickieCore's SecondaryActionTests / ResultContentTests;
@@ -166,11 +167,12 @@ final class SecondaryActionUITests: XCTestCase {
     /// shortcut row is searchable in this suite.
     private static let seededShortcutName = "UITest Shortcut"
 
-    /// A command row carries no content, so its long-press menu shows only
-    /// Pin/Unpin — exactly as before secondary actions existed (AC
-    /// "command/capture rows show only Pin/Unpin").
+    /// A command row carries no content, so its long-press menu shows the universal
+    /// **Copy action deeplink** (issue #120) and Pin/Unpin — but none of the content
+    /// verbs (Copy / Share / Reveal). Copy action deeplink is the one verb every row
+    /// earns off its id, even a content-less one.
     @MainActor
-    func testLongPressingACommandRowOffersOnlyPin() throws {
+    func testLongPressingACommandRowOffersDeeplinkAndPin() throws {
         let app = launchApp()
 
         let input = app.textFields["search-input"]
@@ -182,8 +184,11 @@ final class SecondaryActionUITests: XCTestCase {
         XCTAssertTrue(settings.waitForExistence(timeout: 5))
         settings.press(forDuration: 1.3)
 
-        // Pin is offered; the content verbs are not — a command has no content.
-        XCTAssertTrue(app.buttons["Pin as Favorite"].waitForExistence(timeout: 5),
+        // Copy action deeplink + Pin are offered; the content verbs are not — a
+        // command has no content, but it does have an addressable id.
+        XCTAssertTrue(app.buttons["Copy action deeplink"].waitForExistence(timeout: 5),
+                      "every row, a content-less command included, offers Copy action deeplink")
+        XCTAssertTrue(app.buttons["Pin as Favorite"].exists,
                       "a command row still offers Pin as Favorite")
         XCTAssertFalse(app.buttons["Copy"].exists,
                        "a content-less command row must not offer Copy")

@@ -128,6 +128,10 @@ struct RootView: View {
     /// launches.
     @State private var shortcuts = ShortcutsStore.launch()
 
+    /// One-shot latch for the `-uitest-deeplink` seam so the seeded deeplink
+    /// dispatches exactly once, even though `onAppear` can fire more than once.
+    @State private var didDispatchLaunchDeeplink = false
+
     @State private var query = ""
     /// Whether the **Search Files context** is active (CONTEXT.md → Search Files
     /// context; ADR 0014): entered by selecting the "Search Files" command row, it
@@ -638,14 +642,26 @@ struct RootView: View {
                     .onDisappear { if path.isEmpty { refocusInput() } }
             }
             // Inbound `quickie://` URLs are dispatched here at the app root by host
-            // (issue #45, #46; ADR 0007). Two families ride the scheme: the Sync
-            // Shortcut's `quickie://import?names=…`, which the store ingests (parse →
-            // auto-prune reconcile → persist), and the run callbacks a triggered
-            // Shortcut Action comes back on. An unrecognized URL is ignored.
+            // (issue #45, #46, #120; ADR 0007, 0024). Families ride the scheme: the
+            // Sync Shortcut's `quickie://import?names=…`, which the store ingests
+            // (parse → auto-prune reconcile → persist); the run callbacks a triggered
+            // Shortcut Action comes back on; and the App Intents bridge / entry-surface
+            // deeplink door (run / entry). Each parser claims only its own hosts, so
+            // order is immaterial and an unrecognized URL falls through untouched.
             .onOpenURL { url in
                 if shortcuts.handle(url: url) { return }
+                if let deeplink = QuickieDeeplink.parse(url) { handleDeeplink(deeplink); return }
                 handleShortcutResult(url)
             }
+            // The `-uitest-deeplink` seam: XCUITest can't deliver a `quickie://` URL,
+            // so a UI test seeds one as a launch argument and the app dispatches it
+            // through the *real* parse → `handleDeeplink` path once the launcher is on
+            // screen — the same "drive the real path" approach the shortcut import and
+            // Favorites pin tests use. A `capture/*` deeplink swaps the search field for
+            // the capture breadcrumb, whose `capture-input` self-focuses
+            // (`BackspaceTextField.becomeFirstResponder`), so it needs no prior search
+            // focus. Gated on `--uitesting`, latched to fire once.
+            .onAppear { dispatchUITestDeeplinkIfRequested() }
             // Seed the default web-search Custom Action once on launch (ADR 0021).
             .task {
                 QuickieStore.seedDefaultCustomActions(in: modelContext)
@@ -1065,12 +1081,13 @@ struct RootView: View {
         }
     }
 
-    /// Performs a one-shot **secondary action** on a row's content (CONTEXT.md →
-    /// Secondary action; ADR 0017). Core decides *which* verbs a row's content is
-    /// eligible for; the App resolves the content **at the edge** and runs the verb
-    /// — the same defer-to-the-edge pattern as the main-action outcomes. Only
-    /// content-bearing rows reach here (a `.none` row offers no such menu item), so
-    /// a resolution that comes back empty is a stale reference, not a dead item.
+    /// Performs a one-shot **secondary action** on a row (CONTEXT.md → Secondary
+    /// action; ADR 0017). Core decides *which* verbs a row is eligible for; the App
+    /// resolves the reference **at the edge** and runs the verb — the same
+    /// defer-to-the-edge pattern as the main-action outcomes. The content verbs
+    /// (copy/share/edit/reveal) only reach here for a content-bearing row, so an
+    /// empty resolution is a stale reference, not a dead item; `copyDeeplink` is the
+    /// exception — it rides on every row, keyed by the id, not the content.
     private func performSecondary(_ action: Action, _ kind: SecondaryActionKind) {
         switch kind {
         case .copy:
@@ -1093,6 +1110,12 @@ struct RootView: View {
             default:
                 editSnippet(action)
             }
+        case .copyDeeplink:
+            // Copy the row's tap-equivalent `quickie://run/<id>` URL, built by the
+            // one pure constructor so the id is percent-encoded consistently (issue
+            // #120). Available on every row, a content-less command included.
+            UIPasteboard.general.string = QuickieDeeplink.runURL(id: action.id).absoluteString
+            flashConfirmation("Copied deeplink")
         }
     }
 
@@ -1234,6 +1257,65 @@ struct RootView: View {
     private func exitFileSearch() {
         inFileSearch = false
         query = ""
+    }
+
+    /// Dispatches an inbound `quickie://` **deeplink** (issue #120; ADR 0024) — the
+    /// door the App Intents bridge (#121) and epic #16's open-focused entry surfaces
+    /// (#124, #125) ride. Both routes first **drop any scoped context** — a
+    /// half-filled breadcrumb and the Search Files context — the same reset a
+    /// Shortcut-output reinjection performs, so the app lands on the launcher root
+    /// before acting:
+    ///
+    /// - `run/<id>` runs the resolved Action **tap-equivalently** (a Favorite's main
+    ///   action, a Custom Action's breadcrumb, a quick-capture command row's capture —
+    ///   `run/builtin.new-reminder` *is* "open the Reminder capture"); an id that no
+    ///   longer resolves — unpinned, deleted, disabled — degrades to the clean Home
+    ///   the reset already left, no error UI.
+    /// - `entry` is the reset with **nothing selected after**, refocusing the input:
+    ///   a fresh, focused Home for a warm app (cold launch already lands there).
+    private func handleDeeplink(_ deeplink: QuickieDeeplink) {
+        resetToLauncher()
+        switch deeplink {
+        case .run(let id):
+            // Tap-equivalent: behave exactly as if the user tapped this Action's
+            // row. An unresolvable id leaves the clean Home the reset produced.
+            if let action = engine.action(for: id) { run(action) }
+        case .entry:
+            // Fresh entry: the reset, then re-arm focus so the warm app lands on a
+            // clean, focused Home exactly like a cold launch.
+            refocusInput()
+        }
+    }
+
+    /// Clears every scoped context back to the launcher root before a deeplink acts
+    /// (issue #120): abandon an in-flight capture breadcrumb, leave the Search Files
+    /// context, empty a stale query, and pop any pushed Management page. This is the
+    /// open-focused entry-surface reset (CONTEXT.md → Entry surface) — a stale query
+    /// cleared and a half-filled breadcrumb abandoned — shared by every deeplink so
+    /// none of them acts on top of leftover state.
+    private func resetToLauncher() {
+        capture.cancel()
+        inFileSearch = false
+        query = ""
+        if !path.isEmpty { path = [] }
+    }
+
+    /// The `-uitest-deeplink <url>` seam (issue #120): XCUITest cannot open a
+    /// `quickie://` URL against the app, so a UI test passes one as a launch argument
+    /// and the app dispatches it through the real `QuickieDeeplink.parse` →
+    /// `handleDeeplink` path once the launcher appears. Gated on `--uitesting` so a
+    /// stray flag can never fire in production, and latched so it runs a single time.
+    private func dispatchUITestDeeplinkIfRequested() {
+        guard !didDispatchLaunchDeeplink else { return }
+        let arguments = ProcessInfo.processInfo.arguments
+        guard arguments.contains("--uitesting"),
+              let flagIndex = arguments.firstIndex(of: "-uitest-deeplink"),
+              arguments.indices.contains(flagIndex + 1),
+              let url = URL(string: arguments[flagIndex + 1]),
+              let deeplink = QuickieDeeplink.parse(url)
+        else { return }
+        didDispatchLaunchDeeplink = true
+        handleDeeplink(deeplink)
     }
 
     /// Handles a Shortcut Action run coming back over the `quickie://` scheme

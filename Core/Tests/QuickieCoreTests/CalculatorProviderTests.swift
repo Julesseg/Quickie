@@ -37,10 +37,11 @@ struct CalculatorProviderTests {
     func resultDeclaresNumberContent() {
         // The Calculator copies *text* but its content reads as `.number` (ADR
         // 0017): proof content is a declared property, not derived from the
-        // copy-text outcome. Its secondary actions are still the universal pair.
+        // copy-text outcome. Its secondary actions are the universal copy/share pair
+        // plus the id-keyed Copy action deeplink every row earns (issue #120).
         let result = provider.candidates(for: "23*7").first
         #expect(result?.content == .number)
-        #expect(result.map { secondaryActions(for: $0.content) } == [.copy, .share])
+        #expect(result.map { secondaryActions(for: $0.content) } == [.copy, .share, .copyDeeplink])
     }
 
     @Test("the injected result is a Dynamic Provider result, not a Fallback")

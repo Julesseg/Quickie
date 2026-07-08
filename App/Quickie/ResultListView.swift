@@ -186,11 +186,12 @@ private struct EnterHint: View {
 
 extension View {
     /// A row's long-press menu: its eligible **secondary actions** (Copy / Share /
-    /// Reveal in Files, keyed by the result's content — CONTEXT.md → Secondary
-    /// action; ADR 0017) combined with the **Pin/Unpin** item, in **one** menu on
-    /// **one** gesture. A content-less row (command / capture / shortcut) passes an
-    /// empty `secondaryActions`, so it shows only Pin/Unpin, exactly as before — no
-    /// dead items, a verb appears only when it can run.
+    /// Reveal in Files / Edit keyed by the result's content, plus the universal
+    /// **Copy action deeplink** keyed by its id — CONTEXT.md → Secondary action;
+    /// ADR 0017, issue #120) combined with the **Pin/Unpin** item, in **one** menu on
+    /// **one** gesture. Every row carries at least Copy action deeplink now, so even a
+    /// content-less command/capture row shows that plus Pin/Unpin (its content verbs
+    /// stay absent) — no dead items, a verb appears only when it can run.
     ///
     /// `canPin` reflects the Favorites cap (CONTEXT.md → Favorite): when the grid
     /// is full, the "Pin as Favorite" item is disabled with a hint rather than
@@ -256,6 +257,7 @@ extension SecondaryActionKind {
         case .share: return "Share"
         case .revealInFiles: return "Reveal in Files"
         case .edit: return "Edit"
+        case .copyDeeplink: return "Copy action deeplink"
         }
     }
 
@@ -265,6 +267,7 @@ extension SecondaryActionKind {
         case .share: return "square.and.arrow.up"
         case .revealInFiles: return "folder"
         case .edit: return "pencil"
+        case .copyDeeplink: return "link"
         }
     }
 }

@@ -1,0 +1,68 @@
+import XCTest
+
+/// The UI-only acceptance for the `quickie://` deeplink door (issue #120): a
+/// `run/builtin.new-reminder` deeplink must open the app straight onto the Reminder
+/// quick-capture breadcrumb at Argument 1 with the keyboard up — no typing, no
+/// row tap, exactly as the App Intents bridge and entry surfaces (#121, #124,
+/// #125) will drive it. Opening a quick capture is a tap-equivalent run of its
+/// built-in command row (ADR 0024 retired the separate `capture/*` routes). The
+/// parse grammar itself is covered deterministically by QuickieCore's
+/// `QuickieDeeplinkTests`; this proves the root `onOpenURL` → `handleDeeplink` →
+/// tap-equivalent `run` wiring around it.
+///
+/// XCUITest can't open a `quickie://` URL against the app, so the deeplink is
+/// delivered through the *real* parse → dispatch path via the `-uitest-deeplink`
+/// launch argument — the same "drive the real path" seam the shortcut import and
+/// Favorites pin suites use. The Reminder capture rides the `-uitest-stub-reminders`
+/// seam because the simulator's Reminders permission dialog can't be pre-granted.
+final class DeeplinkUITests: XCTestCase {
+
+    override func setUpWithError() throws {
+        continueAfterFailure = false
+    }
+
+    @MainActor
+    private func launchApp(deeplink: String) -> XCUIApplication {
+        let app = XCUIApplication()
+        app.launchArguments += [
+            "--uitesting",
+            "-uitest-reset-signals",
+            "-uitest-stub-reminders",
+            "-uitest-deeplink", deeplink,
+        ]
+        app.launchArguments.append("-uitest-instant-motion")
+        app.launch()
+        return app
+    }
+
+    /// A `quickie://run/builtin.new-reminder` deeplink lands the app directly on the
+    /// Reminder capture's title step — the `capture-input` breadcrumb field, keyboard
+    /// up — without the user typing "reminder" or tapping the row first. The launcher
+    /// swaps its search field for the capture breadcrumb the moment the deeplink
+    /// fires, so the assertion is on `capture-input` directly, not the transient
+    /// `search-input`.
+    @MainActor
+    func testCaptureReminderDeeplinkOpensBreadcrumb() throws {
+        let app = launchApp(deeplink: "quickie://run/builtin.new-reminder")
+
+        // The deeplink alone drives selection — no typing, no row tap. The generous
+        // timeout spans app launch plus the seam's dispatch into the capture; the
+        // launcher never shows its search field to the test because the deeplink
+        // replaces it with the breadcrumb straight away.
+        let captureField = app.textFields["capture-input"]
+        XCTAssertTrue(
+            captureField.waitForExistence(timeout: 30),
+            "the capture deeplink should open the breadcrumb on Argument 1 with no user input"
+        )
+        XCTAssertTrue(
+            app.keyboards.firstMatch.waitForExistence(timeout: 5),
+            "the title step should bring the keyboard up"
+        )
+
+        // The breadcrumb is a real, drivable capture — committing a title is accepted
+        // (the field takes text and Return advances the step), proving the deeplink
+        // selected the Reminder capture rather than surfacing a stray row.
+        captureField.tap()
+        captureField.typeText("Buy milk\n")
+    }
+}

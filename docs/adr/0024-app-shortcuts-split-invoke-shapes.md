@@ -30,11 +30,24 @@ lists, and calendars are the breadcrumb's job, and duplicating that collection
 in Siri parameter resolution would thicken the bridge 0009 wants thin.
 
 **One inbound door.** Foreground intents steer the app by opening `quickie://`
-deeplinks (`quickie://capture/reminder`, `quickie://capture/event`,
-`quickie://run/<action-id>`), parsed by a pure `QuickieCore` type covered by the
-Linux `swift test` gate, dispatched by the existing root `onOpenURL`. Rejected:
-an in-process intent router — a second inbound path parallel to `onOpenURL`,
-with its routing logic stranded in the App target outside Core's test gate.
+deeplinks — `quickie://run/<action-id>` (tap-equivalent run) and `quickie://entry`
+(the open-focused fresh-Home reset epic #16's entry surfaces ride) — parsed by a
+pure `QuickieCore` type covered by the Linux `swift test` gate, dispatched by the
+existing root `onOpenURL`. Rejected: an in-process intent router — a second
+inbound path parallel to `onOpenURL`, with its routing logic stranded in the App
+target outside Core's test gate.
+
+**No separate `capture/*` routes** (amended after slice 1, issue #120). The quick
+captures are already built-in command rows in the index (`builtin.new-reminder`,
+`builtin.new-event`), and a `run/<id>` of a capture row *is* "open that capture"
+— so `quickie://run/builtin.new-reminder` / `run/builtin.new-event` already mean
+"open the Reminder/Event capture". A parallel `capture/reminder` / `capture/event`
+family (in an earlier draft of this ADR and issue #120) would only duplicate two
+ids behind a second verb; `run` is the one uniform verb. Consequence: because
+`run/<id>` resolves against the **live** catalog, a capture reached this way honours
+its provider's Enabled toggle (a disabled Reminders kind degrades to Home) — the
+same graceful-staleness rule every other bridged id follows, which is the intended
+behaviour, not a regression to design around.
 
 **One dynamic entity.** Favorites *and* Custom Actions are exposed through a
 single parameterized App Shortcut ("Run &lt;name&gt; with Quickie") over one
