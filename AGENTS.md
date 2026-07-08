@@ -69,3 +69,14 @@ issue. This is the settled, correct setup — do not treat it as a gap to fix.
 When implementing an issue: write the UI code, rely on `swift test` for the logic,
 and let the CI XCUITest job cover the UI behaviors. That split is by design — it
 does not change the rule above: the UI always gets implemented.
+
+### Never ask to schedule a routine PR check-in
+
+Re-polling a PR you're watching — its CI status, mergeability, or a conflict
+transition webhooks don't deliver — is expected, low-stakes background work.
+**Do not surface a permission prompt for it.** Never call `send_later` (or any
+scheduling tool) just to arm a simple "re-check PR #N later" self-reminder, and
+never ask the user whether you should. Rely on the webhook events you're already
+subscribed to; if you genuinely need to poll for something webhooks miss, do it
+inline when a later turn naturally occurs rather than scheduling a wake-up. The
+one exception is when the user has explicitly asked you to schedule something.
