@@ -70,12 +70,14 @@ struct FallbacksView: View {
                         .accessibilityIdentifier("fallbacks-enabled-empty")
                 } else {
                     ForEach(activeActions) { action in
+                        // Active rows: a red minus to demote and the drag grip to
+                        // reorder — no enable/disable toggle (it lives on the pool).
                         FallbackRow(
                             action: action,
                             style: .active,
-                            isDisabled: enablement.isDisabled(action.id),
-                            onPrimary: { store.demote(action.id) },
-                            onToggleDisabled: { enablement.toggleDisabled(action.id) }
+                            isDisabled: false,
+                            onPrimary: { withAnimation { store.demote(action.id) } },
+                            onToggleDisabled: {}
                         )
                     }
                     .onMove(perform: reorder)
@@ -83,7 +85,7 @@ struct FallbacksView: View {
             } header: {
                 Text("Active")
             } footer: {
-                Text("Top is most important — nearest the input in results. Tap Edit to reorder. The red minus moves a fallback to the list below; the toggle disables the action everywhere and moves it there too. Nothing here deletes it.")
+                Text("Top is most important — nearest the input in results. Drag the grip to reorder; the red minus moves a fallback down to the list below. Nothing here deletes it.")
             }
 
             Section {
@@ -93,35 +95,40 @@ struct FallbacksView: View {
                         .accessibilityIdentifier("fallbacks-pool-empty")
                 } else {
                     ForEach(pooledActions) { action in
+                        // Pool rows: a green plus to promote and the action's
+                        // enable/disable toggle — the toggle only appears here.
                         FallbackRow(
                             action: action,
                             style: .pool,
                             isDisabled: enablement.isDisabled(action.id),
                             onPrimary: { promote(action) },
-                            onToggleDisabled: { enablement.toggleDisabled(action.id) }
+                            onToggleDisabled: { withAnimation { enablement.toggleDisabled(action.id) } }
                         )
                     }
                 }
             } header: {
                 Text("Available")
             } footer: {
-                Text("Fallback-eligible actions you haven't activated, plus any you've disabled. The green plus adds one to the bottom of the active list. A Custom Action or Shortcut becomes eligible when its first argument is free text.")
+                Text("Fallback-eligible actions you haven't activated, plus any you've disabled. The green plus adds one to the bottom of the active list; the toggle disables the action everywhere. A Custom Action or Shortcut becomes eligible when its first argument is free text.")
             }
         }
+        // Always in edit mode so the reorder grips show on the Active rows without a
+        // separate Edit step — the same always-editable shape as the iOS share sheet's
+        // app row. The custom minus/plus buttons and the pool toggles stay interactive
+        // (they carry explicit button/toggle styles, not row-selection taps).
+        .environment(\.editMode, .constant(.active))
         .navigationTitle("Fallbacks")
-        .toolbar {
-            ToolbarItem(placement: .topBarTrailing) {
-                EditButton()
-            }
-        }
     }
 
-    /// Promotes a pooled Action to the bottom of Active. A disabled one is re-enabled
-    /// first, so a promoted fallback is always live (an active-but-hidden row would be
-    /// a contradiction) — the plus reads as "make this an active fallback".
+    /// Promotes a pooled Action to the bottom of Active, sliding it up to the Active
+    /// list. A disabled one is re-enabled first, so a promoted fallback is always live
+    /// (an active-but-hidden row would be a contradiction) — the plus reads as "make
+    /// this an active fallback".
     private func promote(_ action: Action) {
-        if enablement.isDisabled(action.id) { enablement.toggleDisabled(action.id) }
-        store.promote(action.id)
+        withAnimation {
+            if enablement.isDisabled(action.id) { enablement.toggleDisabled(action.id) }
+            store.promote(action.id)
+        }
     }
 
     /// Persists a reorder of the Active section. The offsets index into
@@ -135,14 +142,16 @@ struct FallbacksView: View {
     }
 }
 
-/// One Fallbacks-page row, shared by both sections: a leading activation control (red
-/// minus to demote in **Active**, green plus to promote in **pool**), the action's
-/// title + kind caption, and the instance enable/disable toggle. No delete affordance.
+/// One Fallbacks-page row. In **Active** it is a red minus (demote) + title, with the
+/// system drag grip trailing (edit mode) to reorder — no toggle. In the **pool** it is
+/// a green plus (promote) + title + the action's instance enable/disable toggle. No
+/// delete affordance in either.
 private struct FallbackRow: View {
     enum Style { case active, pool }
 
     let action: Action
     let style: Style
+    /// Whether the action is instance-disabled — only meaningful (and shown) in the pool.
     let isDisabled: Bool
     /// Demote (Active) or promote (pool) — the section's activation verb.
     let onPrimary: () -> Void
@@ -170,11 +179,14 @@ private struct FallbackRow: View {
             }
             Spacer(minLength: 8)
 
-            // The instance enable/disable toggle — disabling hides the action
-            // everywhere and (via demoteDisabled) parks it in the pool.
-            Toggle("Enabled", isOn: Binding(get: { !isDisabled }, set: { _ in onToggleDisabled() }))
-                .labelsHidden()
-                .accessibilityIdentifier("fallback-enabled.\(action.id)")
+            // The instance enable/disable toggle lives only on the pool rows —
+            // disabling hides the action everywhere; an Active fallback is demoted
+            // here first (or disabled from its home page) before it can be switched off.
+            if style == .pool {
+                Toggle("Enabled", isOn: Binding(get: { !isDisabled }, set: { _ in onToggleDisabled() }))
+                    .labelsHidden()
+                    .accessibilityIdentifier("fallback-enabled.\(action.id)")
+            }
         }
     }
 

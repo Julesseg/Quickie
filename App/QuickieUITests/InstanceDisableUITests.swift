@@ -273,12 +273,12 @@ final class InstanceDisableUITests: XCTestCase {
         app.cells.containing(NSPredicate(format: "label CONTAINS[c] %@", title)).firstMatch
     }
 
-    /// Each Fallbacks-page row carries the action's enable/disable toggle, and
-    /// disabling an *active* fallback both hides it everywhere and demotes it into the
-    /// Available pool (issue #114 follow-up): the row leaves Active and gains a promote
-    /// plus in the pool.
+    /// The enable/disable toggle lives only on the **Available** (pool) rows, not the
+    /// Active ones (issue #114 follow-up): an Active fallback shows a demote minus but
+    /// no switch; demoting it to the pool reveals its toggle, and disabling it there
+    /// keeps it in the pool.
     @MainActor
-    func testDisablingAnActiveFallbackMovesItToTheAvailablePool() throws {
+    func testEnableDisableToggleLivesOnlyOnTheAvailableList() throws {
         let app = launchApp()
 
         let input = app.textFields["search-input"]
@@ -289,28 +289,30 @@ final class InstanceDisableUITests: XCTestCase {
         XCTAssertTrue(command.waitForExistence(timeout: 5))
         command.tap()
 
-        // Save for later is pre-enabled (Active), so its cell carries the demote
-        // button. Its enable/disable toggle is the row's only switch. Resolve both via
-        // cell-containment (a top-level id query over a lazy List row is flaky).
+        // Save for later is pre-enabled (Active): a demote button, and — the point of
+        // this test — no enable/disable switch on the row. Resolve via cell-containment
+        // (a top-level id query over a lazy List row is flaky).
         let activeCell = fallbackCell(app, titled: "Save for later")
         XCTAssertTrue(activeCell.waitForExistence(timeout: 10), "Save for later is on the page")
-        XCTAssertTrue(
-            activeCell.buttons["Remove from active fallbacks"].waitForExistence(timeout: 5),
-            "Save for later starts active"
-        )
-        let toggle = activeCell.switches.firstMatch
-        XCTAssertTrue(toggle.waitForExistence(timeout: 5), "each Fallbacks row carries its enable/disable toggle")
+        let demote = activeCell.buttons["Remove from active fallbacks"]
+        XCTAssertTrue(demote.waitForExistence(timeout: 5), "an Active fallback shows a demote minus")
+        XCTAssertFalse(activeCell.switches.firstMatch.exists, "an Active fallback carries no enable/disable toggle")
 
-        // Disable it → it drops out of Active and lands in the pool with a promote plus.
-        flip(toggle, to: false)
+        // Demote it → in the pool it now shows both a promote plus and its toggle.
+        demote.tap()
         let pooledCell = fallbackCell(app, titled: "Save for later")
         XCTAssertTrue(
             pooledCell.buttons["Add to active fallbacks"].waitForExistence(timeout: 5),
-            "disabling an active fallback demotes it into the Available pool"
+            "a demoted fallback lands in the pool with a promote plus"
         )
-        XCTAssertFalse(
-            pooledCell.buttons["Remove from active fallbacks"].exists,
-            "the disabled fallback no longer sits in the Active section"
+        let toggle = pooledCell.switches.firstMatch
+        XCTAssertTrue(toggle.waitForExistence(timeout: 5), "a pool row carries the enable/disable toggle")
+
+        // Disabling it there keeps it in the pool (it was already not active).
+        flip(toggle, to: false)
+        XCTAssertTrue(
+            fallbackCell(app, titled: "Save for later").buttons["Add to active fallbacks"].waitForExistence(timeout: 5),
+            "disabling a pooled fallback keeps it in the Available list"
         )
     }
 }
