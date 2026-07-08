@@ -174,20 +174,44 @@ struct ShareClassificationTests {
     func sharedURLStringRoutesToQuicklinkEvenWithAnAttachment() {
         // A plain page share whose only "text" is the URL string still becomes a
         // Quicklink — routed from the text, not the attachment, but same branch.
+        // Because it came from *text*, the string rides along as the switchable
+        // fallback: the sheet defaults to the link but can re-read it as text.
         let route = ShareClassification.route(
             sharedText: "https://example.org/a",
             attachedURL: URL(string: "https://example.org/a")
         )
-        #expect(route == .quicklink(URL(string: "https://example.org/a")!))
+        #expect(route == .quicklink(URL(string: "https://example.org/a")!, textFallback: "https://example.org/a"))
     }
 
     @Test("a page share with no selection routes to the Quicklink branch via the URL attachment", arguments: [nil, "", "   \n"])
     func pageShareWithoutSelectionUsesTheURLAttachment(sharedText: String?) {
+        // A genuine public.url attachment is an unambiguous link — no text to
+        // fall back to, so no toggle (issue #103).
         let route = ShareClassification.route(
             sharedText: sharedText,
             attachedURL: URL(string: "https://anthropic.com")
         )
-        #expect(route == .quicklink(URL(string: "https://anthropic.com")!))
+        #expect(route == .quicklink(URL(string: "https://anthropic.com")!, textFallback: nil))
+    }
+
+    // Issue #103: plain text that is *itself* a web URL defaults to the
+    // Quicklink branch, but — unlike a genuine URL attachment — keeps the
+    // original string as a switchable fallback so the sheet can re-read it as
+    // text. The route carries that provenance; the shell reads it to decide
+    // whether to offer the "save as text instead" control.
+
+    @Test("URL-shaped shared text routes to Quicklink but keeps the text as a switchable fallback")
+    func urlShapedTextRouteCarriesTextFallback() {
+        let route = ShareClassification.route(sharedText: "https://example.org/a", attachedURL: nil)
+        #expect(route == .quicklink(URL(string: "https://example.org/a")!, textFallback: "https://example.org/a"))
+    }
+
+    @Test("the switchable fallback preserves the raw shared text for the text branch")
+    func urlShapedTextFallbackIsRaw() {
+        // The fallback carries the untrimmed string, exactly as `.text` would,
+        // so the shell trims it once when it seeds the text draft.
+        let route = ShareClassification.route(sharedText: "  https://example.org\n", attachedURL: nil)
+        #expect(route == .quicklink(URL(string: "https://example.org")!, textFallback: "  https://example.org\n"))
     }
 
     @Test("a text selection with no URL attachment routes to the text branch")

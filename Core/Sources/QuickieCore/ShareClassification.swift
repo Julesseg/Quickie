@@ -9,8 +9,14 @@ public enum ShareClassification {
     /// The branch a shared payload takes once the extension has unpacked it
     /// (ADR 0022): edit it as a Quicklink seeded from a URL, edit it as a
     /// Snippet/Pile seeded from text, or refuse an empty payload.
+    ///
+    /// The Quicklink branch carries a `textFallback`: when the URL came from
+    /// plain text that is *itself* a web URL (issue #103), it is the original
+    /// shared string, and the sheet — defaulting to the link — offers a switch
+    /// to read it as text instead. For a genuine `public.url` attachment the URL
+    /// is unambiguous, so the fallback is `nil` and no toggle is offered.
     public enum Route: Equatable {
-        case quicklink(URL)
+        case quicklink(URL, textFallback: String?)
         case text(String)
         case unsupported
     }
@@ -25,18 +31,21 @@ public enum ShareClassification {
     /// *itself* a web URL still takes the Quicklink branch (the "I shared a
     /// link" reading, `webURL(fromSharedText:)`), so a plain page share — whose
     /// only "text", if any, is the URL string — still becomes a Quicklink; so
-    /// does a page share carrying no selection at all. An empty payload is
+    /// does a page share carrying no selection at all. That text-derived
+    /// Quicklink keeps the original string as its `textFallback` so the sheet
+    /// can switch to the text branch (issue #103); a genuine `public.url`
+    /// attachment has no fallback and no toggle. An empty payload is
     /// unsupported. File-URL refusal stays in the shell (it owns the message).
     public static func route(sharedText: String?, attachedURL: URL?) -> Route {
         if let text = sharedText,
            !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
             if let url = webURL(fromSharedText: text) {
-                return .quicklink(url)
+                return .quicklink(url, textFallback: text)
             }
             return .text(text)
         }
         if let url = attachedURL {
-            return .quicklink(url)
+            return .quicklink(url, textFallback: nil)
         }
         return .unsupported
     }
