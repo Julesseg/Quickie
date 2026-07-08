@@ -206,7 +206,15 @@ final class ShortcutUITests: XCTestCase {
         XCTAssertTrue(command.waitForExistence(timeout: 5))
         command.tap()
 
+        // The pool sits below the pre-enabled Active section (web search + the two
+        // captures), so its row can start below the fold where a lazy List hasn't
+        // realized it yet — scroll it into view before asserting.
         let promote = app.buttons["fallback-promote.shortcut.translate"]
+        var scrolls = 0
+        while !promote.exists && scrolls < 6 {
+            app.swipeUp()
+            scrolls += 1
+        }
         XCTAssertTrue(promote.waitForExistence(timeout: 10),
                       "the accepts-input shortcut waits in the fallback pool")
         promote.tap()

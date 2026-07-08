@@ -120,12 +120,27 @@ final class FallbacksStore {
         persist()
     }
 
-    /// Replaces the enabled order wholesale — the drag-to-reorder handler passes the
-    /// reordered enabled-section ids. Any id not in the new order is dropped, which is
-    /// how a reorder over the *resolved* (live) list also prunes stale ids for free.
+    /// Replaces the enabled list wholesale — the internal write behind migration and
+    /// the forgetting-prune, which have already computed the exact list to persist.
+    /// The Fallbacks page's reorder does **not** use this (it would drop not-yet-loaded
+    /// ids); it routes through `reorderEnabled` instead.
     func setEnabled(_ ids: [String]) {
         enabled = ids
         persist()
+    }
+
+    /// Applies a drag-reorder of the **visible** Active rows without dropping an enabled
+    /// id that hasn't resolved yet (issue #114). The page shows only ids that resolve
+    /// against the loaded catalog, so `visibleOrder` is a permutation of that subset; an
+    /// id still in `enabled` but not yet loaded (the launch race) keeps its slot rather
+    /// than being erased by a wholesale overwrite — the same not-yet-loaded-vs-lost care
+    /// `pruneToEligible` takes. Persists only when the order actually changed.
+    func reorderEnabled(visibleOrder: [String]) {
+        let reordered = FallbackActivation.reorderedEnabled(enabled: enabled, visibleOrder: visibleOrder)
+        if reordered != enabled {
+            enabled = reordered
+            persist()
+        }
     }
 
     /// Forgets an id's rank once its eligibility is **genuinely lost** (issue #114) —

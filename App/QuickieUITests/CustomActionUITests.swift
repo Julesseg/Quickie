@@ -88,10 +88,17 @@ final class CustomActionUITests: XCTestCase {
         command.tap()
 
         // The freshly authored action waits in the Available pool (newly eligible
-        // actions are not auto-enabled). Find its row by title and tap its promote plus.
+        // actions are not auto-enabled). The pool sits below the pre-enabled Active
+        // section, so scroll it into view if a lazy List hasn't realized it, then find
+        // its row by title and tap its promote plus.
         let poolCell = app.cells.containing(
             NSPredicate(format: "label CONTAINS[c] %@", title)
         ).firstMatch
+        var scrolls = 0
+        while !poolCell.exists && scrolls < 6 {
+            app.swipeUp()
+            scrolls += 1
+        }
         XCTAssertTrue(poolCell.waitForExistence(timeout: 10), "the authored action waits in the fallback pool")
         let promote = poolCell.buttons["Add to active fallbacks"]
         XCTAssertTrue(promote.waitForExistence(timeout: 5), "the pool row offers a promote button")

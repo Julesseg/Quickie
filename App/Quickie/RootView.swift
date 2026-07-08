@@ -234,6 +234,12 @@ struct RootView: View {
         let storedShortcuts = shortcuts.entries.map { entry in
             Action.shortcut(name: entry.name, acceptsInput: entry.acceptsInput)
         }
+        // Derive the fallback-eligible set from the Actions already built above, so
+        // `makeAction` (which re-parses each URL template via regex) runs once per
+        // engine build rather than again inside `eligibleFallbackIDs` (issue #114).
+        let eligibleActions = eligibleFallbacks(
+            customActionActions: storedCustomActions, shortcutActions: storedShortcuts
+        )
         return SearchEngine(
             providers: [
                 // The Dynamic Calculator + unit-conversion Provider. The
@@ -291,24 +297,33 @@ struct RootView: View {
             // live fallback-eligible catalog so a deleted or now-ineligible action
             // drops out. Region membership is `Action.isFallbackEligible` ∧ presence
             // here; the disabled pool is derived, never stored.
-            enabledFallbacks: fallbacks.resolvedEnabled(for: eligibleFallbackIDs),
+            enabledFallbacks: fallbacks.resolvedEnabled(for: eligibleActions.map(\.id)),
             enablement: providerEnablement.enablement,
             disabledInstances: instanceEnablement.disabled
         )
     }
 
-    /// Every fallback-eligible Action in the live catalog (CONTEXT.md → Fallback
-    /// Action; issue #114): text-first Custom Actions, accepts-input Shortcuts, and
-    /// the two permanent built-in captures — derived from shape, no stored flag. The
-    /// Fallbacks page splits these into the enabled section and the derived pool, and
-    /// the engine's enabled list is reconciled against their ids.
-    private var eligibleFallbackActions: [Action] {
-        let customs = customActions.compactMap { $0.definition.makeAction(id: $0.id) }
-        let shortcutActions = shortcuts.entries.map {
-            Action.shortcut(name: $0.name, acceptsInput: $0.acceptsInput)
-        }
-        return (customs + shortcutActions + [.saveForLater(), .newSnippet()])
+    /// The fallback-eligible subset of the catalog's Actions — text-first Custom
+    /// Actions, accepts-input Shortcuts, and the two permanent built-in captures
+    /// (CONTEXT.md → Fallback Action; issue #114), derived from shape with no stored
+    /// flag. Takes the already-built Action arrays so the caller controls how many
+    /// times `makeAction`/`shortcut` runs: the hot `engine` build passes its locals
+    /// (one pass per keystroke); the cold computed property below rebuilds them.
+    private func eligibleFallbacks(customActionActions: [Action], shortcutActions: [Action]) -> [Action] {
+        (customActionActions + shortcutActions + [.saveForLater(), .newSnippet()])
             .filter(\.isFallbackEligible)
+    }
+
+    /// Every fallback-eligible Action in the live catalog — the Fallbacks page splits
+    /// these into the enabled section and the derived pool, and `fallbackSeed` /
+    /// `onChange` read them off the hot path. Rebuilds the Actions (cold: only on
+    /// navigation, selection, or a catalog change), so it doesn't share the engine's
+    /// per-keystroke locals.
+    private var eligibleFallbackActions: [Action] {
+        eligibleFallbacks(
+            customActionActions: customActions.compactMap { $0.definition.makeAction(id: $0.id) },
+            shortcutActions: shortcuts.entries.map { Action.shortcut(name: $0.name, acceptsInput: $0.acceptsInput) }
+        )
     }
 
     /// The ids of `eligibleFallbackActions`, in a stable order — what the enabled

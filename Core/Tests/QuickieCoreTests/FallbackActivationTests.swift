@@ -101,4 +101,36 @@ struct FallbackActivationTests {
         )
         #expect(pruned == [web, save, new])
     }
+
+    @Test("reorder applies the visible permutation and keeps unresolved ids in place")
+    func reorderKeepsUnresolvedIDs() {
+        // The page shows only [web, save] (both resolved); "fb.pending" is enabled but
+        // hasn't loaded yet, so it isn't visible. Dragging save above web must reorder
+        // the visible pair without erasing the not-yet-loaded id from its slot.
+        let reordered = FallbackActivation.reorderedEnabled(
+            enabled: [web, "fb.pending", save],
+            visibleOrder: [save, web]
+        )
+        #expect(reordered == [save, "fb.pending", web])
+    }
+
+    @Test("reorder is a straight permutation when everything is visible")
+    func reorderPermutesWhenAllVisible() {
+        let reordered = FallbackActivation.reorderedEnabled(
+            enabled: [web, save, new],
+            visibleOrder: [new, web, save]
+        )
+        #expect(reordered == [new, web, save])
+    }
+
+    @Test("reorder never drops an unresolved id, even reordering around it")
+    func reorderNeverDropsUnresolved() {
+        // Only the pending id is enabled-but-unresolved; the visible list is a no-op
+        // permutation. The pending id survives regardless.
+        let reordered = FallbackActivation.reorderedEnabled(
+            enabled: ["fb.pending", web],
+            visibleOrder: [web]
+        )
+        #expect(reordered == ["fb.pending", web])
+    }
 }

@@ -91,13 +91,14 @@ struct FallbacksView: View {
         }
     }
 
-    /// Persists a reorder of the enabled section. The offsets index into
-    /// `enabledActions` (the resolved, live list); replacing the whole enabled order
-    /// with the moved ids also prunes any stale id for free.
+    /// Persists a reorder of the Active section. The offsets index into
+    /// `enabledActions` (the resolved, *loaded* list), so the moved ids are the new
+    /// visible order; `reorderEnabled` applies it while keeping any enabled id that
+    /// hasn't resolved yet in place (the launch race) rather than dropping it.
     private func reorder(from offsets: IndexSet, to destination: Int) {
         var ids = enabledActions.map(\.id)
         ids.move(fromOffsets: offsets, toOffset: destination)
-        store.setEnabled(ids)
+        store.reorderEnabled(visibleOrder: ids)
     }
 }
 

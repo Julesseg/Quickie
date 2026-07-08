@@ -71,6 +71,17 @@ public enum FallbackActivation {
     /// web search before `@Query` surfaces it) is never mistaken for a loss and dropped.
     /// The App persists the result so regaining eligibility re-enters the action as a
     /// pool newcomer rather than at its old rank.
+    ///
+    /// **Known limit (narrow, accepted):** `everEligible` is session-scoped, so a loss
+    /// that happens *while the app isn't running* — a CloudKit-synced edit that turns a
+    /// Shortcut's accepts-input off — is indistinguishable at the next launch from a
+    /// value not-yet-loaded, and is therefore *not* forgotten: the stale id stays in
+    /// `enabled` (hidden by `reconciledEnabledIDs`), and a later re-gain would restore
+    /// its old rank rather than land it in the pool. Forgetting only on *observed*
+    /// losses is the deliberate trade for never false-dropping the launch-race seed;
+    /// the alternative (forgetting any id absent at launch) would drop the pre-enabled
+    /// web search before `@Query` surfaces it. The window is small — the id must lose
+    /// eligibility out-of-session *and* later regain it — so it is left as-is.
     public static func prunedForgettingLost(
         enabled: [String],
         liveEligible: Set<String>,
@@ -79,5 +90,19 @@ public enum FallbackActivation {
         enabled.filter { id in
             !(everEligible.contains(id) && !liveEligible.contains(id))
         }
+    }
+
+    /// Applies a reorder of the **currently-visible** enabled ids to the full enabled
+    /// list without dropping ids that aren't visible yet (issue #114). The Fallbacks
+    /// page's Active section shows only ids that resolve against the loaded catalog, so
+    /// a drag yields a permutation of that visible subset; an id still in `enabled` but
+    /// not yet loaded (the launch race) must keep its slot rather than be silently
+    /// erased by a wholesale overwrite. Each visible slot in `enabled` is filled from
+    /// `visibleOrder` in sequence; non-visible ids stay exactly where they are. Any
+    /// visible id short of `visibleOrder` keeps its own id (never fewer than present).
+    public static func reorderedEnabled(enabled: [String], visibleOrder: [String]) -> [String] {
+        let visible = Set(visibleOrder)
+        var next = visibleOrder.makeIterator()
+        return enabled.map { visible.contains($0) ? (next.next() ?? $0) : $0 }
     }
 }
