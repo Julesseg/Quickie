@@ -285,6 +285,57 @@ public struct SearchEngine {
         indexedActionsByID(includingDisabled: false)[id]
     }
 
+    /// The **Bridged Action** set (CONTEXT.md → Bridged Action; ADR 0024; issue
+    /// #122): the union of the user's Favorites and Custom Actions, minus anything
+    /// Disabled, as flat `{id, title}` values the App Intents bridge exposes through
+    /// its single parameterized App Shortcut. The set is **derived, never
+    /// hand-curated** — this is the whole membership rule, pure and `swift test`-covered.
+    ///
+    /// Order is deterministic: the user's Favorites first, in **pin order** (any
+    /// kind — a Favorite runs its main action when invoked), then every Custom Action
+    /// in catalog order (favorited or not — a Custom Action starts its breadcrumb).
+    /// A member appearing in both (a pinned Custom Action) is emitted once, in its
+    /// Favorite slot.
+    ///
+    /// Every candidate is resolved through `action(for:)`, the **same** live-catalog
+    /// lookup a `quickie://run/<id>` invocation uses, so the two can never drift: an
+    /// offered entity always resolves tap-equivalently, and a disabled kind, a
+    /// disabled instance, or a deleted target drops out here exactly as it degrades
+    /// to Home there. The Favorites cap (4) is respected implicitly — the set is
+    /// drawn from the given Favorites and Custom Actions and never invents a member.
+    public func bridgedActions() -> [BridgedAction] {
+        // The live catalog, built **once** — disabled kinds and instances excluded,
+        // exactly the map `action(for:)` looks a `quickie://run/<id>` up in, so the
+        // offered set and the run resolution can never drift. Built once (not
+        // `action(for:)` per candidate, which would rebuild it each time) because the
+        // App recomputes this on every keystroke to detect set changes.
+        let live = indexedActionsByID(includingDisabled: false)
+        var result: [BridgedAction] = []
+        var seen = Set<String>()
+        for id in favoriteOrder + customActionIDs() where seen.insert(id).inserted {
+            // A candidate that no longer resolves (disabled or deleted) contributes
+            // nothing — the set never dangles.
+            if let action = live[id] {
+                result.append(BridgedAction(id: action.id, title: action.title))
+            }
+        }
+        return result
+    }
+
+    /// The ids of every Custom Action in the indexed catalog, in provider/candidate
+    /// order — the raw candidate list `bridgedActions()` filters through `action(for:)`.
+    /// Enumerated *including* disabled entries (the resolution step drops those),
+    /// so the derivation sees every Custom Action the user has authored.
+    private func customActionIDs() -> [String] {
+        var ids: [String] = []
+        for provider in providers where provider.kind == .indexed {
+            for action in provider.candidates(for: "") where action.kind == .customAction {
+                ids.append(action.id)
+            }
+        }
+        return ids
+    }
+
     /// A scored match in flight: the raw matcher score (which fixes its tier)
     /// alongside the blended score the user's signals produce (which orders it
     /// within that tier).

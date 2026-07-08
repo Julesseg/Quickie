@@ -54,6 +54,21 @@ struct QuickieAppShortcuts: AppShortcutsProvider {
             shortTitle: "New Event",
             systemImageName: "calendar.badge.plus"
         )
+        // The single **parameterized** App Shortcut over the derived [[Bridged Action]]
+        // set (slice 3; ADR 0024): one entity, one phrase, whose `<name>` slot the
+        // dynamic `BridgedActionQuery` fills with the user's Favorites ∪ Custom Actions
+        // — so each member surfaces individually in Siri and Spotlight without a
+        // per-Action shortcut. `updateAppShortcutParameters()` (fired by `RootView` on
+        // every set change) keeps the offered names in step with the live set.
+        AppShortcut(
+            intent: RunBridgedActionIntent(),
+            phrases: [
+                "Run \(\.$target) with \(.applicationName)",
+                "Run \(\.$target) in \(.applicationName)",
+            ],
+            shortTitle: "Run Action",
+            systemImageName: "bolt"
+        )
     }
 }
 
