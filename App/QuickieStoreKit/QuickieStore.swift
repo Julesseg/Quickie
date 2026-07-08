@@ -66,12 +66,18 @@ public final class StoredQuicklink {
 /// A user-saved **Custom Action** (CONTEXT.md → Custom Action; ADR 0021): a stored
 /// URL template that **requires** at least one `{name}` slot the breadcrumb fills,
 /// opening the filled URL on commit. It absorbs the retired Fallback query
-/// wholesale — web search is a default-seeded, fully deletable, fallback-flagged
-/// instance (`seedDefaultCustomActions` seeds it on first launch).
+/// wholesale — web search is a default-seeded, fully deletable instance
+/// (`seedDefaultCustomActions` seeds it on first launch).
+///
+/// There is **no stored fallback flag** (issue #114): a Custom Action is
+/// fallback-*eligible* whenever its first fill-order argument is free text, derived
+/// live by `CustomActionDefinition.isFallbackEligible` / `Action.isFallbackEligible`.
+/// Activation is membership in the Fallbacks page's single enabled list
+/// (`FallbacksStore`), keyed by `id`, not a column here.
 ///
 /// `id` is a stable identity assigned at creation — the key the Fallbacks page's
-/// persisted order and disabled set reference, and the id of the Action built
-/// from this row, so reordering/disabling survives relaunches.
+/// enabled list references, and the id of the Action built from this row, so
+/// activation/ordering survives relaunches.
 @Model
 public final class StoredCustomAction {
     public var id: String = UUID().uuidString
@@ -80,11 +86,6 @@ public final class StoredCustomAction {
     /// enforces it, mirroring `CustomActionDefinition`).
     public var urlString: String = ""
     public var alias: String?
-    /// Whether this is a **Fallback** Custom Action (CONTEXT.md → Fallback Action):
-    /// surfaced in the bottom region, its selection seeding the typed query as
-    /// Argument 1. Web search seeds with this on. Defaulted so a non-fallback row
-    /// migrates without a value.
-    public var isFallback: Bool = true
     /// The **fill order** (CONTEXT.md → Custom Action; ADR 0021, issue #94): the
     /// token names in the order the breadcrumb asks them, which the editor's
     /// drag-to-reorder sets. Empty (the default, so existing rows migrate without a
@@ -107,7 +108,6 @@ public final class StoredCustomAction {
         title: String,
         urlString: String,
         alias: String? = nil,
-        isFallback: Bool = true,
         fillOrder: [String] = [],
         argumentSpecsData: Data? = nil,
         createdAt: Date = Date()
@@ -116,7 +116,6 @@ public final class StoredCustomAction {
         self.title = title
         self.urlString = urlString
         self.alias = alias
-        self.isFallback = isFallback
         self.fillOrder = fillOrder
         self.argumentSpecsData = argumentSpecsData
         self.createdAt = createdAt

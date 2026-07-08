@@ -10,8 +10,8 @@ import QuickieStoreKit
 /// actions list follows, each row a stored Custom Action with a per-row enable/disable
 /// toggle, swipe-to-delete, tap-to-edit, and an Add button. Reached by typing "Custom
 /// Actions" or from the Settings Providers list. The Fallbacks page stays the
-/// ordering/disable surface for the fallback-flagged ones; here every Custom Action
-/// appears, fallback-flagged or not.
+/// activation/ordering surface for the fallback-eligible ones; here every Custom Action
+/// appears, eligible or not.
 struct CustomActionsView: View {
     @Environment(\.modelContext) private var modelContext
     @Query(sort: \StoredCustomAction.createdAt) private var customActions: [StoredCustomAction]
@@ -76,7 +76,7 @@ struct CustomActionsView: View {
             } header: {
                 Text("Custom Actions")
             } footer: {
-                Text("A Custom Action opens a URL template, filling its {slots} through the breadcrumb. Turn one into a fallback in its editor. Disable one to hide it without deleting it.")
+                Text("A Custom Action opens a URL template, filling its {slots} through the breadcrumb. A text-first one can be activated as a fallback on the Fallbacks page. Disable one to hide it without deleting it.")
             }
         }
         .navigationTitle("Custom Actions")

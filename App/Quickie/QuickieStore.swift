@@ -19,7 +19,6 @@ extension StoredCustomAction {
         title: String,
         urlString: String,
         alias: String? = nil,
-        isFallback: Bool = true,
         fillOrder: [String] = [],
         argumentSpecs: [String: ArgumentSpec],
         createdAt: Date = Date()
@@ -29,7 +28,6 @@ extension StoredCustomAction {
             title: title,
             urlString: urlString,
             alias: alias,
-            isFallback: isFallback,
             fillOrder: fillOrder,
             argumentSpecsData: Self.encodeSpecs(argumentSpecs),
             createdAt: createdAt
@@ -62,7 +60,9 @@ extension QuickieStore {
     /// guarded by a *per-device* flag, so a second device can seed before its
     /// first CloudKit import lands — a fixed id is what lets the launch-time
     /// dedup pass recognize the two rows as the same seed and collapse them.
-    private static let seedWebSearchID = "seed.web-search"
+    /// Exposed so `FallbacksStore` can pre-enable it as a first-run fallback
+    /// (issue #114) against the exact id the seed writes.
+    static let seedWebSearchID = "seed.web-search"
     /// Bumped to `.v2` for the Custom Action unification (ADR 0021): the retired
     /// `StoredFallbackQuery` table is gone, so a fresh seed of the web-search
     /// **Custom Action** must run once against the new storage even on a build that
@@ -75,11 +75,12 @@ extension QuickieStore {
 
     /// Seeds the default, fully deletable web-search **Custom Action** on first
     /// launch (CONTEXT.md → Custom Action; ADR 0021), run at launch and guarded by a
-    /// flag so it happens exactly once. Web search is an ordinary, deletable,
-    /// fallback-flagged one-slot Custom Action — no longer a privileged built-in —
-    /// so the user can search out of the box while remaining free to delete or edit
-    /// it. No data migration: the retired Fallback query storage is pre-release, so
-    /// there is nothing to convert (ADR 0021).
+    /// flag so it happens exactly once. Web search is an ordinary, deletable one-slot
+    /// Custom Action — no longer a privileged built-in — so the user can search out
+    /// of the box while remaining free to delete or edit it. Its free-text `{query}`
+    /// slot makes it fallback-*eligible* by shape (issue #114); `FallbacksStore`
+    /// pre-enables it in the first-run enabled list. No data migration: the retired
+    /// Fallback query storage is pre-release, so there is nothing to convert (ADR 0021).
     ///
     /// Idempotent and defensive: the seed is gated on "no Custom Actions *and* never
     /// seeded", so a user who later deletes web search doesn't get it re-seeded.
@@ -96,8 +97,7 @@ extension QuickieStore {
                 id: seedWebSearchID,
                 title: "Search the web",
                 urlString: defaultWebSearchTemplate,
-                alias: "search",
-                isFallback: true
+                alias: "search"
             ))
         }
 

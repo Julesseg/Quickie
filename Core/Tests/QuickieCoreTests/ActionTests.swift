@@ -63,7 +63,7 @@ struct ActionTests {
         let file = Action.file(bookmarkID: "folder-1", relativePath: "docs/report.pdf")
         #expect(file.outputType == .file)
         #expect(file.inputTypes.isEmpty)
-        #expect(file.isFallback == false)
+        #expect(file.isFallbackEligible == false)
     }
 
     @Test("a file's display name defaults to the relative path's last component")

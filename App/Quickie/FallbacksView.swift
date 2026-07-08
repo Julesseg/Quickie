@@ -1,168 +1,203 @@
 import SwiftUI
-import SwiftData
 import QuickieCore
-import QuickieStoreKit
 
-/// The unified **Fallbacks** page (CONTEXT.md → Fallback list; ADR 0021): one
-/// user-ordered list of every Fallback Action — fallback-flagged Custom Actions
-/// plus the two permanent built-ins, Save for later and New Snippet. It reads
-/// most-important-first (top = nearest the input/thumb in results). Rows can be
-/// reordered, each can be **disabled** (kept in the list, hidden from results),
-/// and only Custom Actions can be deleted — Save for later and New Snippet are
-/// permanent (disable-only). Reached as the typed "Fallbacks" command row and
-/// presented full-screen. This is the interim ordering/disable *and* authoring
-/// surface; the dedicated Custom Actions editor + Management page are the next slice.
+/// The two-section **Fallbacks** page (CONTEXT.md → Fallback list; issue #114) — the
+/// same shape as editing the app row of the native iOS share sheet. An **Active
+/// section** (user-ordered, most-important-first, reorderable, a red minus demotes to
+/// the pool) sits above an **Available pool** (every fallback-eligible Action not
+/// active, alphabetical by title, a green plus promotes to the *bottom* of Active).
+/// Membership in the Active section is the fact the user sets here — the pool is
+/// derived, and **nothing on this page deletes anything**: deletion lives on an
+/// action's home page (Custom Actions / Shortcuts). Save for later and New Snippet are
+/// demotable but permanent.
+///
+/// Each row also carries the action's **enable/disable** toggle — the same instance
+/// switch its home page shows. Disabling an action hides it from every launcher surface
+/// *and* demotes it from Active into the pool; re-enabling leaves it in the pool until
+/// the user promotes it again. So the pool holds both enabled-but-not-active actions
+/// (a green plus, ready to promote) and disabled ones (dimmed).
+///
+/// Reached as the typed "Fallbacks" command row and presented full-screen. It is fed
+/// the live fallback-eligible Actions (text-first Custom Actions, accepts-input
+/// Shortcuts, the two built-in captures) so eligibility stays derived from shape.
 struct FallbacksView: View {
-    @Environment(\.modelContext) private var modelContext
-    @Query(sort: \StoredCustomAction.createdAt) private var customActions: [StoredCustomAction]
-
     let store: FallbacksStore
+    /// The per-action instance Disabled state (issue #68) — the same toggle the
+    /// action's home page shows, surfaced here and coupled to demotion.
+    let enablement: EnablementStore
+    /// The live fallback-eligible Actions, from `RootView` — the union the two
+    /// sections partition by the store's enabled list and the disabled set.
+    let eligible: [Action]
 
-    @State private var editing: StoredCustomAction?
+    /// The eligible Actions keyed by id, so an enabled/pooled id resolves to its row.
+    private var byID: [String: Action] {
+        Dictionary(eligible.map { ($0.id, $0) }, uniquingKeysWith: { first, _ in first })
+    }
 
-    /// The display rows, in the user's reconciled order (most-important-first): each
-    /// persisted id resolved to its fallback-flagged Custom Action or built-in. Only
-    /// fallback-flagged Custom Actions belong on this ordering/disable surface
-    /// (CONTEXT.md → Fallback list); a future non-fallback one (the next slice's
-    /// Custom Actions page) is filtered out here.
-    private var rows: [FallbackRow] {
-        let fallbackCustomActions = customActions.filter(\.isFallback)
-        let byID = Dictionary(uniqueKeysWithValues: fallbackCustomActions.map { ($0.id, $0) })
-        return store.resolvedOrder(for: fallbackCustomActions.map(\.id)).compactMap { id in
-            if let query = byID[id] { return .query(query) }
-            switch id {
-            case FallbacksStore.saveForLaterID: return .builtin(id: id, title: "Save for later")
-            case FallbacksStore.newSnippetID: return .builtin(id: id, title: "New Snippet")
-            default: return nil
+    /// The Active section, most-important-first: the enabled list resolved to live
+    /// Actions, minus any that are instance-disabled (a disabled action always sits in
+    /// the pool, even for the frame before `demoteDisabled` prunes it from the list).
+    private var activeActions: [Action] {
+        store.resolvedEnabled(for: eligible.map(\.id))
+            .compactMap { byID[$0] }
+            .filter { !enablement.isDisabled($0.id) }
+    }
+
+    /// The Available pool: every eligible Action not in the Active section — the ones
+    /// not activated *plus* the disabled ones — alphabetical by title (id as the
+    /// deterministic tie-break). Derived from `activeActions` so no Action shows twice.
+    private var pooledActions: [Action] {
+        let activeIDs = Set(activeActions.map(\.id))
+        return eligible
+            .filter { !activeIDs.contains($0.id) }
+            .sorted { lhs, rhs in
+                let order = lhs.title.localizedCaseInsensitiveCompare(rhs.title)
+                return order == .orderedSame ? lhs.id < rhs.id : order == .orderedAscending
             }
-        }
     }
 
     // Pushed onto the launcher's navigation stack — no own stack or Done button.
     var body: some View {
         List {
-            // The unified page shape (ADR 0019; issue #66): Options lead, the
-            // user-ordered Fallback list follows.
+            // The unified page shape (ADR 0019): Options (the kind-level master
+            // Enabled switch over the whole bottom region) lead the two sections.
             ProviderOptionsSection(provider: .fallbacks)
 
             Section {
-                    ForEach(rows) { row in
-                        FallbackRowView(
-                            row: row,
-                            isDisabled: store.isDisabled(row.id),
-                            onToggleDisabled: { store.toggleDisabled(row.id) },
-                            onEdit: { if case let .query(q) = row { editing = q } }
+                if activeActions.isEmpty {
+                    Text("No active fallbacks. Add one from the list below.")
+                        .foregroundStyle(.secondary)
+                        .accessibilityIdentifier("fallbacks-enabled-empty")
+                } else {
+                    ForEach(activeActions) { action in
+                        // Active rows: a red minus to demote and the drag grip to
+                        // reorder — no enable/disable toggle (it lives on the pool).
+                        FallbackRow(
+                            action: action,
+                            style: .active,
+                            isDisabled: false,
+                            onPrimary: { withAnimation { store.demote(action.id) } },
+                            onToggleDisabled: {}
                         )
-                        // Built-ins (Save for later / New Snippet) are permanent
-                        // — only Custom Actions can be deleted.
-                        .deleteDisabled(!row.isQuery)
                     }
-                    .onMove(perform: move)
-                    .onDelete(perform: delete)
-                } footer: {
-                    Text("Top is most important — nearest the input in results. Disable to hide a fallback without removing it. Tap Edit to reorder. Save for later and New Snippet can't be deleted. Create a Custom Action on the Custom Actions page.")
+                    .onMove(perform: reorder)
                 }
+            } header: {
+                Text("Active")
+            } footer: {
+                Text("Top is most important — nearest the input in results. Drag the grip to reorder; the red minus moves a fallback down to the list below. Nothing here deletes it.")
             }
-            .navigationTitle("Fallbacks")
-            .toolbar {
-                ToolbarItem(placement: .topBarTrailing) {
-                    EditButton()
+
+            Section {
+                if pooledActions.isEmpty {
+                    Text("Every eligible fallback is active.")
+                        .foregroundStyle(.secondary)
+                        .accessibilityIdentifier("fallbacks-pool-empty")
+                } else {
+                    ForEach(pooledActions) { action in
+                        // Pool rows: a green plus to promote and the action's
+                        // enable/disable toggle — the toggle only appears here.
+                        FallbackRow(
+                            action: action,
+                            style: .pool,
+                            isDisabled: enablement.isDisabled(action.id),
+                            onPrimary: { promote(action) },
+                            onToggleDisabled: { withAnimation { enablement.toggleDisabled(action.id) } }
+                        )
+                    }
                 }
+            } header: {
+                Text("Available")
+            } footer: {
+                Text("Fallback-eligible actions you haven't activated, plus any you've disabled. The green plus adds one to the bottom of the active list; the toggle disables the action everywhere. A Custom Action or Shortcut becomes eligible when its first argument is free text.")
             }
-            // A Custom Action row taps into the shared editor (ADR 0021; issue #94) —
-            // the interim add/edit sheet is gone. Creating a new one lives on the
-            // Custom Actions Management page; this page only orders and disables.
-            .sheet(item: $editing) { action in
-                CustomActionEditorView(definition: action.definition, isNew: false) { def in
-                    action.apply(def)
-                }
-            }
+        }
+        // Always in edit mode so the reorder grips show on the Active rows without a
+        // separate Edit step — the same always-editable shape as the iOS share sheet's
+        // app row. The custom minus/plus buttons and the pool toggles stay interactive
+        // (they carry explicit button/toggle styles, not row-selection taps).
+        .environment(\.editMode, .constant(.active))
+        .navigationTitle("Fallbacks")
     }
 
-    /// Persists a reorder. We reconcile first so the saved order covers every
-    /// live id, then apply the move and store it.
-    private func move(from offsets: IndexSet, to destination: Int) {
-        var ids = rows.map(\.id)
+    /// Promotes a pooled Action to the bottom of Active, sliding it up to the Active
+    /// list. A disabled one is re-enabled first, so a promoted fallback is always live
+    /// (an active-but-hidden row would be a contradiction) — the plus reads as "make
+    /// this an active fallback".
+    private func promote(_ action: Action) {
+        withAnimation {
+            if enablement.isDisabled(action.id) { enablement.toggleDisabled(action.id) }
+            store.promote(action.id)
+        }
+    }
+
+    /// Persists a reorder of the Active section. The offsets index into
+    /// `activeActions` (the resolved, loaded list), so the moved ids are the new
+    /// visible order; `reorderEnabled` applies it while keeping any enabled id that
+    /// hasn't resolved yet in place (the launch race) rather than dropping it.
+    private func reorder(from offsets: IndexSet, to destination: Int) {
+        var ids = activeActions.map(\.id)
         ids.move(fromOffsets: offsets, toOffset: destination)
-        store.setOrder(ids)
-    }
-
-    /// Deletes only Custom Actions — Save for later / New Snippet refuse
-    /// deletion (CONTEXT.md → Fallback list). A swipe over a built-in row is a
-    /// no-op.
-    private func delete(_ offsets: IndexSet) {
-        let current = rows
-        for index in offsets {
-            if case let .query(query) = current[index] {
-                modelContext.delete(query)
-            }
-        }
+        store.reorderEnabled(visibleOrder: ids)
     }
 }
 
-/// One entry in the Fallback list: a deletable fallback-flagged Custom Action, or a
-/// permanent built-in (Save for later / New Snippet).
-enum FallbackRow: Identifiable {
-    case query(StoredCustomAction)
-    case builtin(id: String, title: String)
+/// One Fallbacks-page row. In **Active** it is a red minus (demote) + title, with the
+/// system drag grip trailing (edit mode) to reorder — no toggle. In the **pool** it is
+/// a green plus (promote) + title + the action's instance enable/disable toggle. No
+/// delete affordance in either.
+private struct FallbackRow: View {
+    enum Style { case active, pool }
 
-    var id: String {
-        switch self {
-        case .query(let q): return q.id
-        case .builtin(let id, _): return id
-        }
-    }
-
-    var title: String {
-        switch self {
-        case .query(let q): return q.title
-        case .builtin(_, let title): return title
-        }
-    }
-
-    var subtitle: String? {
-        switch self {
-        case .query(let q): return q.urlString
-        case .builtin: return nil
-        }
-    }
-
-    var isQuery: Bool {
-        if case .query = self { return true }
-        return false
-    }
-}
-
-/// A single Fallbacks-page row: title (+ template for a query), an enable/disable
-/// toggle, and — for a Custom Action — a tap into its editor.
-private struct FallbackRowView: View {
-    let row: FallbackRow
+    let action: Action
+    let style: Style
+    /// Whether the action is instance-disabled — only meaningful (and shown) in the pool.
     let isDisabled: Bool
+    /// Demote (Active) or promote (pool) — the section's activation verb.
+    let onPrimary: () -> Void
     let onToggleDisabled: () -> Void
-    let onEdit: () -> Void
 
     var body: some View {
         HStack(spacing: 12) {
+            Button(action: onPrimary) {
+                Image(systemName: style == .active ? "minus.circle.fill" : "plus.circle.fill")
+                    .foregroundStyle(style == .active ? .red : .green)
+            }
+            .buttonStyle(.borderless)
+            .accessibilityLabel(style == .active ? "Remove from active fallbacks" : "Add to active fallbacks")
+            .accessibilityIdentifier("\(style == .active ? "fallback-demote" : "fallback-promote").\(action.id)")
+
             VStack(alignment: .leading, spacing: 2) {
-                Text(row.title)
+                Text(action.title)
                     .font(.body)
                     .foregroundStyle(isDisabled ? .secondary : .primary)
-                if let subtitle = row.subtitle {
-                    Text(subtitle)
+                if let caption = kindCaption {
+                    Text(caption)
                         .font(.caption)
                         .foregroundStyle(.secondary)
-                        .lineLimit(1)
                 }
             }
             Spacer(minLength: 8)
-            // A per-row enable switch — disabling keeps the row in the list but
-            // hides it from results.
-            Toggle("Enabled", isOn: Binding(get: { !isDisabled }, set: { _ in onToggleDisabled() }))
-                .labelsHidden()
-                .accessibilityIdentifier("fallback-enabled.\(row.id)")
+
+            // The instance enable/disable toggle lives only on the pool rows —
+            // disabling hides the action everywhere; an Active fallback is demoted
+            // here first (or disabled from its home page) before it can be switched off.
+            if style == .pool {
+                Toggle("Enabled", isOn: Binding(get: { !isDisabled }, set: { _ in onToggleDisabled() }))
+                    .labelsHidden()
+                    .accessibilityIdentifier("fallback-enabled.\(action.id)")
+            }
         }
-        .contentShape(Rectangle())
-        .onTapGesture { if row.isQuery { onEdit() } }
+    }
+
+    /// A small caption naming what kind of fallback this is — so a permanent capture
+    /// reads distinctly from a user's Custom Action or Shortcut.
+    private var kindCaption: String? {
+        switch action.kind {
+        case .customAction: return "Custom Action"
+        case .shortcut: return "Shortcut"
+        case .saveForLater, .newSnippet: return "Built-in capture"
+        default: return nil
+        }
     }
 }
-

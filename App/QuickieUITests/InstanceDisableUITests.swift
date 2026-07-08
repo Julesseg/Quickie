@@ -220,11 +220,13 @@ final class InstanceDisableUITests: XCTestCase {
         XCTAssertFalse(fileRow.exists, "a disabled folder's files are hidden from results")
     }
 
-    /// Permanent built-ins are disable-only (issue #68 AC #2): on the Fallbacks
-    /// page a deletable Fallback query exposes swipe-to-delete, while Save for
-    /// later refuses the swipe — its only off-switch is the toggle.
+    /// The Fallbacks page deletes nothing (issue #114): deletion lives on an action's
+    /// home page, so even the seeded web-search Custom Action exposes no swipe-to-delete
+    /// here. And the permanent built-in captures are demotable but never leave the page
+    /// — demoting Save for later moves it to the Available pool, where it can be
+    /// promoted straight back.
     @MainActor
-    func testPermanentBuiltInsExposeNoDeleteOnlyDisable() throws {
+    func testFallbacksPageHasNoDeleteAndBuiltInsArePermanent() throws {
         let app = launchApp()
 
         let input = app.textFields["search-input"]
@@ -235,23 +237,82 @@ final class InstanceDisableUITests: XCTestCase {
         XCTAssertTrue(command.waitForExistence(timeout: 5))
         command.tap()
 
-        // Control leg: the seeded web-search Fallback query is deletable.
+        // No delete affordance anywhere: swiping the seeded web-search row (Active by
+        // default) offers no Delete — deletion is on the Custom Actions page.
         let webSearch = app.staticTexts["Search the web"]
-        XCTAssertTrue(webSearch.waitForExistence(timeout: 10), "the seeded web-search query is listed")
+        XCTAssertTrue(webSearch.waitForExistence(timeout: 10), "the seeded web-search fallback is listed")
         webSearch.swipeLeft()
-        let delete = app.buttons["Delete"]
-        XCTAssertTrue(delete.waitForExistence(timeout: 5), "a Fallback query exposes swipe-to-delete")
-        delete.tap()
-
-        // Save for later keeps its Enabled toggle but refuses the delete swipe.
-        let toggle = app.switches["fallback-enabled.builtin.save-for-later"]
-        XCTAssertTrue(toggle.waitForExistence(timeout: 10), "Save for later carries an Enabled toggle")
-        let saveForLater = app.staticTexts["Save for later"]
-        XCTAssertTrue(saveForLater.waitForExistence(timeout: 5))
-        saveForLater.swipeLeft()
         XCTAssertFalse(
             app.buttons["Delete"].waitForExistence(timeout: 2),
-            "a permanent built-in exposes no swipe-to-delete — disable is its only off-switch"
+            "the Fallbacks page has no delete affordance — deletion lives on the action's home page"
+        )
+
+        // Save for later is pre-enabled (Active), so its cell carries the demote
+        // ("Remove from active fallbacks") button. Resolve it via cell-containment —
+        // a top-level id query over a lazy List row doesn't resolve reliably.
+        let activeCell = fallbackCell(app, titled: "Save for later")
+        XCTAssertTrue(activeCell.waitForExistence(timeout: 10), "Save for later is on the page")
+        let demote = activeCell.buttons["Remove from active fallbacks"]
+        XCTAssertTrue(demote.waitForExistence(timeout: 5), "Save for later is active and demotable")
+        demote.tap()
+
+        // Demoting doesn't delete it: its cell gains the promote ("Add to active
+        // fallbacks") button, so a permanent built-in never leaves the page.
+        let pooledCell = fallbackCell(app, titled: "Save for later")
+        XCTAssertTrue(
+            pooledCell.buttons["Add to active fallbacks"].waitForExistence(timeout: 5),
+            "a demoted built-in capture lands in the pool — still on the page, never deleted"
+        )
+    }
+
+    /// The Fallbacks-page row (cell) whose title contains `title`, resolved by
+    /// containment — the reliable way to reach a row's inline controls where a
+    /// top-level id query over a lazy List row is flaky.
+    @MainActor
+    private func fallbackCell(_ app: XCUIApplication, titled title: String) -> XCUIElement {
+        app.cells.containing(NSPredicate(format: "label CONTAINS[c] %@", title)).firstMatch
+    }
+
+    /// The enable/disable toggle lives only on the **Available** (pool) rows, not the
+    /// Active ones (issue #114 follow-up): an Active fallback shows a demote minus but
+    /// no switch; demoting it to the pool reveals its toggle, and disabling it there
+    /// keeps it in the pool.
+    @MainActor
+    func testEnableDisableToggleLivesOnlyOnTheAvailableList() throws {
+        let app = launchApp()
+
+        let input = app.textFields["search-input"]
+        XCTAssertTrue(input.waitForExistence(timeout: 30))
+        input.tap()
+        input.typeText("fallbacks")
+        let command = app.buttons["builtin.fallbacks-page"]
+        XCTAssertTrue(command.waitForExistence(timeout: 5))
+        command.tap()
+
+        // Save for later is pre-enabled (Active): a demote button, and — the point of
+        // this test — no enable/disable switch on the row. Resolve via cell-containment
+        // (a top-level id query over a lazy List row is flaky).
+        let activeCell = fallbackCell(app, titled: "Save for later")
+        XCTAssertTrue(activeCell.waitForExistence(timeout: 10), "Save for later is on the page")
+        let demote = activeCell.buttons["Remove from active fallbacks"]
+        XCTAssertTrue(demote.waitForExistence(timeout: 5), "an Active fallback shows a demote minus")
+        XCTAssertFalse(activeCell.switches.firstMatch.exists, "an Active fallback carries no enable/disable toggle")
+
+        // Demote it → in the pool it now shows both a promote plus and its toggle.
+        demote.tap()
+        let pooledCell = fallbackCell(app, titled: "Save for later")
+        XCTAssertTrue(
+            pooledCell.buttons["Add to active fallbacks"].waitForExistence(timeout: 5),
+            "a demoted fallback lands in the pool with a promote plus"
+        )
+        let toggle = pooledCell.switches.firstMatch
+        XCTAssertTrue(toggle.waitForExistence(timeout: 5), "a pool row carries the enable/disable toggle")
+
+        // Disabling it there keeps it in the pool (it was already not active).
+        flip(toggle, to: false)
+        XCTAssertTrue(
+            fallbackCell(app, titled: "Save for later").buttons["Add to active fallbacks"].waitForExistence(timeout: 5),
+            "disabling a pooled fallback keeps it in the Available list"
         )
     }
 }

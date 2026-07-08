@@ -67,7 +67,8 @@ struct RankingTests {
         // reached by always being present, not by rank (issue #9 AC #4).
         let engine = SearchEngine(
             providers: [IndexedProvider(catalog: [link("match", "Search Repo"), .webSearchFallback()])],
-            favorites: ["builtin.web-search"]
+            favorites: ["builtin.web-search"],
+            enabledFallbacks: [Action.webSearchFallbackID]
         )
         let ids = engine.results(for: "search").map(\.id)
         #expect(ids.first == "match")

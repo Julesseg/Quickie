@@ -47,7 +47,7 @@ struct CalculatorProviderTests {
     func resultIsDynamicNonFallback() {
         // Dynamic kind + non-fallback is what the SearchEngine boosts to the top.
         #expect(provider.kind == .dynamic)
-        #expect(provider.candidates(for: "23*7").first?.isFallback == false)
+        #expect(provider.candidates(for: "23*7").first?.isFallbackEligible == false)
         #expect(provider.candidates(for: "23*7").first?.outputType == .number)
     }
 

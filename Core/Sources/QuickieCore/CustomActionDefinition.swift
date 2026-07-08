@@ -36,11 +36,6 @@ public struct CustomActionDefinition: Equatable, Sendable {
     /// The URL template — a stored URL carrying at least one `{name}` token the
     /// breadcrumb fills (a definition with no token factories no Action).
     public var template: String
-    /// Whether this is a **Fallback** Action (CONTEXT.md → Fallback Action): always
-    /// surfaced in the bottom region, its selection seeding the typed query as
-    /// Argument 1. Orthogonal to being a Custom Action — it is still startable
-    /// verb-first, where the breadcrumb begins empty.
-    public var isFallback: Bool
     /// The **fill order** (CONTEXT.md → Custom Action; ADR 0021, issue #94): the
     /// token names in the order the breadcrumb asks them, which need not be the
     /// URL's own order. It is a *stored* order that can lag the live template —
@@ -60,14 +55,12 @@ public struct CustomActionDefinition: Equatable, Sendable {
         name: String,
         aliases: [String] = [],
         template: String,
-        isFallback: Bool = false,
         fillOrder: [String] = [],
         argumentSpecs: [String: ArgumentSpec] = [:]
     ) {
         self.name = name
         self.aliases = aliases
         self.template = template
-        self.isFallback = isFallback
         self.fillOrder = fillOrder
         self.argumentSpecs = argumentSpecs
     }
@@ -286,7 +279,6 @@ public struct CustomActionDefinition: Equatable, Sendable {
             aliases: aliases,
             inputTypes: [.text],
             outputType: .url,
-            isFallback: isFallback,
             arguments: arguments,
             // A Custom Action is a hand-off whose URL only exists once the slots are
             // filled, so — like a Shortcut — it carries no pre-resolved value to copy
@@ -327,13 +319,16 @@ public struct CustomActionDefinition: Equatable, Sendable {
         return true
     }
 
-    /// Whether the **fallback flag** may be set: the first argument *by fill order*
-    /// must be free text, so the seeded query has somewhere to land (ADR 0021). It
-    /// keys off the first fill-order token's declared **type**, so a number/date/choice
-    /// first argument disables the flag (issue #96) — a choice slot's content type is
-    /// also `.text`, so checking the spec type rather than the derived content type is
-    /// what makes the gate bite.
-    public var canBeFallback: Bool {
+    /// Whether the produced Action is **fallback-eligible** — derived from shape, not
+    /// declared (CONTEXT.md → Fallback Action; the retired fallback flag): its first
+    /// argument *by fill order* must be free text, so the seeded query has somewhere
+    /// to land. It keys off the first fill-order token's declared **type**, so a
+    /// number/date/choice first argument makes it ineligible (issue #96) — a choice
+    /// slot's content type is also `.text`, so checking the spec type rather than the
+    /// derived content type is what makes the gate bite. The editor shows this as an
+    /// informational note (no toggle); it mirrors `Action.isFallbackEligible`, the
+    /// runtime source of truth.
+    public var isFallbackEligible: Bool {
         guard let first = orderedTokenNames.first else { return false }
         return spec(for: first).type == .text
     }
@@ -349,13 +344,14 @@ public struct CustomActionDefinition: Equatable, Sendable {
     }
 
     /// Whether the definition may be **saved** (ADR 0021): a non-empty name, at least
-    /// one slot, a schemed URL after probe substitution, non-empty options for every
-    /// choice slot, and — if the fallback flag is on — a free-text first argument. The
-    /// runtime keeps its silent no-op on the can't-happen fill failure; this predicate
-    /// is what makes that unreachable.
+    /// one slot, a schemed URL after probe substitution, and non-empty options for
+    /// every choice slot. Fallback eligibility no longer gates Save — it is derived
+    /// from shape and never declared, so any valid Custom Action saves whether or not
+    /// its first argument is free text; a text-first one simply becomes eligible for
+    /// the Fallback list's pool. The runtime keeps its silent no-op on the can't-happen
+    /// fill failure; this predicate is what makes that unreachable.
     public var isValidForSave: Bool {
         nameIsValid && hasSlot && urlIsSchemedAfterProbe && choiceOptionsAreValid
-            && (!isFallback || canBeFallback)
     }
 
     /// The characters a filled **value** may carry unescaped: `.urlQueryAllowed`

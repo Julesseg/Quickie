@@ -87,10 +87,11 @@ struct PileTests {
     @Test("the Save for later Fallback captures the typed text silently — no editor, no confirm")
     func saveForLaterCapturesSilently() {
         let capture = Action.saveForLater()
-        // A Fallback (CONTEXT.md → Fallback Action): always surfaced, consuming
-        // the raw typed text. Running it drops the text straight into the Pile —
-        // a silent save outcome the app performs, not a seeded editor.
-        #expect(capture.isFallback)
+        // Fallback-eligible by kind (CONTEXT.md → Fallback Action): a permanent
+        // built-in capture that consumes the raw typed text. Running it drops the
+        // text straight into the Pile — a silent save outcome the app performs, not
+        // a seeded editor.
+        #expect(capture.isFallbackEligible)
         #expect(capture.inputTypes == [.text])
         #expect(capture.run(input: "look into e-bike rebates")
                 == .saveToPile(text: "look into e-bike rebates"))
@@ -101,13 +102,16 @@ struct PileTests {
     // An engine wired like the app: saved Pile entries feeding the index plus
     // the always-present "Save for later" capture and the web-search Fallback.
     private func engine() -> SearchEngine {
-        SearchEngine(providers: [
-            IndexedProvider(catalog: [
-                .pileEntry(id: "pile.ferry", text: "compare ferry vs train to Nanaimo"),
-                .pileEntry(id: "pile.dentist", text: "call the dentist about the crown"),
-            ]),
-            IndexedProvider(catalog: [.saveForLater(), .webSearchFallback()]),
-        ])
+        SearchEngine(
+            providers: [
+                IndexedProvider(catalog: [
+                    .pileEntry(id: "pile.ferry", text: "compare ferry vs train to Nanaimo"),
+                    .pileEntry(id: "pile.dentist", text: "call the dentist about the crown"),
+                ]),
+                IndexedProvider(catalog: [.saveForLater(), .webSearchFallback()]),
+            ],
+            enabledFallbacks: [Action.saveForLaterID, Action.webSearchFallbackID]
+        )
     }
 
     @Test("Save for later rides the bottom region below body-matched Pile entries")
@@ -144,8 +148,8 @@ struct PileTests {
         #expect(command.run() == .openPage(.pile))
         #expect(command.run() != .openPage(.settings(panel: .pile)))
         // A command, not a Fallback — it matches by name (pile / later / saved)
-        // and doesn't ride the bottom region.
-        #expect(command.isFallback == false)
+        // and isn't fallback-eligible, so it never rides the bottom region.
+        #expect(command.isFallbackEligible == false)
 
         let engine = SearchEngine(providers: [IndexedProvider(catalog: [command])])
         for query in ["pile", "later", "saved"] {

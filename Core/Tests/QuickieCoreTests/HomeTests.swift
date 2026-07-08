@@ -53,7 +53,7 @@ struct HomeTests {
 
     @Test("a pinned Fallback draws a Favorite card on Home")
     func pinnedFallbackSurfacesInFavorites() {
-        // A fallback-flagged Indexed Action (a fallback Custom Action, Save for
+        // A fallback-eligible Indexed Action (a text-first Custom Action, Save for
         // later, New Snippet) is part of the enumerable catalog: pinning it must
         // draw a card like any other pin, not silently consume a slot.
         let engine = SearchEngine(
@@ -61,39 +61,44 @@ struct HomeTests {
                 IndexedProvider(catalog: [.webSearchFallback()]),
                 IndexedProvider(catalog: [.saveForLater()]),
             ],
-            favorites: ["builtin.web-search", "builtin.save-for-later"]
+            favorites: ["builtin.web-search", "builtin.save-for-later"],
+            enabledFallbacks: [Action.webSearchFallbackID, Action.saveForLaterID]
         )
         #expect(engine.home().favorites.map(\.id) == ["builtin.web-search", "builtin.save-for-later"])
     }
 
-    @Test("Fallbacks stay out of the Recent list")
-    func fallbacksExcludedFromRecents() {
-        // A fallback records frecency like any selection (web search fires on
-        // every fallback search), but it already rides the bottom of every
-        // Result list — auto-surfacing it again on Home would only be noise.
-        // Only a manual pin puts a fallback on Home.
+    @Test("an enabled Fallback stays out of the Recent list")
+    func enabledFallbacksExcludedFromRecents() {
+        // An action currently riding the fallback region records frecency like any
+        // selection (web search fires on every fallback search), but it already sits
+        // at the bottom of every Result list — auto-surfacing it again on Home would
+        // only be noise. Only a manual pin puts an enabled fallback on Home.
         let now = Date()
         var frecency = Frecency()
         frecency.record("builtin.web-search", at: now)
         let engine = SearchEngine(
             providers: [IndexedProvider(catalog: [.webSearchFallback()])],
             frecency: frecency,
-            now: now
+            now: now,
+            enabledFallbacks: [Action.webSearchFallbackID]
         )
         #expect(engine.home().frecent.isEmpty)
     }
 
     @Test("a disabled pinned Fallback drops from the grid but keeps its pin")
     func disabledPinnedFallbackLeavesTheGridButKeepsResolving() {
-        // Both fallback disable axes hide the card (CONTEXT.md → Disabled,
-        // Fallback list) — the Fallbacks master switch and the Fallback list's
-        // per-instance disabled set — while the id keeps resolving, so the pin
-        // survives reconciliation and the card returns on re-enable.
+        // Both disable axes hide the card (CONTEXT.md → Disabled, Fallback list) —
+        // the Fallbacks master switch and the action's instance-disable — while the
+        // id keeps resolving, so the pin survives reconciliation and the card returns
+        // on re-enable. (Demotion to the pool is *not* one of these: a pooled eligible
+        // action still draws its card.)
         let providers: [Provider] = [IndexedProvider(catalog: [.webSearchFallback()])]
+        let enabled = [Action.webSearchFallbackID]
 
         let masterOff = SearchEngine(
             providers: providers,
             favorites: ["builtin.web-search"],
+            enabledFallbacks: enabled,
             enablement: ProviderEnablement(disabled: [.fallbacks])
         )
         #expect(masterOff.home().favorites.isEmpty)
@@ -102,7 +107,8 @@ struct HomeTests {
         let instanceOff = SearchEngine(
             providers: providers,
             favorites: ["builtin.web-search"],
-            disabledFallbacks: ["builtin.web-search"]
+            enabledFallbacks: enabled,
+            disabledInstances: ["builtin.web-search"]
         )
         #expect(instanceOff.home().favorites.isEmpty)
         #expect(instanceOff.resolvableHomeIDs().contains("builtin.web-search"))

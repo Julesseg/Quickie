@@ -10,12 +10,15 @@ import Testing
 struct HighlightedResultTests {
 
     private func engine() -> SearchEngine {
-        SearchEngine(providers: [
-            IndexedProvider(catalog: [
-                .quicklink(id: "github", title: "Open GitHub", aliases: ["git"], url: URL(string: "https://github.com")!),
-                .webSearchFallback(),
-            ])
-        ])
+        SearchEngine(
+            providers: [
+                IndexedProvider(catalog: [
+                    .quicklink(id: "github", title: "Open GitHub", aliases: ["git"], url: URL(string: "https://github.com")!),
+                    .webSearchFallback(),
+                ])
+            ],
+            enabledFallbacks: [Action.webSearchFallbackID]
+        )
     }
 
     @Test("the highlighted result is the best row, results[0]")
