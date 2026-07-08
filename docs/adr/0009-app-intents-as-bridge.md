@@ -11,3 +11,7 @@ So App Intents sits **on top** as a thin export bridge: our Providers are the so
 - A few **App Shortcuts** for headline verbs ("Quick Capture in Quickie" → open focused, "New Note", "New Reminder") for Siri / Spotlight / Action Button.
 - **Favorites** exposed as dynamic App Shortcuts where feasible.
 - **CoreSpotlight** indexing of all user content (notes/snippets/quicklinks) is deferred — later polish, not core.
+
+_Refined by ADR 0024: "New Note" here predates ADR 0018 (Note was retired — read
+as Save for later); 0024 fixes the headline set, splits the invoke shapes, and
+adds Custom Actions to the dynamic exposure._
