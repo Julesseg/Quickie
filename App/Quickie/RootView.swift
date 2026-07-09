@@ -713,6 +713,11 @@ struct RootView: View {
                 // demoted out of the enabled list into the Available pool, so it never
                 // renders as active and re-enabling doesn't restore its old rank.
                 fallbacks.demoteDisabled(instanceEnablement.disabled)
+                // Publish the initial Bridged Action snapshot (issue #122): `onChange`
+                // only fires on later changes, so the out-of-process entity query needs
+                // the set seeded here — after favorites are reconciled — so Siri and
+                // Spotlight have the live members from the first launch onward.
+                syncBridgedActions(engine.bridgedActions())
             }
             // Keep that coupling live: disabling an action anywhere (its home page or
             // the Fallbacks page) demotes it from the enabled Fallback list.
@@ -729,6 +734,18 @@ struct RootView: View {
             .onChange(of: eligibleFallbackIDs) { _, ids in
                 everEligibleFallbacks.formUnion(ids)
                 fallbacks.pruneToEligible(liveEligible: ids, everEligible: everEligibleFallbacks)
+            }
+            // Keep the outward **Bridged Action** set in step (CONTEXT.md → Bridged
+            // Action; ADR 0024; issue #122). Deriving the set from the live `engine`
+            // catches *every* way it can change through one signal — a pin/unpin, a
+            // Custom Action create/edit/delete (a rename shifts a title with no count
+            // change), a kind or instance disable, or a favorited member being deleted
+            // or retitled — so the published snapshot and the App Shortcut parameters
+            // never miss an update. The closure only fires on a real change (the value
+            // is `Equatable`), and `syncBridgedActions` writes + nudges only when the
+            // snapshot actually moved, so this stays off the keystroke hot path.
+            .onChange(of: engine.bridgedActions()) { _, actions in
+                syncBridgedActions(actions)
             }
             // Re-run the dedup when the Custom Action catalog changes: the
             // remote-notification background mode lets a CloudKit import land a
@@ -1307,6 +1324,19 @@ struct RootView: View {
             // Fresh entry: the reset, then re-arm focus so the warm app lands on a
             // clean, focused Home exactly like a cold launch.
             refocusInput()
+        }
+    }
+
+    /// Publishes the derived Bridged Action set for the App Intents bridge (issue
+    /// #122; ADR 0024) and, **only when it actually changed**, nudges the system to
+    /// re-read the parameterized "Run <name>" App Shortcut's options via
+    /// `updateAppShortcutParameters()`. The `publish` write and the parameter refresh
+    /// are paired so a no-op body pass costs nothing — the store guards the write and
+    /// the refresh fires just once per real set change.
+    @MainActor
+    private func syncBridgedActions(_ actions: [BridgedAction]) {
+        if BridgedActionStore.publish(actions) {
+            QuickieAppShortcuts.updateAppShortcutParameters()
         }
     }
 
