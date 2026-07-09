@@ -33,20 +33,20 @@ struct EntryWidget: Widget {
 /// A one-shot timeline: the tile is static, so a single entry serves forever and
 /// never needs refreshing (`.never`).
 private struct EntryProvider: TimelineProvider {
-    func placeholder(in context: Context) -> EntryEntry { EntryEntry() }
+    func placeholder(in context: Context) -> EntryTimelineEntry { EntryTimelineEntry() }
 
-    func getSnapshot(in context: Context, completion: @escaping (EntryEntry) -> Void) {
-        completion(EntryEntry())
+    func getSnapshot(in context: Context, completion: @escaping (EntryTimelineEntry) -> Void) {
+        completion(EntryTimelineEntry())
     }
 
-    func getTimeline(in context: Context, completion: @escaping (Timeline<EntryEntry>) -> Void) {
-        completion(Timeline(entries: [EntryEntry()], policy: .never))
+    func getTimeline(in context: Context, completion: @escaping (Timeline<EntryTimelineEntry>) -> Void) {
+        completion(Timeline(entries: [EntryTimelineEntry()], policy: .never))
     }
 }
 
 /// The lone timeline entry. It carries no payload — the tile is a fixed glyph — so
 /// it holds only the render date WidgetKit's `TimelineEntry` requires.
-private struct EntryEntry: TimelineEntry {
+private struct EntryTimelineEntry: TimelineEntry {
     var date = Date()
 }
 
@@ -88,7 +88,7 @@ private struct EntryWidgetView: View {
     }
 
     /// The single glyph that stands for "open Quickie" — a magnifying glass, the
-    /// launcher's search identity, matching the focused input the entry route lands
-    /// the user on.
+    /// launcher's search identity (Quickie ships no standalone brand mark),
+    /// matching the focused input the entry route lands the user on.
     private static let symbol = "magnifyingglass"
 }

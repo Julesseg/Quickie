@@ -663,19 +663,25 @@ struct RootView: View {
             // `quickie://entry` to reset a warm app to a clean, focused Home, but
             // XCUITest can neither deliver a `quickie://` URL nor tap a Home-Screen
             // widget, so the warm reset is otherwise undrivable. Under the flag the
-            // launcher carries a hidden, near-zero-size corner button that fires the
-            // *real* `handleDeeplink(.entry)` — the same dispatch the widget's
-            // `widgetURL` reaches through the root `onOpenURL` — so a test can build
-            // state (a stale query, a half-filled breadcrumb) and prove the tap
-            // clears it. The precedent is `SignalsStore`'s `-uitest-pin-favorite`: a
-            // launch flag that drives a real path a gesture can't. Topmost overlay so
-            // it stays hittable, tiny so it blocks nothing the test drives.
+            // launcher carries a hidden, near-zero-size corner button that builds the
+            // widget's own `quickie://entry` URL and drives it through the *real*
+            // `QuickieDeeplink.parse → handleDeeplink` path — exactly what the
+            // widget's `widgetURL` reaches through the root `onOpenURL` — so a test
+            // can build state (a stale query, a half-filled breadcrumb) and prove the
+            // tap clears it. Unlike the launch-time `-uitest-deeplink`/pin seams the
+            // trigger must fire on demand, *after* the test has established state a
+            // cold launch can't. Topmost overlay so it stays hittable, tiny so it
+            // blocks nothing the test drives.
             .overlay(alignment: .topLeading) {
                 if isUITestEntryArmed {
-                    Button("uitest entry") { handleDeeplink(.entry) }
-                        .frame(width: 8, height: 8)
-                        .opacity(0.01)
-                        .accessibilityIdentifier("uitest-entry-trigger")
+                    Button("uitest entry") {
+                        if let deeplink = QuickieDeeplink.parse(QuickieDeeplink.entryURL()) {
+                            handleDeeplink(deeplink)
+                        }
+                    }
+                    .frame(width: 8, height: 8)
+                    .opacity(0.01)
+                    .accessibilityIdentifier("uitest-entry-trigger")
                 }
             }
             // Inbound `quickie://` URLs are dispatched here at the app root by host
