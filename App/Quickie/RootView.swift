@@ -797,6 +797,16 @@ struct RootView: View {
                     SnippetEditorView(seed: seed.text)
                 case .editSnippet(let snippet):
                     SnippetEditorView(snippet: snippet)
+                case .editQuicklink(let link):
+                    // The same create/edit form the Quicklinks page presents, applying
+                    // the draft straight to the stored record (SwiftData autosaves).
+                    QuicklinkEditorView(link: link) { draft in draft.apply(to: link) }
+                case .editCustomAction(let action):
+                    // The same live-mirroring editor the Custom Actions page presents,
+                    // applying the edited definition to the stored record.
+                    CustomActionEditorView(definition: action.definition, isNew: false) { def in
+                        action.apply(def)
+                    }
                 }
             }
             // New Event's editor mode (issue #38): the pre-filled system event editor
@@ -1143,10 +1153,15 @@ struct RootView: View {
             revealInFiles(action)
         case .edit:
             // Edit resolves per content: a Shortcut deeplinks into the Shortcuts
-            // app's editor by name, a Snippet opens its stored record in-app.
+            // app's editor by name; a Snippet, Quicklink, and Custom Action each open
+            // their stored record in the same in-app editor their library page uses.
             switch action.content {
             case .shortcut(let name):
                 editShortcut(name)
+            case .quicklink(let id):
+                editQuicklink(id)
+            case .customAction(let id):
+                editCustomAction(id)
             default:
                 editSnippet(action)
             }
@@ -1182,6 +1197,31 @@ struct RootView: View {
         activeSheet = .editSnippet(snippet)
     }
 
+    /// **Edit** a Quicklink (ADR 0017): resolves the row's `.quicklink(id:)` content
+    /// to its stored record and opens the same create/edit form the Quicklinks page
+    /// uses — reached here straight from a result's long-press. A stale id (the
+    /// Quicklink was deleted) acknowledges rather than opening an empty editor.
+    private func editQuicklink(_ id: String) {
+        guard let link = indexedQuicklinks.first(where: { $0.id == id }) else {
+            flashConfirmation("Quicklink not found")
+            return
+        }
+        activeSheet = .editQuicklink(link)
+    }
+
+    /// **Edit** a Custom Action (ADR 0017): resolves the row's `.customAction(id:)`
+    /// content to its stored record and opens the same live-mirroring editor the
+    /// Custom Actions page uses — reached here straight from a result's long-press. A
+    /// stale id (the Custom Action was deleted) acknowledges rather than opening an
+    /// empty editor.
+    private func editCustomAction(_ id: String) {
+        guard let action = customActions.first(where: { $0.id == id }) else {
+            flashConfirmation("Custom Action not found")
+            return
+        }
+        activeSheet = .editCustomAction(action)
+    }
+
     /// Resolves a row's content to the text a **Copy** puts on the pasteboard (ADR
     /// 0017): the snippet text / calculator number straight off its copy outcome,
     /// the URL string, a Pile entry's text fetched from the store by id, or a
@@ -1198,7 +1238,10 @@ struct RootView: View {
             case .copyText(let text), .copyAndStage(let text): return text
             default: return nil
             }
-        case .url:
+        case .url, .quicklink:
+            // A Quicklink carries a real static URL just like a bare `.url` value, so
+            // both copy the string its open outcome would open. Its extra `.quicklink`
+            // identity only adds Edit — it changes nothing about what Copy resolves.
             if case .openURL(let url) = action.run(input: query) { return url.absoluteString }
             return nil
         case .pileEntry(let id):
@@ -1209,9 +1252,10 @@ struct RootView: View {
             }
             defer { indexedFolders.endFileAccess(access) }
             return access.fileURL.path
-        case .none, .shortcut:
-            // Neither carries copyable text — a command/capture row has no content,
-            // and a Shortcut is a launchable reference whose only verb is Edit.
+        case .none, .shortcut, .customAction:
+            // None carries copyable text — a command/capture row has no content, a
+            // Shortcut is a launchable reference, and a Custom Action's URL only
+            // exists once its slots are filled: each offers Edit (or nothing), not Copy.
             return nil
         }
     }
@@ -1227,7 +1271,9 @@ struct RootView: View {
             case .copyText(let text), .copyAndStage(let text): shareRequest = ShareRequest(items: [text])
             default: break
             }
-        case .url:
+        case .url, .quicklink:
+            // Both share the static URL their open outcome carries (the sheet then
+            // offers link actions); a Quicklink's `.quicklink` identity only adds Edit.
             if case .openURL(let url) = action.run(input: query) { shareRequest = ShareRequest(items: [url]) }
         case .pileEntry(let id):
             if let text = livePileEntries.first(where: { $0.actionID == id })?.text {
@@ -1241,9 +1287,10 @@ struct RootView: View {
             } else {
                 flashConfirmation("File not found")
             }
-        case .none, .shortcut:
-            // Nothing to share — a content-less command row, or a Shortcut whose
-            // only verb is Edit (a launchable reference, not a value).
+        case .none, .shortcut, .customAction:
+            // Nothing to share — a content-less command row, a Shortcut (a launchable
+            // reference), or a Custom Action (its URL exists only once filled): each
+            // offers Edit (or nothing), not Share.
             break
         }
     }
@@ -1466,14 +1513,21 @@ private struct ShareSheet: UIViewControllerRepresentable {
 /// presentation point stays in place as sheets come and go: `composeSnippet`
 /// seeds a brand-new Snippet from typed text (New Snippet), `editSnippet` opens
 /// an existing one for revision (the **Edit** secondary action — ADR 0017).
+/// `editQuicklink` and `editCustomAction` are the same **Edit** verb reaching a
+/// Quicklink's and a Custom Action's stored records, opening the very editors their
+/// library pages use — so a long-press edits an item without visiting its page.
 private enum ActiveSheet: Identifiable {
     case composeSnippet(ComposeSeed)
     case editSnippet(StoredSnippet)
+    case editQuicklink(StoredQuicklink)
+    case editCustomAction(StoredCustomAction)
 
     var id: String {
         switch self {
         case .composeSnippet(let seed): return "compose-snippet-\(seed.id)"
         case .editSnippet(let snippet): return "edit-snippet-\(snippet.id)"
+        case .editQuicklink(let link): return "edit-quicklink-\(link.id)"
+        case .editCustomAction(let action): return "edit-custom-action-\(action.id)"
         }
     }
 }
