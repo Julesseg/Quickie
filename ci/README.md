@@ -37,14 +37,20 @@ additive.)
 3. Make sure the **App ID** `com.julesseguin.quickie.share` exists, also
    with the **App Groups** capability — the Share Extension is its own bundle and
    writes to the same `group.com.julesseguin.quickie` store.
-4. Create an **Ad Hoc** distribution provisioning profile for `com.julesseguin.quickie`
+4. Make sure the **App ID** `com.julesseguin.quickie.widgets` exists, also
+   with the **App Groups** capability — the widget extension is its own bundle
+   and reads the same `group.com.julesseguin.quickie` store.
+5. Create an **Ad Hoc** distribution provisioning profile for `com.julesseguin.quickie`
    that includes those devices, **named exactly `Quickie Ad Hoc`**, and download it
    (`.mobileprovision`).
-5. Create a second **Ad Hoc** profile for `com.julesseguin.quickie.share`
+6. Create a second **Ad Hoc** profile for `com.julesseguin.quickie.share`
    with the same devices, **named exactly `Quickie Share Extension Ad Hoc`**, and
-   download it too. (The Release build settings pin both names; the workflow
-   verifies them and fails with a clear message on a mismatch.)
-6. Have the matching **Apple Distribution** certificate in your keychain and
+   download it too.
+7. Create a third **Ad Hoc** profile for `com.julesseguin.quickie.widgets`
+   with the same devices, **named exactly `Quickie Widgets Ad Hoc`**, and download
+   it too. (The Release build settings pin all three names; the workflow verifies
+   them and fails with a clear message on a mismatch.)
+8. Have the matching **Apple Distribution** certificate in your keychain and
    export it as a `.p12` (with a password).
 
 > Ad Hoc only installs on the UDIDs baked into the profile. Add a device → it's
@@ -63,6 +69,7 @@ default, which is what we want):
 | `APPLE_CERTIFICATE_PASSWORD` | the `.p12` export password | — |
 | `APPLE_PROVISIONING_PROFILE` | base64 of the app's `.mobileprovision` | `base64 -i Quickie_AdHoc.mobileprovision \| pbcopy` |
 | `APPLE_PROVISIONING_PROFILE_EXTENSION` | base64 of the Share Extension's `.mobileprovision` | `base64 -i Quickie_Share_Extension_AdHoc.mobileprovision \| pbcopy` |
+| `APPLE_PROVISIONING_PROFILE_WIDGETS` | base64 of the widget extension's `.mobileprovision` | `base64 -i Quickie_Widgets_AdHoc.mobileprovision \| pbcopy` |
 | `APPLE_TEAM_ID` | your 10-char Team ID | Apple Developer → Membership |
 | `NTFY_TOPIC` | *(optional)* ntfy.sh topic for push notifications | — |
 
@@ -70,7 +77,7 @@ The signing identity name and each profile's UUID are read out of the cert and
 profiles at runtime; only the profile *names* are pinned (in the project's Release
 build settings — see step 1 above).
 
-Until all five required secrets are set, the `build` job no-ops and the PR check
+Until all six required secrets are set, the `build` job no-ops and the PR check
 stays green — the installable build simply doesn't run.
 
 ### 3. Enable GitHub Pages
