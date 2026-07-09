@@ -110,15 +110,20 @@ final class EntryWidgetUITests: XCTestCase {
         trigger.tap()
 
         // The breadcrumb field is gone and the plain search input is back, focused —
-        // a clean, focused Home, the capture abandoned rather than left in flight.
+        // the capture abandoned rather than left in flight. We assert the launcher is
+        // restored and focused, *not* the empty-Home placeholder: selecting the New
+        // Reminder row recorded a frecency event, so Home now shows a Recent row
+        // instead of the empty-state placeholder. "Clean Home" here means the
+        // breadcrumb is gone and the input is back and focused, not that Home is
+        // empty of content.
         XCTAssertTrue(input.waitForExistence(timeout: 10), "the launcher's plain input returns after the reset")
         XCTAssertFalse(
             app.textFields["capture-input"].exists,
             "the in-flight capture breadcrumb should be abandoned by the reset"
         )
         XCTAssertTrue(
-            app.staticTexts["home-placeholder"].waitForExistence(timeout: 10),
-            "abandoning the breadcrumb should land on a clean Home"
+            app.keyboards.firstMatch.waitForExistence(timeout: 10),
+            "the reset should refocus the launcher input with the keyboard up"
         )
     }
 }
