@@ -398,7 +398,12 @@ extension Action {
             subtitle: subtitle,
             aliases: aliases,
             inputTypes: [],
-            outputType: .url
+            outputType: .url,
+            // A Quicklink declares `.quicklink(id:)` content, not the bare `.url` its
+            // open outcome would derive (ADR 0017): the id lets the long-press menu
+            // add **Edit** (open the stored link in its create/edit form) on top of
+            // the universal copy/share, which a value-only URL can't offer.
+            content: .quicklink(id: id)
         ) { _ in .openURL(url) }
     }
 

@@ -51,6 +51,22 @@ struct SecondaryActionTests {
         #expect(secondaryActions(for: .shortcut(name: "Start Workout")) == [.edit, .copyDeeplink])
     }
 
+    @Test("a quicklink additionally exposes Edit — a stored, editable link")
+    func quicklinkAlsoExposesEdit() {
+        // A Quicklink is a stored, titled static link the user can revise, so it
+        // earns Edit on top of the universal copy/share (it still carries a real URL
+        // to copy or share) — the Snippet pattern, for a URL. Deeplink last.
+        #expect(secondaryActions(for: .quicklink(id: "ql.1")) == [.copy, .share, .edit, .copyDeeplink])
+    }
+
+    @Test("a Custom Action exposes Edit then the deeplink — an editable reference, no value")
+    func customActionExposesEditThenDeeplink() {
+        // A Custom Action's URL only exists once its slots are filled, so — like a
+        // Shortcut — it carries no value to copy or share; its `.customAction` content
+        // earns only Edit (open its live-mirroring editor), plus the universal deeplink.
+        #expect(secondaryActions(for: .customAction(id: "ca.1")) == [.edit, .copyDeeplink])
+    }
+
     @Test("a file additionally exposes reveal in Files, then the deeplink")
     func fileAlsoExposesReveal() {
         #expect(
@@ -64,6 +80,7 @@ struct SecondaryActionTests {
         for content: ResultContent in [
             .none, .text, .url, .number,
             .snippet(id: "s"), .shortcut(name: "S"),
+            .quicklink(id: "ql"), .customAction(id: "ca"),
             .pileEntry(id: "p"), .file(bookmarkID: "b", relativePath: "f"),
         ] {
             #expect(secondaryActions(for: content).last == .copyDeeplink)

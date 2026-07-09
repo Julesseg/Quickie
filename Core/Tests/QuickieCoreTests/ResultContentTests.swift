@@ -24,21 +24,40 @@ struct ResultContentTests {
         #expect(entry.content == .pileEntry(id: "pile.42"))
     }
 
-    @Test("a quicklink declares url content")
-    func quicklinkContentIsURL() {
+    @Test("a quicklink declares quicklink content, keyed by its id")
+    func quicklinkContentIsQuicklink() {
+        // A Quicklink declares `.quicklink(id:)`, not the bare `.url` its open
+        // outcome would derive — the id is what lets the menu add Edit (open its
+        // create/edit form) on top of copy/share (ADR 0017).
         let link = Action.quicklink(id: "gh", title: "GitHub", url: URL(string: "https://github.com")!)
-        #expect(link.content == .url)
+        #expect(link.content == .quicklink(id: "gh"))
     }
 
-    @Test("a Custom Action carries no content — a hand-off, not a value")
-    func customActionHasNoContent() {
+    @Test("a quicklink offers copy + share + Edit via its declared content")
+    func quicklinkOffersCopyShareEdit() {
+        // A Quicklink still carries a real URL to copy or share, and its stored
+        // identity adds Edit — the Snippet pattern for a URL; the deeplink sits last.
+        let link = Action.quicklink(id: "gh", title: "GitHub", url: URL(string: "https://github.com")!)
+        #expect(secondaryActions(for: link.content) == [.copy, .share, .edit, .copyDeeplink])
+    }
+
+    @Test("a Custom Action declares custom-action content, keyed by its id")
+    func customActionContentIsCustomAction() {
         // A Custom Action's URL only exists once its slots are filled through the
         // breadcrumb, so — like a Shortcut hand-off — it carries no pre-resolved
-        // value to copy or share (ADR 0021): `.none` content, so no *content* verbs —
-        // only the id-keyed Copy action deeplink every row earns (issue #120).
+        // value to copy or share (ADR 0021); but it declares `.customAction(id:)` so
+        // the menu can add **Edit** (open its live-mirroring editor).
         let search = Action.webSearchFallback()
-        #expect(search.content == .none)
-        #expect(secondaryActions(for: search.content) == [.copyDeeplink])
+        #expect(search.content == .customAction(id: Action.webSearchFallbackID))
+    }
+
+    @Test("a Custom Action offers Edit (then the deeplink) — no value to copy or share")
+    func customActionOffersEditOnly() {
+        // Among the content verbs a Custom Action earns only Edit (open its editor) —
+        // never copy/share, since it has no pre-resolved value — followed by the
+        // universal id-keyed Copy action deeplink every row earns (issue #120).
+        let search = Action.webSearchFallback()
+        #expect(secondaryActions(for: search.content) == [.edit, .copyDeeplink])
     }
 
     @Test("a file declares file content, carrying its bookmark + relative path")

@@ -167,6 +167,126 @@ final class SecondaryActionUITests: XCTestCase {
     /// shortcut row is searchable in this suite.
     private static let seededShortcutName = "UITest Shortcut"
 
+    /// Author a Quicklink through its Management page, then long-press its result
+    /// row: the menu offers **Edit** (open its create/edit form) on top of Copy and
+    /// Share — the verb a stored, editable static link earns that a value-only URL
+    /// does not, while it still carries a real URL to copy or share (ADR 0017).
+    @MainActor
+    func testLongPressingAQuicklinkOffersEdit() throws {
+        let app = launchApp()
+
+        let input = app.textFields["search-input"]
+        XCTAssertTrue(input.waitForExistence(timeout: 30))
+
+        // Open the Quicklinks page via its typed command row and add a Quicklink.
+        input.tap()
+        input.typeText("quicklinks")
+        let command = app.buttons["builtin.quicklinks-page"]
+        XCTAssertTrue(command.waitForExistence(timeout: 5), "typing 'quicklinks' surfaces the command row")
+        command.tap()
+
+        let add = app.buttons["add-quicklink"]
+        XCTAssertTrue(add.waitForExistence(timeout: 10), "the Quicklinks page offers an Add button")
+        add.tap()
+
+        let title = "Open GitHub"
+        let titleField = app.textFields["quicklink-title-field"]
+        XCTAssertTrue(titleField.waitForExistence(timeout: 5))
+        titleField.tap()
+        titleField.typeText(title)
+        app.textFields["quicklink-url-field"].tap()
+        app.textFields["quicklink-url-field"].typeText("https://github.com")
+        app.buttons["save-quicklink"].tap()
+
+        // Pop back to the launcher, search the Quicklink by name, and long-press it.
+        let back = app.navigationBars.buttons.firstMatch
+        XCTAssertTrue(back.waitForExistence(timeout: 10))
+        back.tap()
+
+        XCTAssertTrue(input.waitForExistence(timeout: 10))
+        input.tap()
+        input.typeText(title)
+        let row = app.buttons.matching(
+            NSPredicate(format: "label CONTAINS[c] %@", title)
+        ).firstMatch
+        XCTAssertTrue(row.waitForExistence(timeout: 5))
+        row.press(forDuration: 1.3)
+
+        // Edit joins the universal Copy / Share and the existing Pin item.
+        XCTAssertTrue(app.buttons["Edit"].waitForExistence(timeout: 5),
+                      "a quicklink's long-press menu should offer Edit (open its editor)")
+        XCTAssertTrue(app.buttons["Copy"].exists,
+                      "a quicklink still carries a URL, so it should offer Copy")
+        XCTAssertTrue(app.buttons["Share"].exists,
+                      "a quicklink still carries a URL, so it should offer Share")
+        XCTAssertTrue(app.buttons["Pin as Favorite"].exists,
+                      "the content verbs join the existing Pin item in one menu")
+        XCTAssertFalse(app.buttons["Reveal in Files"].exists,
+                       "a non-file row must not offer Reveal in Files")
+    }
+
+    /// Author a Custom Action through its Management page, then long-press its result
+    /// row: like a Shortcut it offers **Edit** alone — an editable reference whose URL
+    /// only exists once its slots are filled, so it offers neither Copy nor Share (ADR
+    /// 0017).
+    @MainActor
+    func testLongPressingACustomActionOffersEditOnly() throws {
+        let app = launchApp()
+
+        let input = app.textFields["search-input"]
+        XCTAssertTrue(input.waitForExistence(timeout: 30))
+
+        // Open the Custom Actions page via its typed command row and author one.
+        input.tap()
+        input.typeText("custom actions")
+        let command = app.buttons["builtin.custom-actions-page"]
+        XCTAssertTrue(command.waitForExistence(timeout: 5), "typing 'custom actions' surfaces the command row")
+        command.tap()
+
+        let add = app.buttons["add-custom-action"]
+        XCTAssertTrue(add.waitForExistence(timeout: 10), "the Custom Actions page offers an Add button")
+        add.tap()
+
+        let title = "Search Wikipedia"
+        let nameField = app.textFields["custom-action-name-field"]
+        XCTAssertTrue(nameField.waitForExistence(timeout: 5))
+        nameField.tap()
+        nameField.typeText(title)
+        let urlField = app.textFields["custom-action-url-field"]
+        urlField.tap()
+        urlField.typeText("https://en.wikipedia.org/w/index.php?search={q}")
+        let save = app.buttons["save-custom-action"]
+        XCTAssertTrue(save.isEnabled, "a named, slotted, schemed URL validates for Save")
+        save.tap()
+
+        // Pop back to the launcher, search the Custom Action by name, and long-press it.
+        let back = app.navigationBars.buttons.firstMatch
+        XCTAssertTrue(back.waitForExistence(timeout: 10))
+        back.tap()
+
+        XCTAssertTrue(input.waitForExistence(timeout: 10))
+        input.tap()
+        input.typeText(title)
+        let row = app.buttons.matching(
+            NSPredicate(format: "label CONTAINS[c] %@", title)
+        ).firstMatch
+        XCTAssertTrue(row.waitForExistence(timeout: 5))
+        row.press(forDuration: 1.3)
+
+        // Edit is offered (open the live-mirroring editor), alongside Pin.
+        XCTAssertTrue(app.buttons["Edit"].waitForExistence(timeout: 5),
+                      "a custom action's long-press menu should offer Edit (open its editor)")
+        XCTAssertTrue(app.buttons["Pin as Favorite"].exists,
+                      "Edit joins the existing Pin item in one menu")
+        // A Custom Action's URL only exists once filled: no value to copy or share.
+        XCTAssertFalse(app.buttons["Copy"].exists,
+                       "a custom action has no pre-resolved value, so it must not offer Copy")
+        XCTAssertFalse(app.buttons["Share"].exists,
+                       "a custom action has no pre-resolved value, so it must not offer Share")
+        XCTAssertFalse(app.buttons["Reveal in Files"].exists,
+                       "a non-file row must not offer Reveal in Files")
+    }
+
     /// A command row carries no content, so its long-press menu shows the universal
     /// **Copy action deeplink** (issue #120) and Pin/Unpin — but none of the content
     /// verbs (Copy / Share / Reveal). Copy action deeplink is the one verb every row

@@ -280,10 +280,13 @@ public struct CustomActionDefinition: Equatable, Sendable {
             inputTypes: [.text],
             outputType: .url,
             arguments: arguments,
-            // A Custom Action is a hand-off whose URL only exists once the slots are
-            // filled, so — like a Shortcut — it carries no pre-resolved value to copy
-            // or share: `.none` content, no secondary actions.
-            content: ResultContent.none,
+            // A Custom Action declares `.customAction(id:)` content (ADR 0017): its
+            // URL only exists once the slots are filled, so — like a Shortcut — it
+            // carries no pre-resolved value to copy or share, but the id lets the
+            // long-press menu add **Edit** (open the live-mirroring editor on the
+            // stored record). Without the id it would read as `.none` and expose only
+            // the universal Copy action deeplink.
+            content: .customAction(id: id),
             effect: { _ in .none },
             multiStepEffect: { values in
                 CustomActionDefinition.fill(template: template, tokenNames: names, specs: specs, values: values)

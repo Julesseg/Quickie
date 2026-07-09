@@ -22,6 +22,22 @@ public enum ResultContent: Equatable, Hashable, Sendable {
     /// identity is what lets `secondaryActions(for:)` add Edit to a Snippet's
     /// menu while a plain `.text` row keeps only the universal copy/share.
     case snippet(id: String)
+    /// A stored **Quicklink**, keyed by its Action id so the edge can resolve the
+    /// record the user opens for editing (CONTEXT.md → Quicklink). Distinct from a
+    /// bare `.url` value precisely because a Quicklink is a *stored, titled* static
+    /// link the user can **edit** — a Calculator-derived or otherwise value-only URL
+    /// cannot. It still carries a real URL to copy or share (unlike `.customAction`
+    /// or `.shortcut`, whose values only exist once run), so its identity adds
+    /// **Edit** *on top of* the universal copy/share — the Snippet pattern, for a URL.
+    case quicklink(id: String)
+    /// A stored **Custom Action** (a URL template), keyed by its Action id so the
+    /// edge can resolve the record the user opens in the live-mirroring editor
+    /// (CONTEXT.md → Custom Action). Like a `.shortcut` it wraps **no textual value**
+    /// to copy or share — its URL only exists once the breadcrumb fills its `{slots}`
+    /// — so it is a pure reference to an editable item. That reference is what lets
+    /// `secondaryActions(for:)` offer **Edit** (open the editor) on a Custom Action
+    /// row that would otherwise, as a hand-off `.none` row, expose nothing.
+    case customAction(id: String)
     /// An imported Shortcut Action, keyed by the shortcut's **name** — its stable
     /// identity (ADR 0007), the same handle the run path already carries. Unlike
     /// every other case it wraps **no textual value** to copy or share: it is a
@@ -54,12 +70,15 @@ public enum SecondaryActionKind: Equatable, Hashable, Sendable {
     case copy
     case share
     case revealInFiles
-    /// Open the item in its own editor. Offered for a `.snippet` — a stored,
-    /// titled record the App opens in the Snippet editor — and for a `.shortcut`,
-    /// where it deeplinks into `shortcuts://open-shortcut` to open the named
-    /// shortcut in the Shortcuts app for editing. Never a bare `.text` value. The
-    /// App resolves the reference by id/name and performs the open; Core only
-    /// declares the verb eligible.
+    /// Open the item in its own editor. Offered for every **user-authored,
+    /// editable** record — a `.snippet` (opened in the Snippet editor), a
+    /// `.quicklink` (its create/edit form) and a `.customAction` (the live-mirroring
+    /// URL-template editor), all resolved by id to the stored record the App opens
+    /// in-app — and for a `.shortcut`, where it deeplinks into
+    /// `shortcuts://open-shortcut` to open the named shortcut in the Shortcuts app.
+    /// Never a bare `.text`/`.url` *value* (a Calculator result, a value-only URL):
+    /// only a stored record the user can revise earns it. The App resolves the
+    /// reference by id/name and performs the open; Core only declares the verb eligible.
     case edit
     /// **Copy action deeplink**: put this row's `quickie://run/<id>` URL on the
     /// pasteboard (issue #120; `QuickieDeeplink.runURL`). Unlike every other verb
@@ -73,10 +92,12 @@ public enum SecondaryActionKind: Equatable, Hashable, Sendable {
 
 /// The eligible secondary actions for a result's content (ADR 0017): a pure
 /// switch on `ResultContent`, **not** a `[ContentType: …]` table. The content-keyed
-/// verbs come first — `.file` adds `revealInFiles`; `.snippet` adds `edit` on top of
-/// copy/share; a `.shortcut` offers `edit` **alone** (no text to copy or share); a
-/// `.none` command/capture row has none of them; every other content-bearing case
-/// gets the universal `copy`/`share`. Then **`copyDeeplink` is appended to every
+/// verbs come first — `.file` adds `revealInFiles`; a `.snippet` and a `.quicklink`
+/// each add `edit` on top of copy/share (a stored, editable record that still carries
+/// a value); a `.shortcut` and a `.customAction` offer `edit` **alone** (an editable
+/// reference with no text or pre-resolved URL to copy or share); a `.none`
+/// command/capture row has none of them; every other content-bearing case gets the
+/// universal `copy`/`share`. Then **`copyDeeplink` is appended to every
 /// case, `.none` included** (issue #120): it keys off the Action's id, which every
 /// row has, so it is the one verb a content-less row still exposes. Content verbs
 /// stay first so the menu reads value-first; the deeplink utility sits last. No dead
@@ -89,15 +110,18 @@ public func secondaryActions(for content: ResultContent) -> [SecondaryActionKind
         contentVerbs = []
     case .file:
         contentVerbs = [.copy, .share, .revealInFiles]
-    case .snippet:
-        // A Snippet is a stored, titled record, so it earns Edit on top of the
-        // universal copy/share — resolvable only because `.snippet` carries the
-        // record's id, unlike a bare `.text` value.
+    case .snippet, .quicklink:
+        // A Snippet and a Quicklink are each stored, titled records the user can
+        // revise, so each earns Edit on top of the universal copy/share — resolvable
+        // only because the content carries the record's id, unlike a bare `.text`
+        // value or a value-only `.url`. The App resolves the id and opens the
+        // matching in-app editor (Snippet editor / Quicklink form).
         contentVerbs = [.copy, .share, .edit]
-    case .shortcut:
-        // A Shortcut carries no textual value to copy or share — it is a pure
-        // reference to a launchable item — so it earns only Edit: a deeplink into
-        // the Shortcuts app's editor for the named shortcut.
+    case .shortcut, .customAction:
+        // Neither carries a textual value to copy or share — a Shortcut is a pure
+        // reference to a launchable item, and a Custom Action's URL only exists once
+        // its slots are filled — so each earns only Edit: a Shortcut deeplinks into
+        // the Shortcuts app's editor, a Custom Action opens its live-mirroring editor.
         contentVerbs = [.edit]
     case .text, .url, .number, .pileEntry:
         contentVerbs = [.copy, .share]
