@@ -663,24 +663,31 @@ struct RootView: View {
             // `quickie://entry` to reset a warm app to a clean, focused Home, but
             // XCUITest can neither deliver a `quickie://` URL nor tap a Home-Screen
             // widget, so the warm reset is otherwise undrivable. Under the flag the
-            // launcher carries a hidden, near-zero-size corner button that builds the
-            // widget's own `quickie://entry` URL and drives it through the *real*
+            // launcher carries a hidden corner button that builds the widget's own
+            // `quickie://entry` URL and drives it through the *real*
             // `QuickieDeeplink.parse → handleDeeplink` path — exactly what the
             // widget's `widgetURL` reaches through the root `onOpenURL` — so a test
             // can build state (a stale query, a half-filled breadcrumb) and prove the
             // tap clears it. Unlike the launch-time `-uitest-deeplink`/pin seams the
             // trigger must fire on demand, *after* the test has established state a
-            // cold launch can't. Topmost overlay so it stays hittable, tiny so it
-            // blocks nothing the test drives.
+            // cold launch can't. Topmost overlay so it stays hittable; only the widget
+            // UI test ever renders it (it is gated on `-uitest-entry`).
             .overlay(alignment: .topLeading) {
                 if isUITestEntryArmed {
-                    Button("uitest entry") {
+                    Button {
                         if let deeplink = QuickieDeeplink.parse(QuickieDeeplink.entryURL()) {
                             handleDeeplink(deeplink)
                         }
+                    } label: {
+                        // A *filled* swatch, not `Color.clear`: UIKit's hit-testing
+                        // ignores any view with `alpha < 0.01`, so a truly invisible
+                        // trigger silently swallows the tap (the bug that failed the
+                        // first CI run). 0.06 is above that cutoff yet visually inert,
+                        // and a solid rectangle gives XCUITest a real 44×44 target.
+                        Color.primary.opacity(0.06)
+                            .frame(width: 44, height: 44)
                     }
-                    .frame(width: 8, height: 8)
-                    .opacity(0.01)
+                    .buttonStyle(.plain)
                     .accessibilityIdentifier("uitest-entry-trigger")
                 }
             }
