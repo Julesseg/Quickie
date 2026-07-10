@@ -41,7 +41,16 @@ enum FavoritesWidgetStore {
     @discardableResult
     static func publish(_ favorites: [WidgetFavorite]) -> Bool {
         guard favorites != load() else { return false }
-        guard let data = FavoritesWidgetSnapshot.encode(favorites) else { return false }
+        guard let data = FavoritesWidgetSnapshot.encode(favorites) else {
+            // Unreachable today — `WidgetFavorite` is a plain `Codable` struct —
+            // but if an encode ever failed here the grid would silently keep its
+            // stale snapshot until the next successful change, a failure that
+            // reads as "the widget just didn't update". Trap loudly in debug
+            // (compiled out in Release, where the stale-but-rendering grid is the
+            // right degrade) rather than skip the write without a trace.
+            assertionFailure("Favorites widget snapshot failed to encode; the widget keeps its stale grid")
+            return false
+        }
         defaults.set(data, forKey: snapshotKey)
         return true
     }
