@@ -61,7 +61,7 @@ struct ActionPresentationTests {
         // read the capture's real outcome (`createReminder` → compose), so the row
         // wears the same compose pencil as New Snippet rather than no glyph at all.
         #expect(Action.newReminder().mainAction == .compose)
-        #expect(Action.newReminder(askDate: false, list: .ask, lists: [
+        #expect(Action.newReminder(steps: [.list], lists: [
             ChoiceOption(id: "work", label: "Work"),
         ]).mainAction == .compose)
 

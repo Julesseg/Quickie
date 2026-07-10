@@ -16,16 +16,20 @@ import QuickieCore
 /// (`.ask`) or a fixed list id — the string the schema's picker persists, read back
 /// here. Keys are Core-owned (`SettingsKey`) so the schema and the capture never drift.
 struct ReminderSettings {
-    /// Ask for a due date (default ON); OFF skips the date step.
-    var askDate: Bool = true
-    /// The list dynamic choice's stored value: empty = "Ask each time" (`.ask`),
-    /// else a fixed list id.
+    /// The enabled, ordered capture steps after the pinned Title (issue #145 follow-up)
+    /// — the user's step plan from the reorderable double-list. `.list` here means "ask
+    /// each time"; absent, the reminder routes to `listStored`'s target.
+    var steps: [ReminderStep] = ReminderStep.firstRun
+    /// The default-list choice's stored value used when the List step is **off**: empty
+    /// (or the system-default sentinel) = the system default list, else a fixed list id.
     var listStored: String = ""
 
-    /// How the list step is routed (CONTEXT.md → Reminder): the stored dynamic
-    /// choice, mapped by Core — empty is "Ask each time", any value a fixed list.
-    var listSelection: ReminderListSelection {
-        ReminderListSelection(stored: listStored)
+    /// The fixed list id to route to when the List step is off (CONTEXT.md → Reminder):
+    /// the stored default-list choice mapped by Core — a `nil` is the system default.
+    /// Unused while the List step is on (the breadcrumb collects the list instead).
+    var listTarget: String? {
+        if case .fixed(let id) = ReminderListSelection(stored: listStored) { return id }
+        return nil
     }
 }
 
@@ -64,8 +68,8 @@ struct ReminderCapture: Capture {
     func makeAction() async -> Action {
         let lists = await service.reminderLists()
         return .newReminder(
-            askDate: settings.askDate,
-            list: settings.listSelection,
+            steps: settings.steps,
+            listTarget: settings.listTarget,
             lists: lists
         )
     }
@@ -120,8 +124,7 @@ struct UITestReminderCapture: Capture {
 
     func makeAction() async -> Action {
         .newReminder(
-            askDate: true,
-            list: .ask,
+            steps: [.dueDate, .list],
             lists: [
                 ChoiceOption(id: "uitest.inbox", label: "Inbox"),
                 ChoiceOption(id: "uitest.errands", label: "Errands"),

@@ -66,6 +66,8 @@ actor RemindersService {
         let reminder = EKReminder(eventStore: store)
         reminder.title = draft.title
         reminder.calendar = calendar(for: draft.listID)
+        reminder.notes = draft.notes
+        reminder.priority = draft.priority
 
         if let due = draft.dueDate {
             let units: Set<Calendar.Component> = draft.hasTime

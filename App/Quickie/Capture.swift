@@ -378,12 +378,16 @@ private func pillText(_ value: ArgumentValue) -> String {
 /// their control is the keyboard at the bottom.
 struct CaptureContent: View {
     @Bindable var model: CaptureModel
+    /// The height of the breadcrumb bar overlaying the top (issue #37): the choice
+    /// list insets its scroll content by this much so a long option set can scroll
+    /// fully clear of the breadcrumb instead of stranding its top rows behind it.
+    var topInset: CGFloat = 0
 
     var body: some View {
         Group {
             switch model.currentArgument?.inputMethod {
             case .choice:
-                ChoiceList(model: model)
+                ChoiceList(model: model, topInset: topInset)
             case .datePicker:
                 DateStep(model: model)
             default:
@@ -398,6 +402,8 @@ struct CaptureContent: View {
 /// Result-list shape, best match nearest the thumb (CONTEXT.md → Input method).
 private struct ChoiceList: View {
     @Bindable var model: CaptureModel
+    /// Top scroll-content inset that clears the breadcrumb overlay (issue #37).
+    var topInset: CGFloat = 0
 
     var body: some View {
         let options = model.choiceOptions()
@@ -417,6 +423,11 @@ private struct ChoiceList: View {
                     }
                 }
                 .frame(maxWidth: .infinity)
+                // A scrollable top spacer the height of the breadcrumb, so the earliest
+                // options (the top of the reversed list) can scroll out from behind the
+                // breadcrumb overlay. Plain content padding — not a scroll safe-area
+                // inset — so the bottom options stay clear of the input bar and hittable.
+                .padding(.top, topInset)
             }
         }
         .defaultScrollAnchor(.bottom)

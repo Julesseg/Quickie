@@ -178,7 +178,7 @@ struct MultiStepActionTests {
             ChoiceOption(id: "personal", label: "Personal"),
             ChoiceOption(id: "wishlist", label: "Wishlist"),
         ]
-        let action = Action.newReminder(askDate: false, list: .ask, lists: lists)
+        let action = Action.newReminder(steps: [.list], lists: lists)
         var session = MultiStepAction(action: action)
         _ = session.commit(.text("Buy milk")) // now on the list choice step
 

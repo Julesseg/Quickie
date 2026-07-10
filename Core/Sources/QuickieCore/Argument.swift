@@ -105,26 +105,60 @@ public struct Argument: Equatable, Sendable {
     }
 }
 
-/// Reads a collected breadcrumb's values back out by kind (issue #37/#38) — what a
-/// quick-capture's draft builder uses to pull each field. Reading by kind rather
-/// than position keeps a capture robust to the steps a setting skips: a fixed
-/// list/calendar drops the choice step, an off due-date drops the date step, and
-/// the remaining values still resolve to the right field.
+/// Reads a collected breadcrumb's first text value (issue #37/#46) — what a
+/// single-text-step capture (a Shortcut Action's lone optional input) uses to pull
+/// its field. Robust to a *skipped* step, but not to a **second step of the same
+/// kind**: a capture with more than one text or choice step reads by label instead
+/// (the by-label readers below, issue #145).
 extension Array where Element == ArgumentValue {
     var firstText: String? {
         for case .text(let s) in self { return s }
         return nil
     }
+}
 
-    var firstChoiceID: String? {
-        for case .choice(let option) in self { return option.id }
-        return nil
+/// Reads a collected breadcrumb's values back out **by step label** (issue #145) —
+/// what a quick-capture with more than one step of the same kind uses to pull each
+/// field. The pills are collected in Argument order, so a step's value sits at its
+/// declared index; resolving by label against the same `arguments` the capture
+/// declared keeps this robust to any toggle combination — a skipped step is simply
+/// absent from `arguments`, and every remaining step still lands on its own value.
+extension Array where Element == ArgumentValue {
+    /// The value committed for the step declared with `label`, or `nil` when that
+    /// step was skipped (absent from `arguments`) or is not yet collected (a shorter
+    /// probe — `mainAction` reads the outcome case with empty values).
+    func value(labeled label: String, in arguments: [Argument]) -> ArgumentValue? {
+        guard let index = arguments.firstIndex(where: { $0.label == label }),
+              indices.contains(index) else { return nil }
+        return self[index]
     }
 
-    /// The first picked date and whether it included a time — the signal a capture
-    /// reads to branch (a reminder's alarm, an event's timed-vs-all-day duration).
-    var firstDate: (date: Date, hasTime: Bool)? {
-        for case .date(let date, let hasTime) in self { return (date, hasTime) }
-        return nil
+    /// The committed text for the labeled step, or `nil` when it is absent, of a
+    /// different kind, or not yet collected. An empty string is a real value — an
+    /// optional text step committed empty — which `nonEmptyText` maps to "no field".
+    func text(labeled label: String, in arguments: [Argument]) -> String? {
+        guard case .text(let s)? = value(labeled: label, in: arguments) else { return nil }
+        return s
+    }
+
+    /// The committed text for the labeled step with an **empty commit treated as
+    /// absent** (issue #145) — what an optional text step (notes, location) maps to
+    /// "no field", so the draft carries `nil` rather than an empty string.
+    func nonEmptyText(labeled label: String, in arguments: [Argument]) -> String? {
+        let value = text(labeled: label, in: arguments)
+        return (value?.isEmpty ?? true) ? nil : value
+    }
+
+    /// The chosen option id for the labeled choice step, or `nil` when it is absent.
+    func choiceID(labeled label: String, in arguments: [Argument]) -> String? {
+        guard case .choice(let option)? = value(labeled: label, in: arguments) else { return nil }
+        return option.id
+    }
+
+    /// The picked date and whether it included a time for the labeled date step, or
+    /// `nil` when it is absent.
+    func date(labeled label: String, in arguments: [Argument]) -> (date: Date, hasTime: Bool)? {
+        guard case .date(let date, let hasTime)? = value(labeled: label, in: arguments) else { return nil }
+        return (date, hasTime)
     }
 }
