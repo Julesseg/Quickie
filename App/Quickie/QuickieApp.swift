@@ -36,6 +36,10 @@ struct QuickieApp: App {
             // this, a leftover outbox event from a prior run would drain into
             // frecency and trip a later test's "empty Home" assertion.
             FavoritesWidgetStore.launchReset()
+            // The eligible-action catalog (ADR 0027) shares those persistent
+            // defaults too — clear it on the same reset so a prior run's catalog
+            // can't leak into a later test.
+            EligibleActionCatalogStore.launchReset()
         }
         // Seed pending widget-run outbox events under UI testing (issue #126):
         // XCUITest can't tap a Home-Screen widget, so this plants real outbox

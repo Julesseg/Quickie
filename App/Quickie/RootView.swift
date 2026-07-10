@@ -766,6 +766,11 @@ struct RootView: View {
                 // projection alone, so it needs the reconciled grid from first
                 // launch onward, not only after the next pin.
                 publishWidgetFavorites(widgetFavoritesProjection)
+                // Publish the initial eligible-action catalog (ADR 0027; #140) for
+                // the same reason: the Actions widget picker and both render surfaces
+                // read the App Group snapshot alone, so it needs the live eligible set
+                // from first launch onward, not only after the next change.
+                publishEligibleCatalog(eligibleCatalogProjection)
                 // Drain the widget's frecency outbox for the cold-launch case: the
                 // scenePhase observer below covers later foregrounds, but a run
                 // performed while the app was fully terminated must be credited on
@@ -788,22 +793,23 @@ struct RootView: View {
                 everEligibleFallbacks.formUnion(ids)
                 fallbacks.pruneToEligible(liveEligible: ids, everEligible: everEligibleFallbacks)
             }
-            // Keep both **outward projections** in step — the Bridged Action set
-            // (CONTEXT.md → Bridged Action; ADR 0024; issue #122) and the Favorites
-            // widget snapshot (ADR 0025; issue #126). Deriving them from the live
-            // `engine` catches *every* way either can change through one signal — a
-            // pin/unpin, a create/edit/delete (a rename shifts a title with no count
-            // change; a Quicklink URL edit shifts a hand-off payload), a kind or
-            // instance disable. One `onChange` observes the pair rather than one
-            // each because `body`'s modifier chain sits near the type-checker's
-            // budget — a second observation of the same shape pushed RootView past
-            // "unable to type-check in reasonable time" on CI. The closure only
-            // fires on a real change (the value is `Equatable`), and each sync
-            // writes + nudges only when its snapshot actually moved, so this stays
-            // off the keystroke hot path.
+            // Keep the **outward projections** in step — the Bridged Action set
+            // (CONTEXT.md → Bridged Action; ADR 0024; issue #122), the Favorites
+            // widget snapshot (ADR 0025; issue #126), and the eligible-action catalog
+            // (ADR 0027; #140). Deriving them from the live `engine` catches *every*
+            // way any of them can change through one signal — a pin/unpin, a
+            // create/edit/delete (a rename shifts a title with no count change; a
+            // Quicklink URL edit shifts a hand-off payload), a kind or instance
+            // disable. One `onChange` observes all three rather than one each because
+            // `body`'s modifier chain sits near the type-checker's budget — a second
+            // observation of the same shape pushed RootView past "unable to type-check
+            // in reasonable time" on CI. The closure only fires on a real change (the
+            // value is `Equatable`), and each sync writes + nudges only when its
+            // snapshot actually moved, so this stays off the keystroke hot path.
             .onChange(of: outwardProjections) { _, projections in
                 syncBridgedActions(projections.bridged)
                 publishWidgetFavorites(projections.widgetFavorites)
+                publishEligibleCatalog(projections.catalog)
             }
             // Re-run the dedup when the Custom Action catalog changes: the
             // remote-notification background mode lets a CloudKit import land a
@@ -1451,18 +1457,25 @@ struct RootView: View {
         }
     }
 
-    /// The two engine-derived **outward projections**, bundled so `body` observes
-    /// them through a single `onChange`: the Bridged Action set the App Intents
-    /// bridge publishes (issue #122) and the Favorites widget snapshot (issue
-    /// #126). One value, not one observation each, because RootView's modifier
-    /// chain sits near the compiler's type-checking budget (see the `onChange`).
+    /// The engine-derived **outward projections**, bundled so `body` observes them
+    /// through a single `onChange`: the Bridged Action set the App Intents bridge
+    /// publishes (issue #122), the Favorites widget snapshot (issue #126), and the
+    /// eligible-action catalog the Actions widget and Action control join against
+    /// (ADR 0027; #140). One value, not one observation each, because RootView's
+    /// modifier chain sits near the compiler's type-checking budget (see the
+    /// `onChange`).
     private struct OutwardProjections: Equatable {
         var bridged: [BridgedAction]
-        var widgetFavorites: [WidgetFavorite]
+        var widgetFavorites: [WidgetAction]
+        var catalog: [WidgetAction]
     }
 
     private var outwardProjections: OutwardProjections {
-        OutwardProjections(bridged: engine.bridgedActions(), widgetFavorites: widgetFavoritesProjection)
+        OutwardProjections(
+            bridged: engine.bridgedActions(),
+            widgetFavorites: widgetFavoritesProjection,
+            catalog: eligibleCatalogProjection
+        )
     }
 
     /// The **Favorites widget** projection (ADR 0025; issue #126): the pinned grid
@@ -1472,9 +1485,9 @@ struct RootView: View {
     /// draws and acts from this alone; the snippet *body* deliberately never rides
     /// along (the copy intent reads it fresh at run time — a stale snapshot must
     /// never copy stale text).
-    private var widgetFavoritesProjection: [WidgetFavorite] {
+    private var widgetFavoritesProjection: [WidgetAction] {
         engine.home(showRecents: false).favorites.map { action in
-            WidgetFavorite(action: action, glyph: action.kind.symbol)
+            WidgetAction(action: action, glyph: action.kind.symbol)
         }
     }
 
@@ -1482,9 +1495,35 @@ struct RootView: View {
     /// reloads the Favorites widget's timelines — the write/reload pairing ADR
     /// 0025 prescribes, mirroring `syncBridgedActions`' publish-then-nudge shape.
     @MainActor
-    private func publishWidgetFavorites(_ favorites: [WidgetFavorite]) {
+    private func publishWidgetFavorites(_ favorites: [WidgetAction]) {
         if FavoritesWidgetStore.publish(favorites) {
             WidgetCenter.shared.reloadTimelines(ofKind: FavoritesWidgetStore.widgetKind)
+        }
+    }
+
+    /// The **eligible-action catalog** projection (CONTEXT.md → Actions widget; ADR
+    /// 0027; #140): every enabled Action except a Pile entry (`engine.eligibleActions()`),
+    /// denormalized per Action into the same `WidgetAction` shape the Favorites
+    /// snapshot uses — id, title, badge glyph, kind, Core-classified execution. The
+    /// Actions widget picker enumerates this and both render surfaces join their
+    /// configured ids against it. Derived from the live `engine`, so it moves with any
+    /// create, edit, delete, enable, or disable that touches an eligible Action.
+    private var eligibleCatalogProjection: [WidgetAction] {
+        engine.eligibleActions().map { action in
+            WidgetAction(action: action, glyph: action.kind.symbol)
+        }
+    }
+
+    /// Publishes the eligible-action catalog and, **only when it actually changed**,
+    /// reloads the Actions widget's timelines *and* the Action control — the two
+    /// surfaces that join their configured ids against it, so a renamed, deleted, or
+    /// (dis)abled action re-renders without the user re-opening a config sheet (ADR
+    /// 0027). The same publish-then-reload pairing as `publishWidgetFavorites`.
+    @MainActor
+    private func publishEligibleCatalog(_ catalog: [WidgetAction]) {
+        if EligibleActionCatalogStore.publish(catalog) {
+            WidgetCenter.shared.reloadTimelines(ofKind: EligibleActionCatalogStore.widgetKind)
+            ControlCenter.shared.reloadControls(ofKind: EligibleActionCatalogStore.controlKind)
         }
     }
 

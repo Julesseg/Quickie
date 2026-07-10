@@ -382,8 +382,36 @@ public struct Action: Identifiable, Sendable {
     /// not its kind: the Pile *page command row* wears the `.pile` kind too, and
     /// that durable command is pinnable like any other.
     public var isFavoriteEligible: Bool {
-        if case .pileEntry = content { return false }
-        return true
+        !isPileEntry
+    }
+
+    /// Whether this Action carries a **Pile entry**'s reference as its Result
+    /// content — the row whose main action *consumes* it (staging removes it from
+    /// the Pile, CONTEXT.md → Stage). Keyed off the row's **content**
+    /// (`.pileEntry`), not its `.pile` kind: the Pile *page command row* wears the
+    /// `.pile` kind too but is a durable command, not an entry. The single
+    /// predicate both eligibility rules that exclude a Pile entry read from, so
+    /// they can never drift.
+    public var isPileEntry: Bool {
+        if case .pileEntry = content { return true }
+        return false
+    }
+
+    /// Whether this Action may be **chosen** for the [[Actions widget]] or the
+    /// [[Action control]] (CONTEXT.md → Actions widget; ADR 0027): every Action
+    /// **except a Pile entry**. A button bound to a Pile entry would die after one
+    /// tap — staging consumes the entry — so it is the one shape excluded from the
+    /// picker's eligible set. (Disabled instances and kinds are already hidden from
+    /// every surface, so the "enabled" half of the rule is enforced by the engine's
+    /// catalog filtering, not here — this predicate is the pure per-Action shape
+    /// half.)
+    ///
+    /// Coincides with `isFavoriteEligible` today — both exclude exactly the Pile
+    /// entry — but is a distinct concept (choosable-in-a-widget vs. pinnable), so it
+    /// is declared separately against the shared `isPileEntry` check rather than
+    /// aliased, in case the two rules ever diverge.
+    public var isWidgetEligible: Bool {
+        !isPileEntry
     }
 }
 

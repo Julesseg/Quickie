@@ -339,6 +339,44 @@ public struct SearchEngine {
         return result
     }
 
+    /// The **eligible-action catalog** (CONTEXT.md → Actions widget; ADR 0027): every
+    /// *enabled* Indexed Action **except a Pile entry**, the set the [[Actions widget]]
+    /// picker offers and the [[Action control]] chooses one of. The App denormalizes
+    /// each into a `WidgetAction` and publishes the list to the App Group; the picker
+    /// enumerates it and the two render surfaces join their configured ids against it.
+    ///
+    /// The rule has two halves, split exactly like the two levels of [[Disabled]]:
+    /// - **enabled** — enforced here by resolving through the *same* live catalog map
+    ///   `action(for:)` uses (`indexedActionsByID(includingDisabled: false)`), so a
+    ///   disabled kind or instance drops out here exactly as it degrades to Home on a
+    ///   `quickie://run/<id>`; eligibility ⟺ runnability, the pairing every projection
+    ///   relies on.
+    /// - **shape** — `Action.isWidgetEligible`, the pure per-Action half (not a Pile
+    ///   entry, whose main action consumes it — a button bound to one would die after
+    ///   one tap).
+    ///
+    /// Order is deterministic — provider order, then each provider's candidate order,
+    /// deduped by id (first wins) — so the published catalog and the picker list are
+    /// stable across rebuilds. Only Indexed Actions are addressable (a dynamic
+    /// calculator answer or file hit is never a widget target), the same restriction
+    /// `bridgedActions()` and `action(for:)` carry.
+    public func eligibleActions() -> [Action] {
+        let live = indexedActionsByID(includingDisabled: false)
+        var result: [Action] = []
+        var seen = Set<String>()
+        for provider in providers where provider.kind == .indexed {
+            for candidate in provider.candidates(for: "") {
+                // Resolve through the live map so the enabled/disabled filtering is
+                // identical to a run's — an id absent from `live` is a disabled kind
+                // or instance and must not be offered.
+                guard let action = live[candidate.id], action.isWidgetEligible else { continue }
+                guard seen.insert(action.id).inserted else { continue }
+                result.append(action)
+            }
+        }
+        return result
+    }
+
     /// The ids of every Custom Action in the indexed catalog, in provider/candidate
     /// order — the raw candidate list `bridgedActions()` filters through `action(for:)`.
     /// Enumerated *including* disabled entries (the resolution step drops those),

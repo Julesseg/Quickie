@@ -5,8 +5,12 @@ import UIKit
 import QuickieCore
 import QuickieStoreKit
 
-/// The Favorites widget's button intents (ADR 0025; issue #126) — the execution
-/// edge of the three-way split `WidgetExecution.classify` decides in Core:
+/// The widget-surface button intents (ADR 0025; issue #126) — the execution edge of
+/// the three-way split `WidgetExecution.classify` decides in Core. Named for their
+/// origin (the Favorites widget) but **surface-agnostic**: the Actions widget and the
+/// Action control (ADR 0027; #140) run their chosen Actions through these same three
+/// intents and the same Frecency outbox, since every widget-grid cell and the control
+/// execute the identical classified lane. The three are:
 ///
 /// - `CopyFavoriteSnippetIntent` — the **in-place** lane: writes the pasteboard in
 ///   the widget process, no app launch.

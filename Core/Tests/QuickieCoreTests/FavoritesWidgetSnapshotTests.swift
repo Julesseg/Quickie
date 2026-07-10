@@ -94,7 +94,7 @@ struct FavoritesWidgetSnapshotTests {
     func itemDenormalizesFromAction() {
         let url = URL(string: "https://docs.example")!
         let action = Action.quicklink(id: "ql.docs", title: "Docs", url: url)
-        let item = WidgetFavorite(action: action, glyph: "link")
+        let item = WidgetAction(action: action, glyph: "link")
         #expect(item.id == "ql.docs")
         #expect(item.title == "Docs")
         #expect(item.glyph == "link")
@@ -104,8 +104,8 @@ struct FavoritesWidgetSnapshotTests {
 
     // MARK: Codec — what the app writes, the widget reads
 
-    private func item(_ id: String, kind: ActionKind = .quicklink, execution: WidgetExecution = .openApp) -> WidgetFavorite {
-        WidgetFavorite(id: id, title: "Title \(id)", glyph: "link", kind: kind, execution: execution)
+    private func item(_ id: String, kind: ActionKind = .quicklink, execution: WidgetExecution = .openApp) -> WidgetAction {
+        WidgetAction(id: id, title: "Title \(id)", glyph: "link", kind: kind, execution: execution)
     }
 
     @Test("the snapshot round-trips through the codec, order preserved")
