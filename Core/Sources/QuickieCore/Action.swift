@@ -101,7 +101,11 @@ public enum ManagementPage: Equatable, Hashable, Sendable {
 /// leading provider badge shown on every Result row (issue #11). Every Action
 /// originates from exactly one Provider, so this is the row's identity — distinct
 /// from `mainAction`, which is what tapping it *does*.
-public enum ActionKind: Equatable, Sendable {
+///
+/// `String`-backed and `Codable` so the Favorites widget snapshot (ADR 0025) can
+/// carry a Favorite's kind across the App Group as a stable name; the raw values
+/// are a persisted format, so renaming a case must keep its raw value.
+public enum ActionKind: String, Equatable, Sendable, Codable {
     case quicklink
     /// A Custom Action (CONTEXT.md → Custom Action; ADR 0021): a user-authored URL
     /// template whose `{name}` slots become the breadcrumb's Arguments. It absorbs
