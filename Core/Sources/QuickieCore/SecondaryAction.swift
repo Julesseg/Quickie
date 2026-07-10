@@ -100,12 +100,13 @@ public enum SecondaryActionKind: Equatable, Hashable, Sendable {
 /// universal `copy`/`share`. Then **`copyDeeplink` is appended** (issue #120): it
 /// keys off the Action's id, which every row has, so it is the one verb a content-less
 /// row still exposes — **but only when the row's `quickie://run/<id>` actually runs to
-/// an effect**. A **query-only capture** (Save for later / New Snippet) does nothing
-/// standalone (issue #140 review), so its deeplink is a no-op not worth copying: the
-/// caller passes `includeDeeplink: false` for it and the verb is dropped, leaving that
-/// row with no secondary actions at all. `includeDeeplink` defaults to `true`, so every
-/// other row — a command, a Pile entry (whose deeplink stages), any content row — keeps
-/// it exactly as before. Content verbs stay first so the menu reads value-first; the
+/// an effect**. **Save for later** does nothing standalone — its main action silently
+/// writes the absent query into the Pile (issue #140 review) — so its deeplink is a
+/// no-op not worth copying: the caller passes `includeDeeplink: false` for it and the
+/// verb is dropped, leaving that content-less row with no secondary actions at all.
+/// `includeDeeplink` defaults to `true`, so every other row — a command, New Snippet
+/// (its deeplink opens the editor), a Pile entry (whose deeplink stages), any content
+/// row — keeps it exactly as before. Content verbs stay first so the menu reads value-first; the
 /// deeplink utility sits last. No dead items — every listed verb can run (a copy always
 /// succeeds; whether the copied deeplink later resolves is the open path's
 /// graceful-staleness concern).
@@ -133,7 +134,7 @@ public func secondaryActions(for content: ResultContent, includeDeeplink: Bool =
         contentVerbs = [.copy, .share]
     }
     // Every runnable row is addressable by its id, so Copy action deeplink rides on it —
-    // the lone verb a content-less command row exposes. A query-only capture's deeplink
-    // is a no-op, so the caller drops it (`includeDeeplink: false`).
+    // the lone verb a content-less command row exposes. Save for later's deeplink is a
+    // no-op (silent Pile write), so the caller drops it (`includeDeeplink: false`).
     return includeDeeplink ? contentVerbs + [.copyDeeplink] : contentVerbs
 }

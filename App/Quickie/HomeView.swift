@@ -89,7 +89,7 @@ struct HomeView: View {
                     .buttonStyle(.plain)
                     .accessibilityIdentifier("favorite.\(action.id)")
                     .resultContextMenu(
-                        secondaryActions: secondaryActions(for: action.content, includeDeeplink: !action.isQueryOnlyCapture),
+                        secondaryActions: secondaryActions(for: action.content, includeDeeplink: !action.isSilentQueryCapture),
                         onSecondaryAction: { onSecondaryAction(action, $0) },
                         isFavorite: true,
                         toggle: { onToggleFavorite(action) }
@@ -145,7 +145,7 @@ struct HomeView: View {
                         .buttonStyle(.plain)
                         .accessibilityIdentifier(action.id)
                         .resultContextMenu(
-                            secondaryActions: secondaryActions(for: action.content, includeDeeplink: !action.isQueryOnlyCapture),
+                            secondaryActions: secondaryActions(for: action.content, includeDeeplink: !action.isSilentQueryCapture),
                             onSecondaryAction: { onSecondaryAction(action, $0) },
                             isFavorite: isFavorite(action),
                             pinnable: action.isFavoriteEligible,

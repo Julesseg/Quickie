@@ -214,10 +214,10 @@ public struct SearchEngine {
     /// is the enumerable catalog of things to pin and reuse, not the query-driven
     /// Dynamic results. A *standalone-runnable* fallback-eligible Indexed Action (a
     /// text-first Custom Action) is part of that catalog: pinning it draws a card that
-    /// launches it verb-first. A **query-only capture** (Save for later, New Snippet)
-    /// is not favorite-eligible — pinned, its card would run with no query and do
-    /// nothing (issue #140) — so reconciliation prunes any such pin before it reaches
-    /// here. An action currently riding the
+    /// launches it verb-first. **Save for later** is not favorite-eligible — its
+    /// silent Pile write does nothing pinned-and-run without a query (issue #140), so
+    /// reconciliation prunes any such pin before it reaches here (New Snippet stays
+    /// pinnable — it opens the editor). An action currently riding the
     /// fallback region stays out of the **Recent** list, though — it already sits at
     /// the bottom of every Result list, so auto-surfacing it again would only be noise.
     ///

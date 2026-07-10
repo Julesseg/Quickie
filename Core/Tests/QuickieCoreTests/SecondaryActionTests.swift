@@ -24,11 +24,11 @@ struct SecondaryActionTests {
         #expect(secondaryActions(for: .text) == [.copy, .share, .copyDeeplink])
     }
 
-    @Test("includeDeeplink:false drops Copy action deeplink — a query-only capture's is a no-op")
-    func queryOnlyCaptureOmitsDeeplink() {
-        // Save for later / New Snippet do nothing run standalone (issue #140), so their
-        // `quickie://run/<id>` is a no-op not worth copying: the App passes
-        // includeDeeplink:false, leaving a content-less capture row with no verbs at all.
+    @Test("includeDeeplink:false drops Copy action deeplink — Save for later's is a no-op")
+    func silentCaptureOmitsDeeplink() {
+        // Save for later does nothing run standalone (its silent Pile write; issue #140),
+        // so its `quickie://run/<id>` is a no-op not worth copying: the App passes
+        // includeDeeplink:false, leaving that content-less row with no verbs at all.
         #expect(secondaryActions(for: .none, includeDeeplink: false) == [])
         // The gate is orthogonal to the content verbs — a hypothetical value row with
         // the flag off keeps copy/share, just not the deeplink.

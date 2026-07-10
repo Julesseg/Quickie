@@ -55,9 +55,9 @@ struct HomeTests {
     func pinnedFallbackSurfacesInFavorites() {
         // A *standalone-runnable* fallback-eligible Indexed Action — a text-first
         // Custom Action — is part of the enumerable catalog: pinning it must draw a
-        // card that launches it verb-first, like any other pin. (A query-only capture
-        // — Save for later, New Snippet — is *not* pinnable: it does nothing run
-        // without a query; issue #140.)
+        // card that launches it verb-first, like any other pin. (Save for later is
+        // *not* pinnable — its silent Pile write does nothing run without a query;
+        // issue #140.)
         let engine = SearchEngine(
             providers: [IndexedProvider(catalog: [.webSearchFallback()])],
             favorites: ["builtin.web-search"],

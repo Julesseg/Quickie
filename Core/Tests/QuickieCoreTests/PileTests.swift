@@ -146,11 +146,13 @@ struct PileTests {
         // It is therefore never pinnable; the App omits its Pin item off this.
         let entry = Action.pileEntry(id: "pile.ferry", text: "compare ferry vs train to Nanaimo")
         #expect(entry.isFavoriteEligible == false)
-        // A query-only capture (Save for later, New Snippet) is likewise not pinnable
-        // (issue #140): pinned, its card would run with no query and do nothing — a
-        // dead card. It stays a Fallback, just not a standalone pin.
+        // Save for later is likewise not pinnable (issue #140): its main action
+        // silently writes the typed query into the Pile, so pinned — run with no query
+        // — its card would do nothing. It stays a Fallback, just not a standalone pin.
         #expect(Action.saveForLater().isFavoriteEligible == false)
-        #expect(Action.newSnippet().isFavoriteEligible == false)
+        // New Snippet, by contrast, stays pinnable: run standalone it opens the Snippet
+        // editor, a real verb-first action.
+        #expect(Action.newSnippet().isFavoriteEligible)
         // Durable, standalone-runnable catalog members stay pinnable: a command row
         // (opens its page) and a text-first Custom Action fallback (launches verb-first).
         #expect(Action.openPilePage().isFavoriteEligible)
@@ -166,9 +168,9 @@ struct PileTests {
         let ids = engine().resolvableHomeIDs()
         #expect(!ids.contains("pile.ferry"))
         #expect(!ids.contains("pile.dentist"))
-        // A query-only capture is pruned here too (issue #140): like a Pile entry it
-        // is not favorite-eligible, so a pin an older build allowed on Save for later
-        // drops out at reconciliation.
+        // Save for later is pruned here too (issue #140): like a Pile entry it is not
+        // favorite-eligible (its silent Pile write does nothing standalone), so a pin
+        // an older build allowed on it drops out at reconciliation.
         #expect(!ids.contains(Action.saveForLaterID))
         // A standalone-runnable pin keeps resolving, so real pins survive.
         #expect(ids.contains(Action.webSearchFallbackID))

@@ -13,19 +13,23 @@ struct EligibleActionCatalogTests {
 
     // MARK: Eligibility — the pure per-Action shape rule
 
-    @Test("a Pile entry and a query-only capture are the ineligible shapes; everything else is choosable")
+    @Test("a Pile entry and Save for later are the ineligible shapes; everything else is choosable")
     func onlyNonStandaloneShapesAreIneligible() {
         // A Pile entry's main action consumes it (staging), so a button bound to one
         // would die after a single tap.
         #expect(Action.pileEntry(id: "pile.1", text: "call bank").isWidgetEligible == false)
         #expect(Action.pileEntry(id: "pile.1", text: "call bank").isPileEntry == true)
 
-        // A query-only capture (Save for later, New Snippet) has nothing to consume
-        // without a typed query, so run standalone it does nothing — also excluded.
-        #expect(Action.saveForLater().isQueryOnlyCapture)
-        #expect(Action.newSnippet().isQueryOnlyCapture)
+        // Save for later silently writes the typed query into the Pile (`.saveToPile`),
+        // so run standalone with no query it does nothing — excluded.
+        #expect(Action.saveForLater().isSilentQueryCapture)
         #expect(Action.saveForLater().isWidgetEligible == false)
-        #expect(Action.newSnippet().isWidgetEligible == false)
+
+        // New Snippet is NOT excluded: though it also consumes the query as a Fallback,
+        // run standalone it opens the Snippet editor (`.composeSnippet`) — a real,
+        // useful verb-first action — so it stays a valid choice.
+        #expect(Action.newSnippet().isSilentQueryCapture == false)
+        #expect(Action.newSnippet().isWidgetEligible)
 
         // Everything else is choosable — snippets, links, shortcuts, the
         // argument-collecting captures (they open a breadcrumb), and command rows.
@@ -35,10 +39,10 @@ struct EligibleActionCatalogTests {
         #expect(Action.newReminder().isWidgetEligible)
         #expect(Action.newEvent().isWidgetEligible)
         #expect(Action.openSettings().isWidgetEligible)
-        // The argument-collecting captures are not query-only — they collect verb-first.
-        #expect(Action.newReminder().isQueryOnlyCapture == false)
-        // A text-first Custom Action declares its slot, so it is not query-only either.
-        #expect(Action.webSearchFallback().isQueryOnlyCapture == false)
+        // The argument-collecting captures and a text-first Custom Action open UI /
+        // collect verb-first, so none is a silent query capture.
+        #expect(Action.newReminder().isSilentQueryCapture == false)
+        #expect(Action.webSearchFallback().isSilentQueryCapture == false)
         #expect(Action.webSearchFallback().isWidgetEligible)
     }
 
@@ -140,18 +144,18 @@ struct EligibleActionCatalogTests {
         #expect(eligible.map(\.id) == ["s.1", "ql.1"])
     }
 
-    @Test("eligibleActions excludes a query-only capture — it does nothing run standalone")
-    func eligibleActionsExcludesQueryOnlyCapture() {
+    @Test("eligibleActions excludes Save for later but keeps New Snippet — outcome, not shape")
+    func eligibleActionsExcludesSilentCaptureButKeepsNewSnippet() {
         let link = Action.quicklink(id: "ql.1", title: "Docs", url: URL(string: "https://x.example")!)
-        // Save for later rides an indexed provider (its real home is the pile/capture
-        // catalog); it must not surface as a widget/control choice.
+        // Both captures ride an indexed provider; Save for later (silent Pile write) is
+        // dropped, New Snippet (opens the editor) survives as a valid choice.
         let engine = SearchEngine(
             providers: [
                 IndexedProvider(catalog: [link], id: .quicklinks),
-                IndexedProvider(catalog: [.saveForLater()], id: .pile),
+                IndexedProvider(catalog: [.saveForLater(), .newSnippet()], id: .pile),
             ]
         )
-        #expect(engine.eligibleActions().map(\.id) == ["ql.1"])
+        #expect(engine.eligibleActions().map(\.id) == ["ql.1", Action.newSnippetID])
     }
 
     @Test("a disabled instance drops out — eligibility mirrors runnability")

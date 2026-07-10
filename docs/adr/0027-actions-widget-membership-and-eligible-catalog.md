@@ -29,8 +29,8 @@ one list, and rebuilds UI the system already provides.
 **Data: a published eligible-action catalog, ids in the configuration.** The
 app is the single writer of a second App Group snapshot beside the Favorites
 one: the **catalog** of every eligible Action (every enabled Action that is
-[[Standalone-runnable]] — all but a [[Pile]] entry or a query-only capture, which
-run to nothing without a query), each entry in the same denormalized shape the Favorites
+[[Standalone-runnable]] — all but a [[Pile]] entry or Save for later, whose silent
+Pile write does nothing without a query), each entry in the same denormalized shape the Favorites
 snapshot uses — id, title, glyph, kind, classified `WidgetExecution` —
 rewritten (publish-only-on-change, paired with a `WidgetCenter` reload)
 whenever the underlying set changes. The picker's `EntityQuery` enumerates it;
