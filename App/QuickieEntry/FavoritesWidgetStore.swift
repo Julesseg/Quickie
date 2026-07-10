@@ -39,10 +39,10 @@ enum FavoritesWidgetStore {
     /// was written, so the caller pairs a real change with one
     /// `WidgetCenter.reloadTimelines(ofKind:)`.
     @discardableResult
-    static func publish(_ favorites: [WidgetFavorite]) -> Bool {
+    static func publish(_ favorites: [WidgetAction]) -> Bool {
         guard favorites != load() else { return false }
         guard let data = FavoritesWidgetSnapshot.encode(favorites) else {
-            // Unreachable today — `WidgetFavorite` is a plain `Codable` struct —
+            // Unreachable today — `WidgetAction` is a plain `Codable` struct —
             // but if an encode ever failed here the grid would silently keep its
             // stale snapshot until the next successful change, a failure that
             // reads as "the widget just didn't update". Trap loudly in debug
@@ -58,7 +58,7 @@ enum FavoritesWidgetStore {
     /// The current snapshot — the widget timeline's whole source of truth. Empty
     /// when nothing has been published or the blob is unreadable, which the widget
     /// renders as the pin-invitation placeholder: never blank, never an error.
-    static func load() -> [WidgetFavorite] {
+    static func load() -> [WidgetAction] {
         FavoritesWidgetSnapshot.decode(defaults.data(forKey: snapshotKey))
     }
 

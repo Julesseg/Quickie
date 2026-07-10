@@ -24,6 +24,17 @@ struct SecondaryActionTests {
         #expect(secondaryActions(for: .text) == [.copy, .share, .copyDeeplink])
     }
 
+    @Test("includeDeeplink:false drops Copy action deeplink — Save for later's is a no-op")
+    func silentCaptureOmitsDeeplink() {
+        // Save for later does nothing run standalone (its silent Pile write; issue #140),
+        // so its `quickie://run/<id>` is a no-op not worth copying: the App passes
+        // includeDeeplink:false, leaving that content-less row with no verbs at all.
+        #expect(secondaryActions(for: .none, includeDeeplink: false) == [])
+        // The gate is orthogonal to the content verbs — a hypothetical value row with
+        // the flag off keeps copy/share, just not the deeplink.
+        #expect(secondaryActions(for: .text, includeDeeplink: false) == [.copy, .share])
+    }
+
     @Test("a url and a number expose copy + share + deeplink, same as text")
     func urlAndNumberExposeCopyShare() {
         #expect(secondaryActions(for: .url) == [.copy, .share, .copyDeeplink])

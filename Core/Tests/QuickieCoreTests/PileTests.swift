@@ -146,9 +146,15 @@ struct PileTests {
         // It is therefore never pinnable; the App omits its Pin item off this.
         let entry = Action.pileEntry(id: "pile.ferry", text: "compare ferry vs train to Nanaimo")
         #expect(entry.isFavoriteEligible == false)
-        // Durable catalog members stay pinnable — including the Pile-adjacent
-        // capture and command rows, which are permanent, not consumed.
-        #expect(Action.saveForLater().isFavoriteEligible)
+        // Save for later is likewise not pinnable (issue #140): its main action
+        // silently writes the typed query into the Pile, so pinned — run with no query
+        // — its card would do nothing. It stays a Fallback, just not a standalone pin.
+        #expect(Action.saveForLater().isFavoriteEligible == false)
+        // New Snippet, by contrast, stays pinnable: run standalone it opens the Snippet
+        // editor, a real verb-first action.
+        #expect(Action.newSnippet().isFavoriteEligible)
+        // Durable, standalone-runnable catalog members stay pinnable: a command row
+        // (opens its page) and a text-first Custom Action fallback (launches verb-first).
         #expect(Action.openPilePage().isFavoriteEligible)
         #expect(Action.webSearchFallback().isFavoriteEligible)
     }
@@ -162,8 +168,11 @@ struct PileTests {
         let ids = engine().resolvableHomeIDs()
         #expect(!ids.contains("pile.ferry"))
         #expect(!ids.contains("pile.dentist"))
-        // The rest of the catalog keeps resolving, so real pins survive.
-        #expect(ids.contains(Action.saveForLaterID))
+        // Save for later is pruned here too (issue #140): like a Pile entry it is not
+        // favorite-eligible (its silent Pile write does nothing standalone), so a pin
+        // an older build allowed on it drops out at reconciliation.
+        #expect(!ids.contains(Action.saveForLaterID))
+        // A standalone-runnable pin keeps resolving, so real pins survive.
         #expect(ids.contains(Action.webSearchFallbackID))
     }
 

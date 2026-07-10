@@ -53,18 +53,17 @@ struct HomeTests {
 
     @Test("a pinned Fallback draws a Favorite card on Home")
     func pinnedFallbackSurfacesInFavorites() {
-        // A fallback-eligible Indexed Action (a text-first Custom Action, Save for
-        // later, New Snippet) is part of the enumerable catalog: pinning it must
-        // draw a card like any other pin, not silently consume a slot.
+        // A *standalone-runnable* fallback-eligible Indexed Action — a text-first
+        // Custom Action — is part of the enumerable catalog: pinning it must draw a
+        // card that launches it verb-first, like any other pin. (Save for later is
+        // *not* pinnable — its silent Pile write does nothing run without a query;
+        // issue #140.)
         let engine = SearchEngine(
-            providers: [
-                IndexedProvider(catalog: [.webSearchFallback()]),
-                IndexedProvider(catalog: [.saveForLater()]),
-            ],
-            favorites: ["builtin.web-search", "builtin.save-for-later"],
-            enabledFallbacks: [Action.webSearchFallbackID, Action.saveForLaterID]
+            providers: [IndexedProvider(catalog: [.webSearchFallback()])],
+            favorites: ["builtin.web-search"],
+            enabledFallbacks: [Action.webSearchFallbackID]
         )
-        #expect(engine.home().favorites.map(\.id) == ["builtin.web-search", "builtin.save-for-later"])
+        #expect(engine.home().favorites.map(\.id) == ["builtin.web-search"])
     }
 
     @Test("an enabled Fallback stays out of the Recent list")

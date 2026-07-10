@@ -55,6 +55,14 @@ public struct SearchEngine {
     /// precedent; issue #114).
     private let disabledInstances: Set<String>
 
+    /// The enabled-only indexed catalog (`includingDisabled: false`), keyed by id and
+    /// built **once** at construction — disabled kinds and instances (and enabled
+    /// fallbacks hidden by the master switch) excluded. The single map `action(for:)`,
+    /// `bridgedActions()`, `eligibleActions()`, and `home()`'s cards all read, so the
+    /// three outward projections the App recomputes per keystroke share one scan
+    /// instead of rebuilding it each (issue #140 review).
+    private let liveIndexedActions: [String: Action]
+
     /// The boost a Favorite adds to its match score. Tuned to reorder *within* a
     /// match tier (e.g. float a pinned exact match above an unpinned one)
     /// without lifting a weak match over a clean exact/prefix one — the tiers,
@@ -94,6 +102,20 @@ public struct SearchEngine {
         self.enabledRank = rank
         self.enablement = enablement
         self.disabledInstances = disabledInstances
+        // Build the enabled-only indexed map **once** at construction (issue #140
+        // review): `action(for:)`, `bridgedActions()`, `eligibleActions()`, and
+        // `home()`'s card resolution all need this identical
+        // `includingDisabled: false` scan, and the App recomputes all three outward
+        // projections on every keystroke — three independent O(n) rebuilds became
+        // one. The rarer `includingDisabled: true` variant (reconciliation only)
+        // stays computed on demand.
+        self.liveIndexedActions = Self.buildIndexedActionsByID(
+            includingDisabled: false,
+            providers: providers,
+            enablement: enablement,
+            disabledInstances: disabledInstances,
+            enabledRank: rank
+        )
     }
 
     /// Whether a Provider's Actions may surface at all (issue #67): true unless
@@ -190,9 +212,12 @@ public struct SearchEngine {
     /// Builds the Home state from the engine's indexed Actions and the user's
     /// signals (issue #9 AC #1, #2). Only **Indexed** Actions are eligible: Home
     /// is the enumerable catalog of things to pin and reuse, not the query-driven
-    /// Dynamic results. A fallback-eligible Indexed Action (a text-first Custom
-    /// Action, Save for later, New Snippet) is part of that catalog: pinning it
-    /// draws a card that launches it verb-first. An action currently riding the
+    /// Dynamic results. A *standalone-runnable* fallback-eligible Indexed Action (a
+    /// text-first Custom Action) is part of that catalog: pinning it draws a card that
+    /// launches it verb-first. **Save for later** is not favorite-eligible — its
+    /// silent Pile write does nothing pinned-and-run without a query (issue #140), so
+    /// reconciliation prunes any such pin before it reaches here (New Snippet stays
+    /// pinnable — it opens the editor). An action currently riding the
     /// fallback region stays out of the **Recent** list, though — it already sits at
     /// the bottom of every Result list, so auto-surfacing it again would only be noise.
     ///
@@ -239,16 +264,44 @@ public struct SearchEngine {
     /// mirroring `results(for:)`. `resolvableHomeIDs()` reads it unfiltered, because
     /// a disabled action still *exists* — only a deleted one stops resolving.
     private func indexedActionsByID(includingDisabled: Bool) -> [String: Action] {
+        // The enabled-only map is memoized at construction (`liveIndexedActions`) so
+        // the per-keystroke projections don't each rebuild it; the unfiltered variant
+        // (reconciliation only) is cheap to compute on demand.
+        includingDisabled
+            ? Self.buildIndexedActionsByID(
+                includingDisabled: true,
+                providers: providers,
+                enablement: enablement,
+                disabledInstances: disabledInstances,
+                enabledRank: enabledRank
+              )
+            : liveIndexedActions
+    }
+
+    /// Builds the indexed-Action-by-id map. A `static` function (not an instance
+    /// method) so `init` can compute the memoized `liveIndexedActions` before `self`
+    /// is fully formed. The `isLive` / `isEnabledFallback` predicates are inlined
+    /// here from their stored inputs — the two one-line checks their instance
+    /// counterparts wrap — since a static context can't call them.
+    private static func buildIndexedActionsByID(
+        includingDisabled: Bool,
+        providers: [Provider],
+        enablement: ProviderEnablement,
+        disabledInstances: Set<String>,
+        enabledRank: [String: Int]
+    ) -> [String: Action] {
         var byId: [String: Action] = [:]
         for provider in providers where provider.kind == .indexed {
-            guard includingDisabled || isLive(provider) else { continue }
+            let live = provider.id.map(enablement.isEnabled) ?? true
+            guard includingDisabled || live else { continue }
             for action in provider.candidates(for: "") {
                 if !includingDisabled {
                     if disabledInstances.contains(action.id) { continue }
                     // An enabled fallback hidden by the master switch draws no card,
                     // like any disabled kind. A pooled eligible action isn't riding
                     // the region, so it keeps its card.
-                    if isEnabledFallback(action), !enablement.isEnabled(.fallbacks) { continue }
+                    let isEnabledFallback = action.isFallbackEligible && enabledRank[action.id] != nil
+                    if isEnabledFallback, !enablement.isEnabled(.fallbacks) { continue }
                 }
                 if byId[action.id] == nil { byId[action.id] = action }
             }
@@ -334,6 +387,44 @@ public struct SearchEngine {
             // nothing — the set never dangles.
             if let action = live[id] {
                 result.append(BridgedAction(id: action.id, title: action.title))
+            }
+        }
+        return result
+    }
+
+    /// The **eligible-action catalog** (CONTEXT.md → Actions widget; ADR 0027): every
+    /// *enabled* Indexed Action **except a Pile entry**, the set the [[Actions widget]]
+    /// picker offers and the [[Action control]] chooses one of. The App denormalizes
+    /// each into a `WidgetAction` and publishes the list to the App Group; the picker
+    /// enumerates it and the two render surfaces join their configured ids against it.
+    ///
+    /// The rule has two halves, split exactly like the two levels of [[Disabled]]:
+    /// - **enabled** — enforced here by resolving through the *same* live catalog map
+    ///   `action(for:)` uses (`indexedActionsByID(includingDisabled: false)`), so a
+    ///   disabled kind or instance drops out here exactly as it degrades to Home on a
+    ///   `quickie://run/<id>`; eligibility ⟺ runnability, the pairing every projection
+    ///   relies on.
+    /// - **shape** — `Action.isWidgetEligible`, the pure per-Action half (not a Pile
+    ///   entry, whose main action consumes it — a button bound to one would die after
+    ///   one tap).
+    ///
+    /// Order is deterministic — provider order, then each provider's candidate order,
+    /// deduped by id (first wins) — so the published catalog and the picker list are
+    /// stable across rebuilds. Only Indexed Actions are addressable (a dynamic
+    /// calculator answer or file hit is never a widget target), the same restriction
+    /// `bridgedActions()` and `action(for:)` carry.
+    public func eligibleActions() -> [Action] {
+        let live = indexedActionsByID(includingDisabled: false)
+        var result: [Action] = []
+        var seen = Set<String>()
+        for provider in providers where provider.kind == .indexed {
+            for candidate in provider.candidates(for: "") {
+                // Resolve through the live map so the enabled/disabled filtering is
+                // identical to a run's — an id absent from `live` is a disabled kind
+                // or instance and must not be offered.
+                guard let action = live[candidate.id], action.isWidgetEligible else { continue }
+                guard seen.insert(action.id).inserted else { continue }
+                result.append(action)
             }
         }
         return result

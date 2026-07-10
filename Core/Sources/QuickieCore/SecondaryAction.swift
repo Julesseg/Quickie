@@ -97,13 +97,20 @@ public enum SecondaryActionKind: Equatable, Hashable, Sendable {
 /// a value); a `.shortcut` and a `.customAction` offer `edit` **alone** (an editable
 /// reference with no text or pre-resolved URL to copy or share); a `.none`
 /// command/capture row has none of them; every other content-bearing case gets the
-/// universal `copy`/`share`. Then **`copyDeeplink` is appended to every
-/// case, `.none` included** (issue #120): it keys off the Action's id, which every
-/// row has, so it is the one verb a content-less row still exposes. Content verbs
-/// stay first so the menu reads value-first; the deeplink utility sits last. No dead
-/// items — every listed verb can run (a copy always succeeds; whether the copied
-/// deeplink later resolves is the open path's graceful-staleness concern).
-public func secondaryActions(for content: ResultContent) -> [SecondaryActionKind] {
+/// universal `copy`/`share`. Then **`copyDeeplink` is appended** (issue #120): it
+/// keys off the Action's id, which every row has, so it is the one verb a content-less
+/// row still exposes — **but only when the row's `quickie://run/<id>` actually runs to
+/// an effect**. **Save for later** does nothing standalone — its main action silently
+/// writes the absent query into the Pile (issue #140 review) — so its deeplink is a
+/// no-op not worth copying: the caller passes `includeDeeplink: false` for it and the
+/// verb is dropped, leaving that content-less row with no secondary actions at all.
+/// `includeDeeplink` defaults to `true`, so every other row — a command, New Snippet
+/// (its deeplink opens the editor), a Pile entry (whose deeplink stages), any content
+/// row — keeps it exactly as before. Content verbs stay first so the menu reads value-first; the
+/// deeplink utility sits last. No dead items — every listed verb can run (a copy always
+/// succeeds; whether the copied deeplink later resolves is the open path's
+/// graceful-staleness concern).
+public func secondaryActions(for content: ResultContent, includeDeeplink: Bool = true) -> [SecondaryActionKind] {
     let contentVerbs: [SecondaryActionKind]
     switch content {
     case .none:
@@ -126,7 +133,8 @@ public func secondaryActions(for content: ResultContent) -> [SecondaryActionKind
     case .text, .url, .number, .pileEntry:
         contentVerbs = [.copy, .share]
     }
-    // Every row is addressable by its id, so Copy action deeplink rides on all of
-    // them — the lone verb a content-less command/capture row now exposes.
-    return contentVerbs + [.copyDeeplink]
+    // Every runnable row is addressable by its id, so Copy action deeplink rides on it —
+    // the lone verb a content-less command row exposes. Save for later's deeplink is a
+    // no-op (silent Pile write), so the caller drops it (`includeDeeplink: false`).
+    return includeDeeplink ? contentVerbs + [.copyDeeplink] : contentVerbs
 }

@@ -382,8 +382,71 @@ public struct Action: Identifiable, Sendable {
     /// not its kind: the Pile *page command row* wears the `.pile` kind too, and
     /// that durable command is pinnable like any other.
     public var isFavoriteEligible: Bool {
-        if case .pileEntry = content { return false }
-        return true
+        isStandaloneRunnable
+    }
+
+    /// Whether this Action carries a **Pile entry**'s reference as its Result
+    /// content — the row whose main action *consumes* it (staging removes it from
+    /// the Pile, CONTEXT.md → Stage). Keyed off the row's **content**
+    /// (`.pileEntry`), not its `.pile` kind: the Pile *page command row* wears the
+    /// `.pile` kind too but is a durable command, not an entry.
+    public var isPileEntry: Bool {
+        if case .pileEntry = content { return true }
+        return false
+    }
+
+    /// Whether this Action, run **standalone** (verb-first, no typed query), silently
+    /// commits that absent query with **no UI** — so nothing observable happens. The
+    /// one such shape is **Save for later**: its main action writes the raw typed
+    /// query straight into the [[Pile]] (`.saveToPile`), so with no query there is
+    /// nothing to save and nothing to see. Detected by the **outcome**, not the kind
+    /// — `run()` with no input is `.saveToPile` — so the rule reads off what the
+    /// action actually does. New Snippet is deliberately *not* here: though it too
+    /// consumes the query as a Fallback, run standalone it opens the Snippet editor
+    /// (`.composeSnippet`) seeded with the (empty) text — a real, useful verb-first
+    /// action — so it stays a standalone run target. The argument-collecting captures
+    /// (Reminder, Event) open a breadcrumb, and every other Action runs to an effect.
+    public var isSilentQueryCapture: Bool {
+        // Only an argument-less action consumes the query through its single-step
+        // effect; an argument-collecting one produces its outcome from collected
+        // values (its plain `run()` is the `.none` placeholder), so guard first —
+        // the same caution `mainAction` takes before reading a single-step outcome.
+        guard arguments.isEmpty else { return false }
+        if case .saveToPile = run() { return true }
+        return false
+    }
+
+    /// Whether running this Action **standalone** — verb-first from an [[Entry
+    /// surface]], a Favorite card, an [[Actions widget]] / [[Action control]] button,
+    /// or a `quickie://run/<id>` deeplink, with no typed query — does something. Two
+    /// shapes fail it: a **Pile entry** (its run *consumes* it — a bound button dies
+    /// after one tap) and a **silent query capture** (Save for later, which just
+    /// writes the absent query into the Pile). Everything else — a Snippet, Quicklink,
+    /// Shortcut, Custom Action, New Snippet (opens the editor), the argument-collecting
+    /// captures, and every command row — runs to a real effect.
+    ///
+    /// The one predicate the standalone surfaces share so their "is this worth
+    /// offering?" answer can never drift: favorite- and widget-eligibility both
+    /// require it. A row's **Copy action deeplink** is close but not identical — it is
+    /// withheld only from a silent query capture (its deeplink is a no-op), *not* from
+    /// a Pile entry, whose deeplink stages (an effect) — so that verb is gated on
+    /// `!isSilentQueryCapture` directly (the App), not on this compound predicate.
+    public var isStandaloneRunnable: Bool {
+        !isPileEntry && !isSilentQueryCapture
+    }
+
+    /// Whether this Action may be **chosen** for the [[Actions widget]] or the
+    /// [[Action control]] (CONTEXT.md → Actions widget; ADR 0027): every Action that
+    /// is `isStandaloneRunnable` — i.e. **not a Pile entry and not a silent query
+    /// capture** (Save for later). A widget/control button runs its action with no
+    /// typed query, so a Pile entry (consumed on first tap) and a Save for later
+    /// (nothing to save) would both be dead buttons; every other enabled Action —
+    /// New Snippet included, since it opens the editor — is a valid choice. (Disabled
+    /// instances and kinds are already hidden from every surface, so the "enabled"
+    /// half of the rule is enforced by the engine's catalog filtering, not here —
+    /// this predicate is the pure per-Action shape half.)
+    public var isWidgetEligible: Bool {
+        isStandaloneRunnable
     }
 }
 
