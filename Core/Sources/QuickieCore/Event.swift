@@ -20,14 +20,6 @@ public enum EventCalendarSelection: Equatable, Sendable {
         }
     }
 
-    /// The calendar id to bake in when this selection skips the calendar step —
-    /// `nil` when the step is collected instead (`.ask`) or routed to the default.
-    var presetCalendarID: String? {
-        switch self {
-        case .ask: return nil
-        case .fixed(let id): return id
-        }
-    }
 }
 
 /// The pure description of a calendar event to create (CONTEXT.md → Event; issue
@@ -73,44 +65,45 @@ extension Action {
     /// verb-first, searchable Action that collects a **title**, a **start**, and a
     /// target **calendar** through the breadcrumb, reusing the #37 engine.
     ///
-    /// Unlike a reminder's optional due date, the start is **always** collected — an
-    /// event has to happen somewhere on the calendar. The opt-in `askLocation` and
-    /// `askNotes` add the Location and Notes steps (issue #145, both off by default).
-    /// The `calendar` setting gates the calendar-choice step; a `.fixed` calendar
-    /// routes every event to a preset one with no step. The `editor` setting (the
-    /// silent-vs-editor preference, default **silent**) decides the final commit:
-    /// silent resolves to `.createEvent` (a direct write), editor to `.composeEvent`
-    /// (the pre-filled system event editor for final review). Both collect the same
-    /// breadcrumb. Step order: Title → Start → Location → Notes → Calendar.
+    /// Which steps it declares is the user's **step plan** (issue #145 follow-up): the
+    /// enabled, ordered `steps` become breadcrumb steps after the pinned Title. A
+    /// `.start` step collects the start; **absent**, the event is all-day today (from
+    /// the injected `now` — the App passes the current date; Core stays clock-free). A
+    /// `.calendar` step collects the target over `calendars` (ask each time); absent,
+    /// the event routes to `calendarTarget` (a `nil` = the system default calendar).
+    /// The `editor` setting (the silent-vs-editor preference, default **silent**)
+    /// decides the final commit: silent resolves to `.createEvent` (a direct write),
+    /// editor to `.composeEvent` (the pre-filled system event editor). The default plan
+    /// (`EventStep.firstRun`) is Start then Calendar — today's flow.
     public static func newEvent(
-        calendar: EventCalendarSelection = .fixed(id: nil),
+        steps: [EventStep] = EventStep.firstRun,
+        calendarTarget: String? = nil,
         calendars: [ChoiceOption] = [],
-        askLocation: Bool = false,
-        askNotes: Bool = false,
+        now: Date = Date(timeIntervalSince1970: 0),
         editor: Bool = false
     ) -> Action {
-        var arguments = [
-            Argument(label: titleLabel, contentType: .text),
-            Argument(label: startLabel, contentType: .date),
-        ]
-        if askLocation {
-            arguments.append(Argument(label: locationLabel, contentType: .text, isOptional: true))
-        }
-        if askNotes {
-            arguments.append(Argument(label: notesLabel, contentType: .text, isOptional: true))
-        }
-        if case .ask = calendar {
-            arguments.append(Argument(
-                label: calendarLabel,
-                contentType: .text,
-                options: calendars,
-                optionSymbol: "calendar"
-            ))
+        var arguments = [Argument(label: titleLabel, contentType: .text)]
+        for step in steps {
+            switch step {
+            case .start:
+                arguments.append(Argument(label: startLabel, contentType: .date))
+            case .location:
+                arguments.append(Argument(label: locationLabel, contentType: .text, isOptional: true))
+            case .notes:
+                arguments.append(Argument(label: notesLabel, contentType: .text, isOptional: true))
+            case .calendar:
+                arguments.append(Argument(
+                    label: calendarLabel,
+                    contentType: .text,
+                    options: calendars,
+                    optionSymbol: "calendar"
+                ))
+            }
         }
 
         // Bind the built-up steps to a `let` so the `@Sendable` effect captures an
         // immutable value (Swift 6 concurrency), and reads them back by label.
-        let steps = arguments
+        let declared = arguments
         return Action(
             id: newEventID,
             kind: .event,
@@ -118,10 +111,10 @@ extension Action {
             aliases: ["event", "calendar", "meeting", "appointment"],
             inputTypes: [.text],
             outputType: .text,
-            arguments: steps,
+            arguments: declared,
             effect: { _ in .none },
             multiStepEffect: { values in
-                let draft = draft(from: values, arguments: steps, calendar: calendar)
+                let draft = draft(from: values, arguments: declared, calendarTarget: calendarTarget, now: now)
                 return editor ? .composeEvent(draft) : .createEvent(draft)
             }
         )
@@ -148,21 +141,23 @@ extension Action {
 
     /// Builds the `EventDraft` from the collected Argument values (issue #38/#145),
     /// applying the timed-vs-all-day rule. Reads each field **by step label** against
-    /// the declared `arguments`, so it is robust to any toggle combination — the two
-    /// text steps (Location, Notes) no longer collide the way by-kind reading did. A
-    /// Location or Notes step committed empty writes no field; a skipped Calendar step
-    /// falls back to the preset routing.
+    /// the declared `arguments`, so it is robust to any step plan — the two text steps
+    /// (Location, Notes) no longer collide the way by-kind reading did. A Location or
+    /// Notes step committed empty writes no field; an absent Calendar step falls back
+    /// to `calendarTarget`. With **no** Start step the event is all-day at `now`; this
+    /// same `now` fallback also keeps `mainAction`'s empty-values probe from trapping.
     private static func draft(
         from values: [ArgumentValue],
         arguments: [Argument],
-        calendar: EventCalendarSelection
+        calendarTarget: String?,
+        now: Date
     ) -> EventDraft {
         let title = values.text(labeled: titleLabel, in: arguments) ?? ""
-        let calendarID = values.choiceID(labeled: calendarLabel, in: arguments) ?? calendar.presetCalendarID
+        let calendarID = values.choiceID(labeled: calendarLabel, in: arguments) ?? calendarTarget
         let picked = values.date(labeled: startLabel, in: arguments)
-        // The start is required, but `mainAction` probes with empty values to read
-        // the outcome *case*; fall back to the epoch so that probe never traps.
-        let start = picked?.date ?? Date(timeIntervalSince1970: 0)
+        // Start collected → its date and time; no Start step (or the empty probe) →
+        // all-day today from the injected clock.
+        let start = picked?.date ?? now
         let hasTime = picked?.hasTime ?? false
         return EventDraft(
             title: title,

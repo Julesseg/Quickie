@@ -58,23 +58,16 @@ struct RootView: View {
     @AppStorage(AppSettings.showRecentsKey, store: AppGroup.defaults)
     private var showRecents = true
 
-    /// New Reminder settings, persisted with working defaults (ADR 0012) so the
-    /// capture is fully functional and now rendered from the declared schema (ADR
-    /// 0020; issue #69): ask for a due date, and pick the target list — empty is the
-    /// "Ask each time" sentinel the generic renderer stores for a dynamic choice. The
-    /// keys are Core-owned (`SettingsKey`) so the schema and this reader never drift.
-    @AppStorage(SettingsKey.reminderAskDate) private var reminderAskDate = true
-    @AppStorage(SettingsKey.reminderAskNotes) private var reminderAskNotes = false
-    @AppStorage(SettingsKey.reminderAskPriority) private var reminderAskPriority = false
+    /// New Reminder's **default-list** target (issue #145 follow-up), used when the
+    /// List step is off: empty (or the system-default sentinel) is the system default
+    /// list, any other value a fixed list id. Whether the list is *collected* is the
+    /// reorderable step plan's business (`reminderSteps`), not this. Core-owned key.
     @AppStorage(SettingsKey.reminderList) private var reminderList = ""
 
-    /// New Event settings, persisted with working defaults (ADR 0012) and rendered
-    /// from the schema (ADR 0020; issue #69): the target-calendar dynamic choice
-    /// (empty = "Ask each time") and create silently vs. opening the pre-filled system
-    /// event editor. Same Core-owned keys the schema declares.
+    /// New Event's **default-calendar** target (issue #145 follow-up), used when the
+    /// Calendar step is off, plus the silent-vs-editor toggle. The step plan
+    /// (`eventSteps`) decides which steps are collected. Core-owned keys.
     @AppStorage(SettingsKey.eventCalendar) private var eventCalendar = ""
-    @AppStorage(SettingsKey.eventAskLocation) private var eventAskLocation = false
-    @AppStorage(SettingsKey.eventAskNotes) private var eventAskNotes = false
     @AppStorage(SettingsKey.eventEditor) private var eventUseEditor = false
 
     /// The Calculator unit-conversion toggle and File Search inline-result cap — the
@@ -90,6 +83,13 @@ struct RootView: View {
     /// The user's Fallback list state — the single enabled list (issue #114),
     /// persisted across launches.
     @State private var fallbacks = FallbacksStore.launch()
+
+    /// The New Reminder / New Event **step plans** (issue #145 follow-up) — each the
+    /// enabled, ordered steps the reorderable double-list on the provider page sets,
+    /// seeded/migrated from the retired per-setting toggles. Read when a capture starts
+    /// to build its breadcrumb; persisted across launches.
+    @State private var reminderSteps = CaptureStepsStore.reminder()
+    @State private var eventSteps = CaptureStepsStore.event()
 
     /// The fallback ids seen eligible at any point this session — the guard that lets
     /// the enabled list forget a *genuinely* lost id (a Shortcut's accepts-input turned
@@ -136,6 +136,11 @@ struct RootView: View {
     /// One-shot latch for the `-uitest-deeplink` seam so the seeded deeplink
     /// dispatches exactly once, even though `onAppear` can fire more than once.
     @State private var didDispatchLaunchDeeplink = false
+
+    /// The measured height of the capture breadcrumb bar (a top overlay with no
+    /// layout footprint), fed to `CaptureContent` so the choice list insets its
+    /// scroll content and no option hides behind the breadcrumb (issue #37).
+    @State private var captureBreadcrumbHeight: CGFloat = 0
 
     /// Whether the `-uitest-entry` seam is armed (issue #124). When set, the
     /// launcher carries a hidden trigger that fires the real `handleDeeplink(.entry)`
@@ -337,7 +342,8 @@ struct RootView: View {
     /// times `makeAction`/`shortcut` runs: the hot `engine` build passes its locals
     /// (one pass per keystroke); the cold computed property below rebuilds them.
     private func eligibleFallbacks(customActionActions: [Action], shortcutActions: [Action]) -> [Action] {
-        (customActionActions + shortcutActions + [.saveForLater(), .newSnippet()])
+        (customActionActions + shortcutActions
+            + [.saveForLater(), .newSnippet(), .newReminder(), .newEvent()])
             .filter(\.isFallbackEligible)
     }
 
@@ -439,7 +445,7 @@ struct RootView: View {
                         // morphing control (the fuzzy choice list or date picker).
                         // It fades in while the browse list it replaces slides out
                         // the bottom, toward the keyboard (issue #37).
-                        CaptureContent(model: capture)
+                        CaptureContent(model: capture, topInset: captureBreadcrumbHeight)
                             .transition(.opacity)
                     } else if inFileSearch {
                         // The scoped file-browsing surface (ADR 0014): an uncapped,
@@ -482,6 +488,10 @@ struct RootView: View {
             .overlay(alignment: .top) {
                 if path.isEmpty && capture.isCapturing {
                     CaptureBreadcrumbBar(model: capture)
+                        // Measure the bar's height (a top overlay with no layout
+                        // footprint) so the choice list can inset its scroll content
+                        // and no option hides behind the breadcrumb (issue #37).
+                        .onGeometryChange(for: CGFloat.self) { $0.size.height } action: { captureBreadcrumbHeight = $0 }
                         .transition(captureMotion.edgeTransition(from: .top))
                 } else if path.isEmpty && inFileSearch {
                     // The `[Search Files] ▸ …` breadcrumb, on the same blur band as a
@@ -969,10 +979,23 @@ struct RootView: View {
         // The Pile's settings page stays options-only (ADR 0018): its entries
         // are temporary content whose verbs — stage and discard — live on the
         // `.pile` entries page, the carve-out from the unified
-        // content-under-options shape. Entries have no per-entry disable. Events
-        // is now options-only too (issue #69): its former bespoke EventSettingsView
-        // folded into the declared schema, so it renders like the others.
-        case .pile, .reminders, .calculator, .events: ProviderOptionsPage(provider: provider)
+        // content-under-options shape. Entries have no per-entry disable.
+        case .pile, .calculator: ProviderOptionsPage(provider: provider)
+        // Reminders and Events lead their Options with the reorderable capture-step
+        // double-list (issue #145 follow-up) — the arrangeable steps beyond the pinned
+        // Title — so they get a dedicated page rather than the options-only one.
+        case .reminders:
+            CaptureStepsPage<ReminderStep>(
+                provider: .reminders,
+                store: reminderSteps,
+                stepsFooter: "The steps this capture collects after the title, in order. Turn a step off to skip it; drag to reorder. List on asks each time; off saves to the default list above."
+            )
+        case .events:
+            CaptureStepsPage<EventStep>(
+                provider: .events,
+                store: eventSteps,
+                stepsFooter: "The steps this capture collects after the title, in order. Turn a step off to skip it; drag to reorder. Start off makes the event all-day today; Calendar on asks each time; off saves to the default calendar above."
+            )
         }
     }
 
@@ -1002,12 +1025,15 @@ struct RootView: View {
     /// records a frecency event (issue #9 AC #2).
     private func run(_ action: Action) {
         signals.record(action.id)
+        // Selected from the bottom fallback region, a capture seeds-and-commits the
+        // typed query as its first step — the free-text Title (issue #145 follow-up) —
+        // so it continues at step 2; verb-first (a name match) it opens empty.
         if action.kind == .reminder {
-            startReminderCapture()
+            startReminderCapture(seed: fallbackSeed(for: action))
             return
         }
         if action.kind == .event {
-            startEventCapture()
+            startEventCapture(seed: fallbackSeed(for: action))
             return
         }
         // An input-accepting Shortcut Action (its `acceptsInput` toggle on, so it
@@ -1046,24 +1072,23 @@ struct RootView: View {
     /// `onChange`), not here — clearing it synchronously while the authorized
     /// session is still resolving on the actor would flash an empty Home for a
     /// frame before the capture slides in.
-    private func startReminderCapture() {
+    private func startReminderCapture(seed: String? = nil) {
         // The `-uitest-stub-reminders` seam: the same breadcrumb driven end-to-end
         // with only the EventKit edge stubbed, because XCUITest cannot pre-grant
         // the Reminders permission dialog (see `UITestReminderCapture`).
         if UITestReminderCapture.isRequested {
-            capture.start(UITestReminderCapture(), layout: keyboardLayout.layout)
+            capture.start(UITestReminderCapture(), layout: keyboardLayout.layout, seed: seed)
             return
         }
         capture.start(
             ReminderCapture(
                 settings: ReminderSettings(
-                    askDate: reminderAskDate,
-                    askNotes: reminderAskNotes,
-                    askPriority: reminderAskPriority,
+                    steps: CaptureStepPlan.resolved(reminderSteps.enabledRaw, as: ReminderStep.self),
                     listStored: reminderList
                 )
             ),
-            layout: keyboardLayout.layout
+            layout: keyboardLayout.layout,
+            seed: seed
         )
     }
 
@@ -1073,18 +1098,18 @@ struct RootView: View {
     /// before the breadcrumb starts (ADR 0012), and routes editor mode through the
     /// shared `eventEditor` presenter. The search field keeps first responder for the
     /// same seamless keyboard hand-off as the reminder capture.
-    private func startEventCapture() {
+    private func startEventCapture(seed: String? = nil) {
         capture.start(
             EventCapture(
                 settings: EventSettings(
+                    steps: CaptureStepPlan.resolved(eventSteps.enabledRaw, as: EventStep.self),
                     calendarStored: eventCalendar,
-                    askLocation: eventAskLocation,
-                    askNotes: eventAskNotes,
                     useEditor: eventUseEditor
                 ),
                 presenter: eventEditor
             ),
-            layout: keyboardLayout.layout
+            layout: keyboardLayout.layout,
+            seed: seed
         )
     }
 

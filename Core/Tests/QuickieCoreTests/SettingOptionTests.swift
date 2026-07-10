@@ -23,12 +23,11 @@ struct SettingOptionTests {
         }
     }
 
-    @Test("the Events schema migrates its capture settings, calendar as a dynamic choice")
-    func eventsSchemaMigratesSettings() {
-        // ADR 0020's migration: the former bespoke EventSettingsView folds into the
-        // schema. The live EventKit calendar picker is a `dynamic choice` fed by the
-        // app — not the escape hatch — with an "Ask each time" placeholder that maps
-        // to the sentinel (empty) value, so nothing ships needing the hatch.
+    @Test("the Events schema declares its default-calendar choice and editor toggle")
+    func eventsSchemaDeclaresOptions() {
+        // The capture *steps* now live in the reorderable double-list on the page (issue
+        // #145 follow-up), not the schema. The schema keeps the default-calendar choice
+        // (where an event lands when the Calendar step is off) and the editor toggle.
         let schema = ProviderID.events.settingsSchema
         let keys = schema.map(\.key)
         #expect(keys.contains(SettingsKey.eventCalendar))
@@ -38,47 +37,42 @@ struct SettingOptionTests {
             Issue.record("the calendar option should be a choice"); return
         }
         #expect(calendar.source == .dynamic(.eventCalendars))
-        // The picker leads with two synthetic rows that preserve both routings the
-        // old settings could express: empty = "Ask each time" (`.ask`), and the
-        // system-default sentinel = "Default calendar" (`.fixed(id: nil)`).
-        #expect(calendar.leadingOptions.map(\.id) == ["", SettingsChoice.systemDefault])
-        #expect(calendar.leadingOptions.map(\.label) == ["Ask each time", "Default calendar"])
+        // No "Ask each time" row: asking is expressed by enabling the Calendar step in
+        // the double-list. The choice is only the default target, leading with it.
+        #expect(calendar.leadingOptions.map(\.id) == [""])
+        #expect(calendar.leadingOptions.map(\.label) == ["Default calendar"])
 
         let editor = schema.first { $0.key == SettingsKey.eventEditor }
         #expect(editor?.kind == .toggle(default: false))
-
-        // The opt-in capture-step toggles (issue #145) — both default OFF so the
-        // default capture flow is unchanged until a user turns one on.
-        let location = schema.first { $0.key == SettingsKey.eventAskLocation }
-        #expect(location?.kind == .toggle(default: false))
-        let notes = schema.first { $0.key == SettingsKey.eventAskNotes }
-        #expect(notes?.kind == .toggle(default: false))
     }
 
-    @Test("the Reminders schema migrates its capture settings, list as a dynamic choice")
-    func remindersSchemaMigratesSettings() {
+    @Test("the Reminders schema declares only its default-list choice")
+    func remindersSchemaDeclaresOptions() {
+        // Like Events, the steps moved to the double-list; the schema keeps just the
+        // default-list choice (the target when the List step is off).
         let schema = ProviderID.reminders.settingsSchema
         let keys = schema.map(\.key)
-        #expect(keys.contains(SettingsKey.reminderAskDate))
         #expect(keys.contains(SettingsKey.reminderList))
-
-        let askDate = schema.first { $0.key == SettingsKey.reminderAskDate }
-        // The due-date step defaults on (ADR 0012's working defaults).
-        #expect(askDate?.kind == .toggle(default: true))
 
         guard case .choice(let list)? = schema.first(where: { $0.key == SettingsKey.reminderList })?.kind else {
             Issue.record("the list option should be a choice"); return
         }
         #expect(list.source == .dynamic(.reminderLists))
-        #expect(list.leadingOptions.map(\.id) == ["", SettingsChoice.systemDefault])
-        #expect(list.leadingOptions.map(\.label) == ["Ask each time", "Default list"])
+        #expect(list.leadingOptions.map(\.id) == [""])
+        #expect(list.leadingOptions.map(\.label) == ["Default list"])
+    }
 
-        // The opt-in capture-step toggles (issue #145) — both default OFF so the
-        // default capture flow is unchanged until a user turns one on.
-        let askNotes = schema.first { $0.key == SettingsKey.reminderAskNotes }
-        #expect(askNotes?.kind == .toggle(default: false))
-        let askPriority = schema.first { $0.key == SettingsKey.reminderAskPriority }
-        #expect(askPriority?.kind == .toggle(default: false))
+    @Test("the reorderable step plan drives the breadcrumb, not schema toggles")
+    func stepPlanResolvesAndPools() {
+        // The step universe is a fixed enum; the plan is the enabled, ordered subset,
+        // and the pool its canonical-order complement (issue #145 follow-up).
+        let reminder: [ReminderStep] = CaptureStepPlan.resolved(["priority", "dueDate"])
+        #expect(reminder == [.priority, .dueDate])
+        #expect(CaptureStepPlan.pool(enabled: reminder) == [.notes, .list])
+
+        let event: [EventStep] = CaptureStepPlan.resolved(["calendar"])
+        #expect(event == [.calendar])
+        #expect(CaptureStepPlan.pool(enabled: event) == [.start, .location, .notes])
     }
 
     @Test("the Calculator schema ships a new unit-conversion toggle, defaulting on")

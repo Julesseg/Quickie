@@ -20,14 +20,6 @@ public enum ReminderListSelection: Equatable, Sendable {
         }
     }
 
-    /// The list id to bake in when this selection skips the list step — `nil`
-    /// when the step is collected instead (`.ask`) or routed to the system default.
-    var presetListID: String? {
-        switch self {
-        case .ask: return nil
-        case .fixed(let id): return id
-        }
-    }
 }
 
 /// The pure description of a reminder to create (CONTEXT.md → Reminder; issue
@@ -71,46 +63,44 @@ extension Action {
     /// **due date**, and a target **list** through the breadcrumb, then resolves
     /// to a pure `createReminder` outcome the app performs against EventKit.
     ///
-    /// Which steps it declares is gated by the user's settings: `askDate` adds the
-    /// due-date step (ADR 0012's working defaults keep it on), the opt-in `askNotes`
-    /// and `askPriority` add the Notes and Priority steps (issue #145, both off by
-    /// default), and `list == .ask` adds the list-choice step over the supplied
-    /// `lists`. A `.fixed` list routes every reminder to a preset list with no step.
-    /// Step order: Title → Due Date → Notes → Priority → List.
+    /// Which steps it declares is the user's **step plan** (issue #145 follow-up): the
+    /// enabled, ordered `steps` become breadcrumb steps after the pinned Title, in that
+    /// order. A `.list` step collects the target list over the supplied `lists` (ask
+    /// each time); with `.list` absent the reminder routes to `listTarget` (a `nil`
+    /// meaning the system default list) with no step. The default plan
+    /// (`ReminderStep.firstRun`) is Due Date then List — today's flow.
     public static func newReminder(
-        askDate: Bool = true,
-        askNotes: Bool = false,
-        askPriority: Bool = false,
-        list: ReminderListSelection = .fixed(id: nil),
+        steps: [ReminderStep] = ReminderStep.firstRun,
+        listTarget: String? = nil,
         lists: [ChoiceOption] = []
     ) -> Action {
         var arguments = [Argument(label: titleLabel, contentType: .text)]
-        if askDate {
-            arguments.append(Argument(label: dueDateLabel, contentType: .date))
-        }
-        if askNotes {
-            arguments.append(Argument(label: notesLabel, contentType: .text, isOptional: true))
-        }
-        if askPriority {
-            arguments.append(Argument(
-                label: priorityLabel,
-                contentType: .text,
-                options: priorityOptions,
-                optionSymbol: "exclamationmark"
-            ))
-        }
-        if case .ask = list {
-            arguments.append(Argument(
-                label: listLabel,
-                contentType: .text,
-                options: lists,
-                optionSymbol: "list.bullet"
-            ))
+        for step in steps {
+            switch step {
+            case .dueDate:
+                arguments.append(Argument(label: dueDateLabel, contentType: .date))
+            case .notes:
+                arguments.append(Argument(label: notesLabel, contentType: .text, isOptional: true))
+            case .priority:
+                arguments.append(Argument(
+                    label: priorityLabel,
+                    contentType: .text,
+                    options: priorityOptions,
+                    optionSymbol: "exclamationmark"
+                ))
+            case .list:
+                arguments.append(Argument(
+                    label: listLabel,
+                    contentType: .text,
+                    options: lists,
+                    optionSymbol: "list.bullet"
+                ))
+            }
         }
 
         // Bind the built-up steps to a `let` so the `@Sendable` effect captures an
         // immutable value (Swift 6 concurrency), and reads them back by label.
-        let steps = arguments
+        let declared = arguments
         return Action(
             id: newReminderID,
             kind: .reminder,
@@ -118,10 +108,10 @@ extension Action {
             aliases: ["reminder", "remind me", "todo"],
             inputTypes: [.text],
             outputType: .text,
-            arguments: steps,
+            arguments: declared,
             effect: { _ in .none },
             multiStepEffect: { values in
-                .createReminder(draft(from: values, arguments: steps, list: list))
+                .createReminder(draft(from: values, arguments: declared, listTarget: listTarget))
             }
         )
     }
@@ -153,19 +143,19 @@ extension Action {
 
     /// Builds the `ReminderDraft` from the collected Argument values (issue #37/#145).
     /// Reads each field **by step label** against the declared `arguments`, so it is
-    /// robust to any toggle combination — two text steps (Title, Notes) and two
-    /// choice steps (Priority, List) no longer collide the way by-kind reading did.
-    /// A Notes step committed empty writes no notes; an absent Priority step is 0
-    /// (none); a skipped List step falls back to the preset routing.
+    /// robust to any step plan — two text steps (Title, Notes) and two choice steps
+    /// (Priority, List) no longer collide the way by-kind reading did. A Notes step
+    /// committed empty writes no notes; an absent Priority step is 0 (none); an absent
+    /// List step falls back to `listTarget` (a `nil` = the system default list).
     private static func draft(
         from values: [ArgumentValue],
         arguments: [Argument],
-        list: ReminderListSelection
+        listTarget: String?
     ) -> ReminderDraft {
         let title = values.text(labeled: titleLabel, in: arguments) ?? ""
         let due = values.date(labeled: dueDateLabel, in: arguments)
         let priority = values.choiceID(labeled: priorityLabel, in: arguments).flatMap { Int($0) } ?? 0
-        let listID = values.choiceID(labeled: listLabel, in: arguments) ?? list.presetListID
+        let listID = values.choiceID(labeled: listLabel, in: arguments) ?? listTarget
         return ReminderDraft(
             title: title,
             dueDate: due?.date,

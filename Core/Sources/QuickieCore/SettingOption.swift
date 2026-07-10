@@ -152,17 +152,16 @@ public enum SettingsKey {
     public static let eventCalendar = "event.calendar"
     /// The New Event silent-vs-editor toggle (default silent, off).
     public static let eventEditor = "event.editor"
-    /// The New Event opt-in Location step toggle (default off; issue #145).
-    public static let eventAskLocation = "event.askLocation"
-    /// The New Event opt-in Notes step toggle (default off; issue #145).
-    public static let eventAskNotes = "event.askNotes"
-    /// The New Reminder due-date step toggle (default on).
+    /// The New Event enabled, ordered **step plan** (issue #145 follow-up) — the raw
+    /// step ids the reorderable double-list persists.
+    public static let eventSteps = "event.steps"
+    /// The New Reminder due-date toggle (retired as a schema option; issue #145
+    /// follow-up). Kept only so the step-plan migration can read the old value.
     public static let reminderAskDate = "reminder.askDate"
-    /// The New Reminder opt-in Notes step toggle (default off; issue #145).
-    public static let reminderAskNotes = "reminder.askNotes"
-    /// The New Reminder opt-in Priority step toggle (default off; issue #145).
-    public static let reminderAskPriority = "reminder.askPriority"
-    /// The New Reminder target-list dynamic choice: empty = "Ask each time".
+    /// The New Reminder enabled, ordered **step plan** (issue #145 follow-up) — the raw
+    /// step ids the reorderable double-list persists.
+    public static let reminderSteps = "reminder.steps"
+    /// The New Reminder default-list choice: the target when the List step is off.
     public static let reminderList = "reminder.list"
     /// The Calculator unit-conversion toggle (default on).
     public static let calculatorUnitConversion = "calculator.unitConversion"
@@ -198,27 +197,14 @@ public extension ProviderID {
             return [
                 SettingOption(
                     key: SettingsKey.eventCalendar,
-                    title: "Calendar",
-                    footer: "Ask each time adds a calendar step to the capture. Pick a calendar to save every event there silently.",
+                    title: "Default calendar",
+                    footer: "Where an event is saved when the Calendar step is off. Turn the Calendar step on below to pick per event instead.",
                     kind: .choice(ChoiceSetting(
                         source: .dynamic(.eventCalendars),
                         leadingOptions: [
-                            ChoiceOption(id: "", label: "Ask each time"),
-                            ChoiceOption(id: SettingsChoice.systemDefault, label: "Default calendar"),
+                            ChoiceOption(id: "", label: "Default calendar"),
                         ]
                     ))
-                ),
-                SettingOption(
-                    key: SettingsKey.eventAskLocation,
-                    title: "Ask for a location",
-                    footer: "On adds a location step to the capture. Off saves the event with no location. Leave the step empty to skip it for one event.",
-                    kind: .toggle(default: false)
-                ),
-                SettingOption(
-                    key: SettingsKey.eventAskNotes,
-                    title: "Ask for notes",
-                    footer: "On adds a notes step to the capture. Off saves the event with no notes. Leave the step empty to skip it for one event.",
-                    kind: .toggle(default: false)
                 ),
                 SettingOption(
                     key: SettingsKey.eventEditor,
@@ -230,32 +216,13 @@ public extension ProviderID {
         case .reminders:
             return [
                 SettingOption(
-                    key: SettingsKey.reminderAskDate,
-                    title: "Ask for a due date",
-                    footer: "On adds a due-date step to the capture. Off saves the reminder with no date.",
-                    kind: .toggle(default: true)
-                ),
-                SettingOption(
-                    key: SettingsKey.reminderAskNotes,
-                    title: "Ask for notes",
-                    footer: "On adds a notes step to the capture. Off saves the reminder with no notes. Leave the step empty to skip it for one reminder.",
-                    kind: .toggle(default: false)
-                ),
-                SettingOption(
-                    key: SettingsKey.reminderAskPriority,
-                    title: "Ask for a priority",
-                    footer: "On adds a priority step (None, Low, Medium, High) to the capture. Off saves the reminder with no priority.",
-                    kind: .toggle(default: false)
-                ),
-                SettingOption(
                     key: SettingsKey.reminderList,
-                    title: "List",
-                    footer: "Ask each time adds a list step to the capture. Pick a list to save every reminder there silently.",
+                    title: "Default list",
+                    footer: "Where a reminder is saved when the List step is off. Turn the List step on below to pick per reminder instead.",
                     kind: .choice(ChoiceSetting(
                         source: .dynamic(.reminderLists),
                         leadingOptions: [
-                            ChoiceOption(id: "", label: "Ask each time"),
-                            ChoiceOption(id: SettingsChoice.systemDefault, label: "Default list"),
+                            ChoiceOption(id: "", label: "Default list"),
                         ]
                     ))
                 ),

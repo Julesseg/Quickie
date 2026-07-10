@@ -17,21 +17,25 @@ import QuickieCore
 /// back here. Keys are Core-owned (`SettingsKey`) so the schema and the capture never
 /// drift onto different keys.
 struct EventSettings {
-    /// The calendar dynamic choice's stored value: empty = "Ask each time" (`.ask`),
+    /// The enabled, ordered capture steps after the pinned Title (issue #145 follow-up)
+    /// — the user's step plan from the reorderable double-list. `.calendar` here means
+    /// "ask each time"; absent, the event routes to `calendarStored`'s target. `.start`
+    /// absent makes the event all-day today.
+    var steps: [EventStep] = EventStep.firstRun
+    /// The default-calendar choice's stored value used when the Calendar step is
+    /// **off**: empty (or the system-default sentinel) = the system default calendar,
     /// else a fixed calendar id.
     var calendarStored: String = ""
-    /// Ask for a location (issue #145, default OFF); ON adds the opt-in Location step.
-    var askLocation: Bool = false
-    /// Ask for notes (issue #145, default OFF); ON adds the opt-in Notes step.
-    var askNotes: Bool = false
     /// Open the pre-filled system event editor for final review instead of writing
     /// silently (default **silent**, OFF).
     var useEditor: Bool = false
 
-    /// How the calendar step is routed (CONTEXT.md → Event): the stored dynamic
-    /// choice, mapped by Core — empty is "Ask each time", any value a fixed calendar.
-    var calendarSelection: EventCalendarSelection {
-        EventCalendarSelection(stored: calendarStored)
+    /// The fixed calendar id to route to when the Calendar step is off (CONTEXT.md →
+    /// Event): the stored default-calendar choice mapped by Core — a `nil` is the
+    /// system default. Unused while the Calendar step is on.
+    var calendarTarget: String? {
+        if case .fixed(let id) = EventCalendarSelection(stored: calendarStored) { return id }
+        return nil
     }
 }
 
@@ -102,10 +106,10 @@ struct EventCapture: Capture {
     func makeAction() async -> Action {
         let calendars = await service.writableCalendars()
         return .newEvent(
-            calendar: settings.calendarSelection,
+            steps: settings.steps,
+            calendarTarget: settings.calendarTarget,
             calendars: calendars,
-            askLocation: settings.askLocation,
-            askNotes: settings.askNotes,
+            now: Date(),
             editor: settings.useEditor
         )
     }

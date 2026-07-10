@@ -347,16 +347,18 @@ public struct Action: Identifiable, Sendable {
     /// Shortcut with "accepts input" on qualifies automatically. The two built-in
     /// captures (Save for later, New Snippet) consume the raw typed text through
     /// their single-step `effect` rather than a declared Argument, so they are
-    /// eligible by kind. Quicklinks, Snippets, files, commands, and the date/choice-
-    /// or number-first captures (Reminder, Event) have nowhere to put the query and
-    /// are never eligible.
+    /// eligible by kind. The New Reminder and New Event captures lead with a free-text
+    /// **Title** step (issue #145 follow-up), so a fallback selection seeds that title
+    /// and the breadcrumb continues from the next step — they are eligible by kind too.
+    /// Quicklinks, Snippets, files, and commands have nowhere to put the query and are
+    /// never eligible.
     ///
     /// Eligibility only *admits* an Action to the Fallback list's disabled pool; the
     /// user activates it there. Membership in the user's enabled list — not this
     /// predicate — decides what actually rides the region (see `SearchEngine`).
     public var isFallbackEligible: Bool {
         switch kind {
-        case .saveForLater, .newSnippet:
+        case .saveForLater, .newSnippet, .reminder, .event:
             return true
         case .customAction, .shortcut:
             guard let first = arguments.first else { return false }
