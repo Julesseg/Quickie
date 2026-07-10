@@ -25,6 +25,11 @@ public enum ProviderID: String, CaseIterable, Equatable, Hashable, Sendable {
     case shortcuts
     case reminders
     case events
+    /// The **System** umbrella provider (CONTEXT.md → System provider; ADR 0029):
+    /// groups Quickie's OS-integration actions and links to the Reminders and
+    /// Events pages beneath it. Its Enabled toggle **cascades** — off short-circuits
+    /// every member kind (see `umbrellaParent`, `isEffectivelyEnabled`).
+    case system
     case calculator
     case fileSearch = "file-search"
 
@@ -39,8 +44,27 @@ public enum ProviderID: String, CaseIterable, Equatable, Hashable, Sendable {
         case .shortcuts: return "Shortcuts"
         case .reminders: return "Reminders"
         case .events: return "Events"
+        case .system: return "System"
         case .calculator: return "Calculator"
         case .fileSearch: return "File Search"
         }
     }
+
+    /// The **umbrella parent** governing this provider (CONTEXT.md → System
+    /// provider; ADR 0029), or `nil` for a top-level provider. Reminders and Events
+    /// live under the System umbrella: its Enabled toggle off short-circuits them
+    /// (the member's own toggle keeps working underneath — see
+    /// `ProviderEnablement.isEffectivelyEnabled`). The one grouping level above kind.
+    public var umbrellaParent: ProviderID? {
+        switch self {
+        case .reminders, .events: return .system
+        default: return nil
+        }
+    }
+
+    /// The providers the top-level Settings **Providers** list shows, in order
+    /// (CONTEXT.md → Settings; ADR 0029). The umbrella members (Reminders, Events)
+    /// are folded under the single **System** row — reachable through it, or by
+    /// typing their names — so they do not appear here directly.
+    public static let topLevelProviders: [ProviderID] = allCases.filter { $0.umbrellaParent == nil }
 }

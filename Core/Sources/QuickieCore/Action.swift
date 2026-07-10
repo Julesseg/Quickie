@@ -152,6 +152,11 @@ public enum ActionKind: String, Equatable, Sendable, Codable {
     /// row never wears the same badge as the data rows it governs (a Quicklinks
     /// command vs a user's Quicklinks, a Fallbacks command vs a Custom Action).
     case managementPage
+    /// A System provider built-in (CONTEXT.md → System provider; ADR 0029): the
+    /// permanent OS-integration actions App Store Search and Open iOS Settings. Its
+    /// own kind so the rows wear the System badge, distinct from a user's Custom
+    /// Action — and it is disable-only (no delete), governed by the System umbrella.
+    case system
 }
 
 /// What tapping a row *does*, as a coarse classification of its `ActionOutcome`
@@ -360,7 +365,10 @@ public struct Action: Identifiable, Sendable {
         switch kind {
         case .saveForLater, .newSnippet, .reminder, .event:
             return true
-        case .customAction, .shortcut:
+        case .customAction, .shortcut, .system:
+            // A System built-in with a free-text first slot (App Store Search)
+            // seeds the query like a text-first Custom Action; an argument-less one
+            // (Open iOS Settings) has nowhere to put it and falls through to `false`.
             guard let first = arguments.first else { return false }
             // A choice slot's content type is `.text` too, so the option set is
             // what tells a free-text slot from a picked one — a query can only
@@ -833,6 +841,107 @@ extension Action {
             inputTypes: [],
             outputType: .text
         ) { _ in .openPage(.settings(panel: .reminders)) }
+    }
+
+    /// The "System" command (CONTEXT.md → System provider, Settings command row;
+    /// ADR 0029): the umbrella provider's typed row, deeplinking to its Management
+    /// page — the cascading Enabled toggle, the Reminders/Events navigation rows,
+    /// and the two OS-integration built-ins. Kind-less like the other page commands
+    /// so a disabled System stays reachable (and re-enableable) by typing its name.
+    public static func openSystemPage() -> Action {
+        Action(
+            id: "builtin.system-page",
+            kind: .managementPage,
+            title: "System",
+            aliases: ["system settings", "os", "integration"],
+            inputTypes: [],
+            outputType: .text
+        ) { _ in .openPage(.settings(panel: .system)) }
+    }
+
+    /// The stable id of the **App Store Search** System built-in (ADR 0029).
+    public static let appStoreSearchID = "builtin.system.app-store-search"
+    /// The stable id of the **Open iOS Settings** System built-in (ADR 0029).
+    public static let openIOSSettingsID = "builtin.system.open-ios-settings"
+
+    /// **App Store Search** (CONTEXT.md → System provider; ADR 0029): a permanent
+    /// System built-in that collects one free-text query and opens the App Store's
+    /// public search. Its single text-first Argument makes it **fallback-eligible**
+    /// by shape (it waits in the Fallback list's pool until activated), and running
+    /// it verb-first starts the breadcrumb at the search step. Disable-only — the
+    /// System page and the Fallback pool toggle it, but it is never deletable.
+    public static func appStoreSearch() -> Action {
+        Action(
+            id: appStoreSearchID,
+            kind: .system,
+            title: "App Store Search",
+            aliases: ["app store", "appstore", "search app store", "apps"],
+            inputTypes: [.text],
+            outputType: .url,
+            arguments: [Argument(label: "Search", contentType: .text)],
+            // Verb-first the row has nothing to open until the query lands, so its
+            // single-step effect is inert; the breadcrumb commit builds the URL.
+            effect: { _ in .none },
+            multiStepEffect: { values in
+                let term = values.firstText ?? ""
+                // The outcome **case** stays `.openURL` regardless of the term so the
+                // row's glyph and Return-key label read like web search's (a browser
+                // open, `.search`) — `mainAction`/`returnKeyLabel` classify off an
+                // empty-args run. A blank term (only reachable via that classification
+                // call — the required slot never commits empty) falls back to the App
+                // Store's bare search landing rather than a broken open.
+                let url = appStoreSearchURL(term: term) ?? appStoreSearchLandingURL
+                return .openURL(url)
+            }
+        )
+    }
+
+    /// The App Store search URL for `term`, or `nil` if it can't be built (an empty
+    /// term). Uses the public `itms-apps` scheme against the App Store's software
+    /// search endpoint, which opens the App Store app straight to the results
+    /// (ADR 0029). Pure and testable — the app just opens whatever URL this returns.
+    public static func appStoreSearchURL(term: String) -> URL? {
+        let trimmed = term.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else { return nil }
+        var components = URLComponents()
+        components.scheme = "itms-apps"
+        components.host = "itunes.apple.com"
+        components.path = "/search"
+        components.queryItems = [
+            URLQueryItem(name: "media", value: "software"),
+            URLQueryItem(name: "term", value: trimmed),
+        ]
+        return components.url
+    }
+
+    /// The App Store's bare software-search landing (no term) — the graceful
+    /// fallback when `appStoreSearchURL` can't build a termed URL, so the outcome
+    /// case stays `.openURL` for glyph/label classification (ADR 0029).
+    static let appStoreSearchLandingURL = URL(string: "itms-apps://itunes.apple.com/search?media=software")!
+
+    /// **Open iOS Settings** (CONTEXT.md → System provider; ADR 0029): a permanent
+    /// System built-in with **no arguments** that opens Quickie's own page in the
+    /// iOS Settings app — the only Settings target iOS exposes (a query-driven
+    /// "search Settings" is infeasible publicly or privately; recorded as such, do
+    /// not re-propose). Opens `app-settings:`, the value of
+    /// `UIApplication.openSettingsURLString`, kept as a literal so Core stays
+    /// UIKit-free (the App's Paste permission hint opens the same destination via
+    /// that UIKit constant). A plain command row (no breadcrumb), never
+    /// fallback-eligible, disable-only.
+    public static func openIOSSettings() -> Action {
+        Action(
+            id: openIOSSettingsID,
+            kind: .system,
+            title: "Open iOS Settings",
+            aliases: ["settings", "ios settings", "open settings"],
+            inputTypes: [],
+            outputType: .url,
+            content: ResultContent.none
+        ) { _ in
+            // `UIApplication.openSettingsURLString` is documented as "app-settings:";
+            // hard-coded here so the pure Core never imports UIKit.
+            .openURL(URL(string: "app-settings:")!)
+        }
     }
 
     /// A file surfaced by File Search (CONTEXT.md → File Search; ADR 0015): a row

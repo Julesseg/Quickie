@@ -197,6 +197,7 @@ private struct FallbackRow: View {
         case .customAction: return "Custom Action"
         case .shortcut: return "Shortcut"
         case .saveForLater, .newSnippet: return "Built-in capture"
+        case .system: return "System built-in"
         default: return nil
         }
     }

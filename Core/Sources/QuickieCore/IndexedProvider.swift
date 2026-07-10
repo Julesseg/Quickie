@@ -63,6 +63,11 @@ extension IndexedProvider {
             .openFileSearchPage(),
             .openEventsPage(),
             .openRemindersPage(),
+            // The System umbrella's typed row (ADR 0029): opens its Management page
+            // (the cascading Enabled toggle, the Reminders/Events links, and the two
+            // OS-integration built-ins). Kind-less like the rows above, so a disabled
+            // System is still reachable — and re-enableable — by typing its name.
+            .openSystemPage(),
             // The Pile's settings command row (issue #67): its typed "Pile" row
             // opens the *entries* page (the ADR 0018 carve-out), so this is the
             // typed route to its Enabled toggle — riding the built-ins like the

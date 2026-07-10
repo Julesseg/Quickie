@@ -210,6 +210,7 @@ extension ProviderID {
         case .shortcuts: return "square.stack.3d.up"
         case .reminders: return "checklist"
         case .events: return "calendar"
+        case .system: return "gearshape.2"
         case .calculator: return "function"
         case .fileSearch: return "doc.text.magnifyingglass"
         }

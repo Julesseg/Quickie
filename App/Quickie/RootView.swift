@@ -321,6 +321,13 @@ struct RootView: View {
                 // indexed instance is only for matching by name; activating it
                 // rebuilds a configured Action from the user's calendars + settings.
                 IndexedProvider(catalog: [.newEvent()], id: .events),
+                // The System umbrella's own built-ins (CONTEXT.md → System
+                // provider; ADR 0029): App Store Search and Open iOS Settings,
+                // attributed to `.system` so the umbrella's Enabled toggle
+                // cascades over them (and, via `isEffectivelyEnabled`, over the
+                // Reminders/Events catalogs above too). App Store Search is
+                // fallback-eligible by shape and enters the Fallbacks pool below.
+                IndexedProvider(catalog: [.appStoreSearch(), .openIOSSettings()], id: .system),
             ],
             layout: keyboardLayout.layout,
             favorites: signals.favorites,
@@ -342,8 +349,11 @@ struct RootView: View {
     /// times `makeAction`/`shortcut` runs: the hot `engine` build passes its locals
     /// (one pass per keystroke); the cold computed property below rebuilds them.
     private func eligibleFallbacks(customActionActions: [Action], shortcutActions: [Action]) -> [Action] {
+        // App Store Search is a permanent, fallback-eligible System built-in (ADR
+        // 0029): it enters the Fallback list's pool by shape, waiting there until
+        // the user activates it — never auto-enabled.
         (customActionActions + shortcutActions
-            + [.saveForLater(), .newSnippet(), .newReminder(), .newEvent()])
+            + [.saveForLater(), .newSnippet(), .newReminder(), .newEvent(), .appStoreSearch()])
             .filter(\.isFallbackEligible)
     }
 
@@ -996,6 +1006,10 @@ struct RootView: View {
                 store: eventSteps,
                 stepsFooter: "The steps this capture collects after the title, in order. Turn a step off to skip it; drag to reorder. Start off makes the event all-day today; Calendar on asks each time; off saves to the default calendar above."
             )
+        // The System umbrella page (ADR 0029): the cascading Enabled toggle and the
+        // Reminders/Events link rows (its declared schema), plus an actions section
+        // for its two disable-only built-ins.
+        case .system: SystemView(enablement: instanceEnablement)
         }
     }
 

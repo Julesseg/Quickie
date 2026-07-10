@@ -183,9 +183,21 @@ public extension ProviderID {
         SettingOption(
             key: SettingOption.enabledKey,
             title: "Enabled",
-            footer: "Off hides \(displayName) from results, Recents, and Favorites until you turn it back on. Its data is kept, and you can always reach this page by typing its name.",
+            footer: enabledFooter,
             kind: .enabled
         )
+    }
+
+    /// The Enabled toggle's footer. The umbrella provider (System, ADR 0029)
+    /// describes its **cascade** — off silences its member kinds too — while every
+    /// other provider gets the plain reversible-hide copy.
+    private var enabledFooter: String {
+        switch self {
+        case .system:
+            return "Off hides Reminders, Events, App Store Search, and Open iOS Settings from results, Recents, and Favorites until you turn it back on. Reminders and Events keep their own settings underneath, so turning System back on restores them. You can always reach this page by typing its name."
+        default:
+            return "Off hides \(displayName) from results, Recents, and Favorites until you turn it back on. Its data is kept, and you can always reach this page by typing its name."
+        }
     }
 
     /// The provider's own options beyond Enabled. Providers with no configurable
@@ -225,6 +237,24 @@ public extension ProviderID {
                             ChoiceOption(id: "", label: "Default list"),
                         ]
                     ))
+                ),
+            ]
+        case .system:
+            // The umbrella's two navigation rows (ADR 0029): the schema's `link`
+            // kind pushes the unchanged Reminders and Events pages, which stay full
+            // providers in their own right — System groups them, it does not merge
+            // them. Its own actions (App Store Search, Open iOS Settings) render in
+            // the actions section beneath these, not as options.
+            return [
+                SettingOption(
+                    key: "system.reminders",
+                    title: ProviderID.reminders.displayName,
+                    kind: .link(.settings(panel: .reminders))
+                ),
+                SettingOption(
+                    key: "system.events",
+                    title: ProviderID.events.displayName,
+                    kind: .link(.settings(panel: .events))
                 ),
             ]
         case .calculator:

@@ -31,6 +31,7 @@ extension ActionKind {
         case .file: return "doc"
         case .searchFiles: return "doc.text.magnifyingglass"
         case .managementPage: return "slider.horizontal.3"
+        case .system: return "gearshape.2"
         }
     }
 
@@ -51,6 +52,7 @@ extension ActionKind {
         case .file: return .brown
         case .searchFiles: return .brown
         case .managementPage: return .gray
+        case .system: return .gray
         }
     }
 }
