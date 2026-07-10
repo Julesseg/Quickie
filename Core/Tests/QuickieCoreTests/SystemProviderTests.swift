@@ -185,4 +185,16 @@ struct SystemProviderTests {
         // The System page's typed row still answers, so it is re-enableable by name.
         #expect(off.results(for: "system").map(\.id).contains("builtin.system-page"))
     }
+
+    @Test("typing 'settings' still highlights the Settings command, with Open iOS Settings below")
+    func settingsQueryKeepsSettingsCommandOnTop() {
+        // Open iOS Settings surfaces for "settings" (a subsequence of its aliases),
+        // but must not seize the highlighted top result from the always-present
+        // Settings hub command — the Highlighted-result contract the InputWrap
+        // acceptance relies on. Its bare "settings" alias was dropped for exactly this.
+        let engine = SearchEngine(providers: systemProviders())
+        let ids = engine.results(for: "settings").map(\.id)
+        #expect(ids.first == "builtin.settings")
+        #expect(ids.contains(Action.openIOSSettingsID))
+    }
 }

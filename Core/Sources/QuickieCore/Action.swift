@@ -933,7 +933,12 @@ extension Action {
             id: openIOSSettingsID,
             kind: .system,
             title: "Open iOS Settings",
-            aliases: ["settings", "ios settings", "open settings"],
+            // Deliberately no bare "settings" alias: it would tie the always-present
+            // "Settings" command row for the exact query "settings" and could seize
+            // the highlighted top result (the Settings hub is the expected match
+            // there). "settings" still fuzzy-matches these aliases as a subsequence,
+            // so typing it surfaces this row — just ranked below the Settings command.
+            aliases: ["ios settings", "open settings", "open ios settings"],
             inputTypes: [],
             outputType: .url,
             content: ResultContent.none
