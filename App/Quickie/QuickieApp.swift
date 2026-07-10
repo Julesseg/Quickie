@@ -31,6 +31,19 @@ struct QuickieApp: App {
         // `RootView`'s `@AppStorage` properties take their first read.
         if ProcessInfo.processInfo.arguments.contains(SignalsStore.uitestResetArgument) {
             AppSettings.reset(in: AppGroup.defaults)
+            // The Favorites-widget projection keys (snapshot + frecency outbox —
+            // ADR 0025) live in the same persistent App Group defaults: without
+            // this, a leftover outbox event from a prior run would drain into
+            // frecency and trip a later test's "empty Home" assertion.
+            FavoritesWidgetStore.launchReset()
+        }
+        // Seed pending widget-run outbox events under UI testing (issue #126):
+        // XCUITest can't tap a Home-Screen widget, so this plants real outbox
+        // events — through `FavoritesWidgetStore.recordRun` — before `RootView`
+        // drains them, letting a test prove a widget run surfaces in Frecency.
+        // After the reset above, so the seed lands on the clean slate.
+        if ProcessInfo.processInfo.arguments.contains("--uitesting") {
+            FavoritesWidgetStore.seedRunsFromLaunchArguments()
         }
         // Forward-migrate the retired Event/Reminder capture settings onto the
         // schema's single dynamic-choice keys (ADR 0020; issue #69), before

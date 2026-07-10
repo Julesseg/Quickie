@@ -7,6 +7,11 @@ import QuickieCore
 /// the right, saying *what tapping it does*. The Core classifications
 /// (`ActionKind`, `MainAction`) decide the meaning; this file is the dumb lookup
 /// from meaning to SF Symbol and tint, kept at the App edge.
+///
+/// It lives in the folder synced into **both** the app and widget targets (like
+/// `DeeplinkInbox`) because the Favorites widget mirrors the in-app Favorites grid
+/// (ADR 0025): its cells render the same `ProviderBadge` from the same
+/// symbol/tint lookup, so the two surfaces can never drift onto different badges.
 
 extension ActionKind {
     /// The SF Symbol shown white inside the provider badge.
@@ -92,13 +97,18 @@ extension MainAction {
 /// row's at-a-glance identity (which Provider it came from).
 struct ProviderBadge: View {
     let kind: ActionKind
+    /// An explicit SF Symbol overriding the kind's own lookup: the Favorites
+    /// widget passes its snapshot's denormalized glyph so the badge truly renders
+    /// from the snapshot alone (ADR 0025); in-app rows omit it and read the
+    /// live lookup.
+    var symbol: String? = nil
 
     var body: some View {
         RoundedRectangle(cornerRadius: 8, style: .continuous)
             .fill(kind.tint)
             .frame(width: 30, height: 30)
             .overlay {
-                Image(systemName: kind.symbol)
+                Image(systemName: symbol ?? kind.symbol)
                     .font(.system(size: 14, weight: .semibold))
                     .foregroundStyle(.white)
             }

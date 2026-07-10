@@ -2,6 +2,7 @@ import SwiftUI
 import SwiftData
 import UIKit
 import Combine
+import WidgetKit
 import QuickieCore
 import QuickieStoreKit
 
@@ -760,6 +761,16 @@ struct RootView: View {
                 // the set seeded here — after favorites are reconciled — so Siri and
                 // Spotlight have the live members from the first launch onward.
                 syncBridgedActions(engine.bridgedActions())
+                // Publish the initial Favorites widget snapshot (ADR 0025; issue
+                // #126) for the same reason: the widget renders from the App Group
+                // projection alone, so it needs the reconciled grid from first
+                // launch onward, not only after the next pin.
+                publishWidgetFavorites(widgetFavoritesProjection)
+                // Drain the widget's frecency outbox for the cold-launch case: the
+                // scenePhase observer below covers later foregrounds, but a run
+                // performed while the app was fully terminated must be credited on
+                // this first pass too (ADR 0025).
+                drainWidgetRuns()
             }
             // Keep that coupling live: disabling an action anywhere (its home page or
             // the Fallbacks page) demotes it from the enabled Fallback list.
@@ -777,17 +788,22 @@ struct RootView: View {
                 everEligibleFallbacks.formUnion(ids)
                 fallbacks.pruneToEligible(liveEligible: ids, everEligible: everEligibleFallbacks)
             }
-            // Keep the outward **Bridged Action** set in step (CONTEXT.md → Bridged
-            // Action; ADR 0024; issue #122). Deriving the set from the live `engine`
-            // catches *every* way it can change through one signal — a pin/unpin, a
-            // Custom Action create/edit/delete (a rename shifts a title with no count
-            // change), a kind or instance disable, or a favorited member being deleted
-            // or retitled — so the published snapshot and the App Shortcut parameters
-            // never miss an update. The closure only fires on a real change (the value
-            // is `Equatable`), and `syncBridgedActions` writes + nudges only when the
-            // snapshot actually moved, so this stays off the keystroke hot path.
-            .onChange(of: engine.bridgedActions()) { _, actions in
-                syncBridgedActions(actions)
+            // Keep both **outward projections** in step — the Bridged Action set
+            // (CONTEXT.md → Bridged Action; ADR 0024; issue #122) and the Favorites
+            // widget snapshot (ADR 0025; issue #126). Deriving them from the live
+            // `engine` catches *every* way either can change through one signal — a
+            // pin/unpin, a create/edit/delete (a rename shifts a title with no count
+            // change; a Quicklink URL edit shifts a hand-off payload), a kind or
+            // instance disable. One `onChange` observes the pair rather than one
+            // each because `body`'s modifier chain sits near the type-checker's
+            // budget — a second observation of the same shape pushed RootView past
+            // "unable to type-check in reasonable time" on CI. The closure only
+            // fires on a real change (the value is `Equatable`), and each sync
+            // writes + nudges only when its snapshot actually moved, so this stays
+            // off the keystroke hot path.
+            .onChange(of: outwardProjections) { _, projections in
+                syncBridgedActions(projections.bridged)
+                publishWidgetFavorites(projections.widgetFavorites)
             }
             // Re-run the dedup when the Custom Action catalog changes: the
             // remote-notification background mode lets a CloudKit import land a
@@ -808,6 +824,12 @@ struct RootView: View {
             .onChange(of: scenePhase) { _, phase in
                 if phase == .active {
                     fileIndex.rebuild(from: indexedFolders)
+                    // Drain the Favorites widget's frecency outbox (ADR 0025; issue
+                    // #126): credit each widget-run selection into `SignalsStore` at
+                    // its recorded moment. Foreground is the drain point because
+                    // the store loads once at launch and rewrites keys whole — the
+                    // widget appending directly would be clobbered by the next save.
+                    drainWidgetRuns()
                     // Re-fetch the Quicklink catalog so anything the Share
                     // Extension saved while backgrounded appears in results
                     // (ADR 0022: foreground re-index, no cross-process signal).
@@ -1426,6 +1448,55 @@ struct RootView: View {
     private func syncBridgedActions(_ actions: [BridgedAction]) {
         if BridgedActionStore.publish(actions) {
             QuickieAppShortcuts.updateAppShortcutParameters()
+        }
+    }
+
+    /// The two engine-derived **outward projections**, bundled so `body` observes
+    /// them through a single `onChange`: the Bridged Action set the App Intents
+    /// bridge publishes (issue #122) and the Favorites widget snapshot (issue
+    /// #126). One value, not one observation each, because RootView's modifier
+    /// chain sits near the compiler's type-checking budget (see the `onChange`).
+    private struct OutwardProjections: Equatable {
+        var bridged: [BridgedAction]
+        var widgetFavorites: [WidgetFavorite]
+    }
+
+    private var outwardProjections: OutwardProjections {
+        OutwardProjections(bridged: engine.bridgedActions(), widgetFavorites: widgetFavoritesProjection)
+    }
+
+    /// The **Favorites widget** projection (ADR 0025; issue #126): the pinned grid
+    /// exactly as Home renders it — `home()`'s favorites, so a disabled pin drops
+    /// out here the moment it drops from the grid — denormalized per Favorite into
+    /// id, title, badge glyph, kind, and the Core-classified execution. The widget
+    /// draws and acts from this alone; the snippet *body* deliberately never rides
+    /// along (the copy intent reads it fresh at run time — a stale snapshot must
+    /// never copy stale text).
+    private var widgetFavoritesProjection: [WidgetFavorite] {
+        engine.home(showRecents: false).favorites.map { action in
+            WidgetFavorite(action: action, glyph: action.kind.symbol)
+        }
+    }
+
+    /// Publishes the widget projection and, **only when it actually changed**,
+    /// reloads the Favorites widget's timelines — the write/reload pairing ADR
+    /// 0025 prescribes, mirroring `syncBridgedActions`' publish-then-nudge shape.
+    @MainActor
+    private func publishWidgetFavorites(_ favorites: [WidgetFavorite]) {
+        if FavoritesWidgetStore.publish(favorites) {
+            WidgetCenter.shared.reloadTimelines(ofKind: FavoritesWidgetStore.widgetKind)
+        }
+    }
+
+    /// Drains the widget's pending run events into `SignalsStore` (ADR 0025; issue
+    /// #126), each at its recorded moment so Frecency's decay sees when the run
+    /// really happened. Consuming the outbox keeps Frecency single-writer: the
+    /// widget only ever appends to its own key, and the app is the sole writer of
+    /// the signals themselves.
+    @MainActor
+    private func drainWidgetRuns() {
+        for event in FavoritesWidgetStore.drainRuns() {
+            signals.record(event.actionID, at: event.date)
         }
     }
 

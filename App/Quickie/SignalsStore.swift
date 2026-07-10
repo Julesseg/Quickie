@@ -34,8 +34,10 @@ final class SignalsStore {
     /// (`FallbacksStore.launch`), the instance-level Disabled set
     /// (`EnablementStore.launch`), the imported Shortcut Actions
     /// (`ShortcutsStore.launch`), the kind-level provider Enabled switches
-    /// (`ProviderEnablementStore.launch`), and the app-level Settings toggles
-    /// (`AppSettings.reset`, run from `QuickieApp.init`).
+    /// (`ProviderEnablementStore.launch`), the app-level Settings toggles
+    /// (`AppSettings.reset`, run from `QuickieApp.init`), and the Favorites-widget
+    /// projection keys — snapshot + frecency outbox
+    /// (`FavoritesWidgetStore.launchReset`, run from `QuickieApp.init`).
     static let uitestResetArgument = "-uitest-reset-signals"
 
     /// The launch argument that pre-pins a Favorite under UI testing — the Action

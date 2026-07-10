@@ -5,11 +5,11 @@ import WidgetKit
 /// the **foundation** every widget-shaped [[Entry surface]] builds on: the target
 /// itself, a member of the shared App Group, building in CI alongside the app.
 ///
-/// This bundle ships the static [[deep-link widget]] (`EntryWidget`, #124) and the
-/// Control Center control (`QuickCaptureControl`, #125) — two [[Entry surface]]s that
-/// both open Quickie on a clean, focused Home. The interactive Favorites widget (ADR
-/// 0025) joins the bundle in a later slice, so it exists now with room to grow rather
-/// than being introduced twice.
+/// This bundle ships the static [[deep-link widget]] (`EntryWidget`, #124), the
+/// interactive [[Favorites widget]] (`FavoritesWidget`, ADR 0025 / #126), and the
+/// Control Center control (`QuickCaptureControl`, #125) — the widget-shaped
+/// [[Entry surface]]s: the first two get the user in (or run a Favorite without
+/// going in at all), the control opens a clean, focused Home.
 ///
 /// A `ControlWidget` sits in the same `WidgetBundle` as a `Widget`; the builder
 /// accepts both and the body's `some Widget` still holds.
@@ -17,6 +17,7 @@ import WidgetKit
 struct QuickieWidgetBundle: WidgetBundle {
     var body: some Widget {
         EntryWidget()
+        FavoritesWidget()
         QuickCaptureControl()
     }
 }
