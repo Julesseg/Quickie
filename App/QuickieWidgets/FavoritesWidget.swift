@@ -143,9 +143,11 @@ private struct FavoriteCellButton: View {
             Button(intent: OpenFavoriteIntent(url: url, recordingRunOf: favorite.id)) { label }
                 .buttonStyle(.plain)
         case .openApp:
-            // Tap-equivalent open: the app resolves the id live and records the
-            // run itself; an unresolvable id degrades to clean Home (issue #120).
-            Button(intent: OpenFavoriteIntent(url: QuickieDeeplink.runURL(id: favorite.id))) { label }
+            // Tap-equivalent open, through the Control's proven openAppWhenRun +
+            // inbox door (not an OpenURLIntent — a custom scheme through it is
+            // unreliable from a widget): the app resolves the id live and records
+            // the run itself; an unresolvable id degrades to clean Home (#120).
+            Button(intent: RunFavoriteInAppIntent(actionID: favorite.id)) { label }
                 .buttonStyle(.plain)
         }
     }
@@ -182,10 +184,11 @@ private struct FavoriteCellButton: View {
 /// An unfilled slot: a quiet tap target that opens the app on a fresh, focused
 /// Home (`quickie://entry`) — the open-focused entry-surface route (issue #126;
 /// CONTEXT.md → Entry surface). A button (not a `Link`) so it works in
-/// `systemSmall` too.
+/// `systemSmall` too, riding the same openAppWhenRun + inbox door as the
+/// open-app lane (a `nil` id is the fresh-entry reset).
 private struct EmptyCellButton: View {
     var body: some View {
-        Button(intent: OpenFavoriteIntent(url: QuickieDeeplink.entryURL())) {
+        Button(intent: RunFavoriteInAppIntent(actionID: nil)) {
             FavoriteCell.shape
                 .strokeBorder(.quaternary, style: StrokeStyle(lineWidth: 1.5, dash: [5, 4]))
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
