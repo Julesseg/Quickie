@@ -368,6 +368,23 @@ public struct Action: Identifiable, Sendable {
             return false
         }
     }
+
+    /// Whether this Action can be pinned as a **Favorite** (CONTEXT.md →
+    /// Favorite). Everything in the indexed catalog is pinnable except a Pile
+    /// entry: its main action *consumes* it — staging removes the entry from
+    /// the Pile (CONTEXT.md → Stage) — so a pin would outlive its target on
+    /// first use, leaving an invisible "ghost" holding one of the four grid
+    /// slots. The App keys the Pin/Unpin affordance off this, and
+    /// `SearchEngine.resolvableHomeIDs()` excludes ineligible ids so the
+    /// launch reconciliation prunes any pin an older build allowed.
+    ///
+    /// Keyed off the row's **content** (`.pileEntry` is the entry's reference),
+    /// not its kind: the Pile *page command row* wears the `.pile` kind too, and
+    /// that durable command is pinnable like any other.
+    public var isFavoriteEligible: Bool {
+        if case .pileEntry = content { return false }
+        return true
+    }
 }
 
 /// The closest system Return-key submit label for the highlighted result's main

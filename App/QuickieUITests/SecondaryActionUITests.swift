@@ -33,8 +33,9 @@ final class SecondaryActionUITests: XCTestCase {
     }
 
     /// Save a query to the Pile, then long-press its row: the menu offers
-    /// **Copy** and **Share** (act on a Pile entry — its content is its text),
-    /// alongside the Pin item.
+    /// **Copy** and **Share** (act on a Pile entry — its content is its text)
+    /// but **no Pin item** — staging consumes the entry, so a pin would ghost
+    /// a Favorites slot (`Action.isFavoriteEligible`).
     @MainActor
     func testLongPressingAPileEntryOffersCopyAndShare() throws {
         let app = launchApp()
@@ -61,13 +62,15 @@ final class SecondaryActionUITests: XCTestCase {
         XCTAssertTrue(row.waitForExistence(timeout: 5))
         row.press(forDuration: 1.3)
 
-        // The content verbs and the pin item share one menu.
+        // The content verbs appear — but no Pin item: staging consumes the
+        // entry, so a pinned one would linger as an invisible ghost holding a
+        // Favorites slot. A Pile entry is never pinnable.
         XCTAssertTrue(app.buttons["Copy"].waitForExistence(timeout: 5),
                       "a Pile entry's long-press menu should offer Copy (its text)")
         XCTAssertTrue(app.buttons["Share"].exists,
                       "a Pile entry's long-press menu should offer Share")
-        XCTAssertTrue(app.buttons["Pin as Favorite"].exists,
-                      "the content verbs join the existing Pin item in one menu")
+        XCTAssertFalse(app.buttons["Pin as Favorite"].exists,
+                       "a Pile entry is consumed by staging, so it must not offer Pin")
         // A Pile entry carries no file, so Reveal in Files must not appear (no
         // dead item).
         XCTAssertFalse(app.buttons["Reveal in Files"].exists,

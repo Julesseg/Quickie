@@ -69,6 +69,7 @@ struct ResultListView: View {
                                 secondaryActions: secondaryActions(for: action.content),
                                 onSecondaryAction: { onSecondaryAction(action, $0) },
                                 isFavorite: isFavorite(action),
+                                pinnable: action.isFavoriteEligible,
                                 canPin: canFavorite(action),
                                 toggle: { onToggleFavorite(action) }
                             ) {
@@ -193,9 +194,12 @@ extension View {
     /// content-less command/capture row shows that plus Pin/Unpin (its content verbs
     /// stay absent) — no dead items, a verb appears only when it can run.
     ///
-    /// `canPin` reflects the Favorites cap (CONTEXT.md → Favorite): when the grid
-    /// is full, the "Pin as Favorite" item is disabled with a hint rather than
-    /// silently swallowing the gesture — Unpin is always available.
+    /// `pinnable` reflects **favorite eligibility** (`Action.isFavoriteEligible`):
+    /// a Pile entry — consumed by its own main action, so a pin would ghost a grid
+    /// slot — omits the Pin/Unpin item entirely (no dead items), leaving only its
+    /// content verbs. `canPin` reflects the Favorites cap (CONTEXT.md → Favorite):
+    /// when the grid is full, the "Pin as Favorite" item is disabled with a hint
+    /// rather than silently swallowing the gesture — Unpin is always available.
     ///
     /// `preview` supplies the **lifted preview** (`contextMenu(menuItems:preview:)`):
     /// the system renders it as a detached card floating over a dimmed backdrop, so
@@ -208,6 +212,7 @@ extension View {
         secondaryActions: [SecondaryActionKind] = [],
         onSecondaryAction: @escaping (SecondaryActionKind) -> Void = { _ in },
         isFavorite: Bool,
+        pinnable: Bool = true,
         canPin: Bool = true,
         toggle: @escaping () -> Void,
         @ViewBuilder preview: () -> Preview
@@ -224,20 +229,22 @@ extension View {
                 // the Pin item is found by its "Pin as Favorite" label. The verb's
                 // menu title *is* its stable identifier.
             }
-            // A visual break between the content verbs and the pin affordance, only
-            // when there are content verbs to separate.
-            if !secondaryActions.isEmpty {
-                Divider()
-            }
-            Button {
-                toggle()
-            } label: {
-                Label(isFavorite ? "Unpin Favorite" : "Pin as Favorite",
-                      systemImage: isFavorite ? "star.slash" : "star")
-            }
-            .disabled(!isFavorite && !canPin)
-            if !isFavorite && !canPin {
-                Text("Favorites are full (max \(SignalsStore.maxFavorites)). Unpin one first.")
+            if pinnable {
+                // A visual break between the content verbs and the pin affordance,
+                // only when there are content verbs to separate.
+                if !secondaryActions.isEmpty {
+                    Divider()
+                }
+                Button {
+                    toggle()
+                } label: {
+                    Label(isFavorite ? "Unpin Favorite" : "Pin as Favorite",
+                          systemImage: isFavorite ? "star.slash" : "star")
+                }
+                .disabled(!isFavorite && !canPin)
+                if !isFavorite && !canPin {
+                    Text("Favorites are full (max \(SignalsStore.maxFavorites)). Unpin one first.")
+                }
             }
         } preview: {
             preview()

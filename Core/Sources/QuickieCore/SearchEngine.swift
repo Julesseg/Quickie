@@ -256,12 +256,18 @@ public struct SearchEngine {
         return byId
     }
 
-    /// The ids of every Indexed Action currently in the catalog — fallbacks
-    /// included — exactly the set a Favorite or Frecency id can resolve to on
-    /// Home. The App reconciles persisted Favorites against this so an id whose
-    /// target no longer exists (a deleted Snippet, or a stale id from an older
-    /// build) is pruned rather than lingering invisibly and consuming a
+    /// The ids of every **favorite-eligible** Indexed Action currently in the
+    /// catalog — fallbacks included — exactly the set a Favorite id may resolve
+    /// to on Home. The App reconciles persisted Favorites against this so an id
+    /// whose target no longer exists (a deleted Snippet, or a stale id from an
+    /// older build) is pruned rather than lingering invisibly and consuming a
     /// Favorites slot.
+    ///
+    /// Excludes ineligible Actions (`Action.isFavoriteEligible` — today, Pile
+    /// entries, which staging consumes): they can no longer be pinned, and a
+    /// pin an older build allowed would otherwise ghost a grid slot the first
+    /// time the entry was staged, so reconciliation prunes it here even while
+    /// the entry still exists.
     ///
     /// Deliberately ignores enablement at both levels (issue #67 AC #3, issue
     /// #68): a disabled Favorite — whether its kind or the single instance was
@@ -269,7 +275,10 @@ public struct SearchEngine {
     /// restored on re-enable, so it must keep resolving here or the
     /// reconciliation would prune the pin the moment it was disabled.
     public func resolvableHomeIDs() -> Set<String> {
-        Set(indexedActionsByID(includingDisabled: true).keys)
+        Set(
+            indexedActionsByID(includingDisabled: true).values
+                .lazy.filter(\.isFavoriteEligible).map(\.id)
+        )
     }
 
     /// The **live** Indexed Action for `id`, or `nil` when nothing enabled resolves

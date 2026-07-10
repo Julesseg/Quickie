@@ -138,6 +138,35 @@ struct PileTests {
         #expect(engine().results(for: "   ").isEmpty)
     }
 
+    @Test("a Pile entry is not favorite-eligible — staging consumes it, so a pin would ghost a grid slot")
+    func pileEntryIsNotFavoriteEligible() {
+        // A Pile entry's main action removes it from the Pile (CONTEXT.md →
+        // Stage), so a pinned one would outlive its target the first time it is
+        // used — invisible on the grid, yet still holding one of the four slots.
+        // It is therefore never pinnable; the App omits its Pin item off this.
+        let entry = Action.pileEntry(id: "pile.ferry", text: "compare ferry vs train to Nanaimo")
+        #expect(entry.isFavoriteEligible == false)
+        // Durable catalog members stay pinnable — including the Pile-adjacent
+        // capture and command rows, which are permanent, not consumed.
+        #expect(Action.saveForLater().isFavoriteEligible)
+        #expect(Action.openPilePage().isFavoriteEligible)
+        #expect(Action.webSearchFallback().isFavoriteEligible)
+    }
+
+    @Test("resolvableHomeIDs excludes Pile entries, so a stale Pile pin is pruned at reconciliation")
+    func resolvableHomeIDsExcludesPileEntries() {
+        // The App reconciles persisted Favorites against this set at launch. A
+        // pin an older build allowed on a Pile entry must drop out — even while
+        // the entry still exists — or it ghosts a Favorites slot the moment the
+        // entry is staged (consumed).
+        let ids = engine().resolvableHomeIDs()
+        #expect(!ids.contains("pile.ferry"))
+        #expect(!ids.contains("pile.dentist"))
+        // The rest of the catalog keeps resolving, so real pins survive.
+        #expect(ids.contains(Action.saveForLaterID))
+        #expect(ids.contains(Action.webSearchFallbackID))
+    }
+
     @Test("the Pile command row opens the entries page — content, not the provider's settings")
     func pileCommandOpensPilePage() {
         // The entries are temporary: their page is purely content to view and
