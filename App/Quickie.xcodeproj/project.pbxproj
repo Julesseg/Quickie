@@ -140,6 +140,11 @@
 			path = QuickieWidgets;
 			sourceTree = "<group>";
 		};
+		1A0000000000000000000070 /* QuickieEntry */ = {
+			isa = PBXFileSystemSynchronizedRootGroup;
+			path = QuickieEntry;
+			sourceTree = "<group>";
+		};
 /* End PBXFileSystemSynchronizedRootGroup section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -190,6 +195,7 @@
 			isa = PBXGroup;
 			children = (
 				1A0000000000000000000004 /* Quickie */,
+				1A0000000000000000000070 /* QuickieEntry */,
 				1A000000000000000000002C /* QuickieStoreKit */,
 				1A000000000000000000003A /* QuickieShareExtension */,
 				1A0000000000000000000062 /* QuickieWidgets */,
@@ -242,6 +248,7 @@
 			);
 			fileSystemSynchronizedGroups = (
 				1A0000000000000000000004 /* Quickie */,
+				1A0000000000000000000070 /* QuickieEntry */,
 			);
 			name = Quickie;
 			packageProductDependencies = (
@@ -335,6 +342,7 @@
 			);
 			fileSystemSynchronizedGroups = (
 				1A0000000000000000000062 /* QuickieWidgets */,
+				1A0000000000000000000070 /* QuickieEntry */,
 			);
 			name = QuickieWidgets;
 			packageProductDependencies = (

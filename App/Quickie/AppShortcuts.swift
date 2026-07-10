@@ -9,11 +9,13 @@ import QuickieStoreKit
 /// phrase-invoked verbs — distinct from the derived, parameterized Bridged Action
 /// shortcut (Favorites ∪ Custom Actions), which is slice 3's job.
 ///
-/// The intent types live here because App Intents is app-process and Apple-only,
-/// but everything *decidable* lives in `QuickieCore.HeadlineAppShortcut` under the
-/// Linux `swift test` gate: the split invoke shapes, the `quickie://` route each
-/// foreground verb opens, and the Save-for-later write guard. These structs are the
-/// thin Apple shell over that.
+/// The intent types live in the App target because App Intents is app-process and
+/// Apple-only, but everything *decidable* lives in `QuickieCore.HeadlineAppShortcut`
+/// under the Linux `swift test` gate: the split invoke shapes, the `quickie://` route
+/// each foreground verb opens, and the Save-for-later write guard. These structs are
+/// the thin Apple shell over that. (`QuickCaptureIntent` is the one exception to
+/// "here": it lives in the `QuickieEntry` folder shared with the widget extension so
+/// the Control Center control (#125) can ride the very same intent.)
 struct QuickieAppShortcuts: AppShortcutsProvider {
     static var appShortcuts: [AppShortcut] {
         AppShortcut(
@@ -74,22 +76,10 @@ struct QuickieAppShortcuts: AppShortcutsProvider {
 
 // MARK: - Foreground verbs (steer the app through the slice-1 deeplink door)
 
-/// **Quick Capture** — opens the app on a clean, focused Home via `quickie://entry`
-/// (CONTEXT.md → Entry surface). Cold launch already auto-focuses (ADR 0012); riding
-/// the entry reset makes the *warm* case abandon stale state instead of resuming it.
-struct QuickCaptureIntent: AppIntent {
-    static let title: LocalizedStringResource = "Quick Capture"
-    static let description = IntentDescription(
-        "Open Quickie on a fresh, focused Home, ready for a new query."
-    )
-    static let openAppWhenRun = true
-
-    @MainActor
-    func perform() async throws -> some IntentResult {
-        openInApp(.quickCapture)
-        return .result()
-    }
-}
+// `QuickCaptureIntent` and the shared `openInApp(_:)` hand-off live in
+// `QuickieEntry/QuickCaptureIntent.swift`, a folder synced into both this app target
+// and the widget extension so the Control Center control (issue #125) can ride the
+// exact same intent — one intent, one inbound door (ADR 0024).
 
 /// **New Reminder** — opens the app into the Reminder capture breadcrumb at
 /// Argument 1 via `quickie://run/builtin.new-reminder` (ADR 0024: a tap-equivalent
@@ -123,25 +113,6 @@ struct NewEventIntent: AppIntent {
     func perform() async throws -> some IntentResult {
         openInApp(.newEvent)
         return .result()
-    }
-}
-
-extension AppIntent {
-    /// Deposit a foreground verb's Core-built `quickie://` URL for `RootView` to
-    /// dispatch through the single root `onOpenURL` path (ADR 0024). Every foreground
-    /// verb has a non-nil `deeplinkURL`, so the guard below is unreachable in correct
-    /// use; it only trips if a *background* verb (Save for later) is wired here by
-    /// mistake, which the Core type's split shape prevents. That is a programmer
-    /// error, not a runtime condition, so it trips `assertionFailure` — a debug trap
-    /// that is compiled out in Release, where the call then no-ops rather than opening
-    /// anything (acceptable because it cannot happen given the fixed foreground set).
-    @MainActor
-    func openInApp(_ shortcut: HeadlineAppShortcut) {
-        guard let url = shortcut.deeplinkURL else {
-            assertionFailure("\(shortcut) is a background verb with no deeplink to open")
-            return
-        }
-        DeeplinkInbox.shared.deposit(url)
     }
 }
 
