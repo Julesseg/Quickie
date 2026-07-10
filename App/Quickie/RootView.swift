@@ -788,27 +788,22 @@ struct RootView: View {
                 everEligibleFallbacks.formUnion(ids)
                 fallbacks.pruneToEligible(liveEligible: ids, everEligible: everEligibleFallbacks)
             }
-            // Keep the outward **Bridged Action** set in step (CONTEXT.md → Bridged
-            // Action; ADR 0024; issue #122). Deriving the set from the live `engine`
-            // catches *every* way it can change through one signal — a pin/unpin, a
-            // Custom Action create/edit/delete (a rename shifts a title with no count
-            // change), a kind or instance disable, or a favorited member being deleted
-            // or retitled — so the published snapshot and the App Shortcut parameters
-            // never miss an update. The closure only fires on a real change (the value
-            // is `Equatable`), and `syncBridgedActions` writes + nudges only when the
-            // snapshot actually moved, so this stays off the keystroke hot path.
-            .onChange(of: engine.bridgedActions()) { _, actions in
-                syncBridgedActions(actions)
-            }
-            // Keep the **Favorites widget** projection in step the same way (ADR
-            // 0025; issue #126): deriving the snapshot from the live `engine`
-            // catches every rewrite trigger through one signal — a pin/unpin, and
-            // any edit, delete, or disable touching a pinned action (a retitle, a
-            // Quicklink URL change, a kind or instance switch). The store writes —
-            // and the timeline reload fires — only when the projection actually
-            // moved, so this too stays off the keystroke hot path.
-            .onChange(of: widgetFavoritesProjection) { _, favorites in
-                publishWidgetFavorites(favorites)
+            // Keep both **outward projections** in step — the Bridged Action set
+            // (CONTEXT.md → Bridged Action; ADR 0024; issue #122) and the Favorites
+            // widget snapshot (ADR 0025; issue #126). Deriving them from the live
+            // `engine` catches *every* way either can change through one signal — a
+            // pin/unpin, a create/edit/delete (a rename shifts a title with no count
+            // change; a Quicklink URL edit shifts a hand-off payload), a kind or
+            // instance disable. One `onChange` observes the pair rather than one
+            // each because `body`'s modifier chain sits near the type-checker's
+            // budget — a second observation of the same shape pushed RootView past
+            // "unable to type-check in reasonable time" on CI. The closure only
+            // fires on a real change (the value is `Equatable`), and each sync
+            // writes + nudges only when its snapshot actually moved, so this stays
+            // off the keystroke hot path.
+            .onChange(of: outwardProjections) { _, projections in
+                syncBridgedActions(projections.bridged)
+                publishWidgetFavorites(projections.widgetFavorites)
             }
             // Re-run the dedup when the Custom Action catalog changes: the
             // remote-notification background mode lets a CloudKit import land a
@@ -1454,6 +1449,20 @@ struct RootView: View {
         if BridgedActionStore.publish(actions) {
             QuickieAppShortcuts.updateAppShortcutParameters()
         }
+    }
+
+    /// The two engine-derived **outward projections**, bundled so `body` observes
+    /// them through a single `onChange`: the Bridged Action set the App Intents
+    /// bridge publishes (issue #122) and the Favorites widget snapshot (issue
+    /// #126). One value, not one observation each, because RootView's modifier
+    /// chain sits near the compiler's type-checking budget (see the `onChange`).
+    private struct OutwardProjections: Equatable {
+        var bridged: [BridgedAction]
+        var widgetFavorites: [WidgetFavorite]
+    }
+
+    private var outwardProjections: OutwardProjections {
+        OutwardProjections(bridged: engine.bridgedActions(), widgetFavorites: widgetFavoritesProjection)
     }
 
     /// The **Favorites widget** projection (ADR 0025; issue #126): the pinned grid
