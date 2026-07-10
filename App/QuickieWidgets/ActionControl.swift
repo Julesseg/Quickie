@@ -25,9 +25,12 @@ struct ActionControl: ControlWidget {
     static let kind = EligibleActionCatalogStore.controlKind
 
     var body: some ControlWidgetConfiguration {
-        AppIntentControlConfiguration(kind: Self.kind, provider: ActionControlValueProvider()) { action in
+        AppIntentControlConfiguration(kind: Self.kind, provider: ActionControlValueProvider()) { (action: WidgetAction?) in
             // The resolved lane picks the button's intent; a `nil` action (unconfigured
-            // or stale) falls through to the clean-Home entry, app glyph and all.
+            // or stale) falls through to the clean-Home entry, app glyph and all. The
+            // parameter type is spelled out because inferring it through the switch on
+            // `action?.execution` — an optional the provider's `Value` supplies — trips
+            // the type-checker (it bound `action` non-optional and rejected the chain).
             switch action?.execution {
             case .copySnippet(let id):
                 ControlWidgetButton(action: CopyFavoriteSnippetIntent(actionID: id)) {
