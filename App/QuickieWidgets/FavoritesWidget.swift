@@ -156,10 +156,14 @@ private struct FavoriteCellButton: View {
         HStack(spacing: 8) {
             if showsTitle {
                 badge
+                // Two lines, not one: a medium cell is wide but shallow, and a
+                // truncated single line wastes the height it does have — a longer
+                // title (most Shortcut and Custom Action names) reads whole.
                 Text(favorite.title)
                     .font(.footnote.weight(.medium))
                     .foregroundStyle(.primary)
-                    .lineLimit(1)
+                    .lineLimit(2)
+                    .multilineTextAlignment(.leading)
                 Spacer(minLength: 0)
             } else {
                 // Glyph-only in systemSmall: the badge centered, the title spoken
