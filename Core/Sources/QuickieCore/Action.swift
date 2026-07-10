@@ -382,36 +382,68 @@ public struct Action: Identifiable, Sendable {
     /// not its kind: the Pile *page command row* wears the `.pile` kind too, and
     /// that durable command is pinnable like any other.
     public var isFavoriteEligible: Bool {
-        !isPileEntry
+        isStandaloneRunnable
     }
 
     /// Whether this Action carries a **Pile entry**'s reference as its Result
     /// content — the row whose main action *consumes* it (staging removes it from
     /// the Pile, CONTEXT.md → Stage). Keyed off the row's **content**
     /// (`.pileEntry`), not its `.pile` kind: the Pile *page command row* wears the
-    /// `.pile` kind too but is a durable command, not an entry. The single
-    /// predicate both eligibility rules that exclude a Pile entry read from, so
-    /// they can never drift.
+    /// `.pile` kind too but is a durable command, not an entry.
     public var isPileEntry: Bool {
         if case .pileEntry = content { return true }
         return false
     }
 
-    /// Whether this Action may be **chosen** for the [[Actions widget]] or the
-    /// [[Action control]] (CONTEXT.md → Actions widget; ADR 0027): every Action
-    /// **except a Pile entry**. A button bound to a Pile entry would die after one
-    /// tap — staging consumes the entry — so it is the one shape excluded from the
-    /// picker's eligible set. (Disabled instances and kinds are already hidden from
-    /// every surface, so the "enabled" half of the rule is enforced by the engine's
-    /// catalog filtering, not here — this predicate is the pure per-Action shape
-    /// half.)
+    /// Whether this Action is a **query-only capture** (CONTEXT.md → Quick capture):
+    /// a capture whose only input is the typed query it consumes as a Fallback, with
+    /// **no declared Argument** to collect anything verb-first — **Save for later**
+    /// and **New Snippet**. Run standalone (from an [[Entry surface]], a Favorite
+    /// card, or a `quickie://run/<id>` with no query) it has nothing to consume, so
+    /// it does nothing at all. That is what disqualifies it from every *standalone*
+    /// run surface (see `isStandaloneRunnable`), while leaving it a perfectly good
+    /// Fallback — its home is the bottom region, consuming the query.
     ///
-    /// Coincides with `isFavoriteEligible` today — both exclude exactly the Pile
-    /// entry — but is a distinct concept (choosable-in-a-widget vs. pinnable), so it
-    /// is declared separately against the shared `isPileEntry` check rather than
-    /// aliased, in case the two rules ever diverge.
+    /// Detected by shape, not kind: fallback-eligible (its whole point is the query)
+    /// **and** argument-less (nothing to collect verb-first). The argument-collecting
+    /// captures (Reminder, Event) are *not* query-only — they open a breadcrumb and
+    /// so do something useful verb-first — and a text-first Custom Action or an
+    /// accepts-input Shortcut declares its slot, so it is excluded here too.
+    public var isQueryOnlyCapture: Bool {
+        isFallbackEligible && arguments.isEmpty
+    }
+
+    /// Whether running this Action **standalone** — verb-first from an [[Entry
+    /// surface]], a Favorite card, an [[Actions widget]] / [[Action control]] button,
+    /// or a `quickie://run/<id>` deeplink, with no typed query — does something. Two
+    /// shapes fail it: a **Pile entry** (its run *consumes* it — a bound button dies
+    /// after one tap) and a **query-only capture** (Save for later / New Snippet,
+    /// which have nothing to consume without a query). Everything else — a Snippet,
+    /// Quicklink, Shortcut, Custom Action, the argument-collecting captures, and every
+    /// command row — runs to a real effect.
+    ///
+    /// The one predicate the standalone surfaces share so their "is this worth
+    /// offering?" answer can never drift: favorite- and widget-eligibility both
+    /// require it, and a row's **Copy action deeplink** is offered only when it holds
+    /// (a deeplink to a no-op is not worth copying). A Pile entry is the one row that
+    /// is *not* standalone-runnable yet still keeps Copy-action-deeplink — its run
+    /// stages, which *is* an effect — so that verb is gated on `!isQueryOnlyCapture`
+    /// directly (the App), not on this compound predicate.
+    public var isStandaloneRunnable: Bool {
+        !isPileEntry && !isQueryOnlyCapture
+    }
+
+    /// Whether this Action may be **chosen** for the [[Actions widget]] or the
+    /// [[Action control]] (CONTEXT.md → Actions widget; ADR 0027): every Action that
+    /// is `isStandaloneRunnable` — i.e. **not a Pile entry and not a query-only
+    /// capture**. A widget/control button runs its action with no typed query, so a
+    /// Pile entry (consumed on first tap) and a Save for later / New Snippet (nothing
+    /// to consume) would both be dead buttons; every other enabled Action is a valid
+    /// choice. (Disabled instances and kinds are already hidden from every surface, so
+    /// the "enabled" half of the rule is enforced by the engine's catalog filtering,
+    /// not here — this predicate is the pure per-Action shape half.)
     public var isWidgetEligible: Bool {
-        !isPileEntry
+        isStandaloneRunnable
     }
 }
 

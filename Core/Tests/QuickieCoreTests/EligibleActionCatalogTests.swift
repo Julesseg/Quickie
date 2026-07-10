@@ -13,20 +13,33 @@ struct EligibleActionCatalogTests {
 
     // MARK: Eligibility — the pure per-Action shape rule
 
-    @Test("every kind is widget-eligible except a Pile entry")
-    func pileEntryIsTheOnlyIneligibleShape() {
+    @Test("a Pile entry and a query-only capture are the ineligible shapes; everything else is choosable")
+    func onlyNonStandaloneShapesAreIneligible() {
         // A Pile entry's main action consumes it (staging), so a button bound to one
-        // would die after a single tap — the one shape excluded from the picker.
+        // would die after a single tap.
         #expect(Action.pileEntry(id: "pile.1", text: "call bank").isWidgetEligible == false)
         #expect(Action.pileEntry(id: "pile.1", text: "call bank").isPileEntry == true)
 
-        // Everything else is choosable — the same set Favorites admits, minus the pin.
+        // A query-only capture (Save for later, New Snippet) has nothing to consume
+        // without a typed query, so run standalone it does nothing — also excluded.
+        #expect(Action.saveForLater().isQueryOnlyCapture)
+        #expect(Action.newSnippet().isQueryOnlyCapture)
+        #expect(Action.saveForLater().isWidgetEligible == false)
+        #expect(Action.newSnippet().isWidgetEligible == false)
+
+        // Everything else is choosable — snippets, links, shortcuts, the
+        // argument-collecting captures (they open a breadcrumb), and command rows.
         #expect(Action.snippet(id: "s.1", title: "Address", body: "1 Main St").isWidgetEligible)
         #expect(Action.quicklink(id: "ql.1", title: "Docs", url: URL(string: "https://x.example")!).isWidgetEligible)
         #expect(Action.shortcut(name: "Start Workout").isWidgetEligible)
-        #expect(Action.saveForLater().isWidgetEligible)
         #expect(Action.newReminder().isWidgetEligible)
+        #expect(Action.newEvent().isWidgetEligible)
         #expect(Action.openSettings().isWidgetEligible)
+        // The argument-collecting captures are not query-only — they collect verb-first.
+        #expect(Action.newReminder().isQueryOnlyCapture == false)
+        // A text-first Custom Action declares its slot, so it is not query-only either.
+        #expect(Action.webSearchFallback().isQueryOnlyCapture == false)
+        #expect(Action.webSearchFallback().isWidgetEligible)
     }
 
     @Test("the Pile page command row is eligible — it is a durable command, not an entry")
@@ -125,6 +138,20 @@ struct EligibleActionCatalogTests {
         let eligible = engine(snippets: [snippet], quicklinks: [link], pile: [entry]).eligibleActions()
         // The Pile entry is filtered out; the snippet and quicklink survive.
         #expect(eligible.map(\.id) == ["s.1", "ql.1"])
+    }
+
+    @Test("eligibleActions excludes a query-only capture — it does nothing run standalone")
+    func eligibleActionsExcludesQueryOnlyCapture() {
+        let link = Action.quicklink(id: "ql.1", title: "Docs", url: URL(string: "https://x.example")!)
+        // Save for later rides an indexed provider (its real home is the pile/capture
+        // catalog); it must not surface as a widget/control choice.
+        let engine = SearchEngine(
+            providers: [
+                IndexedProvider(catalog: [link], id: .quicklinks),
+                IndexedProvider(catalog: [.saveForLater()], id: .pile),
+            ]
+        )
+        #expect(engine.eligibleActions().map(\.id) == ["ql.1"])
     }
 
     @Test("a disabled instance drops out — eligibility mirrors runnability")

@@ -144,13 +144,15 @@ final class QuickieUITests: XCTestCase {
     /// enumerable catalog, so its pin must draw a card rather than silently
     /// consuming a slot — and must survive the launch-time reconciliation that
     /// prunes unresolvable pins. Seeded the same way as the test above, with the
-    /// always-present "Save for later" Fallback (the Pile's permanent capture).
+    /// default "Search the web" Custom Action (`seed.web-search`) — a text-first
+    /// fallback that *is* standalone-runnable, so it stays pinnable (unlike a
+    /// query-only capture such as Save for later, which issue #140 excludes).
     @MainActor
     func testPinnedFallbackSurfacesOnHome() throws {
-        let app = launchApp(extraArguments: ["-uitest-pin-favorite", "builtin.save-for-later"])
+        let app = launchApp(extraArguments: ["-uitest-pin-favorite", "seed.web-search"])
 
         XCTAssertTrue(
-            app.buttons["favorite.builtin.save-for-later"].waitForExistence(timeout: 10),
+            app.buttons["favorite.seed.web-search"].waitForExistence(timeout: 10),
             "a pinned Fallback should appear as a Favorite card on Home"
         )
     }

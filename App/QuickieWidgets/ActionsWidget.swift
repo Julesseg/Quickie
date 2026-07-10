@@ -35,19 +35,35 @@ struct ActionsWidget: Widget {
     }
 }
 
-/// The per-instance configuration (ADR 0027): the ordered list of chosen Actions,
-/// picked from the shared eligible-action catalog. The first four fill the grid in
-/// chosen order; extras are ignored (clamped when the timeline resolves them).
+/// The per-instance configuration (ADR 0027): **four ordered slots**, each picking
+/// one Action from the shared eligible-action catalog. Four separate single-select
+/// slots — not one multi-select list — so the Edit-Widget sheet shows the picker one
+/// item at a time, the choice is inherently capped at the grid's four, and the order
+/// is set by *which slot* holds each action (reassign a slot to reorder). A slot left
+/// empty is simply skipped; the filled ones pack toward the front of the grid.
+///
+/// Every parameter is optional because AppIntents requires **every**
+/// `WidgetConfigurationIntent` parameter to be optional (the ExtractAppIntentsMetadata
+/// build step rejects a non-optional one); all four empty is the unconfigured
+/// invitation state.
 struct ActionsWidgetConfigIntent: WidgetConfigurationIntent {
     static let title: LocalizedStringResource = "Choose Actions"
-    static let description = IntentDescription("Pick the Actions this widget runs.")
+    static let description = IntentDescription("Pick up to four Actions this widget runs, one per slot.")
 
-    // Optional because AppIntents requires **every** `WidgetConfigurationIntent`
-    // parameter to be optional (the ExtractAppIntentsMetadata build step rejects a
-    // non-optional one); an unconfigured instance reads as `nil`, treated as "no
-    // actions chosen" — the invitation state.
-    @Parameter(title: "Actions")
-    var actions: [EligibleActionEntity]?
+    @Parameter(title: "Slot 1")
+    var slot1: EligibleActionEntity?
+    @Parameter(title: "Slot 2")
+    var slot2: EligibleActionEntity?
+    @Parameter(title: "Slot 3")
+    var slot3: EligibleActionEntity?
+    @Parameter(title: "Slot 4")
+    var slot4: EligibleActionEntity?
+
+    /// The chosen ids in slot order, empties skipped — the ordered list the timeline
+    /// joins against the catalog. Bounded to four by the slot count itself.
+    var chosenIDs: [String] {
+        [slot1, slot2, slot3, slot4].compactMap { $0?.id }
+    }
 }
 
 /// Joins the configured ids against the published catalog every render (ADR 0027).
@@ -73,7 +89,7 @@ private struct ActionsProvider: AppIntentTimelineProvider {
     /// one bit that tells an unconfigured instance (→ invitation) from a configured
     /// instance whose ids all went stale (→ grid of dashed slots).
     private func entry(for configuration: ActionsWidgetConfigIntent) -> ActionsTimelineEntry {
-        let ids = (configuration.actions ?? []).map(\.id)
+        let ids = configuration.chosenIDs
         let resolved = EligibleActionCatalog.resolve(ids: ids, in: EligibleActionCatalogStore.load())
         return ActionsTimelineEntry(
             configured: !ids.isEmpty,

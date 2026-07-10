@@ -15,17 +15,22 @@ widget render get their data.
 **Membership: the system configuration owns it.** The chosen list is a
 per-instance `AppIntentConfiguration` parameter (one Action for the control's
 `AppIntentControlConfiguration`), edited in the system Edit-Widget sheet /
-Control Center configuration — no in-app page holds or mirrors it. Each placed
-instance carries its own list, multiple instances come for free, and the app
-never needs a "which widgets exist" model. Rejected: an in-app management page
+Control Center configuration — no in-app page holds or mirrors it. The widget
+exposes it as **four ordered, single-pick slots** (`slot1…slot4`), not one
+multi-select array parameter: single-select slots give the Edit-Widget sheet a
+one-item-at-a-time picker, an inherent cap at the grid's four, and an explicit
+order (which slot holds each action) — a multi-select list offers none of these.
+Each placed instance carries its own list, multiple instances come for free, and
+the app never needs a "which widgets exist" model. Rejected: an in-app management page
 writing an App Group snapshot per widget — it needs an identity scheme for
 placed instances that WidgetKit doesn't expose, collapses all instances onto
 one list, and rebuilds UI the system already provides.
 
 **Data: a published eligible-action catalog, ids in the configuration.** The
 app is the single writer of a second App Group snapshot beside the Favorites
-one: the **catalog** of every eligible Action (every enabled Action except a
-[[Pile]] entry), each entry in the same denormalized shape the Favorites
+one: the **catalog** of every eligible Action (every enabled Action that is
+[[Standalone-runnable]] — all but a [[Pile]] entry or a query-only capture, which
+run to nothing without a query), each entry in the same denormalized shape the Favorites
 snapshot uses — id, title, glyph, kind, classified `WidgetExecution` —
 rewritten (publish-only-on-change, paired with a `WidgetCenter` reload)
 whenever the underlying set changes. The picker's `EntityQuery` enumerates it;
