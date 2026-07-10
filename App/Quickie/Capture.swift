@@ -423,13 +423,14 @@ private struct ChoiceList: View {
                     }
                 }
                 .frame(maxWidth: .infinity)
+                // A scrollable top spacer the height of the breadcrumb, so the earliest
+                // options (the top of the reversed list) can scroll out from behind the
+                // breadcrumb overlay. Plain content padding — not a scroll safe-area
+                // inset — so the bottom options stay clear of the input bar and hittable.
+                .padding(.top, topInset)
             }
         }
         .defaultScrollAnchor(.bottom)
-        // Reserve the breadcrumb's height at the top of the scrollable area so the
-        // earliest options (the top of the reversed list) can scroll out from behind
-        // it, rather than being permanently occluded by the overlay.
-        .contentMargins(.top, topInset, for: .scrollContent)
     }
 }
 
