@@ -50,3 +50,14 @@ reasoning holds one surface further out.
   under the Linux `swift test` gate, beside the Favorites snapshot codec.
 - The app gains one more foreground duty: keep the catalog fresh on any
   create, edit, delete, enable, or disable that touches an eligible Action.
+- **The Action control can't do the three-way split; it opens the app
+  tap-equivalently.** A Control Center control body is a single, non-branching
+  `ControlWidgetTemplate` (WidgetKit's `ControlWidgetTemplateBuilder` exposes no
+  `buildEither`, so no `switch`/`if` over the resolved lane), and one intent can't
+  span the lanes either — a single `perform()` has one return type (can't mix the
+  copy lane's `.result()` with the hand-off lane's `.result(opensIntent:)`), and
+  `openAppWhenRun` is `static`, not per-lane. So the control runs the one intent that
+  serves every eligible action — `RunFavoriteInAppIntent` (`openAppWhenRun`), the
+  tap-equivalent open — and its Frecency rides the app's ordinary run path, not the
+  outbox. The [[Actions widget]] keeps the full three-way split (its cells are
+  ordinary SwiftUI `Button`s, which *can* branch); only the control is constrained.

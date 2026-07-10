@@ -6,50 +6,36 @@ import QuickieCore
 /// The configurable **Action control** (CONTEXT.md → Action control; ADR 0027): a
 /// Control Center control beside the static Quick Capture control (`QuickCaptureControl`,
 /// #125) that runs **one** user-chosen Action, picked from the same eligible catalog
-/// the [[Actions widget]] draws from.
+/// the [[Actions widget]] draws from. It wears the chosen action's own glyph and title
+/// in Control Center.
 ///
-/// It executes the same **three-way split** as a widget button — the control body
-/// picks the button's intent by the resolved `WidgetExecution` lane: a Snippet copies
-/// in-place, a Quicklink / no-input Shortcut hands off directly, anything
-/// input-needing opens the app tap-equivalently — and wears the action's own glyph
-/// and title in Control Center. Out-of-app runs credit Frecency through the same
-/// shared outbox the widget buttons use (`FavoritesWidgetStore.recordRun`, inside the
-/// button intents).
-///
-/// The chosen id lives in this control's `AppIntentControlConfiguration`
-/// (`ActionControlConfigIntent`); the value provider joins it against the published
-/// catalog every render. Unconfigured or **stale** (the chosen action was deleted or
-/// [[Disabled]]) it falls back to the app glyph and a clean, focused Home open —
-/// never inert, never an error (the ADR 0025 degrade, extended to the control).
+/// **Execution — tap-equivalent open, not the widget's three-way split.** A Control
+/// Center control body is a *single, non-branching* `ControlWidgetTemplate`: WidgetKit's
+/// `ControlWidgetTemplateBuilder` has no `buildEither`, so the body can't `switch` on the
+/// resolved lane to pick a per-lane intent the way a widget grid cell (an ordinary
+/// SwiftUI `Button`) can — and a single intent can't span the lanes either (one
+/// `perform()` has one return type, so it can't mix the copy lane's `.result()` with the
+/// hand-off lane's `.result(opensIntent:)`, and `openAppWhenRun` is `static`, not
+/// per-lane). So the control runs the one intent that works for **every** eligible
+/// action: `RunFavoriteInAppIntent` (`openAppWhenRun`), which opens Quickie and runs the
+/// action **tap-equivalently** through the shared inbox door — a Snippet copies, a
+/// Quicklink opens the browser, a capture opens its breadcrumb, each the correct outcome,
+/// but via a brief app open rather than the widget's in-place / direct hand-off. The
+/// Frecency credit rides the app's ordinary tap path (not the outbox), since the run
+/// lands in-app. The [[Actions widget]] keeps the full three-way split — only the control
+/// is constrained. Unconfigured or **stale** (the chosen action was deleted or
+/// [[Disabled]], so the catalog join misses) the id resolves to `nil` and the control
+/// falls back to the app glyph and a clean focused Home — never inert, never an error.
 struct ActionControl: ControlWidget {
     static let kind = EligibleActionCatalogStore.controlKind
 
     var body: some ControlWidgetConfiguration {
         AppIntentControlConfiguration(kind: Self.kind, provider: ActionControlValueProvider()) { (action: WidgetAction?) in
-            // The resolved lane picks the button's intent; a `nil` action (unconfigured
-            // or stale) falls through to the clean-Home entry, app glyph and all. The
-            // parameter type is spelled out because inferring it through the switch on
-            // `action?.execution` — an optional the provider's `Value` supplies — trips
-            // the type-checker (it bound `action` non-optional and rejected the chain).
-            switch action?.execution {
-            case .copySnippet(let id):
-                ControlWidgetButton(action: CopyFavoriteSnippetIntent(actionID: id)) {
-                    ActionControlLabel(action: action)
-                }
-            case .handOff(let url):
-                ControlWidgetButton(action: OpenFavoriteIntent(url: url, recordingRunOf: action?.id)) {
-                    ActionControlLabel(action: action)
-                }
-            case .openApp:
-                ControlWidgetButton(action: RunFavoriteInAppIntent(actionID: action?.id)) {
-                    ActionControlLabel(action: action)
-                }
-            case nil:
-                // Unconfigured or stale: the app glyph, opening a clean focused Home
-                // — the same `nil`-id fresh-entry the widget's empty cells ride.
-                ControlWidgetButton(action: RunFavoriteInAppIntent(actionID: nil)) {
-                    ActionControlLabel(action: nil)
-                }
+            // One non-branching template: open Quickie and run the chosen action
+            // tap-equivalently. A `nil` action (unconfigured or stale) carries a `nil`
+            // id, which `RunFavoriteInAppIntent` routes to the clean-Home entry.
+            ControlWidgetButton(action: RunFavoriteInAppIntent(actionID: action?.id)) {
+                ActionControlLabel(action: action)
             }
         }
         .displayName("Quickie Action")
@@ -85,8 +71,9 @@ struct ActionControlConfigIntent: ControlConfigurationIntent {
 
 /// Resolves the configured id against the published catalog (ADR 0027) — the
 /// control's render-time join, mirroring the Actions widget timeline. Returns the
-/// resolved `WidgetAction`, or `nil` when unconfigured or the chosen id no longer
-/// resolves, which the control body renders as the app-glyph clean-Home fallback.
+/// resolved `WidgetAction` (for the label and the run id), or `nil` when unconfigured
+/// or the chosen id no longer resolves, which the control body renders as the
+/// app-glyph clean-Home fallback.
 struct ActionControlValueProvider: AppIntentControlValueProvider {
     /// The gallery preview: no configuration yet, so the app-glyph fallback — what an
     /// unconfigured control looks like before the user picks an Action.

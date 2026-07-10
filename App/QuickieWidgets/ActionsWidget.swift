@@ -73,7 +73,7 @@ private struct ActionsProvider: AppIntentTimelineProvider {
         let resolved = EligibleActionCatalog.resolve(ids: ids, in: EligibleActionCatalogStore.load())
         return ActionsTimelineEntry(
             configured: !ids.isEmpty,
-            actions: Array(resolved.prefix(FavoritesWidgetSnapshot.capacity))
+            actions: Array(resolved.prefix(WidgetActionGrid.capacity))
         )
     }
 }

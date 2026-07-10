@@ -26,6 +26,14 @@ enum WidgetCell {
 /// stale-id slots an ADR 0027 join dropped). At most four cells — the caller clamps
 /// its list to the grid's capacity before handing it in.
 struct WidgetActionGrid: View {
+    /// The grid's cell count — the 2×2 geometry below drawn out — owned here beside
+    /// that geometry so a caller clamping its list (the Actions widget's timeline) and
+    /// the grid's actual cells can't drift apart. Sourced from the Core-canonical
+    /// `FavoritesWidgetSnapshot.capacity` (the Favorites snapshot codec clamps against
+    /// the same number), surfaced under the shared grid's name so neither widget has to
+    /// reach into a Favorites-specific type for it.
+    static let capacity = FavoritesWidgetSnapshot.capacity
+
     let actions: [WidgetAction]
     /// Whether cells show their title (`systemMedium`) or are glyph-only
     /// (`systemSmall`) — passed in so the grid needn't read the environment itself.
