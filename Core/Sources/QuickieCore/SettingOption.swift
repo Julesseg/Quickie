@@ -152,8 +152,16 @@ public enum SettingsKey {
     public static let eventCalendar = "event.calendar"
     /// The New Event silent-vs-editor toggle (default silent, off).
     public static let eventEditor = "event.editor"
+    /// The New Event opt-in Location step toggle (default off; issue #145).
+    public static let eventAskLocation = "event.askLocation"
+    /// The New Event opt-in Notes step toggle (default off; issue #145).
+    public static let eventAskNotes = "event.askNotes"
     /// The New Reminder due-date step toggle (default on).
     public static let reminderAskDate = "reminder.askDate"
+    /// The New Reminder opt-in Notes step toggle (default off; issue #145).
+    public static let reminderAskNotes = "reminder.askNotes"
+    /// The New Reminder opt-in Priority step toggle (default off; issue #145).
+    public static let reminderAskPriority = "reminder.askPriority"
     /// The New Reminder target-list dynamic choice: empty = "Ask each time".
     public static let reminderList = "reminder.list"
     /// The Calculator unit-conversion toggle (default on).
@@ -201,6 +209,18 @@ public extension ProviderID {
                     ))
                 ),
                 SettingOption(
+                    key: SettingsKey.eventAskLocation,
+                    title: "Ask for a location",
+                    footer: "On adds a location step to the capture. Off saves the event with no location. Leave the step empty to skip it for one event.",
+                    kind: .toggle(default: false)
+                ),
+                SettingOption(
+                    key: SettingsKey.eventAskNotes,
+                    title: "Ask for notes",
+                    footer: "On adds a notes step to the capture. Off saves the event with no notes. Leave the step empty to skip it for one event.",
+                    kind: .toggle(default: false)
+                ),
+                SettingOption(
                     key: SettingsKey.eventEditor,
                     title: "Review in Calendar before saving",
                     footer: "On opens the system event editor pre-filled with what you captured — so you can set alerts, invitees, or recurrence before saving. Off saves silently.",
@@ -214,6 +234,18 @@ public extension ProviderID {
                     title: "Ask for a due date",
                     footer: "On adds a due-date step to the capture. Off saves the reminder with no date.",
                     kind: .toggle(default: true)
+                ),
+                SettingOption(
+                    key: SettingsKey.reminderAskNotes,
+                    title: "Ask for notes",
+                    footer: "On adds a notes step to the capture. Off saves the reminder with no notes. Leave the step empty to skip it for one reminder.",
+                    kind: .toggle(default: false)
+                ),
+                SettingOption(
+                    key: SettingsKey.reminderAskPriority,
+                    title: "Ask for a priority",
+                    footer: "On adds a priority step (None, Low, Medium, High) to the capture. Off saves the reminder with no priority.",
+                    kind: .toggle(default: false)
                 ),
                 SettingOption(
                     key: SettingsKey.reminderList,

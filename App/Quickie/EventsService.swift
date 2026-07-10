@@ -72,6 +72,8 @@ actor EventsService {
         event.isAllDay = draft.isAllDay
         event.startDate = draft.start
         event.endDate = draft.end
+        event.location = draft.location
+        event.notes = draft.notes
         event.calendar = calendar(for: draft.calendarID)
 
         try store.save(event, span: .thisEvent, commit: true)

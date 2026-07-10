@@ -83,6 +83,114 @@ struct EventTests {
         )))
     }
 
+    @Test("the opt-in Location and Notes steps slot in after Start, before Calendar")
+    func optInStepsInOrder() {
+        // Both step toggles on with an ask-calendar: Title → Start → Location → Notes → Calendar.
+        let action = Action.newEvent(
+            calendar: .ask, calendars: calendars, askLocation: true, askNotes: true
+        )
+        #expect(action.arguments.map(\.label) == ["Title", "Start", "Location", "Notes", "Calendar"])
+        // Both new steps are free text, committable empty to skip them per event.
+        #expect(action.arguments.first { $0.label == "Location" }?.isOptional == true)
+        #expect(action.arguments.first { $0.label == "Notes" }?.isOptional == true)
+    }
+
+    @Test("collected location and notes land on the created event")
+    func locationAndNotesCollected() {
+        let start = Date(timeIntervalSince1970: 1_700_000_000)
+        let action = Action.newEvent(
+            calendar: .fixed(id: "home"), askLocation: true, askNotes: true
+        )
+        let outcome = action.run(arguments: [
+            .text("Dentist"),
+            .date(start, hasTime: true),
+            .text("12 Main St"),
+            .text("Bring insurance card"),
+        ])
+        #expect(outcome == .createEvent(EventDraft(
+            title: "Dentist",
+            start: start,
+            end: start.addingTimeInterval(3600),
+            isAllDay: false,
+            location: "12 Main St",
+            notes: "Bring insurance card",
+            calendarID: "home"
+        )))
+    }
+
+    @Test("committing an empty location or notes step writes no field")
+    func emptyTextStepsWriteNoField() {
+        let start = Date(timeIntervalSince1970: 1_700_000_000)
+        let action = Action.newEvent(
+            calendar: .fixed(id: "home"), askLocation: true, askNotes: true
+        )
+        let outcome = action.run(arguments: [
+            .text("Focus block"),
+            .date(start, hasTime: true),
+            .text(""),
+            .text(""),
+        ])
+        #expect(outcome == .createEvent(EventDraft(
+            title: "Focus block",
+            start: start,
+            end: start.addingTimeInterval(3600),
+            isAllDay: false,
+            location: nil,
+            notes: nil,
+            calendarID: "home"
+        )))
+    }
+
+    @Test("draft building stays correct with a location, a notes, and a calendar step")
+    func robustToTwoTextStepsPlusChoice() {
+        // Location + Notes are both text; the by-label reader keeps each on its own
+        // value, and the Calendar choice still resolves where by-kind reading would
+        // have handed the first text value to the title regardless of position.
+        let start = Date(timeIntervalSince1970: 1_700_000_000)
+        let action = Action.newEvent(
+            calendar: .ask, calendars: calendars, askLocation: true, askNotes: true
+        )
+        let outcome = action.run(arguments: [
+            .text("Team offsite"),
+            .date(start, hasTime: true),
+            .text("Rooftop"),
+            .text("Agenda in the deck"),
+            .choice(ChoiceOption(id: "work", label: "Work")),
+        ])
+        #expect(outcome == .createEvent(EventDraft(
+            title: "Team offsite",
+            start: start,
+            end: start.addingTimeInterval(3600),
+            isAllDay: false,
+            location: "Rooftop",
+            notes: "Agenda in the deck",
+            calendarID: "work"
+        )))
+    }
+
+    @Test("editor mode carries the collected location and notes into composeEvent")
+    func editorCarriesLocationAndNotes() {
+        let start = Date(timeIntervalSince1970: 1_700_000_000)
+        let action = Action.newEvent(
+            calendar: .fixed(id: "home"), askLocation: true, askNotes: true, editor: true
+        )
+        let outcome = action.run(arguments: [
+            .text("1:1"),
+            .date(start, hasTime: true),
+            .text("Coffee shop"),
+            .text("Career chat"),
+        ])
+        #expect(outcome == .composeEvent(EventDraft(
+            title: "1:1",
+            start: start,
+            end: start.addingTimeInterval(3600),
+            isAllDay: false,
+            location: "Coffee shop",
+            notes: "Career chat",
+            calendarID: "home"
+        )))
+    }
+
     @Test("the calendar setting gates the Calendar step and routes the skipped calendar")
     func calendarSettingGatesStep() {
         // ask-every-time keeps the three-step breadcrumb.

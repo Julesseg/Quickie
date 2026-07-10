@@ -35,14 +35,17 @@ struct EventEditorView: UIViewControllerRepresentable {
     }
 
     /// Pre-fills an `EKEvent` from the pure draft: title, the timed-vs-all-day span
-    /// the Core already resolved, and the chosen calendar (or the system default when
-    /// the draft routed to it or the chosen one is gone).
+    /// the Core already resolved, any collected location/notes (issue #145), and the
+    /// chosen calendar (or the system default when the draft routed to it or the
+    /// chosen one is gone).
     private func makeEvent(in store: EKEventStore) -> EKEvent {
         let event = EKEvent(eventStore: store)
         event.title = draft.title
         event.isAllDay = draft.isAllDay
         event.startDate = draft.start
         event.endDate = draft.end
+        event.location = draft.location
+        event.notes = draft.notes
         if let id = draft.calendarID, let calendar = store.calendar(withIdentifier: id) {
             event.calendar = calendar
         } else {

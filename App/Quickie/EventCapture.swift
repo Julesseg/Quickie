@@ -20,6 +20,10 @@ struct EventSettings {
     /// The calendar dynamic choice's stored value: empty = "Ask each time" (`.ask`),
     /// else a fixed calendar id.
     var calendarStored: String = ""
+    /// Ask for a location (issue #145, default OFF); ON adds the opt-in Location step.
+    var askLocation: Bool = false
+    /// Ask for notes (issue #145, default OFF); ON adds the opt-in Notes step.
+    var askNotes: Bool = false
     /// Open the pre-filled system event editor for final review instead of writing
     /// silently (default **silent**, OFF).
     var useEditor: Bool = false
@@ -100,6 +104,8 @@ struct EventCapture: Capture {
         return .newEvent(
             calendar: settings.calendarSelection,
             calendars: calendars,
+            askLocation: settings.askLocation,
+            askNotes: settings.askNotes,
             editor: settings.useEditor
         )
     }

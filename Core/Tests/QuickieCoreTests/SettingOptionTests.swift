@@ -46,6 +46,13 @@ struct SettingOptionTests {
 
         let editor = schema.first { $0.key == SettingsKey.eventEditor }
         #expect(editor?.kind == .toggle(default: false))
+
+        // The opt-in capture-step toggles (issue #145) — both default OFF so the
+        // default capture flow is unchanged until a user turns one on.
+        let location = schema.first { $0.key == SettingsKey.eventAskLocation }
+        #expect(location?.kind == .toggle(default: false))
+        let notes = schema.first { $0.key == SettingsKey.eventAskNotes }
+        #expect(notes?.kind == .toggle(default: false))
     }
 
     @Test("the Reminders schema migrates its capture settings, list as a dynamic choice")
@@ -65,6 +72,13 @@ struct SettingOptionTests {
         #expect(list.source == .dynamic(.reminderLists))
         #expect(list.leadingOptions.map(\.id) == ["", SettingsChoice.systemDefault])
         #expect(list.leadingOptions.map(\.label) == ["Ask each time", "Default list"])
+
+        // The opt-in capture-step toggles (issue #145) — both default OFF so the
+        // default capture flow is unchanged until a user turns one on.
+        let askNotes = schema.first { $0.key == SettingsKey.reminderAskNotes }
+        #expect(askNotes?.kind == .toggle(default: false))
+        let askPriority = schema.first { $0.key == SettingsKey.reminderAskPriority }
+        #expect(askPriority?.kind == .toggle(default: false))
     }
 
     @Test("the Calculator schema ships a new unit-conversion toggle, defaulting on")

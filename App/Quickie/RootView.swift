@@ -64,6 +64,8 @@ struct RootView: View {
     /// "Ask each time" sentinel the generic renderer stores for a dynamic choice. The
     /// keys are Core-owned (`SettingsKey`) so the schema and this reader never drift.
     @AppStorage(SettingsKey.reminderAskDate) private var reminderAskDate = true
+    @AppStorage(SettingsKey.reminderAskNotes) private var reminderAskNotes = false
+    @AppStorage(SettingsKey.reminderAskPriority) private var reminderAskPriority = false
     @AppStorage(SettingsKey.reminderList) private var reminderList = ""
 
     /// New Event settings, persisted with working defaults (ADR 0012) and rendered
@@ -71,6 +73,8 @@ struct RootView: View {
     /// (empty = "Ask each time") and create silently vs. opening the pre-filled system
     /// event editor. Same Core-owned keys the schema declares.
     @AppStorage(SettingsKey.eventCalendar) private var eventCalendar = ""
+    @AppStorage(SettingsKey.eventAskLocation) private var eventAskLocation = false
+    @AppStorage(SettingsKey.eventAskNotes) private var eventAskNotes = false
     @AppStorage(SettingsKey.eventEditor) private var eventUseEditor = false
 
     /// The Calculator unit-conversion toggle and File Search inline-result cap — the
@@ -1054,6 +1058,8 @@ struct RootView: View {
             ReminderCapture(
                 settings: ReminderSettings(
                     askDate: reminderAskDate,
+                    askNotes: reminderAskNotes,
+                    askPriority: reminderAskPriority,
                     listStored: reminderList
                 )
             ),
@@ -1072,6 +1078,8 @@ struct RootView: View {
             EventCapture(
                 settings: EventSettings(
                     calendarStored: eventCalendar,
+                    askLocation: eventAskLocation,
+                    askNotes: eventAskNotes,
                     useEditor: eventUseEditor
                 ),
                 presenter: eventEditor

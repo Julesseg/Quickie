@@ -18,6 +18,10 @@ import QuickieCore
 struct ReminderSettings {
     /// Ask for a due date (default ON); OFF skips the date step.
     var askDate: Bool = true
+    /// Ask for notes (issue #145, default OFF); ON adds the opt-in Notes step.
+    var askNotes: Bool = false
+    /// Ask for a priority (issue #145, default OFF); ON adds the opt-in Priority step.
+    var askPriority: Bool = false
     /// The list dynamic choice's stored value: empty = "Ask each time" (`.ask`),
     /// else a fixed list id.
     var listStored: String = ""
@@ -65,6 +69,8 @@ struct ReminderCapture: Capture {
         let lists = await service.reminderLists()
         return .newReminder(
             askDate: settings.askDate,
+            askNotes: settings.askNotes,
+            askPriority: settings.askPriority,
             list: settings.listSelection,
             lists: lists
         )
