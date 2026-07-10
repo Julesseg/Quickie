@@ -42,8 +42,12 @@ struct ActionsWidgetConfigIntent: WidgetConfigurationIntent {
     static let title: LocalizedStringResource = "Choose Actions"
     static let description = IntentDescription("Pick the Actions this widget runs.")
 
+    // Optional because AppIntents requires **every** `WidgetConfigurationIntent`
+    // parameter to be optional (the ExtractAppIntentsMetadata build step rejects a
+    // non-optional one); an unconfigured instance reads as `nil`, treated as "no
+    // actions chosen" — the invitation state.
     @Parameter(title: "Actions")
-    var actions: [EligibleActionEntity]
+    var actions: [EligibleActionEntity]?
 }
 
 /// Joins the configured ids against the published catalog every render (ADR 0027).
@@ -69,7 +73,7 @@ private struct ActionsProvider: AppIntentTimelineProvider {
     /// one bit that tells an unconfigured instance (→ invitation) from a configured
     /// instance whose ids all went stale (→ grid of dashed slots).
     private func entry(for configuration: ActionsWidgetConfigIntent) -> ActionsTimelineEntry {
-        let ids = configuration.actions.map(\.id)
+        let ids = (configuration.actions ?? []).map(\.id)
         let resolved = EligibleActionCatalog.resolve(ids: ids, in: EligibleActionCatalogStore.load())
         return ActionsTimelineEntry(
             configured: !ids.isEmpty,
