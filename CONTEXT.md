@@ -138,7 +138,7 @@ The 2×2 grid of small Favorite cards pinned at the top of Home over a progressi
 _Avoid_: Favorites row, favorites bar
 
 **Favorite**:
-An Action the user has manually pinned. Capped at **four** (the Favorites grid is 2×2); a fifth pin is refused until one is unpinned. Favorites appear in the Favorites grid on Home, receive a ranking boost in Results, and are exposed outward as [[Bridged Action]]s.
+An Action the user has manually pinned. Capped at **four** (the Favorites grid is 2×2); a fifth pin is refused until one is unpinned. Favorites appear in the Favorites grid on Home, receive a ranking boost in Results, and are exposed outward as [[Bridged Action]]s. Every Action is pinnable **except a [[Pile]] entry**: its main action consumes it ([[Stage]]), so a pin would outlive its target on first use — a ghost card invisibly holding a grid slot. Pile rows offer no Pin item, and reconciliation prunes any Pile pin an older build allowed.
 _Avoid_: Pinned, starred, bookmark (bookmark means Quicklink here)
 
 **Bridged Action**:

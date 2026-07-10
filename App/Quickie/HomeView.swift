@@ -148,6 +148,7 @@ struct HomeView: View {
                             secondaryActions: secondaryActions(for: action.content),
                             onSecondaryAction: { onSecondaryAction(action, $0) },
                             isFavorite: isFavorite(action),
+                            pinnable: action.isFavoriteEligible,
                             canPin: canFavorite(action),
                             toggle: { onToggleFavorite(action) }
                         ) {
