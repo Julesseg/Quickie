@@ -46,15 +46,12 @@ public enum EligibleActionCatalog {
     /// and **drops** any id the catalog no longer resolves — a deleted or [[Disabled]]
     /// action leaves the catalog, so its id falls out here and its cell degrades to
     /// the dashed empty slot / the control falls back to a clean-Home open (ADR
-    /// 0027). Deduplicates by id so a configuration listing the same action twice
-    /// still renders it once.
+    /// 0027). **Duplicates are kept**: the widget's slots are independent, so a user
+    /// who binds the same action to two slots means it — both cells render it (each
+    /// runs identically). The control resolves a single id, so duplication never
+    /// arises there.
     public static func resolve(ids: [String], in catalog: [WidgetAction]) -> [WidgetAction] {
         let byID = Dictionary(catalog.map { ($0.id, $0) }, uniquingKeysWith: { first, _ in first })
-        var seen = Set<String>()
-        var resolved: [WidgetAction] = []
-        for id in ids where seen.insert(id).inserted {
-            if let action = byID[id] { resolved.append(action) }
-        }
-        return resolved
+        return ids.compactMap { byID[$0] }
     }
 }

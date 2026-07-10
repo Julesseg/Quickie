@@ -103,10 +103,12 @@ struct EligibleActionCatalogTests {
         #expect(EligibleActionCatalog.resolve(ids: ["a", "gone", "b"], in: catalog).map(\.id) == ["a", "b"])
     }
 
-    @Test("resolve deduplicates a repeated id — a doubly-chosen action renders once")
-    func resolveDeduplicates() {
+    @Test("resolve keeps a repeated id — the widget's slots are independent, so duplicates are intentional")
+    func resolveKeepsDuplicates() {
         let catalog = [item("a"), item("b")]
-        #expect(EligibleActionCatalog.resolve(ids: ["a", "a", "b"], in: catalog).map(\.id) == ["a", "b"])
+        // Binding the same action to two slots renders it in both cells (each runs
+        // identically) — the user meant it, so the join must not collapse them.
+        #expect(EligibleActionCatalog.resolve(ids: ["a", "a", "b"], in: catalog).map(\.id) == ["a", "a", "b"])
     }
 
     @Test("resolving against an empty catalog yields nothing — every id misses")
