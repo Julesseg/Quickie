@@ -8,12 +8,16 @@ import Testing
 // first-run defaults covered by swift test" (the issue's acceptance criteria) means.
 struct FallbackActivationTests {
     private let web = "seed.web-search"
+    private let appStore = "seed.app-store-search"
     private var save: String { Action.saveForLaterID }
     private var new: String { Action.newSnippetID }
 
-    @Test("fresh install pre-enables web search, Save for later, New Snippet — in that order")
+    @Test("fresh install pre-enables web search, App Store search, Save for later, New Snippet — in that order")
     func firstRunDefaults() {
-        #expect(FallbackActivation.firstRunEnabledIDs(webSearchID: web) == [web, save, new])
+        #expect(
+            FallbackActivation.firstRunEnabledIDs(webSearchID: web, appStoreSearchID: appStore)
+                == [web, appStore, save, new]
+        )
     }
 
     @Test("migration: enabled = old order minus old disabled, order preserved")

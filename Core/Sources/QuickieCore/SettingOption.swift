@@ -194,7 +194,7 @@ public extension ProviderID {
     private var enabledFooter: String {
         switch self {
         case .system:
-            return "Off hides Reminders, Events, App Store Search, and Open iOS Settings from results, Recents, and Favorites until you turn it back on. Reminders and Events keep their own settings underneath, so turning System back on restores them. You can always reach this page by typing its name."
+            return "Off hides Reminders, Events, and Open iOS Settings from results, Recents, and Favorites until you turn it back on. Reminders and Events keep their own settings underneath, so turning System back on restores them. You can always reach this page by typing its name."
         default:
             return "Off hides \(displayName) from results, Recents, and Favorites until you turn it back on. Its data is kept, and you can always reach this page by typing its name."
         }
@@ -243,8 +243,8 @@ public extension ProviderID {
             // The umbrella's two navigation rows (ADR 0029): the schema's `link`
             // kind pushes the unchanged Reminders and Events pages, which stay full
             // providers in their own right — System groups them, it does not merge
-            // them. Its own actions (App Store Search, Open iOS Settings) render in
-            // the actions section beneath these, not as options.
+            // them. Its own action (Open iOS Settings) renders in the actions
+            // section beneath these, not as options.
             return [
                 SettingOption(
                     key: "system.reminders",

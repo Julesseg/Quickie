@@ -9,10 +9,11 @@ import QuickieCore
 ///   Reminders, Events, and the two built-ins below, while their own toggles keep
 ///   working underneath) over two navigation rows into the unchanged Reminders and
 ///   Events pages (the schema's `link` kind).
-/// - An **actions** section listing the two permanent, **disable-only** built-ins:
-///   App Store Search and Open iOS Settings. Each carries the same instance
-///   enable/disable toggle its result row obeys; neither is deletable (no
-///   swipe-to-delete), exactly like Save for later and New Snippet.
+/// - An **actions** section listing the permanent, **disable-only** built-in
+///   Open iOS Settings. It carries the same instance enable/disable toggle its
+///   result row obeys and is not deletable (no swipe-to-delete), like Save for
+///   later and New Snippet. (App Store Search is a default-seeded Custom Action,
+///   not a System built-in — issue #144 — so it lives on the Custom Actions page.)
 ///
 /// Reached as the typed "System" command row or from the Settings Providers list,
 /// and pushed onto the launcher's navigation stack — no own stack or Done button.
@@ -21,9 +22,9 @@ struct SystemView: View {
     /// reversibly hides that action from every launcher surface.
     let enablement: EnablementStore
 
-    /// The two permanent System built-ins, in page order. The same factories the
-    /// engine indexes under `.system`, so the page and the results can never drift.
-    private var builtIns: [Action] { [.appStoreSearch(), .openIOSSettings()] }
+    /// The permanent System built-ins, in page order. The same factories the engine
+    /// indexes under `.system`, so the page and the results can never drift.
+    private var builtIns: [Action] { [.openIOSSettings()] }
 
     var body: some View {
         List {
@@ -43,7 +44,7 @@ struct SystemView: View {
             } header: {
                 Text("Actions")
             } footer: {
-                Text("Built-in actions. Disable one to hide it from results without removing it — they can't be deleted. App Store Search also appears in Fallbacks, where you can make it consume what you type.")
+                Text("Built-in actions. Disable one to hide it from results without removing it — they can't be deleted.")
             }
         }
         .navigationTitle("System")
@@ -52,8 +53,7 @@ struct SystemView: View {
 
 /// One System built-in row: the action's title with a short caption and its
 /// instance enable/disable toggle. No tap target and no delete affordance — a
-/// built-in is configured only by its toggle (and, for App Store Search, on the
-/// Fallbacks page).
+/// built-in is configured only by its toggle.
 private struct SystemActionRow: View {
     let action: Action
     let isDisabled: Bool
@@ -81,7 +81,6 @@ private struct SystemActionRow: View {
     /// A one-line description of what the built-in does.
     private var caption: String? {
         switch action.id {
-        case Action.appStoreSearchID: return "Search the App Store for what you type"
         case Action.openIOSSettingsID: return "Open Quickie's page in the iOS Settings app"
         default: return nil
         }

@@ -22,6 +22,21 @@ row. Its Enabled toggle **cascades**: System off short-circuits every member
 kind beneath it, while the members' own toggles keep working underneath —
 Disabled gains an umbrella level above kind.
 
+## Update (issue #144): App Store Search is a Custom Action, not a System built-in
+
+App Store Search was reclassified out of the System provider. Because its target
+*is* a slotted URL (`itms-apps://…/search?…&term={query}`), it fits the
+[[Custom Action]] model exactly — so it is seeded as an ordinary, editable,
+deletable **default Custom Action** (fixed id `seed.app-store-search`,
+pre-enabled as a fallback beside web search; ADR 0023/0028), and the future
+Catalog (#143) will also offer it for re-install. This also fixed a real defect:
+a System-kind multi-step action fell through the launcher's selection routing to
+its single-step effect and did nothing, whereas a Custom Action runs through the
+proven breadcrumb path. The System provider therefore hosts **only** Open iOS
+Settings as its own action (still a `.system` built-in — it has no slot and can't
+be a Custom Action), plus the Reminders/Events links and the cascading Enabled
+toggle. The umbrella/cascade decision below is unchanged.
+
 ## Considered options
 
 - **Flat merge** (one page absorbing all reminder + event options): a ~9-option

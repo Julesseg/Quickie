@@ -78,15 +78,13 @@ final class SystemProviderUITests: XCTestCase {
 
         XCTAssertTrue(app.switches["provider-enabled-system"].waitForExistence(timeout: 10),
                       "the System page leads with its Enabled toggle")
-        // The two built-ins' disable toggles are present (the actions section).
-        XCTAssertTrue(app.switches["system-action-enabled.builtin.system.app-store-search"].waitForExistence(timeout: 5),
-                      "App Store Search shows its disable toggle")
-        XCTAssertTrue(app.switches["system-action-enabled.builtin.system.open-ios-settings"].exists,
+        // The built-in's disable toggle is present (the actions section).
+        XCTAssertTrue(app.switches["system-action-enabled.builtin.system.open-ios-settings"].waitForExistence(timeout: 5),
                       "Open iOS Settings shows its disable toggle")
     }
 
     /// System off hides every member action from results (New Reminder, New Event,
-    /// App Store Search, Open iOS Settings); turning it back on restores them.
+    /// Open iOS Settings); turning it back on restores them.
     @MainActor
     func testSystemDisableCascadesToMembersAndReEnables() throws {
         let app = launchApp()

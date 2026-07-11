@@ -153,9 +153,10 @@ public enum ActionKind: String, Equatable, Sendable, Codable {
     /// command vs a user's Quicklinks, a Fallbacks command vs a Custom Action).
     case managementPage
     /// A System provider built-in (CONTEXT.md → System provider; ADR 0029): the
-    /// permanent OS-integration actions App Store Search and Open iOS Settings. Its
-    /// own kind so the rows wear the System badge, distinct from a user's Custom
-    /// Action — and it is disable-only (no delete), governed by the System umbrella.
+    /// permanent OS-integration action Open iOS Settings. Its own kind so the row
+    /// wears the System badge, and it is disable-only (no delete), governed by the
+    /// System umbrella. (App Store Search is a default-seeded Custom Action, not a
+    /// System built-in — it opens a slotted URL, so it fits the Custom Action model.)
     case system
 }
 
@@ -365,10 +366,7 @@ public struct Action: Identifiable, Sendable {
         switch kind {
         case .saveForLater, .newSnippet, .reminder, .event:
             return true
-        case .customAction, .shortcut, .system:
-            // A System built-in with a free-text first slot (App Store Search)
-            // seeds the query like a text-first Custom Action; an argument-less one
-            // (Open iOS Settings) has nowhere to put it and falls through to `false`.
+        case .customAction, .shortcut:
             guard let first = arguments.first else { return false }
             // A choice slot's content type is `.text` too, so the option set is
             // what tells a free-text slot from a picked one — a query can only
@@ -859,66 +857,8 @@ extension Action {
         ) { _ in .openPage(.settings(panel: .system)) }
     }
 
-    /// The stable id of the **App Store Search** System built-in (ADR 0029).
-    public static let appStoreSearchID = "builtin.system.app-store-search"
     /// The stable id of the **Open iOS Settings** System built-in (ADR 0029).
     public static let openIOSSettingsID = "builtin.system.open-ios-settings"
-
-    /// **App Store Search** (CONTEXT.md → System provider; ADR 0029): a permanent
-    /// System built-in that collects one free-text query and opens the App Store's
-    /// public search. Its single text-first Argument makes it **fallback-eligible**
-    /// by shape (it waits in the Fallback list's pool until activated), and running
-    /// it verb-first starts the breadcrumb at the search step. Disable-only — the
-    /// System page and the Fallback pool toggle it, but it is never deletable.
-    public static func appStoreSearch() -> Action {
-        Action(
-            id: appStoreSearchID,
-            kind: .system,
-            title: "App Store Search",
-            aliases: ["app store", "appstore", "search app store", "apps"],
-            inputTypes: [.text],
-            outputType: .url,
-            arguments: [Argument(label: "Search", contentType: .text)],
-            // Verb-first the row has nothing to open until the query lands, so its
-            // single-step effect is inert; the breadcrumb commit builds the URL.
-            effect: { _ in .none },
-            multiStepEffect: { values in
-                let term = values.firstText ?? ""
-                // The outcome **case** stays `.openURL` regardless of the term so the
-                // row's glyph and Return-key label read like web search's (a browser
-                // open, `.search`) — `mainAction`/`returnKeyLabel` classify off an
-                // empty-args run. A blank term (only reachable via that classification
-                // call — the required slot never commits empty) falls back to the App
-                // Store's bare search landing rather than a broken open.
-                let url = appStoreSearchURL(term: term) ?? appStoreSearchLandingURL
-                return .openURL(url)
-            }
-        )
-    }
-
-    /// The App Store search URL for `term`, or `nil` if it can't be built (an empty
-    /// term). Uses the `itms-apps` scheme against the App Store's `MZSearch`
-    /// endpoint — the form that reliably opens the App Store app straight to the
-    /// results list on iOS (the `itunes.apple.com/search` path no longer does; ADR
-    /// 0029). Pure and testable — the app just opens whatever URL this returns.
-    public static func appStoreSearchURL(term: String) -> URL? {
-        let trimmed = term.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !trimmed.isEmpty else { return nil }
-        var components = URLComponents()
-        components.scheme = "itms-apps"
-        components.host = "search.itunes.apple.com"
-        components.path = "/WebObjects/MZSearch.woa/wa/search"
-        components.queryItems = [
-            URLQueryItem(name: "media", value: "software"),
-            URLQueryItem(name: "term", value: trimmed),
-        ]
-        return components.url
-    }
-
-    /// The App Store's bare software-search landing (no term) — the graceful
-    /// fallback when `appStoreSearchURL` can't build a termed URL, so the outcome
-    /// case stays `.openURL` for glyph/label classification (ADR 0029).
-    static let appStoreSearchLandingURL = URL(string: "itms-apps://search.itunes.apple.com/WebObjects/MZSearch.woa/wa/search?media=software")!
 
     /// **Open iOS Settings** (CONTEXT.md → System provider; ADR 0029): a permanent
     /// System built-in with **no arguments** that opens Quickie's own page in the

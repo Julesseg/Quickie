@@ -3,10 +3,11 @@ import Testing
 @testable import QuickieCore
 
 // The System umbrella provider (CONTEXT.md → System provider; ADR 0029; issue
-// #144): a grouping over Reminders and Events with two OS-integration built-ins
-// (App Store Search, Open iOS Settings) and a **cascading** Enabled toggle. These
-// tests pin the Core half — the provider identity, the declared schema, the two
-// built-in Actions, and the umbrella cascade — through the public surface.
+// #144): a grouping over Reminders and Events with the OS-integration built-in
+// Open iOS Settings and a **cascading** Enabled toggle. (App Store Search is a
+// default-seeded Custom Action, not a System built-in.) These tests pin the Core
+// half — the provider identity, the declared schema, the Open iOS Settings action,
+// and the umbrella cascade — through the public surface.
 struct SystemProviderTests {
 
     // MARK: Provider identity & the top-level Providers list
@@ -62,42 +63,9 @@ struct SystemProviderTests {
 
     // MARK: App Store Search
 
-    @Test("App Store Search collects one free-text argument and opens the store search")
-    func appStoreSearchOpensStoreSearch() {
-        let action = Action.appStoreSearch()
-        #expect(action.id == Action.appStoreSearchID)
-        #expect(action.kind == .system)
-        // One free-text argument — the seeded query lands here.
-        #expect(action.arguments.count == 1)
-        #expect(action.arguments.first?.contentType == .text)
-
-        // Committing the breadcrumb opens the App Store's public search URL.
-        let outcome = action.run(arguments: [.text("threes")])
-        guard case .openURL(let url) = outcome else {
-            Issue.record("expected an openURL outcome, got \(outcome)")
-            return
-        }
-        #expect(url.scheme == "itms-apps")
-        #expect(url.absoluteString.contains("term=threes"))
-        #expect(url.absoluteString.contains("media=software"))
-    }
-
-    @Test("App Store Search is fallback-eligible by its text-first shape")
-    func appStoreSearchIsFallbackEligible() {
-        // A free-text first slot admits it to the Fallback list's pool (CONTEXT.md
-        // → Fallback Action) — derived from shape, no flag.
-        #expect(Action.appStoreSearch().isFallbackEligible)
-    }
-
-    @Test("an empty App Store query falls back to the bare store search, not a broken open")
-    func appStoreSearchEmptyTermFallsBackToLanding() {
-        // The URL builder refuses to term an empty query…
-        #expect(Action.appStoreSearchURL(term: "   ") == nil)
-        // …but the action's outcome stays a real `.openURL` (the bare software
-        // search landing), so the row's glyph/label classify like web search's and
-        // never dead-ends. The required slot never actually commits empty in use.
-        #expect(Action.appStoreSearch().run(arguments: [.text("  ")]) == .openURL(Action.appStoreSearchLandingURL))
-    }
+    // App Store Search is no longer a System built-in — it is a default-seeded
+    // Custom Action (issue #144), so its slotted-URL behaviour is exercised by the
+    // Custom Action suites, not here.
 
     // MARK: Open iOS Settings
 
@@ -150,18 +118,18 @@ struct SystemProviderTests {
     }
 
     /// The providers wired the way the app wires them: the two captures under
-    /// their kinds, the System built-ins under `.system`, and the built-in command
-    /// rows (which include the System page's typed recovery row).
+    /// their kinds, the System built-in (Open iOS Settings) under `.system`, and the
+    /// built-in command rows (which include the System page's typed recovery row).
     private func systemProviders() -> [Provider] {
         [
             IndexedProvider.builtIns(),
             IndexedProvider(catalog: [.newReminder()], id: .reminders),
             IndexedProvider(catalog: [.newEvent()], id: .events),
-            IndexedProvider(catalog: [.appStoreSearch(), .openIOSSettings()], id: .system),
+            IndexedProvider(catalog: [.openIOSSettings()], id: .system),
         ]
     }
 
-    @Test("System off hides New Reminder, New Event, and both built-ins from results")
+    @Test("System off hides New Reminder, New Event, and Open iOS Settings from results")
     func systemOffHidesEveryMemberAction() {
         let providers = systemProviders()
 
@@ -169,7 +137,6 @@ struct SystemProviderTests {
         let on = SearchEngine(providers: providers)
         #expect(on.results(for: "reminder").map(\.id).contains(Action.newReminderID))
         #expect(on.results(for: "event").map(\.id).contains(Action.newEventID))
-        #expect(on.results(for: "app store").map(\.id).contains(Action.appStoreSearchID))
         #expect(on.results(for: "ios settings").map(\.id).contains(Action.openIOSSettingsID))
 
         // System off: every member action goes dark, even though its own kind
@@ -179,7 +146,6 @@ struct SystemProviderTests {
         let off = SearchEngine(providers: providers, enablement: enablement)
         #expect(!off.results(for: "reminder").map(\.id).contains(Action.newReminderID))
         #expect(!off.results(for: "event").map(\.id).contains(Action.newEventID))
-        #expect(!off.results(for: "app store").map(\.id).contains(Action.appStoreSearchID))
         #expect(!off.results(for: "ios settings").map(\.id).contains(Action.openIOSSettingsID))
 
         // The System page's typed row still answers, so it is re-enableable by name.

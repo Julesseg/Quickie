@@ -321,13 +321,13 @@ struct RootView: View {
                 // indexed instance is only for matching by name; activating it
                 // rebuilds a configured Action from the user's calendars + settings.
                 IndexedProvider(catalog: [.newEvent()], id: .events),
-                // The System umbrella's own built-ins (CONTEXT.md → System
-                // provider; ADR 0029): App Store Search and Open iOS Settings,
-                // attributed to `.system` so the umbrella's Enabled toggle
-                // cascades over them (and, via `isEffectivelyEnabled`, over the
-                // Reminders/Events catalogs above too). App Store Search is
-                // fallback-eligible by shape and enters the Fallbacks pool below.
-                IndexedProvider(catalog: [.appStoreSearch(), .openIOSSettings()], id: .system),
+                // The System umbrella's own built-in (CONTEXT.md → System
+                // provider; ADR 0029): Open iOS Settings, attributed to `.system`
+                // so the umbrella's Enabled toggle cascades over it (and, via
+                // `isEffectivelyEnabled`, over the Reminders/Events catalogs above).
+                // App Store Search is a default-seeded Custom Action instead (issue
+                // #144), so it rides the Custom Actions catalog, not here.
+                IndexedProvider(catalog: [.openIOSSettings()], id: .system),
             ],
             layout: keyboardLayout.layout,
             favorites: signals.favorites,
@@ -349,11 +349,8 @@ struct RootView: View {
     /// times `makeAction`/`shortcut` runs: the hot `engine` build passes its locals
     /// (one pass per keystroke); the cold computed property below rebuilds them.
     private func eligibleFallbacks(customActionActions: [Action], shortcutActions: [Action]) -> [Action] {
-        // App Store Search is a permanent, fallback-eligible System built-in (ADR
-        // 0029): it enters the Fallback list's pool by shape, waiting there until
-        // the user activates it — never auto-enabled.
         (customActionActions + shortcutActions
-            + [.saveForLater(), .newSnippet(), .newReminder(), .newEvent(), .appStoreSearch()])
+            + [.saveForLater(), .newSnippet(), .newReminder(), .newEvent()])
             .filter(\.isFallbackEligible)
     }
 
@@ -786,7 +783,10 @@ struct RootView: View {
                 // the catalog's load timing so the seeded web search is pre-enabled
                 // even before @Query surfaces it.
                 fallbacks.migrateIfNeeded(
-                    firstRunDefaults: FallbackActivation.firstRunEnabledIDs(webSearchID: QuickieStore.seedWebSearchID)
+                    firstRunDefaults: FallbackActivation.firstRunEnabledIDs(
+                        webSearchID: QuickieStore.seedWebSearchID,
+                        appStoreSearchID: QuickieStore.seedAppStoreSearchID
+                    )
                 )
                 everEligibleFallbacks.formUnion(eligibleFallbackIDs)
                 // Couple instance-disable with the Fallback list: a disabled action is
