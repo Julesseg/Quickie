@@ -267,10 +267,20 @@ final class InstanceDisableUITests: XCTestCase {
 
     /// The Fallbacks-page row (cell) whose title contains `title`, resolved by
     /// containment — the reliable way to reach a row's inline controls where a
-    /// top-level id query over a lazy List row is flaky.
+    /// top-level id query over a lazy List row is flaky. On a short screen (CI runs
+    /// on iPhone SE) a demoted row can land in the Available pool below the fold —
+    /// and with the permanent App Store Search pool row (ADR 0029) the page is one
+    /// row taller — so a lazy List never renders it; nudge it into the render tree
+    /// before the caller queries its inline controls.
     @MainActor
     private func fallbackCell(_ app: XCUIApplication, titled title: String) -> XCUIElement {
-        app.cells.containing(NSPredicate(format: "label CONTAINS[c] %@", title)).firstMatch
+        let cell = app.cells.containing(NSPredicate(format: "label CONTAINS[c] %@", title)).firstMatch
+        var swipes = 0
+        while !cell.exists && swipes < 4 {
+            app.swipeUp()
+            swipes += 1
+        }
+        return cell
     }
 
     /// The enable/disable toggle lives only on the **Available** (pool) rows, not the
