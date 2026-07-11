@@ -365,9 +365,18 @@ extension StoredCustomAction {
         argumentSpecs = def.reconciledSpecs
     }
 
-    /// A fresh stored row from a saved definition — the create path's insert.
+    /// A fresh stored row from a saved definition — the create path's insert. A
+    /// Catalog install and the editor's Add both land here under a **fresh** UUID id
+    /// (ADR 0028): installing mints a brand-new ordinary Custom Action every time.
     static func make(from def: CustomActionDefinition) -> StoredCustomAction {
+        make(from: def, id: UUID().uuidString)
+    }
+
+    /// A stored row from a definition under an explicit id — the seed path's insert,
+    /// which needs the fixed `seed.*` id (ADR 0023 dedup) rather than a fresh UUID.
+    static func make(from def: CustomActionDefinition, id: String) -> StoredCustomAction {
         StoredCustomAction(
+            id: id,
             title: def.name,
             urlString: def.template,
             alias: def.aliases.first,

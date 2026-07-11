@@ -55,55 +55,43 @@ extension StoredCustomAction {
 }
 
 extension QuickieStore {
-    private static let defaultWebSearchTemplate = "https://duckduckgo.com/?q={query}"
-    /// The default App Store search Custom Action's template (issue #144): a slotted
-    /// `itms-apps` URL against the App Store's `MZSearch` endpoint — the form that
-    /// opens the App Store app straight to results. Its free-text `{query}` slot
-    /// makes it fallback-eligible by shape, exactly like web search. Seeded as an
-    /// ordinary, editable, deletable Custom Action rather than a System built-in
-    /// (its slotted URL fits the Custom Action model); the future Catalog (#143)
-    /// will also offer it for re-install.
-    private static let defaultAppStoreSearchTemplate =
-        "itms-apps://search.itunes.apple.com/WebObjects/MZSearch.woa/wa/search?media=software&term={query}"
-    /// The seeded App Store search's fixed, well-known id (ADR 0023/0028) — the same
-    /// dedup-friendly fixed-id regime as `seedWebSearchID`.
-    static let seedAppStoreSearchID = "seed.app-store-search"
     /// The seeded web search's fixed, well-known id (ADR 0023). The seed is
     /// guarded by a *per-device* flag, so a second device can seed before its
     /// first CloudKit import lands — a fixed id is what lets the launch-time
     /// dedup pass recognize the two rows as the same seed and collapse them.
     /// Exposed so `FallbacksStore` can pre-enable it as a first-run fallback
     /// (issue #114) against the exact id the seed writes.
-    static let seedWebSearchID = "seed.web-search"
-    /// Bumped to `.v3` for the App Store search seed (issue #144; ADR 0028): the
-    /// one-shot flag re-runs once against the new default set so the App Store search
-    /// Custom Action lands even on a build that recorded the earlier v2 seed as done,
-    /// inserting whichever default seed ids are absent exactly once. (v2 was the
-    /// Custom Action unification, ADR 0021 — the retired `StoredFallbackQuery` table.)
+    static let seedWebSearchID = CatalogSeed.webSearch.id
+    /// The seeded App Store search's fixed, well-known id (ADR 0023/0028; issue #144)
+    /// — the same dedup-friendly fixed-id regime as `seedWebSearchID`.
+    static let seedAppStoreSearchID = CatalogSeed.appStoreSearch.id
+    /// Bumped to `.v3` for the grown default-seed set (issues #143, #144; ADR 0028):
+    /// the seed set grew from web search alone to web search + App Store search +
+    /// Wikipedia + YouTube + Google Maps, so the one-shot pass must run once more to
+    /// insert whichever `seed.*` ids are absent on a build that already recorded the
+    /// v2 (web-search-only) seed as done. Was `.v2` for the Custom Action unification
+    /// (ADR 0021 — the retired `StoredFallbackQuery` table).
     private static let seedFlagKey = "store.didSeedCustomActions.v3"
 
     /// Exposed so the UI-testing launch path can clear the one-time seed flag and
-    /// let each fresh in-memory store re-seed the default web-search Custom Action.
+    /// let each fresh in-memory store re-seed the default Custom Actions.
     static var migrationFlagKeyForTesting: String { seedFlagKey }
 
-    /// The default, fully deletable **Custom Action** seeds (CONTEXT.md → Custom
-    /// Action; ADR 0021/0028): web search and App Store search. Each is an ordinary,
-    /// editable, deletable one-slot Custom Action — not a privileged built-in — so the
-    /// user can search out of the box while remaining free to delete or edit it. Each
-    /// free-text `{query}` slot makes it fallback-*eligible* by shape (issue #114);
-    /// `FallbacksStore` pre-enables both in the first-run enabled list. Fixed,
-    /// well-known ids so the launch-time dedup pass can collapse cross-device copies.
-    static let defaultSeeds: [(id: String, title: String, template: String, alias: String)] = [
-        (seedWebSearchID, "Search the web", defaultWebSearchTemplate, "search"),
-        (seedAppStoreSearchID, "Search the App Store", defaultAppStoreSearchTemplate, "app store"),
-    ]
-
-    /// Seeds the default web-search and App Store search **Custom Actions** on first
-    /// launch (CONTEXT.md → Custom Action; ADR 0021/0028), run at launch and guarded
-    /// by a one-shot flag. Inserts **whichever default seed ids are absent** — so the
-    /// v3 flag bump lands the new App Store search seed beside an existing web search
-    /// without duplicating it. No data migration: the retired Fallback query storage
-    /// is pre-release, so there is nothing to convert (ADR 0021).
+    /// Seeds the five default, fully deletable **Custom Actions** on first launch —
+    /// web search, App Store search, Wikipedia, YouTube, Google Maps (CONTEXT.md →
+    /// Custom Action, Catalog; ADR 0028; issues #143, #144) — run at launch and
+    /// guarded by a one-shot flag so it happens exactly once. Each is an ordinary,
+    /// deletable one-slot Custom Action under a fixed `seed.*` id, so the user can
+    /// search out of the box while remaining free to delete or edit any of them. Their
+    /// free-text slots make them fallback-*eligible* by shape (issue #114);
+    /// `FallbacksStore` pre-enables all first-run fallbacks. No data migration: the
+    /// retired Fallback query storage is pre-release, so there is nothing to convert
+    /// (ADR 0021).
+    ///
+    /// Inserts whichever `seed.*` ids are **absent**, exactly once: a fresh install
+    /// gets all five, an earlier install gains only the ones it's missing. The flag
+    /// then blocks any re-run, so a **deleted** seed never resurrects — the Catalog's
+    /// Browse page is the way back (ADR 0028).
     @MainActor
     static func seedDefaultCustomActions(
         in context: ModelContext,
@@ -111,16 +99,10 @@ extension QuickieStore {
     ) {
         guard !defaults.bool(forKey: seedFlagKey) else { return }
 
-        let existingIDs = Set(
-            ((try? context.fetch(FetchDescriptor<StoredCustomAction>())) ?? []).map(\.id)
-        )
-        for seed in defaultSeeds where !existingIDs.contains(seed.id) {
-            context.insert(StoredCustomAction(
-                id: seed.id,
-                title: seed.title,
-                urlString: seed.template,
-                alias: seed.alias
-            ))
+        let existing = (try? context.fetch(FetchDescriptor<StoredCustomAction>())) ?? []
+        let existingIDs = Set(existing.map(\.id))
+        for seed in CatalogSeed.all where !existingIDs.contains(seed.id) {
+            context.insert(StoredCustomAction.make(from: seed.definition, id: seed.id))
         }
 
         // Only record the seed as done once the save actually persists. If it

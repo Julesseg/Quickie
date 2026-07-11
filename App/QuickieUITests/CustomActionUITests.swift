@@ -245,7 +245,15 @@ final class CustomActionUITests: XCTestCase {
 
         // The new row is listed on the page (the editor wrote to storage), then pop
         // back to the launcher.
-        XCTAssertTrue(app.staticTexts["Add Todo"].waitForExistence(timeout: 10),
+        // The authored row sorts last (newest), below the default seed rows, so scroll
+        // it into view before asserting rather than assuming it's on-screen.
+        let authored = app.staticTexts["Add Todo"]
+        var authoredScrolls = 0
+        while !authored.exists && authoredScrolls < 6 {
+            app.swipeUp()
+            authoredScrolls += 1
+        }
+        XCTAssertTrue(authored.waitForExistence(timeout: 10),
                       "the authored Custom Action is listed on the Management page")
         goBackHome(app)
 
@@ -380,7 +388,14 @@ final class CustomActionUITests: XCTestCase {
         XCTAssertTrue(save.isEnabled)
         save.tap()
 
+        // The authored action sorts last (newest), below the default seed rows, so
+        // scroll it into view before asserting rather than assuming it's on-screen.
         let original = app.staticTexts["Dupe Me"]
+        var scrolls = 0
+        while !original.exists && scrolls < 6 {
+            app.swipeUp()
+            scrolls += 1
+        }
         XCTAssertTrue(original.waitForExistence(timeout: 10), "the authored action is listed")
 
         // Reveal the row's swipe actions and tap Duplicate.
@@ -419,7 +434,15 @@ final class CustomActionUITests: XCTestCase {
         XCTAssertTrue(save.isEnabled, "the typed multi-slot Custom Action validates for Save")
         save.tap()
 
-        XCTAssertTrue(app.staticTexts["Add Todo"].waitForExistence(timeout: 10),
+        // The authored row sorts last (newest), below the default seed rows, so scroll
+        // it into view before asserting rather than assuming it's on-screen.
+        let authored = app.staticTexts["Add Todo"]
+        var authoredScrolls = 0
+        while !authored.exists && authoredScrolls < 6 {
+            app.swipeUp()
+            authoredScrolls += 1
+        }
+        XCTAssertTrue(authored.waitForExistence(timeout: 10),
                       "the authored Custom Action is listed on the Management page")
         goBackHome(app)
 
