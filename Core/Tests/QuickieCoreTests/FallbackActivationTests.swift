@@ -12,12 +12,11 @@ struct FallbackActivationTests {
     private var save: String { Action.saveForLaterID }
     private var new: String { Action.newSnippetID }
 
-    @Test("fresh install pre-enables web search, App Store search, Save for later, New Snippet — in that order")
+    @Test("fresh install pre-enables the five default seeds then the two captures — in most-important-first order")
     func firstRunDefaults() {
-        #expect(
-            FallbackActivation.firstRunEnabledIDs(webSearchID: web, appStoreSearchID: appStore)
-                == [web, appStore, save, new]
-        )
+        #expect(FallbackActivation.firstRunEnabledIDs() == [
+            web, appStore, "seed.wikipedia", "seed.youtube", "seed.google-maps", save, new,
+        ])
     }
 
     @Test("migration: enabled = old order minus old disabled, order preserved")

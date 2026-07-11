@@ -783,10 +783,7 @@ struct RootView: View {
                 // the catalog's load timing so the seeded web search is pre-enabled
                 // even before @Query surfaces it.
                 fallbacks.migrateIfNeeded(
-                    firstRunDefaults: FallbackActivation.firstRunEnabledIDs(
-                        webSearchID: QuickieStore.seedWebSearchID,
-                        appStoreSearchID: QuickieStore.seedAppStoreSearchID
-                    )
+                    firstRunDefaults: FallbackActivation.firstRunEnabledIDs()
                 )
                 everEligibleFallbacks.formUnion(eligibleFallbackIDs)
                 // Couple instance-disable with the Fallback list: a disabled action is

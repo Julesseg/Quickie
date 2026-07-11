@@ -42,6 +42,20 @@ struct CustomActionsView: View {
             // Actions follow.
             ProviderOptionsSection(provider: .customActions)
 
+            // The Catalog's single entry point (CONTEXT.md → Catalog; ADR 0028;
+            // issue #143) — a navigation row in the options section, the
+            // Sync-Shortcut precedent.
+            Section {
+                NavigationLink {
+                    CatalogView()
+                } label: {
+                    Label("Browse catalog", systemImage: "square.grid.2x2")
+                }
+                .accessibilityIdentifier("browse-catalog")
+            } footer: {
+                Text("Install a ready-made Custom Action from the catalog. Each install creates a new, fully editable copy.")
+            }
+
             Section {
                 if customActions.isEmpty {
                     Text("No Custom Actions yet")
