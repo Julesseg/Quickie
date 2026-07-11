@@ -14,10 +14,14 @@ final class QuickieUITests: XCTestCase {
     @MainActor
     private func launchApp(extraArguments: [String] = []) -> XCUIApplication {
         let app = XCUIApplication()
-        // Start from a clean signals slate so persisted Favorites/Frecency from a
-        // prior run can't pollute these tests (issue #9). `extraArguments` lets a
-        // test add hooks such as `-uitest-pin-favorite <id>`.
-        app.launchArguments += ["-uitest-reset-signals"] + extraArguments
+        // `--uitesting` puts the app on the fresh in-memory store and, crucially,
+        // clears the one-shot Custom Action seed flag on every launch (see
+        // QuickieApp) so the default web search is re-seeded each run. Without it
+        // this suite ran on the *persistent* store while a shared seed flag — set by
+        // an earlier `--uitesting` suite's in-memory seed — suppressed seeding it, so
+        // `seed.web-search` was absent and testPinnedFallbackSurfacesOnHome's card
+        // never drew. Matches every other UI-test suite that touches stored content.
+        app.launchArguments += ["--uitesting", "-uitest-reset-signals"] + extraArguments
         app.launchArguments.append("-uitest-instant-motion")
         app.launch()
         return app
