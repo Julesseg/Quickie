@@ -764,9 +764,24 @@ struct RootView: View {
                 // Prune any pinned Favorite whose Action no longer resolves (a
                 // deleted Snippet/Quicklink, or a stale id from a build that
                 // derived ids from the unstable `persistentModelID.hashValue`) so
-                // an invisible pin can't silently occupy a Favorites slot. The
-                // @Query catalogs are loaded by the time this launch task runs.
-                signals.reconcileFavorites(against: engine.resolvableHomeIDs())
+                // an invisible pin can't silently occupy a Favorites slot.
+                //
+                // `engine` reads the `@Query` catalogs, which SwiftData refreshes on
+                // the *next* update cycle — but `seedDefaultCustomActions` above just
+                // inserted the default web search into `modelContext` synchronously,
+                // so on a first launch (every launch under UI testing's in-memory
+                // store) the @Query hasn't caught up yet and `resolvableHomeIDs()`
+                // would miss the fresh seed, pruning a pin to it (e.g. a pinned
+                // web-search Favorite) before it ever draws a card. Fold the store's
+                // *actual* Custom Action ids in from a direct fetch so the reconcile
+                // sees the just-seeded rows. Only ids genuinely in the store are
+                // added, so a pin to a deleted seed still prunes (no ghost revival).
+                let storedCustomActionIDs = (try? modelContext.fetch(
+                    FetchDescriptor<StoredCustomAction>()
+                ))?.map(\.id) ?? []
+                signals.reconcileFavorites(
+                    against: engine.resolvableHomeIDs().union(storedCustomActionIDs)
+                )
                 // One-time migration to the single enabled Fallback list (issue
                 // #114): enabled = old order minus old disabled, with the pre-enabled
                 // web-search + capture trio seeded for fresh installs. Independent of
