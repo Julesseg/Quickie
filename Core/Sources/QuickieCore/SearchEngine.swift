@@ -123,7 +123,11 @@ public struct SearchEngine {
     /// provider (the built-in command rows) is always live — that is what keeps
     /// every Settings command row typeable while its provider is disabled.
     private func isLive(_ provider: Provider) -> Bool {
-        provider.id.map(enablement.isEnabled) ?? true
+        // Effective enablement so the System umbrella cascades (ADR 0029): a member
+        // kind (Reminders, Events) goes dark when System is off even though its own
+        // toggle stays set. A kind-less provider (the built-in command rows) is
+        // always live — keeping every Settings command row typeable while disabled.
+        provider.id.map(enablement.isEffectivelyEnabled) ?? true
     }
 
     /// The ranked Result list for `query`, best match first. An empty or
@@ -292,7 +296,10 @@ public struct SearchEngine {
     ) -> [String: Action] {
         var byId: [String: Action] = [:]
         for provider in providers where provider.kind == .indexed {
-            let live = provider.id.map(enablement.isEnabled) ?? true
+            // Effective enablement so the System umbrella cascades into the outward
+            // projections too (Home cards, bridged actions, the eligible catalog):
+            // System off drops its member kinds' cards, not just their typed rows.
+            let live = provider.id.map(enablement.isEffectivelyEnabled) ?? true
             guard includingDisabled || live else { continue }
             for action in provider.candidates(for: "") {
                 if !includingDisabled {

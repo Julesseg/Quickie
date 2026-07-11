@@ -10,13 +10,14 @@ import Foundation
 /// (derived from shape) and *activation* is membership in the ordered enabled list.
 /// The disabled pool is everything eligible but not enabled, so it is never stored.
 public enum FallbackActivation {
-    /// The first-run enabled list, in most-important-first order: web search, then
-    /// the two permanent captures (CONTEXT.md → Fallback list, "ship pre-enabled").
-    /// Newly eligible Actions are deliberately *not* auto-enabled — only these three
-    /// start active; everything else waits in the pool. The web-search id is supplied
-    /// by the App (its seeded Custom Action), the captures' by Core.
-    public static func firstRunEnabledIDs(webSearchID: String) -> [String] {
-        [webSearchID, Action.saveForLaterID, Action.newSnippetID]
+    /// The first-run enabled list, in most-important-first order: web search, App
+    /// Store search, then the two permanent captures (CONTEXT.md → Fallback list,
+    /// "ship pre-enabled"). Newly eligible Actions are deliberately *not* auto-enabled
+    /// — only these start active; everything else waits in the pool. The seeded
+    /// Custom Action ids (web search, App Store search) are supplied by the App, the
+    /// captures' by Core.
+    public static func firstRunEnabledIDs(webSearchID: String, appStoreSearchID: String) -> [String] {
+        [webSearchID, appStoreSearchID, Action.saveForLaterID, Action.newSnippetID]
     }
 
     /// One-time migration from the retired two-fact model (an ordered list plus a

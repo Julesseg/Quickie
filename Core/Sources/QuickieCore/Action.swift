@@ -152,6 +152,12 @@ public enum ActionKind: String, Equatable, Sendable, Codable {
     /// row never wears the same badge as the data rows it governs (a Quicklinks
     /// command vs a user's Quicklinks, a Fallbacks command vs a Custom Action).
     case managementPage
+    /// A System provider built-in (CONTEXT.md → System provider; ADR 0029): the
+    /// permanent OS-integration action Open iOS Settings. Its own kind so the row
+    /// wears the System badge, and it is disable-only (no delete), governed by the
+    /// System umbrella. (App Store Search is a default-seeded Custom Action, not a
+    /// System built-in — it opens a slotted URL, so it fits the Custom Action model.)
+    case system
 }
 
 /// What tapping a row *does*, as a coarse classification of its `ActionOutcome`
@@ -833,6 +839,55 @@ extension Action {
             inputTypes: [],
             outputType: .text
         ) { _ in .openPage(.settings(panel: .reminders)) }
+    }
+
+    /// The "System" command (CONTEXT.md → System provider, Settings command row;
+    /// ADR 0029): the umbrella provider's typed row, deeplinking to its Management
+    /// page — the cascading Enabled toggle, the Reminders/Events navigation rows,
+    /// and the two OS-integration built-ins. Kind-less like the other page commands
+    /// so a disabled System stays reachable (and re-enableable) by typing its name.
+    public static func openSystemPage() -> Action {
+        Action(
+            id: "builtin.system-page",
+            kind: .managementPage,
+            title: "System",
+            aliases: ["system settings", "os", "integration"],
+            inputTypes: [],
+            outputType: .text
+        ) { _ in .openPage(.settings(panel: .system)) }
+    }
+
+    /// The stable id of the **Open iOS Settings** System built-in (ADR 0029).
+    public static let openIOSSettingsID = "builtin.system.open-ios-settings"
+
+    /// **Open iOS Settings** (CONTEXT.md → System provider; ADR 0029): a permanent
+    /// System built-in with **no arguments** that opens Quickie's own page in the
+    /// iOS Settings app — the only Settings target iOS exposes (a query-driven
+    /// "search Settings" is infeasible publicly or privately; recorded as such, do
+    /// not re-propose). Opens `app-settings:`, the value of
+    /// `UIApplication.openSettingsURLString`, kept as a literal so Core stays
+    /// UIKit-free (the App's Paste permission hint opens the same destination via
+    /// that UIKit constant). A plain command row (no breadcrumb), never
+    /// fallback-eligible, disable-only.
+    public static func openIOSSettings() -> Action {
+        Action(
+            id: openIOSSettingsID,
+            kind: .system,
+            title: "Open iOS Settings",
+            // Deliberately no bare "settings" alias: it would tie the always-present
+            // "Settings" command row for the exact query "settings" and could seize
+            // the highlighted top result (the Settings hub is the expected match
+            // there). "settings" still fuzzy-matches these aliases as a subsequence,
+            // so typing it surfaces this row — just ranked below the Settings command.
+            aliases: ["ios settings", "open settings", "open ios settings"],
+            inputTypes: [],
+            outputType: .url,
+            content: ResultContent.none
+        ) { _ in
+            // `UIApplication.openSettingsURLString` is documented as "app-settings:";
+            // hard-coded here so the pure Core never imports UIKit.
+            .openURL(URL(string: "app-settings:")!)
+        }
     }
 
     /// A file surfaced by File Search (CONTEXT.md → File Search; ADR 0015): a row

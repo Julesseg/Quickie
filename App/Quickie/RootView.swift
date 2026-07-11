@@ -321,6 +321,13 @@ struct RootView: View {
                 // indexed instance is only for matching by name; activating it
                 // rebuilds a configured Action from the user's calendars + settings.
                 IndexedProvider(catalog: [.newEvent()], id: .events),
+                // The System umbrella's own built-in (CONTEXT.md → System
+                // provider; ADR 0029): Open iOS Settings, attributed to `.system`
+                // so the umbrella's Enabled toggle cascades over it (and, via
+                // `isEffectivelyEnabled`, over the Reminders/Events catalogs above).
+                // App Store Search is a default-seeded Custom Action instead (issue
+                // #144), so it rides the Custom Actions catalog, not here.
+                IndexedProvider(catalog: [.openIOSSettings()], id: .system),
             ],
             layout: keyboardLayout.layout,
             favorites: signals.favorites,
@@ -754,16 +761,32 @@ struct RootView: View {
                 // Prune any pinned Favorite whose Action no longer resolves (a
                 // deleted Snippet/Quicklink, or a stale id from a build that
                 // derived ids from the unstable `persistentModelID.hashValue`) so
-                // an invisible pin can't silently occupy a Favorites slot. The
-                // @Query catalogs are loaded by the time this launch task runs.
-                signals.reconcileFavorites(against: engine.resolvableHomeIDs())
+                // an invisible pin can't silently occupy a Favorites slot.
+                //
+                // The default seed is now inserted in `QuickieApp.init` (before the
+                // `@Query` first reads), so `resolvableHomeIDs()` normally already
+                // sees it here. As defence-in-depth against any `@Query` refresh lag,
+                // also fold the store's *actual* Custom Action ids in from a direct
+                // fetch, so a pin to a freshly-seeded default (`seed.web-search`) can
+                // never be pruned before its Home card draws. Only ids genuinely in
+                // the store are added, so a pin to a deleted seed still prunes (no
+                // ghost revival).
+                let storedCustomActionIDs = (try? modelContext.fetch(
+                    FetchDescriptor<StoredCustomAction>()
+                ))?.map(\.id) ?? []
+                signals.reconcileFavorites(
+                    against: engine.resolvableHomeIDs().union(storedCustomActionIDs)
+                )
                 // One-time migration to the single enabled Fallback list (issue
                 // #114): enabled = old order minus old disabled, with the pre-enabled
                 // web-search + capture trio seeded for fresh installs. Independent of
                 // the catalog's load timing so the seeded web search is pre-enabled
                 // even before @Query surfaces it.
                 fallbacks.migrateIfNeeded(
-                    firstRunDefaults: FallbackActivation.firstRunEnabledIDs(webSearchID: QuickieStore.seedWebSearchID)
+                    firstRunDefaults: FallbackActivation.firstRunEnabledIDs(
+                        webSearchID: QuickieStore.seedWebSearchID,
+                        appStoreSearchID: QuickieStore.seedAppStoreSearchID
+                    )
                 )
                 everEligibleFallbacks.formUnion(eligibleFallbackIDs)
                 // Couple instance-disable with the Fallback list: a disabled action is
@@ -996,6 +1019,10 @@ struct RootView: View {
                 store: eventSteps,
                 stepsFooter: "The steps this capture collects after the title, in order. Turn a step off to skip it; drag to reorder. Start off makes the event all-day today; Calendar on asks each time; off saves to the default calendar above."
             )
+        // The System umbrella page (ADR 0029): the cascading Enabled toggle and the
+        // Reminders/Events link rows (its declared schema), plus an actions section
+        // for its two disable-only built-ins.
+        case .system: SystemView(enablement: instanceEnablement)
         }
     }
 

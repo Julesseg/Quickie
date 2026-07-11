@@ -96,7 +96,7 @@ struct SettingsView: View {
             // stack, so the two routes share one page by construction. New
             // Event's former per-Action panel lives on as the Events row.
             Section {
-                ForEach(ProviderID.allCases, id: \.rawValue) { provider in
+                ForEach(ProviderID.topLevelProviders, id: \.rawValue) { provider in
                     NavigationLink(value: ManagementPage.settings(panel: provider)) {
                         Label(provider.displayName, systemImage: provider.symbol)
                     }

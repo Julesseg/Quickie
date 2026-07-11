@@ -78,6 +78,21 @@ struct CustomActionTests {
         CustomActionDefinition(name: "Search", template: template).makeAction(id: "one")!
     }
 
+    @Test("the App Store search seed template opens the itms-apps MZSearch results")
+    func appStoreSearchTemplateOpensResults() {
+        // App Store Search is a default-seeded Custom Action (issue #144), not a
+        // System built-in: its slotted `itms-apps` URL runs through the same fill
+        // path as web search. Verify the non-web scheme survives and the term lands
+        // percent-encoded — the whole reason it fits the Custom Action model.
+        let template = "itms-apps://search.itunes.apple.com/WebObjects/MZSearch.woa/wa/search?media=software&term={query}"
+        let action = CustomActionDefinition(name: "Search the App Store", template: template).makeAction(id: "seed.app-store-search")!
+        #expect(action.isFallbackEligible)
+
+        var run = MultiStepAction(action: action)
+        #expect(run.commit(.text("threes 3"))
+                == .completed(.openURL(URL(string: "itms-apps://search.itunes.apple.com/WebObjects/MZSearch.woa/wa/search?media=software&term=threes%203")!)))
+    }
+
     @Test("filling percent-encodes the value, escaping structural query delimiters")
     func fillPercentEncodes() {
         // Spaces and unicode are percent-encoded. The **structural** query delimiters

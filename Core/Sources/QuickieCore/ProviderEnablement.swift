@@ -20,9 +20,26 @@ public struct ProviderEnablement: Equatable, Sendable {
         self.disabled = disabled
     }
 
-    /// Whether `provider` currently contributes to any surface.
+    /// Whether `provider`'s **own** Enabled toggle is on — the raw switch state the
+    /// provider's Management page shows and writes. Does **not** account for an
+    /// umbrella parent, so a member kind's toggle keeps working underneath a
+    /// disabled umbrella (CONTEXT.md → Disabled; ADR 0029): use `isEffectivelyEnabled`
+    /// to decide whether it actually contributes to a surface.
     public func isEnabled(_ provider: ProviderID) -> Bool {
         !disabled.contains(provider)
+    }
+
+    /// Whether `provider` currently contributes to any surface, honouring the
+    /// **umbrella** level (CONTEXT.md → System provider; ADR 0029): a member kind
+    /// (Reminders, Events) contributes only when **both** its own toggle and its
+    /// umbrella parent's (System) are on. System off short-circuits every member
+    /// beneath it while their own toggles stay set, so turning it back on restores
+    /// exactly the members' own states. Every surface's enablement gate reads this;
+    /// the raw `isEnabled` is only for the toggle rows themselves.
+    public func isEffectivelyEnabled(_ provider: ProviderID) -> Bool {
+        guard isEnabled(provider) else { return false }
+        if let parent = provider.umbrellaParent, !isEnabled(parent) { return false }
+        return true
     }
 
     /// Flips a provider's Enabled switch — the first entry of its Management
