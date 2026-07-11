@@ -38,18 +38,16 @@ struct SystemProviderTests {
 
     // MARK: The declared schema
 
-    @Test("System's schema is Enabled plus link rows to Reminders and Events")
-    func systemSchemaLeadsWithEnabledThenLinks() {
+    @Test("System's schema is Enabled only — its actions render in the Actions section")
+    func systemSchemaIsEnabledOnly() {
         let schema = ProviderID.system.settingsSchema
         // Enabled first (issue #67), as for every provider.
         #expect(schema.first?.kind == .enabled)
-        // Then two navigation rows (the schema's `link` kind) into the unchanged
-        // Reminders and Events pages (ADR 0029) — linked, not merged.
-        let links = schema.compactMap { option -> ManagementPage? in
-            if case .link(let page) = option.kind { return page }
-            return nil
-        }
-        #expect(links == [.settings(panel: .reminders), .settings(panel: .events)])
+        // And nothing else: the member navigation rows into Reminders and Events
+        // now live alongside the Open iOS Settings built-in in the page's Actions
+        // section, not as declared options (ADR 0029).
+        #expect(schema.count == 1)
+        #expect(!schema.contains { if case .link = $0.kind { return true } else { return false } })
     }
 
     @Test("Reminders and Events keep their own unchanged schemas")
