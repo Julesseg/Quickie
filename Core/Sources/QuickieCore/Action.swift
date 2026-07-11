@@ -897,16 +897,17 @@ extension Action {
     }
 
     /// The App Store search URL for `term`, or `nil` if it can't be built (an empty
-    /// term). Uses the public `itms-apps` scheme against the App Store's software
-    /// search endpoint, which opens the App Store app straight to the results
-    /// (ADR 0029). Pure and testable — the app just opens whatever URL this returns.
+    /// term). Uses the `itms-apps` scheme against the App Store's `MZSearch`
+    /// endpoint — the form that reliably opens the App Store app straight to the
+    /// results list on iOS (the `itunes.apple.com/search` path no longer does; ADR
+    /// 0029). Pure and testable — the app just opens whatever URL this returns.
     public static func appStoreSearchURL(term: String) -> URL? {
         let trimmed = term.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty else { return nil }
         var components = URLComponents()
         components.scheme = "itms-apps"
-        components.host = "itunes.apple.com"
-        components.path = "/search"
+        components.host = "search.itunes.apple.com"
+        components.path = "/WebObjects/MZSearch.woa/wa/search"
         components.queryItems = [
             URLQueryItem(name: "media", value: "software"),
             URLQueryItem(name: "term", value: trimmed),
@@ -917,7 +918,7 @@ extension Action {
     /// The App Store's bare software-search landing (no term) — the graceful
     /// fallback when `appStoreSearchURL` can't build a termed URL, so the outcome
     /// case stays `.openURL` for glyph/label classification (ADR 0029).
-    static let appStoreSearchLandingURL = URL(string: "itms-apps://itunes.apple.com/search?media=software")!
+    static let appStoreSearchLandingURL = URL(string: "itms-apps://search.itunes.apple.com/WebObjects/MZSearch.woa/wa/search?media=software")!
 
     /// **Open iOS Settings** (CONTEXT.md → System provider; ADR 0029): a permanent
     /// System built-in with **no arguments** that opens Quickie's own page in the
