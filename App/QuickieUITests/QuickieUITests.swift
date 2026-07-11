@@ -151,8 +151,14 @@ final class QuickieUITests: XCTestCase {
     func testPinnedFallbackSurfacesOnHome() throws {
         let app = launchApp(extraArguments: ["-uitest-pin-favorite", "seed.web-search"])
 
+        // The card resolves only after the first-run seed insert, the launch
+        // favorites reconcile, and a Home re-render once the @Query catalog catches
+        // up — a chain that is slow on the loaded iPhone SE CI runner (app launch
+        // alone can take ~20s there). The pin now survives launch (see
+        // reconcileFavorites' seeded-id union), so the card *will* appear; give it
+        // generous headroom so the render latency can't flake it.
         XCTAssertTrue(
-            app.buttons["favorite.seed.web-search"].waitForExistence(timeout: 10),
+            app.buttons["favorite.seed.web-search"].waitForExistence(timeout: 30),
             "a pinned Fallback should appear as a Favorite card on Home"
         )
     }
