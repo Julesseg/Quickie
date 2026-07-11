@@ -766,16 +766,14 @@ struct RootView: View {
                 // derived ids from the unstable `persistentModelID.hashValue`) so
                 // an invisible pin can't silently occupy a Favorites slot.
                 //
-                // `engine` reads the `@Query` catalogs, which SwiftData refreshes on
-                // the *next* update cycle — but `seedDefaultCustomActions` above just
-                // inserted the default web search into `modelContext` synchronously,
-                // so on a first launch (every launch under UI testing's in-memory
-                // store) the @Query hasn't caught up yet and `resolvableHomeIDs()`
-                // would miss the fresh seed, pruning a pin to it (e.g. a pinned
-                // web-search Favorite) before it ever draws a card. Fold the store's
-                // *actual* Custom Action ids in from a direct fetch so the reconcile
-                // sees the just-seeded rows. Only ids genuinely in the store are
-                // added, so a pin to a deleted seed still prunes (no ghost revival).
+                // The default seed is now inserted in `QuickieApp.init` (before the
+                // `@Query` first reads), so `resolvableHomeIDs()` normally already
+                // sees it here. As defence-in-depth against any `@Query` refresh lag,
+                // also fold the store's *actual* Custom Action ids in from a direct
+                // fetch, so a pin to a freshly-seeded default (`seed.web-search`) can
+                // never be pruned before its Home card draws. Only ids genuinely in
+                // the store are added, so a pin to a deleted seed still prunes (no
+                // ghost revival).
                 let storedCustomActionIDs = (try? modelContext.fetch(
                     FetchDescriptor<StoredCustomAction>()
                 ))?.map(\.id) ?? []

@@ -54,6 +54,19 @@ struct QuickieApp: App {
         // RootView's `@AppStorage` first read — so a "save silently" preference set
         // on an older build survives the upgrade instead of reverting to "ask".
         SettingsMigration.migrateDynamicChoices()
+        // Seed the default web-search Custom Action here — *before* `RootView`'s
+        // `@Query` first reads (ADR 0021) — rather than in RootView's launch task.
+        // SwiftData delivers a mid-`.task` insert to a `@Query` only on the next
+        // update cycle, so seeding there left the catalog empty for the first
+        // render: a pinned Favorite pointing at the seed (`seed.web-search`) then
+        // failed to draw its Home card until the query caught up, a race that lost
+        // deterministically on the slow CI iPhone SE runner. Seeding at init makes
+        // the catalog populated from the very first render on any toolchain. The
+        // seed flag keeps it a one-shot in normal use (and, with the flag cleared
+        // above under UI testing, a per-run reseed for the fresh in-memory store);
+        // RootView's launch task still runs the CloudKit dedupe and favorites
+        // reconcile over the now already-seeded catalog.
+        QuickieStore.seedDefaultCustomActions(in: container.mainContext)
         // Seed legacy pre-Pile Note rows under UI testing (issue #62; ADR 0018):
         // the flag plants `StoredNote` rows in the fresh in-memory store *before*
         // RootView's launch task runs `migrateNotesToPile`, so the test drives
