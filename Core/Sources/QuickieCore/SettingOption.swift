@@ -167,6 +167,10 @@ public enum SettingsKey {
     public static let calculatorUnitConversion = "calculator.unitConversion"
     /// The File Search inline-result cap stepper.
     public static let fileSearchInlineCap = "file-search.inlineCap"
+    /// The Pile's Pending-query auto-save toggle (issue #152): on saves
+    /// unresolved input to the Pile after the fixed 30-second window; off is the
+    /// old behavior exactly — state preserved indefinitely, nothing saved.
+    public static let pileAutoSave = "pile.autoSave"
 }
 
 public extension ProviderID {
@@ -246,6 +250,15 @@ public extension ProviderID {
             // as options. Reminders and Events stay full providers in their own
             // right — System groups them, it does not merge them.
             return []
+        case .pile:
+            return [
+                SettingOption(
+                    key: SettingsKey.pileAutoSave,
+                    title: "Save unfinished input",
+                    footer: "Leave the app with unfinished text in the input and it's saved here after 30 seconds — come back sooner and it's still where you left it. Off keeps whatever you typed in place indefinitely.",
+                    kind: .toggle(default: true)
+                ),
+            ]
         case .calculator:
             return [
                 SettingOption(
