@@ -381,6 +381,24 @@ struct RootView: View {
         query.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
     }
 
+    /// The Live Activity's preview, or `nil` when no activity should be live
+    /// (CONTEXT.md → Pending query; issue #152): the same Core qualification
+    /// the background snapshot uses — a plain, non-empty root query with the
+    /// auto-save toggle on — so the activity and the snapshot can never
+    /// disagree on what counts as pending. The activity tracks the *input*:
+    /// it starts on the first qualifying keystroke (already live when the
+    /// user backgrounds, no request-at-background lag) and ends the moment
+    /// the query empties, a main action resolves it, or a scoped context
+    /// takes over.
+    private var pendingActivityPreview: String? {
+        PendingQuery.snapshot(
+            query: query,
+            isCapturing: capture.isActive,
+            inFileSearch: inFileSearch,
+            autoSaveEnabled: pileAutoSave
+        )?.text
+    }
+
     /// The bottom safe-area (home-indicator) inset, read from the active window. The
     /// keyboard's reported overlap is measured from the screen bottom, but the bar
     /// already sits above the home indicator, so we subtract this to avoid lifting it
@@ -752,7 +770,10 @@ struct RootView: View {
                 // launch's deeplink dispatch (`onAppear`, which runs first)
                 // consumes it as a commit instead.
                 resolvePendingQuery(via: .plainOpen)
-                PendingQueryActivityController.endAll()
+                // Reconcile a leftover activity from a killed process with the
+                // resolved input: a restored query adopts and keeps it, a
+                // committed or absent one ends it.
+                PendingQueryActivityController.sync(preview: pendingActivityPreview)
                 // Convert any pre-0030 Quicklink rows to slot-less Custom Actions
                 // before seeding, so an already-seeded `seed.link.*` link is present
                 // and not double-inserted (ADR 0030).
@@ -818,6 +839,13 @@ struct RootView: View {
                 // performed while the app was fully terminated must be credited on
                 // this first pass too (ADR 0025).
                 drainWidgetRuns()
+            }
+            // Keep the Live Activity mirroring the unresolved input (issue #152):
+            // the first qualifying keystroke starts it, each further one updates
+            // its preview, and emptying or resolving the query — a main action,
+            // a capture taking over, the Search Files context — ends it.
+            .onChange(of: pendingActivityPreview) { _, preview in
+                PendingQueryActivityController.sync(preview: preview)
             }
             // Keep that coupling live: disabling an action anywhere (its home page or
             // the Fallbacks page) demotes it from the enabled Fallback list.
@@ -887,19 +915,25 @@ struct RootView: View {
                         autoSaveEnabled: pileAutoSave
                     ) {
                         PendingQueryStore.save(pending)
-                        if let text = pending.text {
-                            PendingQueryActivityController.start(preview: text)
-                        }
                     }
+                    // The Live Activity is already live (it tracks the input —
+                    // the `pendingActivityPreview` onChange below — so it shows
+                    // without a request-at-background lag); backgrounding only
+                    // arms its 30-second self-dismissal.
+                    PendingQueryActivityController.armWindowDismissal()
                 }
                 if phase == .active {
                     // Resolve the Pending query first (issue #152): a ≥ 30s return
                     // must land on the clean Home *before* anything else reads
                     // `query`, and a < 30s cold launch restores the text into the
-                    // input. Ending the activity is unconditional — however the
-                    // user came back, the pending question is resolved now.
+                    // input. Disarm the window dismissal — the return beat the
+                    // window — and reconcile the activity with the resolved input:
+                    // a restored query keeps it riding, a commit's cleared input
+                    // ends it (`sync` is idempotent; the onChange below misses a
+                    // resolution that leaves `query`'s value unchanged).
                     resolvePendingQuery(via: .plainOpen)
-                    PendingQueryActivityController.endAll()
+                    PendingQueryActivityController.cancelWindowDismissal()
+                    PendingQueryActivityController.sync(preview: pendingActivityPreview)
                     fileIndex.rebuild(from: indexedFolders)
                     // Drain the Favorites widget's frecency outbox (ADR 0025; issue
                     // #126): credit each widget-run selection into `SignalsStore` at

@@ -35,12 +35,16 @@ The text rides the snapshot only for a **plain root query**; a half-filled
 breadcrumb or the [[Search Files context]] snapshots textless — their state
 still resets after the window, but nothing is written to the Pile.
 
-The **Live Activity is chrome, not mechanism**: it starts on backgrounding iff
-the snapshot carries text, and self-dismisses at the window's edge by riding
-the ~30 seconds of `beginBackgroundTask` execution the system grants after
-backgrounding — comfortably covering the window. If the process dies inside
-the window anyway, the activity lingers stale until the next open ends it; the
-restore/commit decision never depends on the activity's code running.
+The **Live Activity is chrome, not mechanism**: it mirrors the unresolved
+input itself — started on the first qualifying keystroke (so it is already
+live when the user backgrounds, with no request-at-background lag), updated
+per keystroke, ended when the query empties or resolves. Backgrounding only
+arms its self-dismissal at the window's edge, riding the ~30 seconds of
+`beginBackgroundTask` execution the system grants — comfortably covering the
+window — and a return within the window disarms it. If the process dies inside
+the window anyway, the expiration handler ends the activity a touch early, and
+the next launch's reconcile sweeps any leftover; the restore/commit decision
+never depends on the activity's code running.
 
 ## Rejected
 
