@@ -240,23 +240,12 @@ public extension ProviderID {
                 ),
             ]
         case .system:
-            // The umbrella's two navigation rows (ADR 0029): the schema's `link`
-            // kind pushes the unchanged Reminders and Events pages, which stay full
-            // providers in their own right — System groups them, it does not merge
-            // them. Its own action (Open iOS Settings) renders in the actions
-            // section beneath these, not as options.
-            return [
-                SettingOption(
-                    key: "system.reminders",
-                    title: ProviderID.reminders.displayName,
-                    kind: .link(.settings(panel: .reminders))
-                ),
-                SettingOption(
-                    key: "system.events",
-                    title: ProviderID.events.displayName,
-                    kind: .link(.settings(panel: .events))
-                ),
-            ]
+            // The umbrella declares no own options beyond Enabled (ADR 0029): its
+            // member navigation rows (Reminders, Events) and its own built-in (Open
+            // iOS Settings) all render together in the page's Actions section, not
+            // as options. Reminders and Events stay full providers in their own
+            // right — System groups them, it does not merge them.
+            return []
         case .calculator:
             return [
                 SettingOption(

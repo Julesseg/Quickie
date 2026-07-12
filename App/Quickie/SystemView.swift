@@ -5,15 +5,16 @@ import QuickieCore
 /// provider; ADR 0029; issue #144). It groups Quickie's OS-integration actions:
 ///
 /// - An **Options** section — rendered generically from `.system`'s declared
-///   schema — leading with the **cascading** Enabled toggle (off short-circuits
-///   Reminders, Events, and the two built-ins below, while their own toggles keep
-///   working underneath) over two navigation rows into the unchanged Reminders and
-///   Events pages (the schema's `link` kind).
-/// - An **actions** section listing the permanent, **disable-only** built-in
-///   Open iOS Settings. It carries the same instance enable/disable toggle its
-///   result row obeys and is not deletable (no swipe-to-delete), like Save for
-///   later and New Snippet. (App Store Search is a default-seeded Custom Action,
-///   not a System built-in — issue #144 — so it lives on the Custom Actions page.)
+///   schema — holding just the **cascading** Enabled toggle (off short-circuits
+///   Reminders, Events, and the built-in below, while their own toggles keep
+///   working underneath).
+/// - An **Actions** section grouping the two navigation rows into the unchanged
+///   Reminders and Events pages together with the permanent, **disable-only**
+///   built-in Open iOS Settings. The built-in carries the same instance
+///   enable/disable toggle its result row obeys and is not deletable (no
+///   swipe-to-delete), like Save for later and New Snippet. (App Store Search is a
+///   default-seeded Custom Action, not a System built-in — issue #144 — so it lives
+///   on the Custom Actions page.)
 ///
 /// Reached as the typed "System" command row or from the Settings Providers list,
 /// and pushed onto the launcher's navigation stack — no own stack or Done button.
@@ -28,10 +29,22 @@ struct SystemView: View {
 
     var body: some View {
         List {
-            // Options: Enabled (cascading) + the Reminders/Events link rows.
+            // Options: just the cascading Enabled toggle.
             ProviderOptionsSection(provider: .system)
 
             Section {
+                // The member navigation rows (Reminders, Events) lead the Actions
+                // section — they push the members' unchanged full pages. System
+                // groups them here; it does not merge them.
+                NavigationLink(value: ManagementPage.settings(panel: .reminders)) {
+                    Text(ProviderID.reminders.displayName)
+                }
+                .accessibilityIdentifier("setting-system.reminders")
+                NavigationLink(value: ManagementPage.settings(panel: .events)) {
+                    Text(ProviderID.events.displayName)
+                }
+                .accessibilityIdentifier("setting-system.events")
+
                 ForEach(builtIns) { action in
                     SystemActionRow(
                         action: action,
@@ -39,12 +52,12 @@ struct SystemView: View {
                         onToggleDisabled: { enablement.toggleDisabled(action.id) }
                     )
                 }
-                // No `.onDelete`: these are permanent built-ins — disable-only,
+                // No `.onDelete`: the built-ins are permanent — disable-only,
                 // never deletable (CONTEXT.md → Management page).
             } header: {
                 Text("Actions")
             } footer: {
-                Text("Built-in actions. Disable one to hide it from results without removing it — they can't be deleted.")
+                Text("Open Reminders or Events to configure their capture. Built-in actions can be disabled to hide them from results without removing them — they can't be deleted.")
             }
         }
         .navigationTitle("System")
