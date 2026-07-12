@@ -411,6 +411,35 @@ struct RootView: View {
             .safeAreaInsets.bottom ?? 0
     }
 
+    /// Applies a `KeyboardBarLift` decision to the held inset. A notified change
+    /// rides the keyboard's own motion: UIKit animates the keyboard with a stock
+    /// spring (mass 3, stiffness 1000, damping 500 — the curve behind every
+    /// keyboard show/hide since iOS 9), so animating our inset with the same
+    /// spring keeps the bar glued to the keyboard's top edge instead of easing in
+    /// after it has settled. A tracked change is a live drag sample — applied with
+    /// animation off, because the finger is the animation. Instant under UI test,
+    /// like all motion (issue #79).
+    private func apply(_ change: KeyboardBarLift.Change) {
+        switch change {
+        case .animateWithKeyboard(let inset):
+            withAnimation(
+                MotionStyle.isInstantForUITesting
+                    ? nil
+                    : .interpolatingSpring(mass: 3, stiffness: 1000, damping: 500)
+            ) {
+                lockedKeyboardInset = inset
+            }
+        case .track(let inset):
+            var transaction = Transaction()
+            transaction.disablesAnimations = true
+            withTransaction(transaction) {
+                lockedKeyboardInset = inset
+            }
+        case .hold:
+            break
+        }
+    }
+
     /// How entering/leaving a capture moves (ADR 0010 budget): a deliberate spring
     /// when motion is allowed, a brief crossfade under Reduce Motion.
     private var captureMotion: MotionStyle {
@@ -598,7 +627,6 @@ struct RootView: View {
                 // keyboard's top is — and stays there when the keyboard drops. Zero
                 // when a page is pushed (the bar is gone), so no phantom inset.
                 .padding(.bottom, path.isEmpty ? lockedKeyboardInset : 0)
-                .animation(.easeOut(duration: 0.25), value: lockedKeyboardInset)
                 // Kill keyboard avoidance on the bar *itself*: the outer
                 // `.ignoresSafeArea(.keyboard)` leaves a small residual lift on
                 // `.safeAreaInset` content, which released on a context-menu dismiss
@@ -628,11 +656,25 @@ struct RootView: View {
             //    lift ourselves.
             .onReceive(NotificationCenter.default.publisher(for: UIResponder.keyboardWillChangeFrameNotification)) { note in
                 guard let endFrame = note.userInfo?[UIResponder.keyboardFrameEndUserInfoKey] as? CGRect else { return }
-                let overlap = UIScreen.main.bounds.height - endFrame.minY
-                if overlap > 120 {
-                    lockedKeyboardInset = max(0, overlap - bottomSafeAreaInset)
-                } else if listScrolling || capture.usesKeyboardlessControl {
-                    lockedKeyboardInset = 0
+                apply(KeyboardBarLift.notified(
+                    overlap: UIScreen.main.bounds.height - endFrame.minY,
+                    bottomSafeArea: bottomSafeAreaInset,
+                    isListScrolling: listScrolling,
+                    usesKeyboardlessControl: capture.usesKeyboardlessControl
+                ))
+            }
+            // The live channel: per-frame keyboard positions during an interactive
+            // swipe-dismiss, so the bar follows the finger instead of waiting for
+            // the commit notification. `dragged` drops every sample taken while
+            // the list is still, so ordinary show/hide (and the held context-menu
+            // inset) stay owned by the notified channel above.
+            .background {
+                KeyboardFrameObserver { overlap in
+                    apply(KeyboardBarLift.dragged(
+                        overlap: overlap,
+                        bottomSafeArea: bottomSafeAreaInset,
+                        isListScrolling: listScrolling
+                    ))
                 }
             }
             // The launcher itself wears no navigation bar — it is the root; the
