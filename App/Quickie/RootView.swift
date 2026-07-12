@@ -532,8 +532,17 @@ struct RootView: View {
                                 // scoped file filter — hide it in the context.
                                 if !inFileSearch && clipboardPrefill.isChipOffered {
                                     ClipboardPasteButton(glassNamespace: glassNamespace) { text in
-                                        query = text
-                                        clipboard.markUsed()
+                                        // The hand-off decision (QuickieCore): `hasStrings` metadata
+                                        // can offer the chip over an empty/expired clipboard, so the
+                                        // tapped content decides. A real paste seeds and retires the
+                                        // offer; a dud withdraws the chip without burning it, so a
+                                        // later real copy can re-offer.
+                                        if let seeded = ClipboardPrefill.seededQuery(fromPasted: text) {
+                                            query = seeded
+                                            clipboard.markUsed()
+                                        } else {
+                                            clipboard.noteEmptyPaste()
+                                        }
                                     }
                                 }
                             }
