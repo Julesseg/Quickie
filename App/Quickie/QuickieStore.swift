@@ -117,6 +117,72 @@ extension QuickieStore {
         }
     }
 
+    /// The one-shot flag for the default **Quicklink** seed. Independent of the
+    /// Custom Action seed flag so the two seed sets version separately.
+    private static let seedQuicklinksFlagKey = "store.didSeedQuicklinks.v1"
+
+    /// Exposed so the UI-testing launch path can clear the one-time Quicklink seed
+    /// flag and let each fresh in-memory store re-seed the default Quicklinks.
+    static var quicklinkSeedFlagKeyForTesting: String { seedQuicklinksFlagKey }
+
+    /// Seeds the default, fully deletable **Quicklinks** on first launch — YouTube,
+    /// Gmail, GitHub (CONTEXT.md → Quicklink; ADR 0013) — run at launch and guarded by
+    /// a one-shot flag so it happens exactly once. Each is an ordinary, deletable
+    /// static Quicklink under a fixed `seed.link.*` id, so the user has a few useful
+    /// destinations out of the box while remaining free to delete or edit any of them.
+    ///
+    /// Inserts whichever `seed.link.*` ids are **absent**, exactly once: a fresh
+    /// install gets all three, an earlier install gains only the ones it's missing.
+    /// The flag then blocks any re-run, so a **deleted** default Quicklink never
+    /// resurrects.
+    @MainActor
+    static func seedDefaultQuicklinks(
+        in context: ModelContext,
+        defaults: UserDefaults = SignalsStore.sharedDefaults
+    ) {
+        guard !defaults.bool(forKey: seedQuicklinksFlagKey) else { return }
+
+        let existing = (try? context.fetch(FetchDescriptor<StoredQuicklink>())) ?? []
+        let existingIDs = Set(existing.map(\.id))
+        for seed in QuicklinkSeed.all where !existingIDs.contains(seed.id) {
+            let link = StoredQuicklink(title: seed.title, urlString: seed.urlString, alias: seed.alias)
+            link.id = seed.id
+            context.insert(link)
+        }
+
+        // Only record the seed as done once the save actually persists (mirrors the
+        // Custom Action seed): if it throws, leave the flag unset so the seed retries
+        // next launch instead of silently losing the inserted Quicklinks.
+        do {
+            try context.save()
+            defaults.set(true, forKey: seedQuicklinksFlagKey)
+        } catch {
+            // Save failed; the seed will retry on the next launch.
+        }
+    }
+
+    /// The Quicklink counterpart to `dedupeCustomActions` (ADR 0023): two devices
+    /// that each seed the fixed-id defaults before their first CloudKit import lands
+    /// end up with duplicate rows once sync merges the stores. Among rows sharing an
+    /// id, `StoreDedup` keeps a deterministic winner and this pass deletes the rest.
+    /// Idempotent and cheap when there are no duplicates: one fetch, no writes.
+    @MainActor
+    static func dedupeQuicklinks(in context: ModelContext) {
+        let rows = (try? context.fetch(FetchDescriptor<StoredQuicklink>())) ?? []
+        let duplicates = StoreDedup.duplicatesToDelete(
+            among: rows,
+            id: \.id,
+            createdAt: \.createdAt,
+            tieBreak: { "\($0.urlString)|\($0.title)|\($0.alias ?? "")" }
+        )
+        guard !duplicates.isEmpty else { return }
+
+        for row in duplicates {
+            context.delete(row)
+        }
+        try? context.save()
+    }
+
     /// The dedup pass behind the fixed seed id (ADR 0023): CloudKit cannot
     /// enforce uniqueness, so two devices that each seeded before their first
     /// import both end up with two "Search the web" rows once sync merges the

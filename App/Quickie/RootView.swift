@@ -750,11 +750,14 @@ struct RootView: View {
             // Seed the default web-search Custom Action once on launch (ADR 0021).
             .task {
                 QuickieStore.seedDefaultCustomActions(in: modelContext)
+                QuickieStore.seedDefaultQuicklinks(in: modelContext)
                 // Collapse same-id Custom Action duplicates to a deterministic
                 // winner (ADR 0023): two devices can each seed the fixed-id web
                 // search before their first CloudKit import lands, so launch
                 // reconciles whatever sync merged in.
                 QuickieStore.dedupeCustomActions(in: modelContext)
+                // Same reconciliation for the fixed-id default Quicklinks.
+                QuickieStore.dedupeQuicklinks(in: modelContext)
                 // Collapse any stored notes from a pre-Pile build into titleless
                 // Pile entries (ADR 0018).
                 QuickieStore.migrateNotesToPile(in: modelContext)
@@ -774,8 +777,16 @@ struct RootView: View {
                 let storedCustomActionIDs = (try? modelContext.fetch(
                     FetchDescriptor<StoredCustomAction>()
                 ))?.map(\.id) ?? []
+                // Same defence for a pin to a freshly-seeded default Quicklink
+                // (`seed.link.*`): fold the store's actual Quicklink ids in so a
+                // @Query refresh lag can't prune it before its Home card draws.
+                let storedQuicklinkIDs = (try? modelContext.fetch(
+                    FetchDescriptor<StoredQuicklink>()
+                ))?.map(\.id) ?? []
                 signals.reconcileFavorites(
-                    against: engine.resolvableHomeIDs().union(storedCustomActionIDs)
+                    against: engine.resolvableHomeIDs()
+                        .union(storedCustomActionIDs)
+                        .union(storedQuicklinkIDs)
                 )
                 // One-time migration to the single enabled Fallback list (issue
                 // #114): enabled = old order minus old disabled, with the pre-enabled
@@ -855,6 +866,11 @@ struct RootView: View {
             // view-update tick keeps the store mutation off the render pass.
             .onChange(of: customActions.count) { _, _ in
                 Task { QuickieStore.dedupeCustomActions(in: modelContext) }
+            }
+            // Same mid-session reconciliation for the fixed-id default Quicklinks: a
+            // CloudKit import can land a duplicate seed after the launch pass ran.
+            .onChange(of: quicklinks.count) { _, _ in
+                Task { QuickieStore.dedupeQuicklinks(in: modelContext) }
             }
             // Build the File Search snapshot on launch, then rebuild it whenever the
             // app returns to the foreground or the Indexed-Folder grants change

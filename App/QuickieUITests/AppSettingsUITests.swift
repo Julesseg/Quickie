@@ -28,8 +28,8 @@ final class AppSettingsUITests: XCTestCase {
     }
 
     /// Types "settings" into the auto-focused input and opens the always-present
-    /// Settings command row (Quickie ships no default Quicklinks, so it is the
-    /// reliable top match). Leaves the app on the pushed Settings page.
+    /// Settings command row (a built-in, so it is the reliable top match for
+    /// "settings"). Leaves the app on the pushed Settings page.
     @MainActor
     private func openSettings(_ app: XCUIApplication) {
         let input = app.textFields["search-input"]

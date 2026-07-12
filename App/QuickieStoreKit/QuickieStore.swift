@@ -33,7 +33,8 @@ public enum AppGroup {
 /// text — the query-consuming, templated behaviour now lives on
 /// `StoredCustomAction`. The app persists these in SwiftData and rebuilds the
 /// in-memory index from them on launch (ADR 0006: the store is the source of truth,
-/// the index a derived cache). Quickie ships no default Quicklinks; the Share
+/// the index a derived cache). Quickie seeds a few default, fully deletable
+/// Quicklinks on first launch (`QuicklinkSeed` / `seedDefaultQuicklinks`); the Share
 /// Extension writes one from a shared URL (ADR 0022).
 @Model
 public final class StoredQuicklink {

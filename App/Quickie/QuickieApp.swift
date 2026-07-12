@@ -18,6 +18,7 @@ struct QuickieApp: App {
             // clear the flag here, letting the launch migration re-seed the
             // default web-search Fallback query into each fresh test store.
             SignalsStore.sharedDefaults.removeObject(forKey: QuickieStore.migrationFlagKeyForTesting)
+            SignalsStore.sharedDefaults.removeObject(forKey: QuickieStore.quicklinkSeedFlagKeyForTesting)
             return QuickieStore.inMemoryContainer()
         }
         return QuickieStore.container
@@ -67,6 +68,10 @@ struct QuickieApp: App {
         // RootView's launch task still runs the CloudKit dedupe and favorites
         // reconcile over the now already-seeded catalog.
         QuickieStore.seedDefaultCustomActions(in: container.mainContext)
+        // Seed the default static Quicklinks (YouTube, Gmail, GitHub) here too, for
+        // the same reason: populated from the first render so a pinned Favorite
+        // pointing at a `seed.link.*` id draws its Home card without a @Query race.
+        QuickieStore.seedDefaultQuicklinks(in: container.mainContext)
         // Seed legacy pre-Pile Note rows under UI testing (issue #62; ADR 0018):
         // the flag plants `StoredNote` rows in the fresh in-memory store *before*
         // RootView's launch task runs `migrateNotesToPile`, so the test drives

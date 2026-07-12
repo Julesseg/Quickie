@@ -8,7 +8,8 @@ import QuickieStoreKit
 /// alias). A Quicklink opens directly — it carries no `{placeholder}` and
 /// consumes no typed text, so the editor *rejects* a templated URL (that is a
 /// Fallback query, managed on the Fallbacks page). Reached as the typed "Quicklinks"
-/// command row and presented full-screen. Quickie ships no default Quicklinks.
+/// command row and presented full-screen. Quickie seeds a few default, fully
+/// deletable Quicklinks on first launch (`QuicklinkSeed`).
 struct QuicklinksView: View {
     @Environment(\.modelContext) private var modelContext
     @Query(sort: \StoredQuicklink.createdAt) private var quicklinks: [StoredQuicklink]

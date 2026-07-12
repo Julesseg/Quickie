@@ -85,7 +85,7 @@ final class QuickieUITests: XCTestCase {
     /// Settings page, the keyboard comes back up and text typed *without tapping*
     /// goes straight into the field. Proves focus is restored on return, so the
     /// user can keep typing without re-tapping. We drive Settings because its
-    /// command row is always present (Quickie ships no default Quicklinks).
+    /// command row is a built-in, always present regardless of user content.
     @MainActor
     func testInputRefocusesWhenReturningFromAPage() throws {
         let app = launchApp()
@@ -128,8 +128,7 @@ final class QuickieUITests: XCTestCase {
     /// is synthesized but the action never runs), though the gesture works on
     /// device. So this covers the persistence + Home-rendering half here, and the
     /// long-press gesture is verified manually on device. We seed the
-    /// always-present "Settings" command row (Quickie ships no default Quicklinks
-    /// — ADR 0013).
+    /// always-present built-in "Settings" command row (ADR 0013).
     @MainActor
     func testPinnedFavoriteSurfacesOnHome() throws {
         let app = launchApp(extraArguments: ["-uitest-pin-favorite", "builtin.settings"])
