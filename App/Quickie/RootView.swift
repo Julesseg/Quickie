@@ -74,6 +74,14 @@ struct RootView: View {
     @AppStorage(SettingsKey.calculatorUnitConversion) private var calculatorUnitConversion = true
     @AppStorage(SettingsKey.fileSearchInlineCap) private var fileSearchInlineCap = 3
 
+    /// The Pile's **Pending query** auto-save toggle (CONTEXT.md → Pending query;
+    /// issue #152; ADR 0031), declared in the Pile provider's schema. On, text left
+    /// unresolved in the root input when the app backgrounds is snapshotted and —
+    /// depending on how and when the user returns — restored or committed to the
+    /// Pile. Off is the old behavior exactly: state preserved indefinitely, entry
+    /// surfaces discard, no Live Activity.
+    @AppStorage(SettingsKey.pileAutoSave) private var pileAutoSave = true
+
     /// The user's ranking signals — pinned Favorites and Frecency of past
     /// selections — persisted across launches (issue #9).
     @State private var signals = SignalsStore.launch()
@@ -734,6 +742,17 @@ struct RootView: View {
             }
             // Seed the default web-search Custom Action once on launch (ADR 0021).
             .task {
+                // Resolve a cold launch's Pending query (issue #152; ADR 0031):
+                // restore a < 30s text into the input, commit an expired one to
+                // the Pile — the path that makes the snapshot survive
+                // termination. The scenePhase observer covers warm foregrounds;
+                // on a cold start its first value can already be `.active`, so
+                // this is the reliable once-at-launch pass (`take` consumes the
+                // snapshot, so both firing costs nothing). An entry-surface
+                // launch's deeplink dispatch (`onAppear`, which runs first)
+                // consumes it as a commit instead.
+                resolvePendingQuery(via: .plainOpen)
+                PendingQueryActivityController.endAll()
                 // Convert any pre-0030 Quicklink rows to slot-less Custom Actions
                 // before seeding, so an already-seeded `seed.link.*` link is present
                 // and not double-inserted (ADR 0030).
@@ -851,7 +870,36 @@ struct RootView: View {
             // folders under a per-folder security-scoped bracket, off the main actor.
             .task { fileIndex.rebuild(from: indexedFolders) }
             .onChange(of: scenePhase) { _, phase in
+                if phase == .background {
+                    // Snapshot the Pending query (CONTEXT.md → Pending query; ADR
+                    // 0031): `(text?, timestamp)` to the App Group defaults, decided
+                    // at the next activation by comparing timestamps — no background
+                    // timer, and termination loses nothing. Text rides along only
+                    // for a plain root query; a breadcrumb or the Search Files
+                    // context still resets after the window but saves nothing. The
+                    // Live Activity shares the same qualification — it *is* the
+                    // visible lifetime of the pending query — so it starts here iff
+                    // there is text, and dies on its own at the window's end.
+                    if let pending = PendingQuery.snapshot(
+                        query: query,
+                        isCapturing: capture.isActive,
+                        inFileSearch: inFileSearch,
+                        autoSaveEnabled: pileAutoSave
+                    ) {
+                        PendingQueryStore.save(pending)
+                        if let text = pending.text {
+                            PendingQueryActivityController.start(preview: text)
+                        }
+                    }
+                }
                 if phase == .active {
+                    // Resolve the Pending query first (issue #152): a ≥ 30s return
+                    // must land on the clean Home *before* anything else reads
+                    // `query`, and a < 30s cold launch restores the text into the
+                    // input. Ending the activity is unconditional — however the
+                    // user came back, the pending question is resolved now.
+                    resolvePendingQuery(via: .plainOpen)
+                    PendingQueryActivityController.endAll()
                     fileIndex.rebuild(from: indexedFolders)
                     // Drain the Favorites widget's frecency outbox (ADR 0025; issue
                     // #126): credit each widget-run selection into `SignalsStore` at
@@ -1165,10 +1213,18 @@ struct RootView: View {
     private func perform(_ outcome: ActionOutcome) {
         switch outcome {
         case .openURL(let url):
+            // A main-action hand-off **resolves the query** (CONTEXT.md → Main
+            // action; PR #151): clear back to Home so the text left behind can
+            // never read as unresolved — a web search, a static Custom Action,
+            // any filled URL template.
             openURL(url)
+            query = ""
         case .copyText(let text):
+            // A Snippet copy resolves the query too (same rule): the flash is
+            // the acknowledgement, Home the landing.
             UIPasteboard.general.string = text
             flashConfirmation("Copied")
+            query = ""
         case .copyAndStage(let text):
             // A math result's main action (CONTEXT.md → main action): copy the
             // answer *and* stage it back into the input so the user keeps
@@ -1235,8 +1291,13 @@ struct RootView: View {
             // Action; issue #46), wiring the `quickie://` success/error/cancel
             // callbacks so the result comes back to `onOpenURL` below. This is the
             // no-input path (the toggle off); the input-collecting path runs through
-            // the capture and opens the same URL from `ShortcutCapture`.
+            // the capture and opens the same URL from `ShortcutCapture`. The
+            // clear is **final** (CONTEXT.md → Main action): `x-error` flashes
+            // its failure toast and `x-cancel` stays silent, neither restoring
+            // the cleared text — the callback can land after the user has
+            // started typing something new.
             openURL(ShortcutRun.runURL(name: name, input: input))
+            query = ""
         case .none:
             break
         }
@@ -1461,6 +1522,11 @@ struct RootView: View {
     /// - `entry` is the reset with **nothing selected after**, refocusing the input:
     ///   a fresh, focused Home for a warm app (cold launch already lands there).
     private func handleDeeplink(_ deeplink: QuickieDeeplink) {
+        // Every deeplink is an Entry surface (CONTEXT.md → Entry surface):
+        // "something new *now*", so a Pending query commits to the Pile at any
+        // age — replacing the reset's old silent discard (issue #152) — before
+        // the reset clears the input.
+        commitPendingOnEntrySurface()
         resetToLauncher()
         switch deeplink {
         case .run(let id):
@@ -1567,6 +1633,66 @@ struct RootView: View {
         for event in FavoritesWidgetStore.drainRuns() {
             signals.record(event.actionID, at: event.date)
         }
+    }
+
+    /// Resolves the stored **Pending query** snapshot on activation (CONTEXT.md →
+    /// Pending query; issue #152; ADR 0031). `take` consumes the snapshot, so each
+    /// backgrounding is resolved exactly once even when activation and an
+    /// entry-surface deeplink race for it. Within the window a plain open keeps
+    /// the state — restoring the text into a cold launch's empty input (a warm
+    /// resume still holds it live); at or past it, the scoped state resets to a
+    /// clean Home and any pending text commits to the Pile with the flash.
+    private func resolvePendingQuery(via path: PendingQueryReturn) {
+        guard let pending = PendingQueryStore.take() else { return }
+        switch pending.resolution(at: Date(), via: path) {
+        case .keep:
+            if let text = pending.text, isHome, !capture.isActive, !inFileSearch {
+                query = text
+            }
+        case .reset(let commit):
+            capture.cancel()
+            inFileSearch = false
+            query = ""
+            if let commit { commitPendingToPile(commit) }
+        }
+    }
+
+    /// Commits a Pending query on an Entry-surface arrival (issue #152): the
+    /// stored snapshot when the deeplink won the race with activation, else the
+    /// live input when activation already resolved (and possibly restored) it —
+    /// or when the deeplink reached a foregrounded app. Either way the text
+    /// lands in the Pile instead of the reset's silent discard; a breadcrumb or
+    /// the Search Files filter still just resets, saving nothing.
+    private func commitPendingOnEntrySurface() {
+        if let pending = PendingQueryStore.take() {
+            if case .reset(let commit) = pending.resolution(at: Date(), via: .entrySurface),
+               let commit {
+                commitPendingToPile(commit)
+            }
+            return
+        }
+        if let pending = PendingQuery.snapshot(
+            query: query,
+            isCapturing: capture.isActive,
+            inFileSearch: inFileSearch,
+            autoSaveEnabled: pileAutoSave
+        ), let text = pending.text {
+            commitPendingToPile(text)
+        }
+    }
+
+    /// Writes an auto-saved Pending query into the Pile and flashes the preview
+    /// confirmation (issue #152). Deliberately **no Frecency credit** (the
+    /// auto-save is not a user selection) and **no dedupe** against existing
+    /// entries (the manual Save for later doesn't either). The trim-and-drop-empty
+    /// guard is the same Core rule every other Pile write surface applies.
+    private func commitPendingToPile(_ text: String) {
+        guard let entryText = HeadlineAppShortcut.pileText(fromDictated: text) else { return }
+        modelContext.insert(StoredPileEntry(text: entryText))
+        // Commit synchronously for the same invalidated-snapshot reason `stage`
+        // does: the engine rebuilds off the `@Query` on the next keystroke.
+        try? modelContext.save()
+        flashConfirmation(PendingQuery.savedConfirmation(for: entryText))
     }
 
     /// Clears every scoped context back to the launcher root before a deeplink acts

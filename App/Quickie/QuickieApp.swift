@@ -40,6 +40,18 @@ struct QuickieApp: App {
             // defaults too — clear it on the same reset so a prior run's catalog
             // can't leak into a later test.
             EligibleActionCatalogStore.launchReset()
+            // The Pending-query snapshot (issue #152) persists in the same App
+            // Group defaults: without this, a snapshot left by a prior run would
+            // restore or commit into a later test's clean launch.
+            PendingQueryStore.launchReset()
+        }
+        // Seed a Pending-query snapshot under UI testing (issue #152): XCUITest
+        // cannot control the wall clock across a backgrounding, so this plants a
+        // real snapshot with a chosen age — through `PendingQueryStore.save` —
+        // before `RootView` resolves it, driving both the cold-launch restore and
+        // the cold-launch commit. After the reset above, on the clean slate.
+        if ProcessInfo.processInfo.arguments.contains("--uitesting") {
+            PendingQueryStore.seedFromLaunchArguments()
         }
         // Seed pending widget-run outbox events under UI testing (issue #126):
         // XCUITest can't tap a Home-Screen widget, so this plants real outbox
