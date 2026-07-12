@@ -104,9 +104,10 @@ struct PendingQueryTests {
 
     // MARK: The confirmation flash
 
-    @Test("the auto-save confirmation quotes a short text whole")
+    @Test("the auto-save confirmation quotes a short text whole — stray whitespace never fakes an ellipsis")
     func confirmationQuotesShortTextWhole() {
         #expect(PendingQuery.savedConfirmation(for: "do chores") == "Saved “do chores” for later")
+        #expect(PendingQuery.savedConfirmation(for: "do chores ") == "Saved “do chores” for later")
     }
 
     @Test("the confirmation truncates a long text with an ellipsis and quotes only its first line")

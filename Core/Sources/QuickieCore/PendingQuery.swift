@@ -75,7 +75,10 @@ public struct PendingQuery: Equatable, Codable, Sendable {
             .split(separator: "\n", omittingEmptySubsequences: true)
             .first.map(String.init)?
             .trimmingCharacters(in: .whitespaces) ?? ""
-        let truncated = firstLine.count > cap || firstLine != text
+        // Ellipsis only when content was actually dropped — a truncation or a
+        // further line — so a trailing space alone never fakes one.
+        let truncated = firstLine.count > cap
+            || firstLine != text.trimmingCharacters(in: .whitespacesAndNewlines)
             ? String(firstLine.prefix(cap)) + "…"
             : firstLine
         return "Saved “\(truncated)” for later"

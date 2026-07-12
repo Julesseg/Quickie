@@ -80,5 +80,16 @@ final class SnippetUITests: XCTestCase {
         XCTAssertTrue(row.isHittable, "the snippet result row is an interactive, tappable control")
         row.tap()
         XCTAssertNotEqual(app.state, .notRunning, "running a snippet's main action should not crash the app")
+
+        // The copy **resolves the query** (CONTEXT.md → Main action; issue #152):
+        // the input clears back to Home rather than leaving "greeting" behind as
+        // unresolved text. The Recent list now has entries (rows were selected
+        // above), so assert the query text itself is gone, not the empty-Home
+        // placeholder.
+        expectation(
+            for: NSPredicate(format: "value != %@", "greeting"),
+            evaluatedWith: input
+        )
+        waitForExpectations(timeout: 10)
     }
 }

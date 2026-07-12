@@ -46,17 +46,35 @@ enum PendingQueryActivityController {
 
     /// Removes the activity at the window's end without the app running in the
     /// foreground: a background task keeps the process alive just long enough
-    /// to sleep out the window and end it. `endAll` racing this (the user came
-    /// back first) is fine — ending an ended activity is a no-op.
+    /// to sleep out the window and end it. The grant is itself only ~30
+    /// seconds — it can expire *before* the sleep completes — so the
+    /// expiration handler ends the activity too (a touch early beats lingering
+    /// stale). Every path racing another (`endAll` on a quick return, the
+    /// handler vs. the sleep) is fine: ending an ended activity is a no-op,
+    /// and `endDismissalTask` guards the one-shot task release.
     private static func dismissAfterLifetime(_ activity: Activity<PendingQueryActivityAttributes>) {
-        var taskID = UIBackgroundTaskIdentifier.invalid
-        taskID = UIApplication.shared.beginBackgroundTask {
-            UIApplication.shared.endBackgroundTask(taskID)
+        endDismissalTask()
+        dismissalTaskID = UIApplication.shared.beginBackgroundTask {
+            Task { await activity.end(nil, dismissalPolicy: .immediate) }
+            Task { @MainActor in endDismissalTask() }
         }
         Task {
             try? await Task.sleep(for: .seconds(PendingQuery.lifetime))
             await activity.end(nil, dismissalPolicy: .immediate)
-            await MainActor.run { UIApplication.shared.endBackgroundTask(taskID) }
+            endDismissalTask()
         }
+    }
+
+    /// The one live dismissal grant — at most one activity exists at a time
+    /// (`start` ends any predecessor), so a single identifier suffices.
+    private static var dismissalTaskID = UIBackgroundTaskIdentifier.invalid
+
+    /// Releases the grant exactly once: the sleep path, the expiration handler,
+    /// and a re-`start` can all reach here, and `endBackgroundTask` must not be
+    /// called twice for one identifier.
+    private static func endDismissalTask() {
+        guard dismissalTaskID != .invalid else { return }
+        UIApplication.shared.endBackgroundTask(dismissalTaskID)
+        dismissalTaskID = .invalid
     }
 }
