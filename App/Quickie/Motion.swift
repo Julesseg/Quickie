@@ -57,3 +57,28 @@ extension MotionStyle {
         edgeTransition(from: .bottom).animation(animation)
     }
 }
+
+/// The same edge mapping for the bottom bar's keyboard lift: the *decision*
+/// (lift, release, hold, track) lives in `KeyboardLiftPolicy` and is unit
+/// tested in Core; this only translates its `Motion` into an `Animation`.
+extension KeyboardLift.Motion {
+    /// The concrete animation for this lift movement, or `nil` to apply it
+    /// directly — for a live drag sample (the finger is the animation) and
+    /// under UI test's instant-motion collapse (issue #79).
+    var animation: Animation? {
+        if MotionStyle.isInstantForUITesting { return nil }
+        switch self {
+        case .keyboardSpring:
+            // UIKit's own keyboard spring (pinned in Core), so the bar moves in
+            // lockstep with the keyboard instead of trailing it on a generic
+            // curve and settling late.
+            return .interpolatingSpring(
+                mass: KeyboardSpring.mass,
+                stiffness: KeyboardSpring.stiffness,
+                damping: KeyboardSpring.damping
+            )
+        case .direct:
+            return nil
+        }
+    }
+}

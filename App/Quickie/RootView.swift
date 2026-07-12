@@ -187,12 +187,17 @@ struct RootView: View {
     @State private var toastToken = UUID()
     /// The **held** keyboard height that lifts the bottom bar (issue #58). We drive
     /// the lift manually — SwiftUI's automatic keyboard avoidance is disabled on the
-    /// launcher (`.ignoresSafeArea(.keyboard)`) — and only ever grow this to a real
-    /// software-keyboard height, never resetting it when the keyboard hides. So when
-    /// a row's long-press context menu resigns first responder and drops the keyboard
-    /// (a system behaviour with no public override), the layout stays frozen instead
-    /// of collapsing the safe area and jerking the reversed result list downward.
+    /// launcher (`.ignoresSafeArea(.keyboard)`) — so when a row's long-press context
+    /// menu resigns first responder and drops the keyboard (a system behaviour with
+    /// no public override), the layout stays frozen instead of collapsing the safe
+    /// area and jerking the reversed result list downward. Every move is decided by
+    /// `keyboardLift` and applied with the motion it chose, so the bar follows the
+    /// keyboard *exactly*: the keyboard's own spring for scheduled transitions,
+    /// direct per-frame tracking during an interactive swipe-dismiss.
     @State private var lockedKeyboardInset: CGFloat = 0
+    /// The pure lift/release/hold/track decision behind `lockedKeyboardInset`
+    /// (issues #58 × #64), unit-tested in Core.
+    private let keyboardLift = KeyboardLiftPolicy()
     /// Whether a result/Recent list is mid-drag (issue #58 × #64): the signal that
     /// tells a keyboard dismissal apart. A dismissal *while* scrolling is the
     /// intentional swipe (#64) — let the bar drop; one while still is the context
@@ -431,6 +436,25 @@ struct RootView: View {
             ZStack {
                 QuietBackdrop()
 
+                // Follow the keyboard's live top edge during an interactive
+                // swipe-dismiss (issue #64): the will-change notification below
+                // is silent for the whole drag — it fires only when the gesture
+                // ends — so these per-frame samples are what keep the bar glued
+                // to the keyboard under the finger instead of dropping only
+                // after it has settled. Same policy, same hold rules as the
+                // notification path; `.direct` motion applies with no animation
+                // (the finger is the animation).
+                KeyboardOverlapTracker { overlap in
+                    guard let lift = keyboardLift.tracking(
+                        forOverlap: overlap,
+                        currentInset: lockedKeyboardInset,
+                        bottomSafeAreaInset: bottomSafeAreaInset,
+                        isListScrolling: listScrolling,
+                        usesKeyboardlessControl: capture.usesKeyboardlessControl
+                    ) else { return }
+                    withAnimation(lift.motion.animation) { lockedKeyboardInset = lift.inset }
+                }
+
                 Group {
                     if capture.isCapturing {
                         // A capture in flight replaces the result list with its
@@ -571,8 +595,12 @@ struct RootView: View {
                 // Reserve the held keyboard height so the bar floats where the
                 // keyboard's top is — and stays there when the keyboard drops. Zero
                 // when a page is pushed (the bar is gone), so no phantom inset.
+                // No blanket `.animation` here: each lift is applied through
+                // `withAnimation` with the motion `KeyboardLiftPolicy` chose —
+                // the keyboard's own spring for a scheduled transition, none for
+                // a live drag sample — so the bar moves in lockstep with the
+                // keyboard instead of trailing it on a generic curve.
                 .padding(.bottom, path.isEmpty ? lockedKeyboardInset : 0)
-                .animation(.easeOut(duration: 0.25), value: lockedKeyboardInset)
                 // Kill keyboard avoidance on the bar *itself*: the outer
                 // `.ignoresSafeArea(.keyboard)` leaves a small residual lift on
                 // `.safeAreaInset` content, which released on a context-menu dismiss
@@ -585,29 +613,26 @@ struct RootView: View {
             // (the pushed pages set this on themselves; this covers the root + its
             // bottom inset). `lockedKeyboardInset` supplies the lift instead.
             .ignoresSafeArea(.keyboard, edges: .bottom)
-            // Reconcile the held inset with the ways the keyboard leaves:
-            //  • **Showing** (a real keyboard, overlap over the threshold — not a
-            //    hardware-keyboard accessory bar): lift the bar to sit on it.
-            //  • **Hiding while the list is being dragged**: an intentional
-            //    swipe-dismiss (issue #64) — release the inset so the bar drops and
-            //    more results show.
-            //  • **Hiding while a capture shows a keyboard-less control** (the date
-            //    step's picker + commit button, the primer/denial affordances): the
-            //    text field was *removed* for the whole step, so the keyboard is
-            //    structurally gone — release the inset so the control takes the
-            //    keyboard's space rather than floating above a dead band.
-            //  • **Hiding while *not* scrolling** otherwise: the context menu
-            //    resigned first responder — **hold** the inset so the long-press
-            //    doesn't reflow the list. This is the whole point of driving the
-            //    lift ourselves.
+            // Reconcile the held inset with each *scheduled* keyboard transition
+            // (appear, the post-release settle of a swipe-dismiss, a context
+            // menu's resign). The lift/release/hold rules live in
+            // `KeyboardLiftPolicy` — pure and unit-tested in Core — and the
+            // returned motion is the keyboard's own spring, so the bar rises and
+            // drops in lockstep with the keyboard rather than trailing it into
+            // place after it has settled. The interactive mid-drag frames never
+            // reach this notification; the `KeyboardOverlapTracker` above feeds
+            // those through the same policy.
             .onReceive(NotificationCenter.default.publisher(for: UIResponder.keyboardWillChangeFrameNotification)) { note in
                 guard let endFrame = note.userInfo?[UIResponder.keyboardFrameEndUserInfoKey] as? CGRect else { return }
                 let overlap = UIScreen.main.bounds.height - endFrame.minY
-                if overlap > 120 {
-                    lockedKeyboardInset = max(0, overlap - bottomSafeAreaInset)
-                } else if listScrolling || capture.usesKeyboardlessControl {
-                    lockedKeyboardInset = 0
-                }
+                guard let lift = keyboardLift.lift(
+                    forOverlap: overlap,
+                    currentInset: lockedKeyboardInset,
+                    bottomSafeAreaInset: bottomSafeAreaInset,
+                    isListScrolling: listScrolling,
+                    usesKeyboardlessControl: capture.usesKeyboardlessControl
+                ) else { return }
+                withAnimation(lift.motion.animation) { lockedKeyboardInset = lift.inset }
             }
             // The launcher itself wears no navigation bar — it is the root; the
             // management pages push *on top* of it, sliding in from the right with
