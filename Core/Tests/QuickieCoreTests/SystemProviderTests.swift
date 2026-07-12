@@ -20,7 +20,7 @@ struct SystemProviderTests {
         #expect(ProviderID.reminders.umbrellaParent == .system)
         #expect(ProviderID.events.umbrellaParent == .system)
         #expect(ProviderID.system.umbrellaParent == nil)
-        #expect(ProviderID.quicklinks.umbrellaParent == nil)
+        #expect(ProviderID.customActions.umbrellaParent == nil)
     }
 
     @Test("the top-level Providers list shows System, not Reminders or Events")
@@ -32,7 +32,7 @@ struct SystemProviderTests {
         #expect(!list.contains(.reminders))
         #expect(!list.contains(.events))
         // Every non-member provider still lists itself.
-        #expect(list.contains(.quicklinks))
+        #expect(list.contains(.customActions))
         #expect(list.contains(.calculator))
     }
 

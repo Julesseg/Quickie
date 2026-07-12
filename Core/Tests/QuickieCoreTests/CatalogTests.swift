@@ -11,14 +11,20 @@ struct CatalogTests {
 
     // MARK: - Every shipped template is valid
 
-    @Test("every catalog entry's template parses, carries ≥ 1 slot, and is schemed")
+    @Test("every catalog entry's template parses and is schemed; only Sites entries are slot-less")
     func everyEntryIsValid() {
         for entry in Catalog.entries {
             let def = entry.definition
-            #expect(def.hasSlot, "\(entry.name) has no {slot}")
             #expect(def.urlIsSchemedAfterProbe, "\(entry.name) is not schemed")
             #expect(def.isValidForSave, "\(entry.name) fails the Save gates")
             #expect(def.makeAction(id: entry.id) != nil, "\(entry.name) factories no Action")
+            // A Sites entry is a static (slot-less) link; every other section is
+            // templated and must carry at least one slot (ADR 0030).
+            if entry.category == .sites {
+                #expect(!def.hasSlot, "\(entry.name) is a Site but carries a {slot}")
+            } else {
+                #expect(def.hasSlot, "\(entry.name) has no {slot}")
+            }
         }
     }
 
@@ -59,20 +65,43 @@ struct CatalogTests {
         }
     }
 
-    // MARK: - The four default seeds
+    // MARK: - The default seeds
 
     @Test("the default seeds carry fixed seed.* ids in most-important-first order")
     func seedIDsAreFixedAndOrdered() {
         #expect(CatalogSeed.all.map(\.id) == [
             "seed.web-search", "seed.app-store-search", "seed.wikipedia", "seed.youtube", "seed.google-maps",
+            "seed.link.youtube", "seed.link.gmail", "seed.link.github",
         ])
     }
 
-    @Test("every seed definition is a valid, fallback-eligible Custom Action")
+    /// The static site seeds (ADR 0030) — slot-less links, so valid but *not*
+    /// fallback-eligible, unlike the templated seeds.
+    private static let staticSeedIDs: Set<String> = [
+        "seed.link.youtube", "seed.link.gmail", "seed.link.github",
+    ]
+
+    @Test("every seed is saveable; templated seeds are fallback-eligible, static links are not")
     func seedsAreValidAndFallbackEligible() {
         for seed in CatalogSeed.all {
             #expect(seed.definition.isValidForSave, "\(seed.id) is not saveable")
-            #expect(seed.definition.isFallbackEligible, "\(seed.id) is not fallback-eligible")
+            if Self.staticSeedIDs.contains(seed.id) {
+                #expect(!seed.definition.isFallbackEligible, "\(seed.id) is a static link — not fallback-eligible")
+                #expect(!seed.definition.hasSlot, "\(seed.id) is a static link — carries no slot")
+            } else {
+                #expect(seed.definition.isFallbackEligible, "\(seed.id) is not fallback-eligible")
+            }
+        }
+    }
+
+    @Test("the static site seeds appear in the Catalog's Sites section under their fixed ids")
+    func staticSeedsAppearInSites() {
+        let sites = Catalog.entries(in: .sites)
+        for seed in [CatalogSeed.youTubeLink, CatalogSeed.gmail, CatalogSeed.gitHubLink] {
+            let entry = sites.first { $0.id == seed.id }
+            #expect(entry != nil, "\(seed.id) is missing from the Sites section")
+            #expect(entry?.definition.template == seed.definition.template)
+            #expect(entry?.definition.name == seed.definition.name)
         }
     }
 

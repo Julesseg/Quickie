@@ -89,20 +89,20 @@ struct CustomActionEditorView: View {
         }
     }
 
-    /// The URL field's footer: the slot-less **Quicklink redirect** when a URL
-    /// carries no `{name}` (a static link isn't a Custom Action), a scheme warning
-    /// once slots exist but the URL won't parse, and the plain hint otherwise.
+    /// The URL field's footer: a scheme warning when the URL won't parse, the plain
+    /// slotted hint when the URL carries `{name}` slots, and the **static link** note
+    /// when it has none — a slot-less URL is a valid static Custom Action that opens
+    /// directly (ADR 0030), not an error.
     @ViewBuilder
     private var urlFooter: some View {
-        if !def.template.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty && !def.hasSlot {
-            Text("This link has no {slot}, so it opens nothing to fill. A static link is a Quicklink — add it on the Quicklinks page instead.")
+        if !def.template.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty && !def.urlIsSchemedAfterProbe {
+            Text("Add a scheme (like https:// or things://) so the URL can open.")
                 .foregroundStyle(.red)
-                .accessibilityIdentifier("custom-action-quicklink-redirect")
-        } else if def.hasSlot && !def.urlIsSchemedAfterProbe {
-            Text("Add a scheme (like https:// or things://) so the filled URL can open.")
-                .foregroundStyle(.red)
-        } else {
+        } else if def.hasSlot {
             Text("Each {name} becomes an argument the breadcrumb fills, then opens the URL.")
+        } else {
+            Text("This link has no {slot}, so it opens directly — a static link.")
+                .accessibilityIdentifier("custom-action-static-link-note")
         }
     }
 

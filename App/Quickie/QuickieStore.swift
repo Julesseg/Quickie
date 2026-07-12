@@ -65,31 +65,31 @@ extension QuickieStore {
     /// The seeded App Store search's fixed, well-known id (ADR 0023/0028; issue #144)
     /// — the same dedup-friendly fixed-id regime as `seedWebSearchID`.
     static let seedAppStoreSearchID = CatalogSeed.appStoreSearch.id
-    /// Bumped to `.v3` for the grown default-seed set (issues #143, #144; ADR 0028):
-    /// the seed set grew from web search alone to web search + App Store search +
-    /// Wikipedia + YouTube + Google Maps, so the one-shot pass must run once more to
-    /// insert whichever `seed.*` ids are absent on a build that already recorded the
-    /// v2 (web-search-only) seed as done. Was `.v2` for the Custom Action unification
-    /// (ADR 0021 — the retired `StoredFallbackQuery` table).
-    private static let seedFlagKey = "store.didSeedCustomActions.v3"
+    /// Bumped to `.v4` for the Quicklink unification (ADR 0030): the seed set grew to
+    /// include the three static site links (YouTube, Gmail, GitHub) as slot-less Custom
+    /// Actions, so the one-shot pass must run once more to insert whichever `seed.*` ids
+    /// are absent on a build that already recorded `.v3`. Was `.v3` for the grown
+    /// default-seed set (issues #143, #144; ADR 0028) and `.v2` for the Custom Action
+    /// unification (ADR 0021 — the retired `StoredFallbackQuery` table).
+    private static let seedFlagKey = "store.didSeedCustomActions.v4"
 
     /// Exposed so the UI-testing launch path can clear the one-time seed flag and
     /// let each fresh in-memory store re-seed the default Custom Actions.
     static var migrationFlagKeyForTesting: String { seedFlagKey }
 
-    /// Seeds the five default, fully deletable **Custom Actions** on first launch —
-    /// web search, App Store search, Wikipedia, YouTube, Google Maps (CONTEXT.md →
-    /// Custom Action, Catalog; ADR 0028; issues #143, #144) — run at launch and
-    /// guarded by a one-shot flag so it happens exactly once. Each is an ordinary,
-    /// deletable one-slot Custom Action under a fixed `seed.*` id, so the user can
-    /// search out of the box while remaining free to delete or edit any of them. Their
-    /// free-text slots make them fallback-*eligible* by shape (issue #114);
-    /// `FallbacksStore` pre-enables all first-run fallbacks. No data migration: the
-    /// retired Fallback query storage is pre-release, so there is nothing to convert
-    /// (ADR 0021).
+    /// Seeds the default, fully deletable **Custom Actions** on first launch — the
+    /// templated seeds (web search, App Store search, Wikipedia, YouTube search, Google
+    /// Maps) plus the three static site links (YouTube, Gmail, GitHub — the former
+    /// default Quicklinks, ADR 0030) — run at launch and guarded by a one-shot flag so
+    /// it happens exactly once. Each is an ordinary, deletable Custom Action under a
+    /// fixed `seed.*` id. The templated seeds' free-text slots make them
+    /// fallback-*eligible* by shape (issue #114) and `FallbacksStore` pre-enables them;
+    /// the static links are ineligible (no slot). No data migration for the templated
+    /// seeds; the static links convert from any pre-0030 `StoredQuicklink` rows via
+    /// `migrateQuicklinksToCustomActions`, which runs first.
     ///
     /// Inserts whichever `seed.*` ids are **absent**, exactly once: a fresh install
-    /// gets all five, an earlier install gains only the ones it's missing. The flag
+    /// gets them all, an earlier install gains only the ones it's missing. The flag
     /// then blocks any re-run, so a **deleted** seed never resurrects — the Catalog's
     /// Browse page is the way back (ADR 0028).
     @MainActor
@@ -115,6 +115,36 @@ extension QuickieStore {
         } catch {
             // Save failed; the seed will retry on the next launch.
         }
+    }
+
+    /// One-time migration for the Quicklink → Custom Action unification (ADR 0030),
+    /// run at launch **before** `seedDefaultCustomActions`: every stored `StoredQuicklink`
+    /// row becomes a slot-less `StoredCustomAction` carrying the same id, title, static
+    /// URL (as the template), alias, and `createdAt`, then the source row is deleted.
+    /// Preserving the id keeps a pinned Favorite, its Frecency, and any Fallback-list
+    /// membership pointing at the same Action; running before the seed pass means a
+    /// user's already-seeded `seed.link.*` Quicklink converts first, so the seed pass
+    /// then sees the id present and does not double-insert.
+    ///
+    /// No flag: migrated rows are deleted, so the source empties and re-running is a
+    /// no-op — self-healing if a save ever fails mid-way (the `migrateNotesToPile`
+    /// pattern, ADR 0018).
+    @MainActor
+    static func migrateQuicklinksToCustomActions(in context: ModelContext) {
+        let links = (try? context.fetch(FetchDescriptor<StoredQuicklink>())) ?? []
+        guard !links.isEmpty else { return }
+
+        for link in links {
+            context.insert(StoredCustomAction(
+                id: link.id,
+                title: link.title,
+                urlString: link.urlString,
+                alias: link.alias,
+                createdAt: link.createdAt
+            ))
+            context.delete(link)
+        }
+        try? context.save()
     }
 
     /// The dedup pass behind the fixed seed id (ADR 0023): CloudKit cannot

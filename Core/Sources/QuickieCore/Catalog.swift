@@ -4,22 +4,28 @@ import Foundation
 /// of ready-made [[Custom Action]] templates, grouped by category, that a user can
 /// **install** with one tap from the Custom Actions Management page's "Browse
 /// catalog" row. Pure data in `QuickieCore` so `swift test` validates every shipped
-/// template up front — it parses, carries ≥ 1 slot, and is schemed (the same Custom
-/// Action Save gates) — and unverifiable templates are dropped from the data rather
-/// than shipped broken.
+/// template up front — it parses and is schemed (the same Custom Action Save gates)
+/// — and unverifiable templates are dropped from the data rather than shipped broken.
+/// A template carries **zero or more** slots (ADR 0030): the "Sites" section holds
+/// slot-less static links (the former Quicklinks), every other section is templated.
 ///
 /// Installing an entry stamps out an *ordinary* Custom Action under a **fresh id**
 /// (ADR 0028): no installed-state, no link back, no overwrite path. Every entry
 /// always offers Install, and restoring a deleted action is simply installing again.
-/// The four first-run **default seeds** (`CatalogSeed`) are the one exception that
-/// carries fixed ids — that is the seed path's doing (ADR 0023 dedup), not the
-/// Catalog's — and they appear here too, listed for re-install.
+/// The first-run **default seeds** (`CatalogSeed`) are the one exception that carries
+/// fixed ids — that is the seed path's doing (ADR 0023 dedup), not the Catalog's — and
+/// they appear here too, listed for re-install (the static site seeds under "Sites").
 public enum CatalogCategory: String, CaseIterable, Sendable {
     case searchEngines
     case aiChats
     case reference
     case appCaptures
     case communication
+    /// **Sites** (ADR 0030): static homepage links with no `{slot}` — the former
+    /// Quicklinks. Installing one stamps out a slot-less Custom Action that opens the
+    /// URL directly. Kept a distinct section so a static site (e.g. YouTube's homepage)
+    /// reads apart from the *search* entry of the same name in "Reference & site search".
+    case sites
 
     /// The section header shown on the Catalog page, in `allCases` order.
     public var title: String {
@@ -29,6 +35,7 @@ public enum CatalogCategory: String, CaseIterable, Sendable {
         case .reference: return "Reference & site search"
         case .appCaptures: return "App captures"
         case .communication: return "Communication & utilities"
+        case .sites: return "Sites"
         }
     }
 }
@@ -179,6 +186,23 @@ public enum Catalog {
                      template: "https://t.17track.net/en#nums={tracking}"),
         CatalogEntry(id: "catalog.waze", name: "Waze", aliases: ["waze"], category: .communication,
                      template: "https://waze.com/ul?q={query}"),
+
+        // Sites — static, slot-less homepage links (ADR 0030). The three default site
+        // seeds are listed here for re-install, pulled straight from `CatalogSeed` so
+        // they can never drift from what the seed pass plants; the rest are ordinary
+        // fresh-id installs. Chosen to avoid name collisions with the *search* entries
+        // above (e.g. this is YouTube's homepage, not the YouTube search).
+        seedEntry(CatalogSeed.youTubeLink, in: .sites),
+        seedEntry(CatalogSeed.gmail, in: .sites),
+        seedEntry(CatalogSeed.gitHubLink, in: .sites),
+        CatalogEntry(id: "catalog.netflix", name: "Netflix", aliases: ["netflix"], category: .sites,
+                     template: "https://www.netflix.com"),
+        CatalogEntry(id: "catalog.linkedin", name: "LinkedIn", aliases: ["linkedin"], category: .sites,
+                     template: "https://www.linkedin.com"),
+        CatalogEntry(id: "catalog.x", name: "X", aliases: ["x", "twitter"], category: .sites,
+                     template: "https://x.com"),
+        CatalogEntry(id: "catalog.instagram", name: "Instagram", aliases: ["instagram", "ig"], category: .sites,
+                     template: "https://www.instagram.com"),
     ]
 
     /// A Catalog entry that re-installs a default seed: its name, aliases, and

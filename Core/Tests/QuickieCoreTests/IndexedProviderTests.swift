@@ -29,11 +29,11 @@ struct IndexedProviderTests {
 
     @Test("the built-in provider supplies the management command rows")
     func builtInsSupplyCommands() {
-        // Quickie ships no default Quicklinks and no privileged web search (ADR
-        // 0013); the built-in indexed catalog is the typed-to management commands.
+        // Quickie ships no privileged web search (ADR 0021/0030); the built-in
+        // indexed catalog is the typed-to management commands.
         let ids = IndexedProvider.builtIns().candidates(for: "").map(\.id)
         #expect(ids.contains("builtin.settings"))
-        #expect(ids.contains("builtin.quicklinks-page"))
+        #expect(ids.contains("builtin.custom-actions-page"))
         #expect(ids.contains("builtin.fallbacks-page"))
         // The Search Files command enters the scoped file-browsing context (ADR 0014).
         #expect(ids.contains("builtin.search-files"))

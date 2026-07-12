@@ -90,7 +90,7 @@ struct CustomActionsView: View {
             } header: {
                 Text("Custom Actions")
             } footer: {
-                Text("A Custom Action opens a URL template, filling its {slots} through the breadcrumb. A text-first one can be activated as a fallback on the Fallbacks page. Disable one to hide it without deleting it.")
+                Text("A Custom Action opens a URL. With {slots} the breadcrumb fills them (a text-first one can be a fallback on the Fallbacks page); with no slot it's a static link that opens directly. Disable one to hide it without deleting it.")
             }
         }
         .navigationTitle("Custom Actions")
@@ -150,9 +150,9 @@ struct CustomActionsView: View {
     }
 }
 
-/// One row in the Custom Actions list: name, its URL template, a per-row
-/// enable/disable toggle (issue #68), and a tap into the editor — the same row shape
-/// as the Quicklinks and Fallbacks pages.
+/// One row in the Custom Actions list: name, its URL (template or static link), a
+/// per-row enable/disable toggle (issue #68), and a tap into the editor — the same row
+/// shape as the Fallbacks page.
 private struct CustomActionRow: View {
     let action: StoredCustomAction
     let isDisabled: Bool

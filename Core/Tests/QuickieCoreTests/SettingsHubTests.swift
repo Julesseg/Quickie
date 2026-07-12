@@ -15,10 +15,10 @@ struct SettingsHubTests {
         // The raw value is persistence identity (future kind-level enablement
         // keys off it, ADR 0019), so it is pinned here: renaming a case must not
         // silently re-key stored state.
-        #expect(ProviderID.quicklinks.rawValue == "quicklinks")
+        #expect(ProviderID.customActions.rawValue == "custom-actions")
         #expect(ProviderID.fileSearch.rawValue == "file-search")
         // The display name is what the Providers list and the page title show.
-        #expect(ProviderID.quicklinks.displayName == "Quicklinks")
+        #expect(ProviderID.customActions.displayName == "Custom Actions")
         #expect(ProviderID.fileSearch.displayName == "File Search")
     }
 
@@ -35,9 +35,9 @@ struct SettingsHubTests {
         // The former management-page command rows keep their identity (ids,
         // titles, aliases — so pins and Frecency survive) but their *target* is
         // redirected to the provider's unified page under the hub (ADR 0019):
-        // typing "quicklinks" lands on the Quicklinks page, settings + content
-        // in one. There is no separate content page left to open.
-        #expect(Action.openQuicklinksPage().run() == .openPage(.settings(panel: .quicklinks)))
+        // typing "custom actions" lands on the Custom Actions page, settings +
+        // content in one. There is no separate content page left to open.
+        #expect(Action.openCustomActionsPage().run() == .openPage(.settings(panel: .customActions)))
         #expect(Action.openFallbacksPage().run() == .openPage(.settings(panel: .fallbacks)))
         #expect(Action.openSnippetsLibrary().run() == .openPage(.settings(panel: .snippets)))
         #expect(Action.openShortcutsPage().run() == .openPage(.settings(panel: .shortcuts)))
@@ -106,8 +106,8 @@ struct SettingsHubTests {
         // running it produces the panel deeplink the app pushes.
         let engine = SearchEngine(providers: [CalculatorProvider(), IndexedProvider.builtIns()])
 
-        let quicklinks = engine.highlighted(for: "quicklinks")
-        #expect(quicklinks?.run() == .openPage(.settings(panel: .quicklinks)))
+        let customActions = engine.highlighted(for: "custom actions")
+        #expect(customActions?.run() == .openPage(.settings(panel: .customActions)))
 
         let calculator = engine.highlighted(for: "calculator")
         #expect(calculator?.run() == .openPage(.settings(panel: .calculator)))

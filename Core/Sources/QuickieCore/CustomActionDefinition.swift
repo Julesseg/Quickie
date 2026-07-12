@@ -253,19 +253,40 @@ public struct CustomActionDefinition: Equatable, Sendable {
         if let spec = argumentSpecs.removeValue(forKey: old) { argumentSpecs[new] = spec }
     }
 
-    /// Factories the standard `Action` this definition drives (ADR 0021): its
-    /// `arguments` feed the existing `MultiStepAction` engine and its multi-step
-    /// effect fills the collected values into the template as an `openURL` outcome —
-    /// no new outcome case. Returns `nil` when the template carries no `{name}`
-    /// token, the type's defining invariant, so a static link can never masquerade
-    /// as one.
+    /// Factories the standard `Action` this definition drives (ADR 0021, 0030). A
+    /// Custom Action is a URL with **zero or more** slots, and the slot count picks
+    /// the shape:
     ///
-    /// The single-step `effect` is a placeholder (`.none`): a Custom Action always
-    /// runs through the breadcrumb — verb-first (empty) or fallback seed-and-commit
-    /// — never a bare `run(input:)`, exactly as a Shortcut Action that accepts input.
+    /// - **Zero slots** — a *static* Custom Action (the former Quicklink; ADR 0030):
+    ///   its URL is already resolved, so it opens directly on a bare `run(input:)`,
+    ///   wears the `.quicklink` leading glyph, and declares `.quicklink(id:)` content
+    ///   so its long-press menu carries copy/share **and** Edit. It is not
+    ///   fallback-eligible (nothing to seed a query into).
+    /// - **One or more slots** — the breadcrumb-filled Custom Action: its `arguments`
+    ///   feed the `MultiStepAction` engine and its multi-step effect fills the
+    ///   collected values into the template as an `openURL` outcome. Its single-step
+    ///   `effect` is a placeholder (`.none`) — it always runs through the breadcrumb,
+    ///   verb-first (empty) or fallback seed-and-commit, exactly as a Shortcut Action
+    ///   that accepts input — and it declares `.customAction(id:)` content (Edit alone,
+    ///   since its URL only exists once the slots are filled).
+    ///
+    /// Returns `nil` only when a zero-slot template does not parse as a URL — a
+    /// slot-less string the Save gate would already have rejected.
     public func makeAction(id: String) -> Action? {
         let names = orderedTokenNames
-        guard !names.isEmpty else { return nil }
+        guard !names.isEmpty else {
+            // A static (slot-less) Custom Action: the resolved URL opens directly.
+            guard let url = URL(string: template) else { return nil }
+            return Action(
+                id: id,
+                kind: .quicklink,
+                title: name,
+                aliases: aliases,
+                inputTypes: [],
+                outputType: .url,
+                content: .quicklink(id: id)
+            ) { _ in .openURL(url) }
+        }
         let template = self.template
         let arguments = self.arguments
         // The specs aligned to `names` (fill order) — the same order the breadcrumb
@@ -301,9 +322,10 @@ public struct CustomActionDefinition: Equatable, Sendable {
         !name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
     }
 
-    /// Whether the template carries at least one `{name}` slot. A slot-less URL is
-    /// not a Custom Action (it consumes nothing) — the editor gently redirects it
-    /// toward a Quicklink rather than saving it (ADR 0021).
+    /// Whether the template carries at least one `{name}` slot. Not a Save gate any
+    /// more (ADR 0030 — a slot-less URL is a valid *static* Custom Action): the editor
+    /// reads it to decide whether to show the Argument rows and the fallback note,
+    /// both of which apply only to a slotted action.
     public var hasSlot: Bool { !tokenNames.isEmpty }
 
     /// Whether the template parses as a URL **with a scheme** once every slot is
@@ -346,15 +368,16 @@ public struct CustomActionDefinition: Equatable, Sendable {
         }
     }
 
-    /// Whether the definition may be **saved** (ADR 0021): a non-empty name, at least
-    /// one slot, a schemed URL after probe substitution, and non-empty options for
-    /// every choice slot. Fallback eligibility no longer gates Save — it is derived
-    /// from shape and never declared, so any valid Custom Action saves whether or not
-    /// its first argument is free text; a text-first one simply becomes eligible for
-    /// the Fallback list's pool. The runtime keeps its silent no-op on the can't-happen
-    /// fill failure; this predicate is what makes that unreachable.
+    /// Whether the definition may be **saved** (ADR 0021, 0030): a non-empty name, a
+    /// schemed URL after probe substitution, and non-empty options for every choice
+    /// slot. The **slot count may be zero** — a slot-less schemed URL is a valid
+    /// *static* Custom Action (the former Quicklink), so `hasSlot` no longer gates
+    /// Save. Fallback eligibility likewise never gates Save — it is derived from shape,
+    /// so a text-first slotted action simply becomes eligible for the Fallback list's
+    /// pool while a static link is ineligible. The runtime keeps its silent no-op on
+    /// the can't-happen fill failure; this predicate is what makes that unreachable.
     public var isValidForSave: Bool {
-        nameIsValid && hasSlot && urlIsSchemedAfterProbe && choiceOptionsAreValid
+        nameIsValid && urlIsSchemedAfterProbe && choiceOptionsAreValid
     }
 
     /// The characters a filled **value** may carry unescaped: `.urlQueryAllowed`

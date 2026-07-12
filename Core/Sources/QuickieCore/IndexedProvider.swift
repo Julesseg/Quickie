@@ -36,12 +36,12 @@ public struct IndexedProvider: Provider {
 
 extension IndexedProvider {
     /// The built-in command rows the app always indexes (CONTEXT.md → Management
-    /// page): Settings, Quicklinks, Fallbacks, and Indexed Folders, each reached by
-    /// typing its name to surface a full-screen page in place of chrome. Quickie
-    /// ships **no** default Quicklinks and no privileged web search — the default
-    /// web-search Custom Action is seeded into the store as ordinary, deletable
-    /// data (ADR 0021), not here. The Notes/Snippets library commands are wired
-    /// alongside their stored content in the app.
+    /// page): Settings, Custom Actions, Fallbacks, and Indexed Folders, each reached by
+    /// typing its name to surface a full-screen page in place of chrome. No privileged
+    /// web search lives here — the default web-search Custom Action and the default
+    /// static site links (`CatalogSeed`) are seeded into the store as ordinary,
+    /// deletable data (ADR 0021/0030), not here. The Notes/Snippets library commands
+    /// are wired alongside their stored content in the app.
     ///
     /// "Search Files" rides here too (CONTEXT.md → Search Files context; ADR 0014):
     /// it is a command row that enters the scoped file-browsing context, indexed
@@ -50,7 +50,6 @@ extension IndexedProvider {
     public static func builtIns() -> IndexedProvider {
         IndexedProvider(catalog: [
             .openSettings(),
-            .openQuicklinksPage(),
             .openCustomActionsPage(),
             .openFallbacksPage(),
             .searchFiles(),

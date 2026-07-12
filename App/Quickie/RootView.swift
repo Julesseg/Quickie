@@ -10,7 +10,7 @@ import QuickieStoreKit
 /// input, a reversed Result list above it, and tap-to-run. The empty-query state
 /// shows Home — a 2×2 Favorites grid over the Recent list (ADR 0008 / issue #36).
 ///
-/// Management surfaces (Settings, Quicklinks, Fallbacks, the Pile, All Snippets)
+/// Management surfaces (Settings, Custom Actions, Fallbacks, the Pile, All Snippets)
 /// are no longer chrome: each is reached by typing to surface a command row and
 /// presents **full-screen** (ADR 0013 / CONTEXT.md → Management page). The old
 /// top-right gear button and combined manage sheet are gone.
@@ -18,22 +18,20 @@ struct RootView: View {
     @Environment(\.openURL) private var openURL
     @Environment(\.modelContext) private var modelContext
 
-    /// User static Quicklinks from the store feed the index alongside the
+    /// User Custom Actions — URL Actions with zero or more `{name}` slots (CONTEXT.md
+    /// → Custom Action; ADR 0021, 0030): a slotted one the breadcrumb fills, a slot-less
+    /// one a static link that opens directly (the former Quicklink, now folded in). Web
+    /// search is just a default-seeded one of these. They feed the index alongside the
     /// built-in command rows (ADR 0006: index rebuilt from the source of truth).
-    @Query(sort: \StoredQuicklink.createdAt) private var quicklinks: [StoredQuicklink]
-
-    /// The store's Quicklinks as of the last return to `.active` (ADR 0022):
-    /// `@Query` observes only in-process saves, so a Quicklink the Share
-    /// Extension wrote while the app was backgrounded never fires it. Each
-    /// foreground re-fetches the catalog explicitly, and `engine` indexes any
-    /// row `@Query` hasn't seen yet — merged by id, so once `@Query` catches
-    /// up (on the next in-process save) the merge is a no-op.
-    @State private var foregroundQuicklinks: [StoredQuicklink] = []
-
-    /// User Custom Actions — templated, slot-filling Actions whose fallback-flagged
-    /// rows consume the typed query (CONTEXT.md → Custom Action; ADR 0021). Web
-    /// search is just a default-seeded one of these.
     @Query(sort: \StoredCustomAction.createdAt) private var customActions: [StoredCustomAction]
+
+    /// The store's Custom Actions as of the last return to `.active` (ADR 0022):
+    /// `@Query` observes only in-process saves, so a static link the Share Extension
+    /// wrote while the app was backgrounded never fires it. Each foreground re-fetches
+    /// the catalog explicitly, and `engine` indexes any row `@Query` hasn't seen yet —
+    /// merged by id, so once `@Query` catches up (on the next in-process save) the
+    /// merge is a no-op.
+    @State private var foregroundCustomActions: [StoredCustomAction] = []
 
     /// User Snippets feed the same index — copy-out Actions ranked beside every
     /// other capability (issue #6).
@@ -222,30 +220,21 @@ struct RootView: View {
     /// morph in and out of the input's capsule (see `InputBar`, `ClipboardPasteButton`).
     @Namespace private var glassNamespace
 
-    /// The Quicklink catalog the engine indexes: the live `@Query` snapshot
-    /// plus any foreground-fetched row it hasn't seen yet (a Share Extension
-    /// write — ADR 0022). The `modelContext` guard drops rows deleted in-app
-    /// since the fetch (the same invalidated-snapshot trap `livePileEntries`
-    /// documents).
-    private var indexedQuicklinks: [StoredQuicklink] {
-        let known = Set(quicklinks.map(\.id))
-        let unseen = foregroundQuicklinks.filter { $0.modelContext != nil && !known.contains($0.id) }
-        return quicklinks + unseen
+    /// The Custom Action catalog the engine indexes: the live `@Query` snapshot plus
+    /// any foreground-fetched row it hasn't seen yet (a Share Extension write — ADR
+    /// 0022). The `modelContext` guard drops rows deleted in-app since the fetch (the
+    /// same invalidated-snapshot trap `livePileEntries` documents).
+    private var indexedCustomActions: [StoredCustomAction] {
+        let known = Set(customActions.map(\.id))
+        let unseen = foregroundCustomActions.filter { $0.modelContext != nil && !known.contains($0.id) }
+        return customActions + unseen
     }
 
     private var engine: SearchEngine {
-        let storedLinks: [Action] = indexedQuicklinks.compactMap { link in
-            guard let url = URL(string: link.urlString) else { return nil }
-            return Action.quicklink(
-                id: link.id,
-                title: link.title,
-                aliases: link.alias.map { [$0] } ?? [],
-                url: url
-            )
-        }
-        let storedCustomActions: [Action] = customActions.compactMap { custom in
+        let storedCustomActions: [Action] = indexedCustomActions.compactMap { custom in
             // Build from the row's full `definition` — it carries the per-argument
-            // type specs, so the breadcrumb morphs its control per type (issue #96).
+            // type specs, so the breadcrumb morphs its control per type (issue #96),
+            // and a slot-less row factories a static (link) Action (ADR 0030).
             // Reconstructing the definition by hand here silently dropped the specs,
             // leaving every step a plain text field.
             custom.definition.makeAction(id: custom.id)
@@ -290,21 +279,17 @@ struct RootView: View {
                     inlineCap: resolvedInlineCap,
                     disabledFolders: indexedFolders.disabledFolderIDs
                 ),
-                // The built-in management command rows (Settings, Quicklinks,
-                // Fallbacks) — no default links, no privileged web search. No
-                // ProviderID: these are each provider's typed route back to its
-                // page, so they must outlive any kind's disable (issue #67).
+                // The built-in management command rows (Settings, Custom Actions,
+                // Fallbacks) — no privileged web search. No ProviderID: these are each
+                // provider's typed route back to its page, so they must outlive any
+                // kind's disable (issue #67).
                 IndexedProvider.builtIns(),
-                // The user-content catalogs, each attributed to its configurable
-                // kind (issue #67) so the Disabled state can key the kind's
-                // Enabled toggle and each action's instance switch (issue #68)
-                // against it.
-                IndexedProvider(catalog: storedLinks, id: .quicklinks),
-                // Custom Actions are their own configurable kind now (ADR 0021; issue
-                // #94): the catalog attributes to `.customActions`, so the Custom
-                // Actions page's Enabled toggle governs them all — eligible for the
-                // Fallback list or not. The Fallbacks page activates the eligible ones
-                // through `FallbacksStore`'s enabled list, an independent region axis.
+                // Custom Actions are their own configurable kind (ADR 0021, 0030; issue
+                // #94) — both slotted actions and static (slot-less) links, unified here.
+                // The catalog attributes to `.customActions`, so the Custom Actions
+                // page's Enabled toggle governs them all — eligible for the Fallback list
+                // or not. The Fallbacks page activates the eligible ones through
+                // `FallbacksStore`'s enabled list, an independent region axis.
                 IndexedProvider(catalog: storedCustomActions, id: .customActions),
                 IndexedProvider(catalog: storedSnippets + [.newSnippet()], id: .snippets),
                 IndexedProvider(catalog: storedPileEntries + [.saveForLater()], id: .pile),
@@ -749,6 +734,10 @@ struct RootView: View {
             }
             // Seed the default web-search Custom Action once on launch (ADR 0021).
             .task {
+                // Convert any pre-0030 Quicklink rows to slot-less Custom Actions
+                // before seeding, so an already-seeded `seed.link.*` link is present
+                // and not double-inserted (ADR 0030).
+                QuickieStore.migrateQuicklinksToCustomActions(in: modelContext)
                 QuickieStore.seedDefaultCustomActions(in: modelContext)
                 // Collapse same-id Custom Action duplicates to a deterministic
                 // winner (ADR 0023): two devices can each seed the fixed-id web
@@ -870,20 +859,20 @@ struct RootView: View {
                     // the store loads once at launch and rewrites keys whole — the
                     // widget appending directly would be clobbered by the next save.
                     drainWidgetRuns()
-                    // Re-fetch the Quicklink catalog so anything the Share
-                    // Extension saved while backgrounded appears in results
-                    // (ADR 0022: foreground re-index, no cross-process signal).
-                    // Write the @State only when the catalog actually changed:
-                    // an unconditional write invalidates the whole root on
-                    // every activation — including the launch transition,
-                    // where that no-op invalidation raced the first render
-                    // (issue #112's near-deterministic CI crash on this
-                    // branch). A failed fetch keeps the previous catalog —
+                    // Re-fetch the Custom Action catalog so anything the Share
+                    // Extension saved while backgrounded (a static link — ADR
+                    // 0022/0030) appears in results (foreground re-index, no
+                    // cross-process signal). Write the @State only when the
+                    // catalog actually changed: an unconditional write
+                    // invalidates the whole root on every activation — including
+                    // the launch transition, where that no-op invalidation raced
+                    // the first render (issue #112's near-deterministic CI crash
+                    // on this branch). A failed fetch keeps the previous catalog —
                     // resetting to empty would drop already-merged rows.
                     if let fetched = try? modelContext.fetch(
-                        FetchDescriptor<StoredQuicklink>(sortBy: [SortDescriptor(\.createdAt)])
-                    ), fetched.map(\.id) != foregroundQuicklinks.map(\.id) {
-                        foregroundQuicklinks = fetched
+                        FetchDescriptor<StoredCustomAction>(sortBy: [SortDescriptor(\.createdAt)])
+                    ), fetched.map(\.id) != foregroundCustomActions.map(\.id) {
+                        foregroundCustomActions = fetched
                     }
                 }
             }
@@ -901,10 +890,6 @@ struct RootView: View {
                     SnippetEditorView(seed: seed.text)
                 case .editSnippet(let snippet):
                     SnippetEditorView(snippet: snippet)
-                case .editQuicklink(let link):
-                    // The same create/edit form the Quicklinks page presents, applying
-                    // the draft straight to the stored record (SwiftData autosaves).
-                    QuicklinkEditorView(link: link) { draft in draft.apply(to: link) }
                 case .editCustomAction(let action):
                     // The same live-mirroring editor the Custom Actions page presents,
                     // applying the edited definition to the stored record.
@@ -990,7 +975,6 @@ struct RootView: View {
     @ViewBuilder
     private func providerPage(for provider: ProviderID) -> some View {
         switch provider {
-        case .quicklinks: QuicklinksView(enablement: instanceEnablement)
         case .customActions: CustomActionsView(enablement: instanceEnablement)
         case .fallbacks: FallbacksView(store: fallbacks, enablement: instanceEnablement, eligible: eligibleFallbackActions)
         case .snippets: SnippetManagerView(enablement: instanceEnablement)
@@ -1280,14 +1264,13 @@ struct RootView: View {
             revealInFiles(action)
         case .edit:
             // Edit resolves per content: a Shortcut deeplinks into the Shortcuts
-            // app's editor by name; a Snippet, Quicklink, and Custom Action each open
-            // their stored record in the same in-app editor their library page uses.
+            // app's editor by name; a Snippet and a Custom Action (slotted or static —
+            // `.customAction`/`.quicklink` content, ADR 0030) each open their stored
+            // record in the same in-app editor their library page uses.
             switch action.content {
             case .shortcut(let name):
                 editShortcut(name)
-            case .quicklink(let id):
-                editQuicklink(id)
-            case .customAction(let id):
+            case .quicklink(let id), .customAction(let id):
                 editCustomAction(id)
             default:
                 editSnippet(action)
@@ -1324,25 +1307,15 @@ struct RootView: View {
         activeSheet = .editSnippet(snippet)
     }
 
-    /// **Edit** a Quicklink (ADR 0017): resolves the row's `.quicklink(id:)` content
-    /// to its stored record and opens the same create/edit form the Quicklinks page
-    /// uses — reached here straight from a result's long-press. A stale id (the
-    /// Quicklink was deleted) acknowledges rather than opening an empty editor.
-    private func editQuicklink(_ id: String) {
-        guard let link = indexedQuicklinks.first(where: { $0.id == id }) else {
-            flashConfirmation("Quicklink not found")
-            return
-        }
-        activeSheet = .editQuicklink(link)
-    }
-
-    /// **Edit** a Custom Action (ADR 0017): resolves the row's `.customAction(id:)`
-    /// content to its stored record and opens the same live-mirroring editor the
-    /// Custom Actions page uses — reached here straight from a result's long-press. A
-    /// stale id (the Custom Action was deleted) acknowledges rather than opening an
-    /// empty editor.
+    /// **Edit** a Custom Action (ADR 0017): resolves the row's `.customAction(id:)` or
+    /// `.quicklink(id:)` content — a slotted action or a static (slot-less) link, both
+    /// stored as `StoredCustomAction` (ADR 0030) — and opens the same live-mirroring
+    /// editor the Custom Actions page uses, reached here straight from a result's
+    /// long-press. Resolves against `indexedCustomActions` so a link the Share Extension
+    /// just wrote (not yet in `@Query`) still edits. A stale id (the record was deleted)
+    /// acknowledges rather than opening an empty editor.
     private func editCustomAction(_ id: String) {
-        guard let action = customActions.first(where: { $0.id == id }) else {
+        guard let action = indexedCustomActions.first(where: { $0.id == id }) else {
             flashConfirmation("Custom Action not found")
             return
         }
@@ -1722,20 +1695,18 @@ private struct ShareSheet: UIViewControllerRepresentable {
 /// presentation point stays in place as sheets come and go: `composeSnippet`
 /// seeds a brand-new Snippet from typed text (New Snippet), `editSnippet` opens
 /// an existing one for revision (the **Edit** secondary action — ADR 0017).
-/// `editQuicklink` and `editCustomAction` are the same **Edit** verb reaching a
-/// Quicklink's and a Custom Action's stored records, opening the very editors their
-/// library pages use — so a long-press edits an item without visiting its page.
+/// `editCustomAction` is the same **Edit** verb reaching a Custom Action's stored
+/// record — slotted or a static (slot-less) link (ADR 0030) — opening the very editor
+/// its library page uses, so a long-press edits an item without visiting its page.
 private enum ActiveSheet: Identifiable {
     case composeSnippet(ComposeSeed)
     case editSnippet(StoredSnippet)
-    case editQuicklink(StoredQuicklink)
     case editCustomAction(StoredCustomAction)
 
     var id: String {
         switch self {
         case .composeSnippet(let seed): return "compose-snippet-\(seed.id)"
         case .editSnippet(let snippet): return "edit-snippet-\(snippet.id)"
-        case .editQuicklink(let link): return "edit-quicklink-\(link.id)"
         case .editCustomAction(let action): return "edit-custom-action-\(action.id)"
         }
     }

@@ -3,14 +3,15 @@ import Foundation
 /// The Share Extension's classification rules (CONTEXT.md → Share Extension;
 /// ADR 0022) — pure functions with no SwiftData or UIKit dependency, so the
 /// extension stays a thin shell and these run under the Linux `swift test`
-/// gate. This slice (issue #101) carries the URL branch: naming the Quicklink
-/// a shared URL becomes.
+/// gate. This slice (issue #101) carries the URL branch: naming the static Custom
+/// Action a shared URL becomes (ADR 0030 — the former Quicklink).
 public enum ShareClassification {
     /// The branch a shared payload takes once the extension has unpacked it
-    /// (ADR 0022): edit it as a Quicklink seeded from a URL, edit it as a
-    /// Snippet/Pile seeded from text, or refuse an empty payload.
+    /// (ADR 0022): save it as a static Custom Action seeded from a URL (the `.quicklink`
+    /// case — the former Quicklink, ADR 0030), as a Snippet/Pile seeded from text, or
+    /// refuse an empty payload.
     ///
-    /// The Quicklink branch carries a `textFallback`: when the URL came from
+    /// The static-link branch carries a `textFallback`: when the URL came from
     /// plain text that is *itself* a web URL (issue #103), it is the original
     /// shared string, and the sheet — defaulting to the link — offers a switch
     /// to read it as text instead. For a genuine `public.url` attachment the URL

@@ -106,9 +106,9 @@ final class ShareModel {
         self.cancelRequest = cancel
     }
 
-    /// Whether the active sheet has enough to save. The URL branch mirrors the
-    /// in-app Quicklink editor's gate (a name, a URL, and no `{placeholder}` —
-    /// a templated URL is a Custom Action, not a Quicklink); the text branch
+    /// Whether the active sheet has enough to save. The URL branch saves a static
+    /// (slot-less) Custom Action (ADR 0030), so it gates on a name and a URL and — since
+    /// a shared link is static — keeps out a stray `{placeholder}`; the text branch
     /// mirrors the Snippet editor (a title *and* a body) for a Snippet and just
     /// non-empty text for a titleless Pile entry.
     var canSave: Bool {
@@ -264,8 +264,11 @@ final class ShareModel {
             let context = ModelContext(container)
             switch phase {
             case .editingQuicklink:
+                // A shared URL is saved as a slot-less (static) Custom Action — the
+                // former Quicklink, now unified (ADR 0030). Its URL is the template
+                // verbatim; no slots, no argument specs.
                 let alias = quicklinkDraft.alias.trimmingCharacters(in: .whitespacesAndNewlines)
-                context.insert(StoredQuicklink(
+                context.insert(StoredCustomAction(
                     title: quicklinkDraft.title.trimmingCharacters(in: .whitespacesAndNewlines),
                     urlString: quicklinkDraft.urlString.trimmingCharacters(in: .whitespacesAndNewlines),
                     alias: alias.isEmpty ? nil : alias

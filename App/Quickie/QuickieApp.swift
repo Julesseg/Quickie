@@ -66,6 +66,10 @@ struct QuickieApp: App {
         // above under UI testing, a per-run reseed for the fresh in-memory store);
         // RootView's launch task still runs the CloudKit dedupe and favorites
         // reconcile over the now already-seeded catalog.
+        // Convert any pre-0030 Quicklink rows into slot-less Custom Actions *before*
+        // the seed pass, so an already-seeded `seed.link.*` link is present and not
+        // double-inserted (ADR 0030).
+        QuickieStore.migrateQuicklinksToCustomActions(in: container.mainContext)
         QuickieStore.seedDefaultCustomActions(in: container.mainContext)
         // Seed legacy pre-Pile Note rows under UI testing (issue #62; ADR 0018):
         // the flag plants `StoredNote` rows in the fresh in-memory store *before*

@@ -56,7 +56,7 @@ final class InputWrapUITests: XCTestCase {
     /// instead of inserting a newline (issue #63 — CONTEXT.md → Highlighted result).
     /// We type "settings" so the always-present Settings command is the top match,
     /// press Return, and assert its page pushed — proof the newline was intercepted
-    /// as Enter. (Quickie ships no default Quicklinks, so Settings is reliable.)
+    /// as Enter. (Settings is a built-in command row, so it is reliably present.)
     @MainActor
     func testReturnRunsHighlightedResultOnVerticalField() throws {
         let app = launchApp()

@@ -170,38 +170,42 @@ final class SecondaryActionUITests: XCTestCase {
     /// shortcut row is searchable in this suite.
     private static let seededShortcutName = "UITest Shortcut"
 
-    /// Author a Quicklink through its Management page, then long-press its result
-    /// row: the menu offers **Edit** (open its create/edit form) on top of Copy and
-    /// Share — the verb a stored, editable static link earns that a value-only URL
-    /// does not, while it still carries a real URL to copy or share (ADR 0017).
+    /// Author a **static (slot-less) Custom Action** through the Custom Actions page,
+    /// then long-press its result row: the menu offers **Edit** (open its editor) on
+    /// top of Copy and Share — the verb a stored, editable static link earns that a
+    /// value-only URL does not, while it still carries a real, resolved URL to copy or
+    /// share (ADR 0017; ADR 0030 — the former Quicklink).
     @MainActor
-    func testLongPressingAQuicklinkOffersEdit() throws {
+    func testLongPressingAStaticCustomActionOffersEditCopyShare() throws {
         let app = launchApp()
 
         let input = app.textFields["search-input"]
         XCTAssertTrue(input.waitForExistence(timeout: 30))
 
-        // Open the Quicklinks page via its typed command row and add a Quicklink.
+        // Open the Custom Actions page via its typed command row and author a
+        // slot-less (static) link.
         input.tap()
-        input.typeText("quicklinks")
-        let command = app.buttons["builtin.quicklinks-page"]
-        XCTAssertTrue(command.waitForExistence(timeout: 5), "typing 'quicklinks' surfaces the command row")
+        input.typeText("custom actions")
+        let command = app.buttons["builtin.custom-actions-page"]
+        XCTAssertTrue(command.waitForExistence(timeout: 5), "typing 'custom actions' surfaces the command row")
         command.tap()
 
-        let add = app.buttons["add-quicklink"]
-        XCTAssertTrue(add.waitForExistence(timeout: 10), "the Quicklinks page offers an Add button")
+        let add = app.buttons["add-custom-action"]
+        XCTAssertTrue(add.waitForExistence(timeout: 10), "the Custom Actions page offers an Add button")
         add.tap()
 
         let title = "Open GitHub"
-        let titleField = app.textFields["quicklink-title-field"]
-        XCTAssertTrue(titleField.waitForExistence(timeout: 5))
-        titleField.tap()
-        titleField.typeText(title)
-        app.textFields["quicklink-url-field"].tap()
-        app.textFields["quicklink-url-field"].typeText("https://github.com")
-        app.buttons["save-quicklink"].tap()
+        let nameField = app.textFields["custom-action-name-field"]
+        XCTAssertTrue(nameField.waitForExistence(timeout: 5))
+        nameField.tap()
+        nameField.typeText(title)
+        app.textFields["custom-action-url-field"].tap()
+        app.textFields["custom-action-url-field"].typeText("https://github.com")
+        let save = app.buttons["save-custom-action"]
+        XCTAssertTrue(save.isEnabled, "a named, schemed slot-less URL validates for Save (a static link)")
+        save.tap()
 
-        // Pop back to the launcher, search the Quicklink by name, and long-press it.
+        // Pop back to the launcher, search the static link by name, and long-press it.
         let back = app.navigationBars.buttons.firstMatch
         XCTAssertTrue(back.waitForExistence(timeout: 10))
         back.tap()
@@ -217,11 +221,11 @@ final class SecondaryActionUITests: XCTestCase {
 
         // Edit joins the universal Copy / Share and the existing Pin item.
         XCTAssertTrue(app.buttons["Edit"].waitForExistence(timeout: 5),
-                      "a quicklink's long-press menu should offer Edit (open its editor)")
+                      "a static link's long-press menu should offer Edit (open its editor)")
         XCTAssertTrue(app.buttons["Copy"].exists,
-                      "a quicklink still carries a URL, so it should offer Copy")
+                      "a static link carries a resolved URL, so it should offer Copy")
         XCTAssertTrue(app.buttons["Share"].exists,
-                      "a quicklink still carries a URL, so it should offer Share")
+                      "a static link carries a resolved URL, so it should offer Share")
         XCTAssertTrue(app.buttons["Pin as Favorite"].exists,
                       "the content verbs join the existing Pin item in one menu")
         XCTAssertFalse(app.buttons["Reveal in Files"].exists,
