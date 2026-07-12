@@ -46,7 +46,8 @@ struct CustomActionEditorView: View {
                 }
 
                 Section {
-                    TextField("things:///add?title={title}&notes={notes}", text: $def.template)
+                    TextField("things:///add?title={title}&notes={notes}", text: $def.template, axis: .vertical)
+                        .lineLimit(1...6)
                         .textInputAutocapitalization(.never)
                         .autocorrectionDisabled()
                         .accessibilityIdentifier("custom-action-url-field")
