@@ -28,10 +28,9 @@ final class QuickieUITests: XCTestCase {
     }
 
     /// The input auto-focuses on launch, so text typed *without tapping* lands
-    /// in it — and the matching built-in command row appears. Quickie ships no
-    /// default Quicklinks (ADR 0013), so we match the always-present "Settings"
-    /// command row. A strong, non-flaky proxy for "keyboard up, input focused"
-    /// (ADR 0012).
+    /// in it — and the matching built-in command row appears. We match the
+    /// always-present built-in "Settings" command row. A strong, non-flaky proxy
+    /// for "keyboard up, input focused" (ADR 0012).
     @MainActor
     func testInputAutoFocusesOnLaunch() throws {
         let app = launchApp()

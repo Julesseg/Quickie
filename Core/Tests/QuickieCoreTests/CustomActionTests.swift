@@ -65,10 +65,18 @@ struct CustomActionTests {
         #expect(action?.arguments.allSatisfy { $0.contentType == .text } == true)
     }
 
-    @Test("a template with no slot factories no Action")
-    func noSlotNoAction() {
+    @Test("a slot-less template factories a static (link) Custom Action, not a breadcrumb (ADR 0030)")
+    func noSlotMakesStaticLink() {
         let def = CustomActionDefinition(name: "Static", template: "https://x.com")
-        #expect(def.makeAction(id: "x") == nil)
+        let action = def.makeAction(id: "x")
+        // A static (slot-less) Custom Action: opens directly, wears the link glyph,
+        // carries no Arguments, and is not fallback-eligible.
+        #expect(action?.kind == .quicklink)
+        #expect(action?.arguments.isEmpty == true)
+        #expect(action?.inputTypes.isEmpty == true)
+        #expect(action?.isFallbackEligible == false)
+        #expect(action?.content == .quicklink(id: "x"))
+        #expect(action?.run() == .openURL(URL(string: "https://x.com")!))
     }
 
     // MARK: - Slot filling through the breadcrumb (Action → MultiStepAction → outcome)

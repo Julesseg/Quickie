@@ -18,21 +18,21 @@ struct ActionResolutionTests {
 
     @Test("a live indexed action resolves by its id")
     func liveActionResolves() {
-        let engine = SearchEngine(providers: [IndexedProvider(catalog: catalog(), id: .quicklinks)])
+        let engine = SearchEngine(providers: [IndexedProvider(catalog: catalog(), id: .customActions)])
         #expect(engine.action(for: "github")?.id == "github")
     }
 
     @Test("an unknown id resolves to nil")
     func unknownIDResolvesNil() {
-        let engine = SearchEngine(providers: [IndexedProvider(catalog: catalog(), id: .quicklinks)])
+        let engine = SearchEngine(providers: [IndexedProvider(catalog: catalog(), id: .customActions)])
         #expect(engine.action(for: "nope") == nil)
     }
 
     @Test("a disabled kind's action no longer resolves")
     func disabledKindResolvesNil() {
         let engine = SearchEngine(
-            providers: [IndexedProvider(catalog: catalog(), id: .quicklinks)],
-            enablement: ProviderEnablement(disabled: [.quicklinks])
+            providers: [IndexedProvider(catalog: catalog(), id: .customActions)],
+            enablement: ProviderEnablement(disabled: [.customActions])
         )
         #expect(engine.action(for: "github") == nil)
     }
@@ -40,7 +40,7 @@ struct ActionResolutionTests {
     @Test("a disabled instance no longer resolves")
     func disabledInstanceResolvesNil() {
         let engine = SearchEngine(
-            providers: [IndexedProvider(catalog: catalog(), id: .quicklinks)],
+            providers: [IndexedProvider(catalog: catalog(), id: .customActions)],
             disabledInstances: ["github"]
         )
         #expect(engine.action(for: "github") == nil)

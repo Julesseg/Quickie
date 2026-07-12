@@ -22,13 +22,14 @@ public enum ResultContent: Equatable, Hashable, Sendable {
     /// identity is what lets `secondaryActions(for:)` add Edit to a Snippet's
     /// menu while a plain `.text` row keeps only the universal copy/share.
     case snippet(id: String)
-    /// A stored **Quicklink**, keyed by its Action id so the edge can resolve the
-    /// record the user opens for editing (CONTEXT.md → Quicklink). Distinct from a
-    /// bare `.url` value precisely because a Quicklink is a *stored, titled* static
-    /// link the user can **edit** — a Calculator-derived or otherwise value-only URL
-    /// cannot. It still carries a real URL to copy or share (unlike `.customAction`
-    /// or `.shortcut`, whose values only exist once run), so its identity adds
-    /// **Edit** *on top of* the universal copy/share — the Snippet pattern, for a URL.
+    /// A stored **static (slot-less) Custom Action**, keyed by its Action id so the
+    /// edge can resolve the record the user opens for editing (CONTEXT.md → Custom
+    /// Action; ADR 0030 — the former Quicklink). Distinct from a bare `.url` value
+    /// precisely because it is a *stored, titled* static link the user can **edit** — a
+    /// Calculator-derived or otherwise value-only URL cannot. It still carries a real,
+    /// resolved URL to copy or share (unlike a slotted `.customAction` or `.shortcut`,
+    /// whose values only exist once run), so its identity adds **Edit** *on top of* the
+    /// universal copy/share — the Snippet pattern, for a URL.
     case quicklink(id: String)
     /// A stored **Custom Action** (a URL template), keyed by its Action id so the
     /// edge can resolve the record the user opens in the live-mirroring editor
@@ -71,9 +72,9 @@ public enum SecondaryActionKind: Equatable, Hashable, Sendable {
     case share
     case revealInFiles
     /// Open the item in its own editor. Offered for every **user-authored,
-    /// editable** record — a `.snippet` (opened in the Snippet editor), a
-    /// `.quicklink` (its create/edit form) and a `.customAction` (the live-mirroring
-    /// URL-template editor), all resolved by id to the stored record the App opens
+    /// editable** record — a `.snippet` (opened in the Snippet editor), a static
+    /// `.quicklink` and a slotted `.customAction` (both the Custom Actions editor; ADR
+    /// 0030), all resolved by id to the stored record the App opens
     /// in-app — and for a `.shortcut`, where it deeplinks into
     /// `shortcuts://open-shortcut` to open the named shortcut in the Shortcuts app.
     /// Never a bare `.text`/`.url` *value* (a Calculator result, a value-only URL):
@@ -118,11 +119,11 @@ public func secondaryActions(for content: ResultContent, includeDeeplink: Bool =
     case .file:
         contentVerbs = [.copy, .share, .revealInFiles]
     case .snippet, .quicklink:
-        // A Snippet and a Quicklink are each stored, titled records the user can
-        // revise, so each earns Edit on top of the universal copy/share — resolvable
-        // only because the content carries the record's id, unlike a bare `.text`
-        // value or a value-only `.url`. The App resolves the id and opens the
-        // matching in-app editor (Snippet editor / Quicklink form).
+        // A Snippet and a static (slot-less) Custom Action are each stored, titled
+        // records the user can revise, so each earns Edit on top of the universal
+        // copy/share — resolvable only because the content carries the record's id,
+        // unlike a bare `.text` value or a value-only `.url`. The App resolves the id
+        // and opens the matching in-app editor (Snippet editor / Custom Action editor).
         contentVerbs = [.copy, .share, .edit]
     case .shortcut, .customAction:
         // Neither carries a textual value to copy or share — a Shortcut is a pure

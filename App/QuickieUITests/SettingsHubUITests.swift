@@ -35,8 +35,8 @@ final class SettingsHubUITests: XCTestCase {
     }
 
     /// Typing a content provider's name and tapping its command row lands on
-    /// that provider's unified page under the hub (AC #1): the Quicklinks page
-    /// now leads with an Options section above the stored-links list.
+    /// that provider's unified page under the hub (AC #1): the Custom Actions page
+    /// leads with an Options section above the stored-actions list.
     @MainActor
     func testTypingAProviderNameDeeplinksToItsPage() throws {
         let app = launchApp()
@@ -44,15 +44,15 @@ final class SettingsHubUITests: XCTestCase {
         let input = app.textFields["search-input"]
         XCTAssertTrue(input.waitForExistence(timeout: 10))
         input.tap()
-        input.typeText("quicklinks")
+        input.typeText("custom actions")
 
-        let row = app.buttons["builtin.quicklinks-page"]
-        XCTAssertTrue(row.waitForExistence(timeout: 5), "typing 'quicklinks' surfaces the Quicklinks command row")
+        let row = app.buttons["builtin.custom-actions-page"]
+        XCTAssertTrue(row.waitForExistence(timeout: 5), "typing 'custom actions' surfaces the Custom Actions command row")
         row.tap()
 
         XCTAssertTrue(
-            optionsRow(app, "quicklinks").waitForExistence(timeout: 10),
-            "the Quicklinks command must deeplink to the provider page, which leads with its Options section"
+            optionsRow(app, "custom-actions").waitForExistence(timeout: 10),
+            "the Custom Actions command must deeplink to the provider page, which leads with its Options section"
         )
     }
 
@@ -126,8 +126,8 @@ final class SettingsHubUITests: XCTestCase {
         // The Providers section: one navigation row per provider. Calculator
         // sits low in the list and Form rows render lazily, so scroll it into
         // existence before asserting.
-        let quicklinksRow = app.descendants(matching: .any)["settings-provider-quicklinks"].firstMatch
-        XCTAssertTrue(quicklinksRow.waitForExistence(timeout: 10), "the hub lists a Quicklinks provider row")
+        let customActionsRow = app.descendants(matching: .any)["settings-provider-custom-actions"].firstMatch
+        XCTAssertTrue(customActionsRow.waitForExistence(timeout: 10), "the hub lists a Custom Actions provider row")
         let calculatorRow = app.descendants(matching: .any)["settings-provider-calculator"].firstMatch
         var swipes = 0
         while !calculatorRow.exists && swipes < 4 {
@@ -137,15 +137,15 @@ final class SettingsHubUITests: XCTestCase {
         XCTAssertTrue(calculatorRow.exists, "the hub lists a Calculator provider row")
 
         // Tapping the row lands on the same unified page the command row opens.
-        // Scroll back up so the Quicklinks row is hittable again.
-        while !quicklinksRow.isHittable && swipes > 0 {
+        // Scroll back up so the Custom Actions row is hittable again.
+        while !customActionsRow.isHittable && swipes > 0 {
             app.swipeDown()
             swipes -= 1
         }
-        quicklinksRow.tap()
+        customActionsRow.tap()
         XCTAssertTrue(
-            optionsRow(app, "quicklinks").waitForExistence(timeout: 10),
-            "the hub's Quicklinks row must push the same provider page as the typed command"
+            optionsRow(app, "custom-actions").waitForExistence(timeout: 10),
+            "the hub's Custom Actions row must push the same provider page as the typed command"
         )
     }
 }

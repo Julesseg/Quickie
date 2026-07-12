@@ -106,10 +106,16 @@ public enum ManagementPage: Equatable, Hashable, Sendable {
 /// carry a Favorite's kind across the App Group as a stable name; the raw values
 /// are a persisted format, so renaming a case must keep its raw value.
 public enum ActionKind: String, Equatable, Sendable, Codable {
+    /// A **static (slot-less) Custom Action** (CONTEXT.md → Custom Action; ADR 0030):
+    /// a Custom Action whose URL carries no `{slot}`, so it opens directly (the former
+    /// Quicklink). A distinct kind only so its Result row wears the **link** leading
+    /// glyph rather than the slotted action's magnifying-glass — both attribute to the
+    /// one Custom Actions provider. The raw value stays `quicklink` (a persisted format
+    /// the Favorites widget carries; renaming would re-key stored snapshots).
     case quicklink
-    /// A Custom Action (CONTEXT.md → Custom Action; ADR 0021): a user-authored URL
-    /// template whose `{name}` slots become the breadcrumb's Arguments. It absorbs
-    /// the retired Fallback query wholesale — web search is the default-seeded,
+    /// A slotted **Custom Action** (CONTEXT.md → Custom Action; ADR 0021): a user-
+    /// authored URL template whose `{name}` slots become the breadcrumb's Arguments. It
+    /// absorbs the retired Fallback query wholesale — web search is the default-seeded,
     /// fallback-flagged one-Argument instance, no longer a privileged built-in.
     case customAction
     case snippet
@@ -148,9 +154,9 @@ public enum ActionKind: String, Equatable, Sendable, Codable {
     /// management command.
     case searchFiles
     /// A management command row that opens a library/management page it does not
-    /// itself belong to — Quicklinks and Fallbacks. A dedicated kind so a command
-    /// row never wears the same badge as the data rows it governs (a Quicklinks
-    /// command vs a user's Quicklinks, a Fallbacks command vs a Custom Action).
+    /// itself belong to — the Fallbacks page. A dedicated kind so a command row never
+    /// wears the same badge as the data rows it governs (a Fallbacks command vs a
+    /// Custom Action).
     case managementPage
     /// A System provider built-in (CONTEXT.md → System provider; ADR 0029): the
     /// permanent OS-integration action Open iOS Settings. Its own kind so the row
@@ -175,7 +181,7 @@ public enum MainAction: Equatable, Sendable {
     case saveToPile
     /// Open an editor to compose a new Snippet from the typed text.
     case compose
-    /// Open a full-screen management page (Settings, Quicklinks, Fallbacks, the
+    /// Open a full-screen management page (Settings, Custom Actions, Fallbacks, the
     /// Pile, all Snippets).
     case openPage
     /// Open a file surfaced by File Search — the app resolves its bookmark identity
@@ -470,12 +476,13 @@ public enum ReturnKeyLabel: Equatable, Sendable {
 }
 
 extension Action {
-    /// A Quicklink (CONTEXT.md → Quicklink; ADR 0013): a *static* URL that opens
-    /// directly, consuming no typed text and carrying no `{placeholder}`. It
-    /// matches by name like any other Action. The query-consuming, templated
-    /// behaviour lives on the Custom Action (`CustomActionDefinition`), so this type
-    /// has exactly one shape — no auto-detection, no Fallback flag. Quickie ships no
-    /// default Quicklinks; the app builds these from the user's stored static links.
+    /// Builds a **static (slot-less) Custom Action** (CONTEXT.md → Custom Action; ADR
+    /// 0030): a resolved URL that opens directly, consuming no typed text and carrying
+    /// no `{placeholder}` — the former Quicklink shape. It matches by name like any
+    /// other Action and wears the link glyph (`kind: .quicklink`). The query-consuming,
+    /// slotted behaviour is the same concept with arguments (`CustomActionDefinition`),
+    /// which is how the App builds these from stored rows; this factory is the direct
+    /// convenience the engine tests use to construct one.
     public static func quicklink(
         id: String,
         title: String,
@@ -714,20 +721,6 @@ extension Action {
         ) { _ in .openPage(.settings(panel: nil)) }
     }
 
-    /// The "Quicklinks" command (CONTEXT.md → Quicklink, Settings command row):
-    /// deeplinks to the Quicklinks provider page under the hub — settings +
-    /// the stored links on one page (ADR 0019).
-    public static func openQuicklinksPage() -> Action {
-        Action(
-            id: "builtin.quicklinks-page",
-            kind: .managementPage,
-            title: "Quicklinks",
-            aliases: ["links", "manage quicklinks", "bookmarks"],
-            inputTypes: [],
-            outputType: .text
-        ) { _ in .openPage(.settings(panel: .quicklinks)) }
-    }
-
     /// The "Shortcuts" command (CONTEXT.md → Management page; issue #45):
     /// deeplinks to the Shortcuts provider page — the home for imported Shortcut
     /// Actions, with the per-row "accepts input" toggle and the Sync-Shortcut
@@ -746,14 +739,14 @@ extension Action {
     /// The "Custom Actions" command (CONTEXT.md → Custom Action, Settings command
     /// row; ADR 0021, issue #94): deeplinks to the Custom Actions provider page under
     /// the hub — the authoring surface where a URL-template Action is created and
-    /// edited. Distinct from "Fallbacks", which orders the fallback region, and from
-    /// "Quicklinks", which holds static links.
+    /// edited — both slotted actions and static (slot-less) links, unified here (ADR
+    /// 0030). Distinct from "Fallbacks", which orders the fallback region.
     public static func openCustomActionsPage() -> Action {
         Action(
             id: "builtin.custom-actions-page",
             kind: .managementPage,
             title: "Custom Actions",
-            aliases: ["custom action", "url actions", "templates", "url templates"],
+            aliases: ["custom action", "url actions", "templates", "url templates", "links", "bookmarks"],
             inputTypes: [],
             outputType: .text
         ) { _ in .openPage(.settings(panel: .customActions)) }

@@ -8,12 +8,12 @@ import Testing
 // the disableable kind — keeps answering its typed name.
 struct ProviderDisableTests {
 
-    /// A user Quicklink wired the way the app wires it: an indexed catalog
-    /// attributed to the `.quicklinks` kind.
+    /// A user static Custom Action wired the way the app wires it: an indexed catalog
+    /// attributed to the `.customActions` kind.
     private func quicklinksProvider() -> IndexedProvider {
         IndexedProvider(
             catalog: [.quicklink(id: "ql.docs", title: "Docs", url: URL(string: "https://example.com/docs")!)],
-            id: .quicklinks
+            id: .customActions
         )
     }
 
@@ -33,20 +33,20 @@ struct ProviderDisableTests {
 
         // Disabled: the same query finds nothing from the kind — reversibly
         // hidden, its data untouched.
-        let engine = SearchEngine(providers: providers, enablement: disabled(.quicklinks))
+        let engine = SearchEngine(providers: providers, enablement: disabled(.customActions))
         #expect(!engine.results(for: "docs").map(\.id).contains("ql.docs"))
     }
 
     @Test("a disabled provider stays re-enableable by typing its name")
     func disabledProviderKeepsItsSettingsCommandRow() {
         // The Settings command row rides the hub's built-ins — it belongs to no
-        // disableable kind — so disabling Quicklinks must not take away the one
+        // disableable kind — so disabling Custom Actions must not take away the one
         // typed route back to its Enabled toggle (issue #67 AC #2).
         let providers: [Provider] = [IndexedProvider.builtIns(), quicklinksProvider()]
-        let engine = SearchEngine(providers: providers, enablement: disabled(.quicklinks))
+        let engine = SearchEngine(providers: providers, enablement: disabled(.customActions))
 
-        let results = engine.results(for: "quicklinks").map(\.id)
-        #expect(results.contains("builtin.quicklinks-page"))
+        let results = engine.results(for: "custom actions").map(\.id)
+        #expect(results.contains("builtin.custom-actions-page"))
         #expect(!results.contains("ql.docs"))
     }
 
@@ -140,7 +140,7 @@ struct ProviderDisableTests {
         let engine = SearchEngine(
             providers: providers,
             favorites: favorites,
-            enablement: disabled(.quicklinks)
+            enablement: disabled(.customActions)
         )
         #expect(engine.home().favorites.map(\.id) == ["builtin.search-files"])
 
@@ -186,7 +186,7 @@ struct ProviderDisableTests {
             providers: providers,
             frecency: frecency,
             now: now,
-            enablement: disabled(.quicklinks)
+            enablement: disabled(.customActions)
         )
         let recent = engine.home().frecent.map(\.id)
         #expect(!recent.contains("ql.docs"))

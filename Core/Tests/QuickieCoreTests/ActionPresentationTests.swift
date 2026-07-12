@@ -98,7 +98,7 @@ struct ActionPresentationTests {
         #expect(Action.openPilePage().run() == .openPage(.pile))
         #expect(Action.openSnippetsLibrary().run() == .openPage(.settings(panel: .snippets)))
         #expect(Action.openSettings().run() == .openPage(.settings(panel: nil)))
-        #expect(Action.openQuicklinksPage().run() == .openPage(.settings(panel: .quicklinks)))
+        #expect(Action.openCustomActionsPage().run() == .openPage(.settings(panel: .customActions)))
         #expect(Action.openFallbacksPage().run() == .openPage(.settings(panel: .fallbacks)))
         #expect(Action.openFileSearchPage().run() == .openPage(.settings(panel: .fileSearch)))
         // Commands, not Fallbacks — they match by name and don't ride the bottom.

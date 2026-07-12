@@ -70,8 +70,8 @@ struct ShareSheetView: View {
                 Text("URL")
             } footer: {
                 Text(hasPlaceholder
-                     ? "A Quicklink can't contain a {placeholder}."
-                     : "Saved as a Quicklink — opens directly from Quickie.")
+                     ? "A static link can't contain a {placeholder}."
+                     : "Saved as a link — opens directly from Quickie.")
                 .foregroundStyle(hasPlaceholder ? AnyShapeStyle(.red) : AnyShapeStyle(.secondary))
             }
             Section("Alias (optional)") {

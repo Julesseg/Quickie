@@ -202,7 +202,6 @@ extension ProviderID {
     /// so a provider looks like itself on both surfaces.
     var symbol: String {
         switch self {
-        case .quicklinks: return "link"
         case .customActions: return "bolt.horizontal"
         case .fallbacks: return "magnifyingglass"
         case .snippets: return "doc.on.clipboard"

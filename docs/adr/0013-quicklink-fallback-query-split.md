@@ -1,7 +1,8 @@
 # Split Quicklink into static Quicklink + Fallback query
 
-Status: partially superseded by ADR-0021 — the Fallback query half is absorbed
-into Custom Actions; the static-Quicklink half stands.
+Status: superseded. The Fallback query half was absorbed into Custom Actions by
+ADR-0021; the static-Quicklink half is folded into Custom Actions as a slot-less
+Custom Action by ADR-0030 — the Quicklink is no longer a distinct concept.
 
 ## Context
 

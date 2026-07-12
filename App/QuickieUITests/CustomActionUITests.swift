@@ -158,12 +158,13 @@ final class CustomActionUITests: XCTestCase {
         XCTAssertFalse(url.contains("{1}"), "the old numeric token is gone (was: \(url))")
     }
 
-    // MARK: - Editor: Save gating + slot-less Quicklink redirect
+    // MARK: - Editor: Save gating + slot-less static link
 
-    /// Save is gated on a valid definition, and a slot-less URL is redirected toward
-    /// Quicklinks rather than saved (ADR 0021).
+    /// Save is gated on a valid definition. A slot-less schemed URL is a valid **static
+    /// link** (ADR 0030 — the former Quicklink), so it saves and shows the static-link
+    /// note rather than a redirect; adding a slot turns it into a breadcrumb action.
     @MainActor
-    func testSaveIsGatedAndSlotlessURLRedirectsToQuicklinks() throws {
+    func testSaveIsGatedAndSlotlessURLIsAStaticLink() throws {
         let app = launchApp()
         openCustomActionsPage(app)
         openNewEditor(app)
@@ -172,14 +173,14 @@ final class CustomActionUITests: XCTestCase {
         XCTAssertTrue(save.waitForExistence(timeout: 5))
         XCTAssertFalse(save.isEnabled, "Save is disabled with an empty name and no URL")
 
-        // A slot-less URL: the redirect hint shows, and Save stays disabled.
+        // A slot-less schemed URL: the static-link note shows, and Save enables.
         setText("Docs", in: app.textFields["custom-action-name-field"])
         setText("https://example.com", in: app.textFields["custom-action-url-field"])
-        XCTAssertTrue(app.staticTexts["custom-action-quicklink-redirect"].waitForExistence(timeout: 5),
-                      "a slot-less URL is gently redirected toward Quicklinks")
-        XCTAssertFalse(save.isEnabled, "a slot-less URL can't be saved as a Custom Action")
+        XCTAssertTrue(app.staticTexts["custom-action-static-link-note"].waitForExistence(timeout: 5),
+                      "a slot-less URL is a valid static link")
+        XCTAssertTrue(save.isEnabled, "a named, schemed slot-less URL saves as a static link")
 
-        // Add a slot → the definition validates and Save enables.
+        // Add a slot → the argument row appears and Save stays enabled.
         setText("https://example.com/search?q={q}", in: app.textFields["custom-action-url-field"])
         XCTAssertTrue(app.textFields["custom-action-arg.q"].waitForExistence(timeout: 5))
         XCTAssertTrue(save.isEnabled, "a named, slotted, schemed URL validates for Save")
@@ -190,7 +191,7 @@ final class CustomActionUITests: XCTestCase {
     /// There is no fallback toggle anymore (issue #114) — eligibility is derived from
     /// shape. The editor shows only an informational note, which appears once the URL
     /// carries a slot and reads "can be a fallback" while the first argument is free
-    /// text. The slot-less case shows the Quicklink redirect instead of the note.
+    /// text. The slot-less case shows the static-link note instead of the eligibility note.
     @MainActor
     func testEligibilityNoteReflectsFreeTextFirstArgument() throws {
         let app = launchApp()
@@ -201,7 +202,7 @@ final class CustomActionUITests: XCTestCase {
         XCTAssertFalse(app.switches["custom-action-fallback-toggle"].exists,
                        "the fallback toggle is retired — eligibility is derived, not declared")
 
-        // No slot yet → no eligibility note (the Quicklink redirect shows instead).
+        // No slot yet → no eligibility note (the static-link note shows instead).
         setText("https://example.com", in: app.textFields["custom-action-url-field"])
         XCTAssertFalse(app.staticTexts["custom-action-eligibility-note"].exists,
                        "with no slot there is no argument, so no eligibility note")

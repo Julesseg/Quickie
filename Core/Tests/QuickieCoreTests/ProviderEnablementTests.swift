@@ -16,14 +16,14 @@ struct ProviderEnablementTests {
             #expect(enablement.isEnabled(provider))
         }
 
-        enablement.setEnabled(false, for: .quicklinks)
-        #expect(!enablement.isEnabled(.quicklinks))
+        enablement.setEnabled(false, for: .customActions)
+        #expect(!enablement.isEnabled(.customActions))
         // Disable is the reversible off-switch, distinct from delete: only the
         // toggled kind changes, and toggling back restores it.
         #expect(enablement.isEnabled(.snippets))
 
-        enablement.setEnabled(true, for: .quicklinks)
-        #expect(enablement.isEnabled(.quicklinks))
+        enablement.setEnabled(true, for: .customActions)
+        #expect(enablement.isEnabled(.customActions))
     }
 
     @Test("enablement round-trips through raw values, dropping unknown ids")
@@ -42,6 +42,6 @@ struct ProviderEnablementTests {
         let restored = ProviderEnablement(disabledRawValues: ["calculator", "file-search", "not-a-provider"])
         #expect(restored == enablement)
         #expect(!restored.isEnabled(.calculator))
-        #expect(restored.isEnabled(.quicklinks))
+        #expect(restored.isEnabled(.customActions))
     }
 }

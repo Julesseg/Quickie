@@ -128,7 +128,7 @@ struct EligibleActionCatalogTests {
         SearchEngine(
             providers: [
                 IndexedProvider(catalog: snippets, id: .snippets),
-                IndexedProvider(catalog: quicklinks, id: .quicklinks),
+                IndexedProvider(catalog: quicklinks, id: .customActions),
                 IndexedProvider(catalog: pile, id: .pile),
             ],
             enablement: enablement,
@@ -153,7 +153,7 @@ struct EligibleActionCatalogTests {
         // dropped, New Snippet (opens the editor) survives as a valid choice.
         let engine = SearchEngine(
             providers: [
-                IndexedProvider(catalog: [link], id: .quicklinks),
+                IndexedProvider(catalog: [link], id: .customActions),
                 IndexedProvider(catalog: [.saveForLater(), .newSnippet()], id: .pile),
             ]
         )
@@ -175,7 +175,7 @@ struct EligibleActionCatalogTests {
         let eligible = engine(
             snippets: [snippet],
             quicklinks: [a],
-            enablement: ProviderEnablement(disabled: [.quicklinks])
+            enablement: ProviderEnablement(disabled: [.customActions])
         ).eligibleActions()
         // Quicklinks disabled → its instance is gone; the enabled Snippet remains.
         #expect(eligible.map(\.id) == ["s.1"])

@@ -28,14 +28,12 @@ public enum AppGroup {
     nonisolated(unsafe) public static let defaults = UserDefaults(suiteName: identifier) ?? .standard
 }
 
-/// A user-saved Quicklink: a stored *static* URL that opens directly (CONTEXT.md
-/// → Quicklink; ADR 0013). It carries no `{placeholder}` and consumes no typed
-/// text — the query-consuming, templated behaviour now lives on
-/// `StoredCustomAction`. The app persists these in SwiftData and rebuilds the
-/// in-memory index from them on launch (ADR 0006: the store is the source of truth,
-/// the index a derived cache). Quickie seeds a few default, fully deletable
-/// Quicklinks on first launch (`QuicklinkSeed` / `seedDefaultQuicklinks`); the Share
-/// Extension writes one from a shared URL (ADR 0022).
+/// The legacy Quicklink entity (pre-ADR 0030), kept in the schema **only** so
+/// `migrateQuicklinksToCustomActions` can read the rows a previous build stored and
+/// convert each into a slot-less `StoredCustomAction` (a static link — the Quicklink
+/// concept folded into Custom Action). Nothing else creates or reads these; once
+/// migrated, the table stays empty. A stored *static* URL that opened directly: no
+/// `{placeholder}`, no typed text consumed.
 @Model
 public final class StoredQuicklink {
     /// A stable, collision-free identity assigned at creation and persisted with

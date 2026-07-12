@@ -10,14 +10,18 @@ import Foundation
 /// (derived from shape) and *activation* is membership in the ordered enabled list.
 /// The disabled pool is everything eligible but not enabled, so it is never stored.
 public enum FallbackActivation {
-    /// The first-run enabled list, in most-important-first order: the default seeds —
-    /// web search, App Store search, Wikipedia, YouTube, Google Maps — then the two
-    /// permanent captures (CONTEXT.md → Fallback list, "ship pre-enabled"; issues #143,
-    /// #144). Newly eligible Actions are deliberately *not* auto-enabled — only these
-    /// start active; everything else waits in the pool. The seed ids come from
-    /// `CatalogSeed` (the same fixed ids the seed pass writes), the captures' from Core.
+    /// The first-run enabled list, in most-important-first order: the **fallback-
+    /// eligible** default seeds — web search, App Store search, Wikipedia, YouTube
+    /// search, Google Maps — then the two permanent captures (CONTEXT.md → Fallback
+    /// list, "ship pre-enabled"; issues #143, #144). The static site seeds (YouTube,
+    /// Gmail, GitHub; ADR 0030) are **excluded** — they carry no free-text slot, so
+    /// they are ineligible by shape and never enter the Fallback list. Newly eligible
+    /// Actions are deliberately *not* auto-enabled — only these start active; everything
+    /// else waits in the pool. The seed ids come from `CatalogSeed` (the same fixed ids
+    /// the seed pass writes), the captures' from Core.
     public static func firstRunEnabledIDs() -> [String] {
-        CatalogSeed.all.map(\.id) + [Action.saveForLaterID, Action.newSnippetID]
+        CatalogSeed.all.filter(\.definition.isFallbackEligible).map(\.id)
+            + [Action.saveForLaterID, Action.newSnippetID]
     }
 
     /// One-time migration from the retired two-fact model (an ordered list plus a

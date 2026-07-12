@@ -11,7 +11,7 @@ import Testing
 // `AppEntity` + dynamic query is a thin shell that reads this list.
 struct BridgedActionTests {
 
-    /// A Quicklink catalog attributed to the `.quicklinks` kind, so its Enabled
+    /// A static Custom Action catalog attributed to the `.customActions` kind, so its Enabled
     /// toggle and per-instance disable can be exercised — the same wiring the App's
     /// `engine` builds.
     private func engine(
@@ -23,7 +23,7 @@ struct BridgedActionTests {
     ) -> SearchEngine {
         SearchEngine(
             providers: [
-                IndexedProvider(catalog: quicklinks, id: .quicklinks),
+                IndexedProvider(catalog: quicklinks, id: .customActions),
                 IndexedProvider(catalog: customActions, id: .customActions),
             ],
             favorites: favorites,
@@ -96,7 +96,7 @@ struct BridgedActionTests {
     @Test("disabling a favorited Action's kind drops it from the set (but keeps the pin)")
     func disabledFavoriteKindExcludesFavorite() {
         var enablement = ProviderEnablement()
-        enablement.setEnabled(false, for: .quicklinks)
+        enablement.setEnabled(false, for: .customActions)
         let link = Action.quicklink(id: "ql.docs", title: "Docs", url: URL(string: "https://docs.example")!)
         let bridged = engine(quicklinks: [link], favorites: ["ql.docs"], enablement: enablement).bridgedActions()
         #expect(bridged.isEmpty)

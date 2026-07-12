@@ -11,11 +11,12 @@ import Foundation
 /// provider inside it, which is what makes it non-disableable by construction
 /// (there is no identity for a disable switch to key off).
 public enum ProviderID: String, CaseIterable, Equatable, Hashable, Sendable {
-    case quicklinks
-    /// User-authored **Custom Actions** (CONTEXT.md → Custom Action; ADR 0021):
-    /// URL-template Actions whose `{name}` slots the breadcrumb fills. Its own
-    /// configurable kind — the authoring surface is the Custom Actions Management
-    /// page (issue #94); the Fallbacks page stays the fallback-region ordering surface.
+    /// User-authored **Custom Actions** (CONTEXT.md → Custom Action; ADR 0021, 0030):
+    /// URL Actions with **zero or more** `{name}` slots — a slotted one the breadcrumb
+    /// fills, a slot-less one a static link that opens directly (the former Quicklink,
+    /// now folded in). Its own configurable kind — the authoring surface is the Custom
+    /// Actions Management page (issue #94); the Fallbacks page stays the fallback-region
+    /// ordering surface. The retired `.quicklinks` provider merged in here (ADR 0030).
     case customActions = "custom-actions"
     case fallbacks
     case snippets
@@ -36,7 +37,6 @@ public enum ProviderID: String, CaseIterable, Equatable, Hashable, Sendable {
     /// The user-facing name: the Providers list row and the page title.
     public var displayName: String {
         switch self {
-        case .quicklinks: return "Quicklinks"
         case .customActions: return "Custom Actions"
         case .fallbacks: return "Fallbacks"
         case .snippets: return "Snippets"

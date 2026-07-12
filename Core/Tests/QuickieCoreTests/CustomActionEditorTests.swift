@@ -192,16 +192,20 @@ struct CustomActionEditorTests {
         #expect(!blank.isValidForSave)
     }
 
-    @Test("a slot-less URL fails the slot check — redirected toward a Quicklink")
-    func slotlessURLHasNoSlot() {
-        // A URL with no `{name}` token isn't a Custom Action (it consumes nothing);
-        // the editor gently redirects it toward Quicklinks instead of saving it.
+    @Test("a slot-less URL is a valid static (link) Custom Action — no slot required (ADR 0030)")
+    func slotlessURLIsValidStaticLink() {
+        // A schemed URL with no `{name}` token is a static Custom Action (the former
+        // Quicklink): it consumes nothing and opens directly, so it saves without a
+        // slot. `hasSlot` still reports false — the editor reads it to hide the
+        // Argument rows and the fallback note — but it no longer gates Save.
         let slotless = CustomActionDefinition(name: "GitHub", template: "https://github.com")
         #expect(!slotless.hasSlot)
-        #expect(!slotless.isValidForSave)
+        #expect(slotless.isValidForSave)
+        #expect(!slotless.isFallbackEligible)
 
         let slotted = CustomActionDefinition(name: "Search", template: "https://x.com/?q={q}")
         #expect(slotted.hasSlot)
+        #expect(slotted.isValidForSave)
     }
 
     @Test("the URL must parse with a scheme after the slots are probe-filled")
