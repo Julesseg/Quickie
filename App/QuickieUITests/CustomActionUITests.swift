@@ -343,11 +343,18 @@ final class CustomActionUITests: XCTestCase {
                       "the authored Custom Action surfaces as a fallback row")
         row.tap()
 
-        // The one-tap run resolves the query: the input clears and Home returns. Before
-        // the completion-driven clear, the typed text lingered — the result list stayed
-        // up — because the immediate completion netted no `isActive` change.
-        XCTAssertTrue(app.staticTexts["home-placeholder"].waitForExistence(timeout: 5),
-                      "running the single-slot fallback clears the input back to Home")
+        // The one-tap run resolves the query: the launcher input clears back to a clean
+        // Home (and with it, the Pending query Live Activity ends). We assert the field's
+        // own value rather than Home's placeholder — by now Frecency has recorded
+        // selections, so Home shows the Recent list, not the empty placeholder. Requiring
+        // `exists` too keeps a stray breadcrumb from passing on a missing field. Before
+        // the completion-driven clear the typed text lingered in the input, because the
+        // immediate completion netted no observable `isActive` change.
+        let cleared = expectation(
+            for: NSPredicate(format: "exists == true AND NOT (value CONTAINS[c] %@)", "hello"),
+            evaluatedWith: input
+        )
+        wait(for: [cleared], timeout: 5)
     }
 
     /// Sets an argument row's type via its menu type picker (issue #96): tap the menu,
