@@ -293,6 +293,70 @@ final class CustomActionUITests: XCTestCase {
         )
     }
 
+    // MARK: - Running a one-tap fallback resolves the query
+
+    /// Running a **single-slot** fallback Custom Action completes in one tap — the
+    /// seed-and-commit finishes inside the capture's `beginSession` without the
+    /// breadcrumb ever taking over — and that run must **resolve the query** like any
+    /// main action (CONTEXT.md → Main action): the input clears back to a clean Home.
+    /// This is the case the `isActive` clear misses (the capture flips active
+    /// true→false in one tick, netting no observable change), so it exercises the
+    /// completion-driven clear directly. Uses a `things:///` scheme so the edge open is
+    /// a no-op in a simulator without the app installed and the launcher stays put.
+    @MainActor
+    func testSingleSlotFallbackRunClearsInput() throws {
+        let app = launchApp()
+        openCustomActionsPage(app)
+        openNewEditor(app)
+
+        setText("Quick Search", in: app.textFields["custom-action-name-field"])
+        setText("things:///search?q={q}", in: app.textFields["custom-action-url-field"])
+
+        let save = app.buttons["save-custom-action"]
+        XCTAssertTrue(save.isEnabled, "the single-slot Custom Action validates for Save")
+        save.tap()
+
+        // The authored row sorts last (newest); scroll it into view, then pop back.
+        let authored = app.staticTexts["Quick Search"]
+        var scrolls = 0
+        while !authored.exists && scrolls < 6 {
+            app.swipeUp()
+            scrolls += 1
+        }
+        XCTAssertTrue(authored.waitForExistence(timeout: 10),
+                      "the authored Custom Action is listed on the Management page")
+        goBackHome(app)
+
+        // Activate it as a fallback (its free-text single slot makes it eligible) so a
+        // typed query seeds-and-commits it in one tap.
+        activateAsFallback(app, title: "Quick Search")
+
+        let input = app.textFields["search-input"]
+        XCTAssertTrue(input.waitForExistence(timeout: 10))
+        input.tap()
+        input.typeText("hello world")
+
+        let row = app.buttons.matching(
+            NSPredicate(format: "label CONTAINS[c] %@", "Quick Search")
+        ).firstMatch
+        XCTAssertTrue(row.waitForExistence(timeout: 5),
+                      "the authored Custom Action surfaces as a fallback row")
+        row.tap()
+
+        // The one-tap run resolves the query: the launcher input clears back to a clean
+        // Home (and with it, the Pending query Live Activity ends). We assert the field's
+        // own value rather than Home's placeholder — by now Frecency has recorded
+        // selections, so Home shows the Recent list, not the empty placeholder. Requiring
+        // `exists` too keeps a stray breadcrumb from passing on a missing field. Before
+        // the completion-driven clear the typed text lingered in the input, because the
+        // immediate completion netted no observable `isActive` change.
+        let cleared = expectation(
+            for: NSPredicate(format: "exists == true AND NOT (value CONTAINS[c] %@)", "hello"),
+            evaluatedWith: input
+        )
+        wait(for: [cleared], timeout: 5)
+    }
+
     /// Sets an argument row's type via its menu type picker (issue #96): tap the menu,
     /// then the option. Element-type-agnostic on the picker, since a Form menu Picker
     /// surfaces as a button on most OS versions but not all.

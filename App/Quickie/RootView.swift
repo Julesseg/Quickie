@@ -699,6 +699,14 @@ struct RootView: View {
             .onChange(of: capture.isActive) { _, active in
                 if active { query = "" }
             }
+            // A completed capture **resolves the query** like any main action
+            // (CONTEXT.md → Main action): clear the input back to a clean Home and — via
+            // `pendingActivityPreview` going nil — end the Pending query Live Activity.
+            // The `isActive` clear above covers a capture that stays open (its query
+            // becomes the breadcrumb), but a one-slot fallback Custom Action (web search)
+            // completes inside `beginSession`, flipping `isActive` true→false with no net
+            // change, so it needs this separate completion signal to clear.
+            .onChange(of: capture.completions) { _, _ in query = "" }
             // Flash the brief confirmation a completed capture reports (issue #37),
             // the same non-blocking acknowledgement as a copy-out.
             .onChange(of: capture.confirmation) { _, new in
