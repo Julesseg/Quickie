@@ -109,24 +109,15 @@ struct HomeView: View {
         }
         .padding(.bottom, 16)
         .frame(maxWidth: .infinity)
-        // The progressive-blur band: a soft material that fades out at its lower
-        // edge so the Recent list dissolves under it rather than meeting a hard
-        // line (CONTEXT.md → Home; ADR 0010). It bleeds into the status bar as one
-        // cohesive frame (`statusBarBleed`) so it slides as a single block with the
-        // rest of Home rather than leaving its status-bar band anchored behind.
+        // The progressive-blur band: a raw, untinted blur (`VariableBlur`) whose
+        // radius eases to zero at its lower edge, so the Recent list sharpens out
+        // from under the grid rather than meeting a hard line — the blur alone
+        // separates the layers, with no material wash (CONTEXT.md → Home; ADR
+        // 0010). It bleeds into the status bar as one cohesive frame
+        // (`statusBarBleed`) so it slides as a single block with the rest of Home
+        // rather than leaving its status-bar band anchored behind.
         .statusBarBleed(topPadding: 12) {
-            Rectangle()
-                .fill(.ultraThinMaterial)
-                .mask {
-                    LinearGradient(
-                        stops: [
-                            .init(color: .black, location: 0.0),
-                            .init(color: .black, location: 0.72),
-                            .init(color: .clear, location: 1.0),
-                        ],
-                        startPoint: .top, endPoint: .bottom
-                    )
-                }
+            VariableBlur()
         }
     }
 
