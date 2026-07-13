@@ -65,6 +65,11 @@ struct HomeView: View {
 
                 if !gridFavorites.isEmpty {
                     favoritesGrid
+                } else {
+                    // No grid to carry the blur band, but the Recent list still
+                    // scrolls under the status bar — the bare band keeps the
+                    // status bar readable over it.
+                    StatusBarBlurBand()
                 }
             }
         }
