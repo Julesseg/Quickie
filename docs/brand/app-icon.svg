@@ -1,0 +1,39 @@
+<!-- Quickie app icon — "Orbital Q (Glide)".
+     A single continuous trajectory: the trail fades in around a tilted elliptical
+     orbit, sweeps counterclockwise around the warm mass at the center of gravity,
+     and releases exactly at the bottom of the orbit — where the tangent runs flat —
+     skimming out beneath the bowl into a small arrow. Bowl + tail spell a Q; the
+     motion tells the launcher story (orbit, choose, go).
+
+     This is the full-bleed 1:1 source. iOS applies the squircle mask itself, so
+     there are no rounded corners here. The asset-catalog PNGs are rendered from
+     this file at 1024×1024:
+       - light:  as-is (opaque)
+       - dark:   glyph only, transparent background
+       - tinted: glyph in grayscale, transparent background -->
+<svg width="1024" height="1024" viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#2E1A5E"/>
+      <stop offset="1" stop-color="#0F0726"/>
+    </linearGradient>
+    <radialGradient id="glow" cx="0.5" cy="0.5" r="0.5">
+      <stop offset="0" stop-color="#FFC94F" stop-opacity="0.55"/>
+      <stop offset="1" stop-color="#FFC94F" stop-opacity="0"/>
+    </radialGradient>
+  </defs>
+  <rect width="100" height="100" fill="url(#bg)"/>
+  <g transform="rotate(14 50 45)">
+    <circle cx="50" cy="45" r="14" fill="url(#glow)"/>
+    <circle cx="50" cy="45" r="6.5" fill="#FFC94F"/>
+    <g stroke="#CBB8FF" stroke-linecap="round" stroke-linejoin="round" fill="none">
+      <ellipse cx="50" cy="45" rx="27" ry="17" stroke-width="5.5" opacity="0.18"/>
+      <path d="M63.5 30.3 A27 17 0 1 0 50 62" stroke-width="6" opacity="0.45"/>
+      <path d="M26.6 53.5 A27 17 0 0 0 50 62" stroke-width="6.5" opacity="0.9"/>
+    </g>
+    <g stroke="#FFFFFF" stroke-width="6.5" stroke-linecap="round" stroke-linejoin="round" fill="none" opacity="0.95">
+      <line x1="50" y1="62" x2="77" y2="62"/>
+      <path d="M75 66.5 L82 62 L75 57.5"/>
+    </g>
+  </g>
+</svg>
