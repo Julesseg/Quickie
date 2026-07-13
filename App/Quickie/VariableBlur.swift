@@ -16,7 +16,7 @@ import UIKit
 /// over its frame rather than crashing or re-tinting.
 struct VariableBlur: UIViewRepresentable {
     /// The blur radius at the fully-blurred (top) edge.
-    var maxRadius: CGFloat = 20
+    var maxRadius: CGFloat = 10
 
     func makeUIView(context: Context) -> VariableBlurUIView {
         VariableBlurUIView(maxRadius: maxRadius)
