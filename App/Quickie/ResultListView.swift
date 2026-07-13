@@ -100,6 +100,44 @@ struct ResultListView: View {
                 onScrollActive(phase == .interacting || phase == .decelerating)
             }
         }
+        // Weak matches scroll up under the status bar; without a band the status
+        // bar sits directly on row text and both turn unreadable. Anchored inside
+        // the list so it slides out with it as one block during a capture
+        // transition (`statusBarBleed`), like the Home Favorites band.
+        .overlay(alignment: .top) {
+            StatusBarBlurBand()
+        }
+    }
+}
+
+/// The bare progressive-blur band behind the status bar: solid at the screen's
+/// top edge, fading clear just below the status area so scrolling content
+/// dissolves under it rather than colliding with the status bar's text. The same
+/// gradient-masked material the breadcrumb bars float on (kept private there),
+/// but with no content riding it — shared by the surfaces that scroll to the top
+/// with no chrome of their own (the Result list, a grid-less Home).
+struct StatusBarBlurBand: View {
+    var body: some View {
+        Color.clear
+            .frame(height: 0)
+            .statusBarBleed(topPadding: 16) {
+                Rectangle()
+                    .fill(.regularMaterial)
+                    .mask(
+                        LinearGradient(
+                            stops: [
+                                .init(color: .black, location: 0),
+                                .init(color: .black, location: 0.6),
+                                .init(color: .clear, location: 1),
+                            ],
+                            startPoint: .top,
+                            endPoint: .bottom
+                        )
+                    )
+            }
+            // Purely decorative — it must never swallow a tap or a scroll that
+            // starts under the status area.
+            .allowsHitTesting(false)
     }
 }
 
