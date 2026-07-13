@@ -112,17 +112,19 @@ struct ResultListView: View {
 
 /// The bare progressive-blur band behind the status bar: solid at the screen's
 /// top edge, fading clear just below the status area so scrolling content
-/// dissolves under it rather than colliding with the status bar's text. The same
-/// gradient-masked material the breadcrumb bars float on (kept private there),
+/// dissolves under it rather than colliding with the status bar's text. The
+/// gradient-masked-material idiom the breadcrumb bars use (kept private there),
 /// but with no content riding it — shared by the surfaces that scroll to the top
-/// with no chrome of their own (the Result list, a grid-less Home).
+/// with no chrome of their own (the Result list, a grid-less Home). Ultra-thin,
+/// like Home's Favorites band: with nothing floating on it, the blur alone
+/// separates the status bar from the rows — a heavier wash would read as chrome.
 struct StatusBarBlurBand: View {
     var body: some View {
         Color.clear
             .frame(height: 0)
             .statusBarBleed(topPadding: 16) {
                 Rectangle()
-                    .fill(.regularMaterial)
+                    .fill(.ultraThinMaterial)
                     .mask(
                         LinearGradient(
                             stops: [
