@@ -23,5 +23,6 @@ struct QuickieWidgetBundle: WidgetBundle {
         ActionsWidget()
         QuickCaptureControl()
         ActionControl()
+        PendingQueryLiveActivity()
     }
 }

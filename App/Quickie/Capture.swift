@@ -123,6 +123,15 @@ final class CaptureModel {
     /// fresh id so repeats still register as a change.
     private(set) var confirmation: CaptureConfirmation?
 
+    /// Bumped each time a capture **runs to completion** — the final-slot commit, or a
+    /// one-tap seed-and-commit that finishes inside `beginSession`. Running a capture's
+    /// outcome resolves the query like any main action (CONTEXT.md → Main action), so
+    /// the launcher clears the input off this signal. `isActive` alone can't carry it:
+    /// a one-slot fallback (web search) flips `isActive` true→false in a single tick, so
+    /// its completion nets no observable `isActive` change — the input, and the Pending
+    /// query Live Activity mirroring it, would otherwise linger past the run.
+    private(set) var completions = 0
+
     /// Whether a capture is in progress (the center area shows its control).
     var isCapturing: Bool { session != nil }
     /// Whether the capture owns the bottom region — an active session, the primer,
@@ -336,6 +345,11 @@ final class CaptureModel {
             // already returned to search.
             let capture = self.capture
             cancel()
+            // Signal the completed run so the launcher resolves the query (clear the
+            // input, end the Live Activity). Bumped even for a one-tap completion that
+            // never nets an `isActive` change — the whole reason `isActive` can't carry
+            // this. Set after `cancel` so any `isActive` observer runs first.
+            completions += 1
             if let capture {
                 Task { confirmation = await capture.perform(outcome) }
             }

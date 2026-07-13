@@ -17,6 +17,14 @@
 	  device changes the private database, so SwiftData can import in the
 	  background instead of only on next foreground.
 	-->
+	<!--
+	  The Pending-query Live Activity (issue #152; ADR 0031): while the
+	  30-second window is open, the unfinished query is glanceable on the Lock
+	  Screen / Dynamic Island. The app requests/ends the activity; the widget
+	  extension renders it.
+	-->
+	<key>NSSupportsLiveActivities</key>
+	<true/>
 	<key>UIBackgroundModes</key>
 	<array>
 		<string>remote-notification</string>

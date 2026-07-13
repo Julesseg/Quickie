@@ -35,4 +35,23 @@ public struct ClipboardPrefill: Equatable, Sendable {
         // the launch.
         self.isChipOffered = isEnabled && clipboardHasText && isHome && !hasBeenUsed
     }
+
+    /// The hand-off decision for a tapped paste: the query the pasted content
+    /// should seed — edge-trimmed of copy artifacts like a dragged-along trailing
+    /// newline, interior whitespace intact — or `nil` when the paste turned out
+    /// to be a dud (empty or whitespace-only, i.e. nothing visible to seed).
+    ///
+    /// The offer above is decided from metadata alone, and `hasStrings` is blind
+    /// to *what* the string is — an app that "clears" the clipboard by writing
+    /// an empty string still reports text present, so the chip can be offered
+    /// with nothing usable behind it. The content itself arrives only with the
+    /// user's tap, which makes this the first moment the dud can be detected.
+    /// On a dud the host should withdraw the chip (the metadata was wrong)
+    /// *without* burning the once-per-launch offer — see
+    /// `ClipboardPrefillModel.noteEmptyPaste()` — so a later real copy can
+    /// re-offer it.
+    public static func seededQuery(fromPasted text: String) -> String? {
+        let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
+        return trimmed.isEmpty ? nil : trimmed
+    }
 }
