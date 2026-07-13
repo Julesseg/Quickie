@@ -109,7 +109,7 @@ public enum ActionKind: String, Equatable, Sendable, Codable {
     /// A **static (slot-less) Custom Action** (CONTEXT.md → Custom Action; ADR 0030):
     /// a Custom Action whose URL carries no `{slot}`, so it opens directly (the former
     /// Quicklink). A distinct kind only so its Result row wears the **link** leading
-    /// glyph rather than the slotted action's magnifying-glass — both attribute to the
+    /// glyph rather than the slotted action's curly-braces — both attribute to the
     /// one Custom Actions provider. The raw value stays `quicklink` (a persisted format
     /// the Favorites widget carries; renaming would re-key stored snapshots).
     case quicklink

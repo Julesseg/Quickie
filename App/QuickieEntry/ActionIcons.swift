@@ -18,7 +18,11 @@ extension ActionKind {
     var symbol: String {
         switch self {
         case .quicklink: return "link"
-        case .customAction: return "magnifyingglass"
+        // A Custom Action is defined by its `{slot}` tokens (ADR 0021) — the
+        // braces are its identity. Not a magnifying glass: that read as a
+        // leftover default next to the brand mark, and search is just one of
+        // the things a Custom Action does.
+        case .customAction: return "curlybraces"
         case .snippet: return "doc.on.clipboard"
         case .pile: return "tray.full"
         case .shortcut: return "square.stack.3d.up"
