@@ -49,4 +49,39 @@ struct ClipboardPrefillTests {
         let prefill = ClipboardPrefill(isEnabled: false, clipboardHasText: true, isHome: true)
         #expect(prefill.isChipOffered == false)
     }
+
+    // The offer is decided from metadata alone (`hasStrings`), which is blind to
+    // *what* the string is: an app that "clears" the clipboard by writing "" or
+    // a copied item that expired still reports text present. The truth arrives
+    // only with the user's tap — so the hand-off, not the offer, must decide
+    // whether the paste actually seeds the input.
+
+    @Test("a tapped paste with real text seeds the query with it")
+    func pasteWithTextSeedsQuery() {
+        #expect(ClipboardPrefill.seededQuery(fromPasted: "buy milk") == "buy milk")
+    }
+
+    @Test("a tapped paste that delivers an empty string seeds nothing")
+    func emptyPasteSeedsNothing() {
+        // The "chip with nothing behind it" case: an app cleared the clipboard
+        // by writing "" (or the copied item expired), `hasStrings` still said
+        // text was present, the chip was offered, and the tap delivered nothing.
+        #expect(ClipboardPrefill.seededQuery(fromPasted: "") == nil)
+    }
+
+    @Test("a paste of only whitespace seeds nothing")
+    func whitespacePasteSeedsNothing() {
+        // Seeding "   " or "\n" would leave Home for a visually empty query —
+        // to the user, indistinguishable from "nothing pasted". A paste with no
+        // visible content is a dud, same as the empty string.
+        #expect(ClipboardPrefill.seededQuery(fromPasted: "  \n\t ") == nil)
+    }
+
+    @Test("copy artifacts at the edges are trimmed; interior whitespace is kept")
+    func pasteIsEdgeTrimmed() {
+        // Copying a line commonly drags a trailing newline along; the single-line
+        // query shouldn't inherit it. Only the edges are cleaned — the text
+        // itself is the user's and stays intact.
+        #expect(ClipboardPrefill.seededQuery(fromPasted: " buy milk\n") == "buy milk")
+    }
 }

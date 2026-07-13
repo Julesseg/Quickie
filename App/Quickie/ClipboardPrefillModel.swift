@@ -50,6 +50,17 @@ final class ClipboardPrefillModel {
         hasBeenUsed = true
     }
 
+    /// Records that a tapped paste turned out to be a dud — `hasStrings` said
+    /// text was present, but the content the tap delivered had nothing to seed
+    /// (an app "cleared" the clipboard by writing "", the copied item expired
+    /// mid-session, or the read failed). Withdraws the chip by correcting the
+    /// stale metadata answer, deliberately *without* touching `hasBeenUsed`:
+    /// the once-per-launch offer wasn't taken, so copying real text later (and
+    /// the `didBecomeActive` re-check that notices it) can offer the chip again.
+    func noteEmptyPaste() {
+        clipboardHasText = false
+    }
+
     /// The silent metadata check. `hasStrings` inspects only whether text is
     /// present — no content read, no banner.
     private func refresh() {

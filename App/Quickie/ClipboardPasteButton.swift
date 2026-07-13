@@ -126,12 +126,19 @@ final class PasteReceiverView: UIView {
     }
 
     override func paste(itemProviders: [NSItemProvider]) {
+        // A tap that can deliver no text still reaches the host as "" — the dud
+        // signal — so the chip is withdrawn instead of sitting there absorbing
+        // taps that visibly do nothing (the host decides via
+        // `ClipboardPrefill.seededQuery(fromPasted:)`).
         guard let provider = itemProviders.first(where: { $0.canLoadObject(ofClass: NSString.self) })
-        else { return }
+        else {
+            onPaste?("")
+            return
+        }
         // Reached only on an explicit tap of the system paste control, so this is
         // the first and only moment any content is read.
         provider.loadObject(ofClass: NSString.self) { [weak self] object, _ in
-            guard let text = object as? String else { return }
+            let text = (object as? String) ?? ""
             DispatchQueue.main.async { self?.onPaste?(text) }
         }
     }
