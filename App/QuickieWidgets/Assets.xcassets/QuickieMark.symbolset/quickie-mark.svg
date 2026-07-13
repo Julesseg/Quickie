@@ -1,0 +1,23 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg width="3300" height="2200" viewBox="0 0 3300 2200" xmlns="http://www.w3.org/2000/svg">
+ <g id="Notes">
+  <rect height="2200" width="3300" fill="white" opacity="0"/>
+  <text style="font-family: sans-serif; font-size: 40px;" x="150" y="2130">Quickie mark — orbital Q (glide). Generated from docs/brand/app-icon.svg.</text>
+ </g>
+ <g id="Guides">
+  <line id="Capline-S" x1="263" y1="1056" x2="735" y2="1056" stroke="#27AAE1" stroke-width="0.5"/>
+  <line id="Baseline-S" x1="263" y1="1556" x2="735" y2="1556" stroke="#27AAE1" stroke-width="0.5"/>
+  <line id="Capline-M" x1="1391" y1="1056" x2="1863" y2="1056" stroke="#27AAE1" stroke-width="0.5"/>
+  <line id="Baseline-M" x1="1391" y1="1556" x2="1863" y2="1556" stroke="#27AAE1" stroke-width="0.5"/>
+  <line id="Capline-L" x1="2519" y1="1056" x2="2991" y2="1056" stroke="#27AAE1" stroke-width="0.5"/>
+  <line id="Baseline-L" x1="2519" y1="1556" x2="2991" y2="1556" stroke="#27AAE1" stroke-width="0.5"/>
+ </g>
+ <g id="Symbols">
+  <g id="Regular-M">
+   <path d="M1888.46 1337.66 A272.25 182.25 14 0 1 1360.14 1205.94 A272.25 182.25 14 0 1 1888.46 1337.66 Z M1831.7 1323.51 A213.75 123.75 14 0 1 1416.9 1220.09 A213.75 123.75 14 0 1 1831.7 1323.51 Z" fill-rule="evenodd"/>
+   <circle cx="1624.3" cy="1271.8" r="58.5"/>
+   <path d="M1559.43 1383.16 L1838.88 1452.84 L1824.72 1509.6 L1545.28 1439.93 Z"/>
+   <path d="M1897.3 1497.55 L1791.37 1401.57 L1758.71 1532.56 Z"/>
+  </g>
+ </g>
+</svg>

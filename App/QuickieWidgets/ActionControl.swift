@@ -53,7 +53,14 @@ private struct ActionControlLabel: View {
         Label {
             Text(action?.title ?? "Quickie")
         } icon: {
-            Image(systemName: action?.glyph ?? QuickieGlyph.app)
+            // A resolved action wears its own SF Symbol; the unconfigured/stale
+            // fallback wears the brand mark — a custom symbol, so it loads by
+            // asset name, not `systemName:`.
+            if let action {
+                Image(systemName: action.glyph)
+            } else {
+                QuickieGlyph.image
+            }
         }
     }
 }

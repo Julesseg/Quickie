@@ -13,7 +13,7 @@ import WidgetKit
 /// breadcrumb) matches the deep-link widget exactly.
 ///
 /// The control surfaces in the Control Center gallery with the app glyph (the same
-/// magnifying glass the deep-link widget shows, via `QuickieGlyph.app`) and the Quick
+/// Quickie mark the deep-link widget shows, via `QuickieGlyph.image`) and the Quick
 /// Capture title (drawn straight from `QuickCaptureIntent.title` so the label can't
 /// drift from the intent it invokes).
 ///
@@ -33,7 +33,7 @@ struct QuickCaptureControl: ControlWidget {
                 Label {
                     Text(QuickCaptureIntent.title)
                 } icon: {
-                    Image(systemName: QuickieGlyph.app)
+                    QuickieGlyph.image
                 }
             }
         }

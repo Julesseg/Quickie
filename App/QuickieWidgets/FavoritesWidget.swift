@@ -79,7 +79,7 @@ private struct FavoritesWidgetView: View {
     /// surface deep-links to a fresh, focused Home — never blank, never an error.
     private var pinInvitation: some View {
         VStack(spacing: 6) {
-            Image(systemName: QuickieGlyph.app)
+            QuickieGlyph.image
                 .font(.title3.weight(.semibold))
                 .foregroundStyle(.secondary)
             Text("Pin favorites in Quickie")

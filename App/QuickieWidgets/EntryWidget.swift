@@ -68,11 +68,11 @@ private struct EntryWidgetView: View {
         case .accessoryCircular:
             // Lock Screen: the system renders accessory widgets desaturated and
             // vibrant, so a plain symbol reads on any wallpaper without its own tint.
-            Image(systemName: QuickieGlyph.app)
+            QuickieGlyph.image
                 .font(.title2)
         default:
             // Home Screen: the glyph centered large over the tinted background.
-            Image(systemName: QuickieGlyph.app)
+            QuickieGlyph.image
                 .font(.system(size: 40, weight: .semibold))
                 .foregroundStyle(.white)
         }
