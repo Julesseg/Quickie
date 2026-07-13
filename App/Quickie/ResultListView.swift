@@ -110,19 +110,32 @@ struct ResultListView: View {
     }
 }
 
-/// The bare progressive-blur band behind the status bar: fully blurred at the
-/// screen's top edge, sharpening to clear just below the status area so
-/// scrolling content comes into focus rather than colliding with the status
-/// bar's text. A raw blur (`VariableBlur`) with no material tint — with nothing
-/// floating on it, the blur alone separates the status bar from the rows; any
-/// wash would read as chrome. Shared by the surfaces that scroll to the top
-/// with no chrome of their own (the Result list, a grid-less Home).
+/// The bare progressive-blur band behind the status bar: solid at the screen's
+/// top edge, fading clear just below the status area so scrolling content
+/// dissolves under it rather than colliding with the status bar's text. The
+/// gradient-masked-material idiom the breadcrumb bars use (kept private there),
+/// but with no content riding it — shared by the surfaces that scroll to the top
+/// with no chrome of their own (the Result list, a grid-less Home). Ultra-thin,
+/// like Home's Favorites band: with nothing floating on it, the blur alone
+/// separates the status bar from the rows — a heavier wash would read as chrome.
 struct StatusBarBlurBand: View {
     var body: some View {
         Color.clear
             .frame(height: 0)
             .statusBarBleed(topPadding: 16) {
-                VariableBlur()
+                Rectangle()
+                    .fill(.ultraThinMaterial)
+                    .mask(
+                        LinearGradient(
+                            stops: [
+                                .init(color: .black, location: 0),
+                                .init(color: .black, location: 0.6),
+                                .init(color: .clear, location: 1),
+                            ],
+                            startPoint: .top,
+                            endPoint: .bottom
+                        )
+                    )
             }
             // Purely decorative — it must never swallow a tap or a scroll that
             // starts under the status area.
