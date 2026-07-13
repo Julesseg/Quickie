@@ -30,11 +30,11 @@ struct QuickCaptureControl: ControlWidget {
             // foregrounds the app and runs `perform()` in-app — the same door the
             // Quick Capture App Shortcut uses, not a second one.
             ControlWidgetButton(action: QuickCaptureIntent()) {
-                Label {
-                    Text(QuickCaptureIntent.title)
-                } icon: {
-                    QuickieGlyph.image
-                }
+                // `Label(_:image:)`, not an `icon:` closure wrapping an `Image`:
+                // Control Center archives the label out-of-process and resolves
+                // only symbol *references* — a custom symbol nested as a plain
+                // `Image` view silently renders nothing there.
+                Label(String(localized: QuickCaptureIntent.title), image: QuickieGlyph.name)
             }
         }
         .displayName(QuickCaptureIntent.title)

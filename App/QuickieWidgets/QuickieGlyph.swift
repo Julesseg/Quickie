@@ -11,10 +11,14 @@ import SwiftUI
 /// only symbol images; as a symbol it tints, scales, and renders vibrantly on the
 /// Lock Screen exactly like a system one.
 enum QuickieGlyph {
-    /// The custom symbol's asset-catalog name (`QuickieMark.symbolset`).
+    /// The custom symbol's asset-catalog name (`QuickieMark.symbolset`). Control
+    /// Center labels must reference it by name via `Label(_:image:)` — a custom
+    /// symbol nested as a plain `Image` view silently renders nothing there.
     static let name = "QuickieMark"
 
-    /// The mark as a SwiftUI image. Custom symbols load through `Image(_:)`, not
-    /// `Image(systemName:)` — this is the one place that distinction lives.
+    /// The mark as a SwiftUI image, for widget and Live Activity views. Custom
+    /// symbols load through `Image(_:)`, not `Image(systemName:)` — this is the
+    /// one place that distinction lives. Not for Control Center labels (see
+    /// `name`).
     static var image: Image { Image(name) }
 }
