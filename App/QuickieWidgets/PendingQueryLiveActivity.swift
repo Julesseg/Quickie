@@ -25,7 +25,7 @@ struct PendingQueryLiveActivity: Widget {
         } dynamicIsland: { context in
             DynamicIsland {
                 DynamicIslandExpandedRegion(.leading) {
-                    Image(systemName: QuickieGlyph.app)
+                    QuickieGlyph.image
                         .foregroundStyle(.tint)
                 }
                 DynamicIslandExpandedRegion(.center) {
@@ -39,13 +39,13 @@ struct PendingQueryLiveActivity: Widget {
                         .foregroundStyle(.secondary)
                 }
             } compactLeading: {
-                Image(systemName: QuickieGlyph.app)
+                QuickieGlyph.image
                     .foregroundStyle(.tint)
             } compactTrailing: {
                 Image(systemName: "arrow.uturn.backward")
                     .foregroundStyle(.secondary)
             } minimal: {
-                Image(systemName: QuickieGlyph.app)
+                QuickieGlyph.image
                     .foregroundStyle(.tint)
             }
         }
@@ -53,13 +53,13 @@ struct PendingQueryLiveActivity: Widget {
 }
 
 /// The Lock Screen banner: the truncated query preview between the app's
-/// search glyph and the return arrow — "your unfinished query; hop back to it".
+/// mark and the return arrow — "your unfinished query; hop back to it".
 private struct PendingQueryLockScreenView: View {
     let preview: String
 
     var body: some View {
         HStack(spacing: 12) {
-            Image(systemName: QuickieGlyph.app)
+            QuickieGlyph.image
                 .font(.title3)
                 .foregroundStyle(.tint)
             Text(preview)
