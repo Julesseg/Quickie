@@ -2,14 +2,15 @@ import Foundation
 import Testing
 @testable import QuickieCore
 
-// The CalculatorProvider is the Dynamic Provider that inspects the live query
-// and, when it parses as math or a unit conversion, injects a single result row
-// whose main action copies the answer (issue #8 / CONTEXT.md → Dynamic
-// Provider). These tests pin what the row says, what tapping it does, and that
-// the provider declines cleanly — no spurious rows — for everything else.
-struct CalculatorProviderTests {
+// The ComputedProvider is the boosted-dynamic Provider that inspects the live
+// query and, when it parses as math or a unit conversion, injects a result row
+// whose main action copies the answer (issue #8 / CONTEXT.md → Computed). These
+// tests pin the Calculator half — what the row says, what tapping it does, and
+// that the provider declines cleanly for everything else; the Detected result
+// half lives in ComputedDetectionTests.
+struct ComputedProviderTests {
 
-    private let provider = CalculatorProvider()
+    private let provider = ComputedProvider()
 
     @Test("a math query yields one result whose main action copies and stages the answer")
     func mathResultCopiesAndStagesAnswer() {
@@ -114,7 +115,7 @@ struct CalculatorProviderTests {
         // The schema's new Calculator unit-conversion toggle (issue #69 AC #4) takes
         // effect here: off, the provider answers arithmetic only and declines a
         // conversion query (rather than injecting a spurious row); on, both work.
-        let mathOnly = CalculatorProvider(unitConversion: false)
+        let mathOnly = ComputedProvider(unitConversion: false)
         #expect(mathOnly.candidates(for: "20 mi to km").isEmpty)
         // Arithmetic is untouched by the conversion toggle.
         #expect(mathOnly.candidates(for: "23*7").first?.title == "161")

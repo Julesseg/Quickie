@@ -75,13 +75,27 @@ struct SettingOptionTests {
         #expect(CaptureStepPlan.pool(enabled: event) == [.start, .location, .notes])
     }
 
-    @Test("the Calculator schema ships a new unit-conversion toggle, defaulting on")
-    func calculatorSchemaShipsUnitConversionToggle() {
-        // A representative new provider option added purely through the schema, to
-        // prove extensibility (issue #69 AC #4): no bespoke view, just a declaration.
-        let toggle = ProviderID.calculator.settingsSchema
-            .first { $0.key == SettingsKey.calculatorUnitConversion }
-        #expect(toggle?.kind == .toggle(default: true))
+    @Test("the Computed schema ships the Enabled toggle plus five per-type toggles, all default-on")
+    func computedSchemaShipsFivePerTypeToggles() {
+        // The Computed provider's options section (ADR 0032): the provider-level
+        // Enabled toggle first, then Math, Unit conversion, URLs, Phone numbers, and
+        // Email addresses — every one a schema-declared toggle defaulting on, so all
+        // detection off restores the pre-detection Calculator exactly.
+        let schema = ProviderID.calculator.settingsSchema
+        #expect(schema.first?.kind == .enabled)
+
+        let perType = [
+            SettingsKey.calculatorMath,
+            SettingsKey.calculatorUnitConversion,
+            SettingsKey.calculatorURL,
+            SettingsKey.calculatorPhone,
+            SettingsKey.calculatorEmail,
+        ]
+        // Present, in order, right after Enabled.
+        #expect(schema.dropFirst().map(\.key) == perType)
+        for key in perType {
+            #expect(schema.first { $0.key == key }?.kind == .toggle(default: true))
+        }
     }
 
     @Test("the File Search schema ships an inline-cap stepper with sane bounds")

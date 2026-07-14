@@ -77,7 +77,7 @@ struct ActionPresentationTests {
         // A calculator result and a snippet both *copy* (same main action) but are
         // different providers (different leading badge) — so the row needs both
         // classifications, not one standing in for the other.
-        let calc = CalculatorProvider().candidates(for: "2+2").first
+        let calc = ComputedProvider().candidates(for: "2+2").first
         let snippet = Action.snippet(id: "s", title: "Reply", body: "thanks!")
         #expect(calc?.mainAction == .copyToClipboard)
         #expect(snippet.mainAction == .copyToClipboard)

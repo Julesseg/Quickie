@@ -49,13 +49,18 @@ struct SettingsHubTests {
         #expect(ProviderID.pile.displayName == "Pile")
     }
 
-    @Test("Calculator and File Search gain a typed settings command row")
+    @Test("Computed and File Search gain a typed settings command row")
     func rowlessDynamicInjectorsGainASettingsCommandRow() {
         // The dynamic injectors never had a management-page row — there was
         // nothing to manage. The hub gives them one (ADR 0019), so every
         // provider is reachable (and, later, re-enableable) by typing its name.
+        // The Computed provider presents under its new name, with "calculator",
+        // "converter", and "detector" kept as typed aliases (ADR 0032).
         let calculator = Action.openCalculatorPage()
-        #expect(calculator.title == "Calculator")
+        #expect(calculator.title == "Computed")
+        #expect(calculator.aliases.contains("calculator"))
+        #expect(calculator.aliases.contains("converter"))
+        #expect(calculator.aliases.contains("detector"))
         #expect(calculator.kind == .managementPage)
         #expect(calculator.run() == .openPage(.settings(panel: .calculator)))
 
@@ -89,7 +94,7 @@ struct SettingsHubTests {
         // type the provider's name, get the row, tap to land on its page.
         // "calculator" is no math expression, so the Calculator provider itself
         // stays silent and the settings row is what answers.
-        let engine = SearchEngine(providers: [CalculatorProvider(), IndexedProvider.builtIns()])
+        let engine = SearchEngine(providers: [ComputedProvider(), IndexedProvider.builtIns()])
         #expect(engine.results(for: "calculator").map(\.id).contains("builtin.calculator-page"))
         #expect(engine.results(for: "file search").map(\.id).contains("builtin.file-search-page"))
         // The capture providers' rows ride the same catalog, so typing their
@@ -104,7 +109,7 @@ struct SettingsHubTests {
         // The whole acceptance loop in one move (issue #66 AC #1): the best
         // match for a typed provider name is its Settings command row, and
         // running it produces the panel deeplink the app pushes.
-        let engine = SearchEngine(providers: [CalculatorProvider(), IndexedProvider.builtIns()])
+        let engine = SearchEngine(providers: [ComputedProvider(), IndexedProvider.builtIns()])
 
         let customActions = engine.highlighted(for: "custom actions")
         #expect(customActions?.run() == .openPage(.settings(panel: .customActions)))
