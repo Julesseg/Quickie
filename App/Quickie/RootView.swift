@@ -254,8 +254,17 @@ struct RootView: View {
                 body: snippet.body
             )
         }
+        // Each entry wears its age in the muted subtitle channel (CONTEXT.md →
+        // Pile, aging paragraph; issue #164) — the same relative-age label the
+        // Pile page shows, formatted off the persisted creation date as of one
+        // captured `now` so every row reads consistently within a build.
+        let now = Date()
         let storedPileEntries = livePileEntries.map { entry in
-            Action.pileEntry(id: entry.actionID, text: entry.text)
+            Action.pileEntry(
+                id: entry.actionID,
+                text: entry.text,
+                age: RelativeAge.label(from: entry.createdAt, asOf: now)
+            )
         }
         // Imported Shortcut Actions surface by name like Quicklinks/Snippets
         // (issue #45); inert this slice (triggering is the next). `acceptsInput`

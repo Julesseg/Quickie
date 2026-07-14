@@ -1,5 +1,6 @@
 import SwiftUI
 import SwiftData
+import QuickieCore
 import QuickieStoreKit
 
 /// The Pile **entries** page (CONTEXT.md → Pile; ADR 0018): every
@@ -30,6 +31,18 @@ struct PileView: View {
         entries.filter { $0.modelContext != nil }
     }
 
+    /// The header line summarizing the Pile (CONTEXT.md → Pile, aging paragraph;
+    /// issue #164): entry count + the oldest entry's age. `nil` for an empty Pile
+    /// — no header, never "0 saved". Entries are newest-first, so the oldest is
+    /// the last live row. Read as of `now` so it ages with the rows below it.
+    private func headerText(asOf now: Date) -> String? {
+        PileHeader.text(
+            entryCount: liveEntries.count,
+            oldest: liveEntries.last?.createdAt,
+            asOf: now
+        )
+    }
+
     /// Stages a tapped entry (CONTEXT.md → Stage). The launcher owns the query,
     /// the navigation stack, and the consume, so the page only reports the tap —
     /// the same defer-to-the-owner shape as the result list's `onRun`.
@@ -46,21 +59,45 @@ struct PileView: View {
                     description: Text("Type a query you don't want to deal with right now and pick “Save for later” — it lands here until you stage it again.")
                 )
             } else {
+                // One `now` for the whole page so the header and every row age
+                // against the same instant.
+                let now = Date()
                 List {
-                    ForEach(liveEntries) { entry in
-                        Button {
-                            onStage(entry)
-                        } label: {
-                            Text(entry.text)
-                                .font(.body)
-                                .lineLimit(3)
+                    Section {
+                        ForEach(liveEntries) { entry in
+                            Button {
+                                onStage(entry)
+                            } label: {
+                                VStack(alignment: .leading, spacing: 2) {
+                                    Text(entry.text)
+                                        .font(.body)
+                                        .foregroundStyle(.primary)
+                                        .lineLimit(3)
+                                    // The muted relative-age subtitle every entry
+                                    // wears — the same optional-subtitle anatomy a
+                                    // file row uses for its relative path, always
+                                    // shown and never opacity (CONTEXT.md → Pile).
+                                    Text(RelativeAge.label(from: entry.createdAt, asOf: now))
+                                        .font(.caption)
+                                        .foregroundStyle(.secondary)
+                                }
                                 .frame(maxWidth: .infinity, alignment: .leading)
                                 .contentShape(Rectangle())
+                            }
+                            .buttonStyle(.plain)
+                            .accessibilityIdentifier("pile-row-\(entry.id)")
                         }
-                        .buttonStyle(.plain)
-                        .accessibilityIdentifier("pile-row-\(entry.id)")
+                        .onDelete(perform: delete)
+                    } header: {
+                        if let headerText = headerText(asOf: now) {
+                            // Keep the authored casing: a List section header
+                            // otherwise uppercases to "3W AGO", fighting the
+                            // muted "3w ago" the ages elsewhere read as.
+                            Text(headerText)
+                                .textCase(nil)
+                                .accessibilityIdentifier("pile-header")
+                        }
                     }
-                    .onDelete(perform: delete)
                 }
             }
         }
