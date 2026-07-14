@@ -9,7 +9,13 @@ import SwiftUI
 /// `ActionControl` ADR 0027) so the entry surfaces can never drift onto different
 /// glyphs. A custom symbol — not a plain image — because Control Center renders
 /// only symbol images; as a symbol it tints, scales, and renders vibrantly on the
-/// Lock Screen exactly like a system one.
+/// Lock Screen exactly like a system one. The symbolset's SVG must stay a
+/// *canonical* SF Symbols template (the layout the SF Symbols app exports, with
+/// the layer classes `monochrome-0` / `hierarchical-0:primary` /
+/// `multicolor-0:tintColor` on every variant path) — regenerate it with
+/// `docs/brand/make-quickie-mark.py` rather than editing by hand: in-process
+/// rendering forgives a bare hand-rolled template, but Control Center's
+/// out-of-process renderer draws an unannotated symbol as empty.
 enum QuickieGlyph {
     /// The custom symbol's asset-catalog name (`QuickieMark.symbolset`). Control
     /// Center labels must reference it by name via `Label(_:image:)` — a custom
