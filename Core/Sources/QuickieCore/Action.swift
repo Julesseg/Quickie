@@ -226,6 +226,17 @@ public struct Action: Identifiable, Sendable {
     /// outcome, because the outcome alone is ambiguous — a Calculator copies text
     /// yet reads as `.number`, and an inert Shortcut has a `.none` outcome.
     public let content: ResultContent
+    /// A user-chosen **leading glyph** overriding the kind-derived one (CONTEXT.md →
+    /// Custom Action; issue #163): an SF Symbol name a Custom Action carries so its
+    /// identity reads as *specific* on every surface — result rows, the Favorites
+    /// grid, both widgets, the Action control, its management-page row. `nil` (the
+    /// default) means the kind-derived glyph applies unchanged, so an action with no
+    /// chosen symbol renders exactly as before (pure opt-in). The App resolves
+    /// `glyph ?? kind.symbol` at its badge edge (the symbol lookup is App vocabulary),
+    /// so a synced record whose glyph this build can't render still degrades to the
+    /// derived glyph, never a blank. Only the *leading* glyph is user-set; the
+    /// *trailing* main-action glyph stays derived from the outcome (`mainAction`).
+    public let glyph: String?
 
     private let effect: @Sendable (String?) -> ActionOutcome
     /// How collected Argument values become an outcome (issue #37) — the
@@ -243,6 +254,7 @@ public struct Action: Identifiable, Sendable {
         outputType: ContentType,
         arguments: [Argument] = [],
         content: ResultContent? = nil,
+        glyph: String? = nil,
         effect: @escaping @Sendable (String?) -> ActionOutcome,
         multiStepEffect: (@Sendable ([ArgumentValue]) -> ActionOutcome)? = nil
     ) {
@@ -254,6 +266,7 @@ public struct Action: Identifiable, Sendable {
         self.inputTypes = inputTypes
         self.outputType = outputType
         self.arguments = arguments
+        self.glyph = glyph
         // Content is a declared property (ADR 0017). Factories that carry a value
         // pass it explicitly; when omitted it defaults to a derive-from-outcome
         // helper so a content-bearing Action never silently reads as `.none` —

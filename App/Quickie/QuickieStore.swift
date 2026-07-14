@@ -21,6 +21,7 @@ extension StoredCustomAction {
         alias: String? = nil,
         fillOrder: [String] = [],
         argumentSpecs: [String: ArgumentSpec],
+        glyph: String? = nil,
         createdAt: Date = Date()
     ) {
         self.init(
@@ -30,6 +31,7 @@ extension StoredCustomAction {
             alias: alias,
             fillOrder: fillOrder,
             argumentSpecsData: Self.encodeSpecs(argumentSpecs),
+            glyph: glyph,
             createdAt: createdAt
         )
     }
