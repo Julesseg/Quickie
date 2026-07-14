@@ -14,6 +14,9 @@ The one deliberate departure from the app icon: the glide arrow is extended
 silhouette. In the icon, color and opacity separate the white arrow from the
 lavender orbit even where they overlap; the mark is a flat single-shape glyph,
 so an arrow that stays inside the ellipse's outline simply vanishes into it.
+Otherwise the arrow is drawn exactly as the icon draws it — the outline of a
+round-capped stroked line plus a round-capped, round-joined stroked chevron —
+so the arrowhead is the icon's soft rounded tip, not a hard filled triangle.
 
 Pure stdlib; deterministic. Run from the repo root:
 
@@ -42,15 +45,18 @@ OUTER_RX, OUTER_RY = 30.25, 20.25
 INNER_RX, INNER_RY = 23.75, 13.75
 DOT_R = 6.5
 
-# Glide arrow along y = 62 (the orbit's bottom tangent), stroke width 6.5.
-# Extended beyond the icon's arrow so the flat mark's arrow clears the orbit:
-# the rotated ellipse's own silhouette reaches x ~= 79.76, which swallowed the
-# icon-length arrow (shaft to 77.5, tip 82.5) entirely.
-SHAFT_X0, SHAFT_X1 = 46.0, 85.0
-SHAFT_Y0, SHAFT_Y1 = 58.75, 65.25
+# Glide arrow along y = 62 (the orbit's bottom tangent), the outline of the
+# icon's stroke-width-6.5 round-capped arrow. Extended beyond the icon's arrow
+# so the flat mark's arrow clears the orbit: the rotated ellipse's own
+# silhouette reaches x ~= 79.76, which swallowed the icon-length arrow (shaft
+# to 77.5, tip 82.5) entirely. The head is the icon's chevron — legs from the
+# tip back (-7, +/-4.5), like the icon's `M75 66.5 L82 62 L75 57.5` — outlined
+# with round caps and a round tip join, matching the icon's softness.
+ARROW_R = 3.25               # half of the icon's 6.5 stroke width
+SHAFT_P0 = (46.0, 62.0)
+SHAFT_P1 = (85.0, 62.0)
 HEAD_TIP = (90.0, 62.0)
-HEAD_BASE_LOWER = (79.0, 70.0)
-HEAD_BASE_UPPER = (79.0, 54.0)
+HEAD_BACK_DX, HEAD_BACK_DY = 7.0, 4.5
 
 # ---------------------------------------------------------------------------
 # Template metrics (canonical SF Symbols template, 3300x2200 canvas).
@@ -72,11 +78,12 @@ def rotated(p):
     return (CX + dx * c - dy * s, CY + dx * s + dy * c)
 
 
-def ellipse_segments(rx, ry, ccw=False):
+def ellipse_ops(rx, ry, ccw=False):
     """Axis-aligned ellipse about the orbit center as four cubic segments.
 
     Clockwise (screen coords, y down) traces t increasing; the ring's hole is
     wound counterclockwise so nonzero winding cuts it out of the outer fill.
+    Returns a subpath: [("M", p), ("C", c1, c2, p), ...] in icon coords.
     """
     def pt(t):
         return (CX + rx * math.cos(t), CY + ry * math.sin(t))
@@ -85,7 +92,7 @@ def ellipse_segments(rx, ry, ccw=False):
         return (-rx * math.sin(t), ry * math.cos(t))
 
     sign = -1.0 if ccw else 1.0
-    segs = []
+    ops = [("M", pt(0.0))]
     for i in range(4):
         t0 = sign * i * math.pi / 2
         t1 = sign * (i + 1) * math.pi / 2
@@ -93,37 +100,114 @@ def ellipse_segments(rx, ry, ccw=False):
         d0, d1 = deriv(t0), deriv(t1)
         c1 = (p0[0] + sign * KAPPA * d0[0], p0[1] + sign * KAPPA * d0[1])
         c2 = (p1[0] - sign * KAPPA * d1[0], p1[1] - sign * KAPPA * d1[1])
-        segs.append((p0, c1, c2, p1))
-    return segs
+        ops.append(("C", c1, c2, p1))
+    return ops
+
+
+def arc_ops(center, r, deg0, deg1):
+    """Circular arc as cubic segments, clockwise (deg increasing, y down).
+
+    Angles in degrees; a point at angle a is center + r*(cos a, sin a). Yields
+    only the ("C", ...) ops — the caller is already at the arc's start point.
+    """
+    ops = []
+    steps = max(1, math.ceil(abs(deg1 - deg0) / 90.0))
+    for i in range(steps):
+        a0 = math.radians(deg0 + (deg1 - deg0) * i / steps)
+        a1 = math.radians(deg0 + (deg1 - deg0) * (i + 1) / steps)
+        k = (4.0 / 3.0) * math.tan((a1 - a0) / 4.0) * r
+        p0 = (center[0] + r * math.cos(a0), center[1] + r * math.sin(a0))
+        p1 = (center[0] + r * math.cos(a1), center[1] + r * math.sin(a1))
+        c1 = (p0[0] - k * math.sin(a0), p0[1] + k * math.cos(a0))
+        c2 = (p1[0] + k * math.sin(a1), p1[1] - k * math.cos(a1))
+        ops.append(("C", c1, c2, p1))
+    return ops
+
+
+def shaft_ops():
+    """The arrow shaft: a round-capped capsule from SHAFT_P0 to SHAFT_P1, CW."""
+    (x0, y), (x1, _) = SHAFT_P0, SHAFT_P1
+    r = ARROW_R
+    ops = [("M", (x0, y - r)), ("L", (x1, y - r))]
+    ops += arc_ops(SHAFT_P1, r, -90.0, 90.0)     # right cap, through the tip
+    ops += [("L", (x0, y + r))]
+    ops += arc_ops(SHAFT_P0, r, 90.0, 270.0)     # left cap, back to the start
+    return ops
+
+
+def head_ops():
+    """The arrowhead: the icon's round-capped, round-joined chevron, outlined.
+
+    Legs run from the back points (tip - (HEAD_BACK_DX, +/-HEAD_BACK_DY)) to
+    the tip, offset by ARROW_R: round caps at both back ends, a round join at
+    the tip (the icon's soft point), and a plain vertex at the concave notch —
+    which the shaft's round cap overlaps anyway, exactly like the icon.
+    """
+    r = ARROW_R
+    tip = HEAD_TIP
+    lower = (tip[0] - HEAD_BACK_DX, tip[1] + HEAD_BACK_DY)
+    upper = (tip[0] - HEAD_BACK_DX, tip[1] - HEAD_BACK_DY)
+    length = math.hypot(HEAD_BACK_DX, HEAD_BACK_DY)
+    ux, uy = HEAD_BACK_DX / length, -HEAD_BACK_DY / length   # lower -> tip
+    n_low = (-uy, ux)                                        # lower leg, outer
+    n_up = (-uy, -ux)                                        # upper leg, outer
+    half = math.degrees(math.atan2(n_low[1], n_low[0]))      # tip join half-angle
+
+    def off(p, n):
+        return (p[0] + n[0] * r, p[1] + n[1] * r)
+
+    # Concave notch: the two inner offset edges meet on the symmetry axis,
+    # r/cos(half) back from the tip (the legs meet the axis at 90 - half).
+    notch = (tip[0] - r / math.cos(math.radians(half)), tip[1])
+
+    ops = [("M", off(upper, n_up)), ("L", off(tip, n_up))]
+    ops += arc_ops(tip, r, -half, half)                      # round tip join
+    ops += [("L", off(lower, n_low))]
+    ops += arc_ops(lower, r, half, half + 180.0)             # lower back cap
+    ops += [("L", notch), ("L", off(upper, (-n_up[0], -n_up[1])))]
+    ops += arc_ops(upper, r, 180.0 - half, 360.0 - half)     # upper back cap
+    return ops
 
 
 def glyph_subpaths():
     """The mark's five subpaths in icon-frame coordinates (pre-rotation)."""
-    shaft = [(SHAFT_X0, SHAFT_Y0), (SHAFT_X1, SHAFT_Y0),
-             (SHAFT_X1, SHAFT_Y1), (SHAFT_X0, SHAFT_Y1)]
-    head = [HEAD_TIP, HEAD_BASE_LOWER, HEAD_BASE_UPPER]
     return [
-        ("ellipse", ellipse_segments(OUTER_RX, OUTER_RY)),
-        ("ellipse", ellipse_segments(INNER_RX, INNER_RY, ccw=True)),
-        ("ellipse", ellipse_segments(DOT_R, DOT_R)),
-        ("polygon", shaft),
-        ("polygon", head),
+        ellipse_ops(OUTER_RX, OUTER_RY),
+        ellipse_ops(INNER_RX, INNER_RY, ccw=True),
+        ellipse_ops(DOT_R, DOT_R),
+        shaft_ops(),
+        head_ops(),
     ]
 
 
 def glyph_bbox():
-    """Rotated-frame bounding box of the whole mark (exact, not sampled)."""
-    c, s = math.cos(math.radians(ROT_DEG)), math.sin(math.radians(ROT_DEG))
-    ex = math.hypot(OUTER_RX * c, OUTER_RY * s)   # rotated-ellipse x half-extent
-    ey = math.hypot(OUTER_RX * s, OUTER_RY * c)
-    xs = [CX - ex, CX + ex]
-    ys = [CY - ey, CY + ey]
-    for kind, data in glyph_subpaths():
-        if kind == "polygon":
-            for p in data:
-                rp = rotated(p)
-                xs.append(rp[0])
-                ys.append(rp[1])
+    """Rotated-frame bounding box of the whole mark, from dense curve samples.
+
+    Rotation is linear, so cubics can be sampled in icon coords and the samples
+    rotated; 32 samples per segment bounds the true extremum to well under a
+    thousandth of an icon unit at these curvatures.
+    """
+    xs, ys = [], []
+
+    def add(p):
+        rp = rotated(p)
+        xs.append(rp[0])
+        ys.append(rp[1])
+
+    for ops in glyph_subpaths():
+        pos = None
+        for op in ops:
+            if op[0] in ("M", "L"):
+                pos = op[1]
+                add(pos)
+            else:
+                _, c1, c2, p1 = op
+                for i in range(1, 33):
+                    t, mt = i / 32.0, 1 - i / 32.0
+                    add(tuple(mt ** 3 * pos[j] + 3 * mt * mt * t * c1[j]
+                              + 3 * mt * t * t * c2[j] + t ** 3 * p1[j]
+                              for j in (0, 1)))
+                pos = p1
     return min(xs), min(ys), max(xs), max(ys)
 
 
@@ -137,22 +221,20 @@ def path_d(scale, xmin, ymid):
         x, y = rotated(p)
         return ((x - xmin) * scale, (y - ymid) * scale - CAP_HEIGHT / 2)
 
+    def xy(p):
+        lp = local(p)
+        return f"{fmt(lp[0])} {fmt(lp[1])}"
+
     parts = []
-    for kind, data in glyph_subpaths():
-        if kind == "ellipse":
-            start = local(data[0][0])
-            parts.append(f"M{fmt(start[0])} {fmt(start[1])}")
-            for _, c1, c2, p1 in data:
-                lc1, lc2, lp1 = local(c1), local(c2), local(p1)
-                parts.append(
-                    f"C{fmt(lc1[0])} {fmt(lc1[1])} {fmt(lc2[0])} {fmt(lc2[1])} "
-                    f"{fmt(lp1[0])} {fmt(lp1[1])}")
-            parts.append("Z")
-        else:
-            pts = [local(p) for p in data]
-            parts.append(f"M{fmt(pts[0][0])} {fmt(pts[0][1])}")
-            parts.extend(f"L{fmt(p[0])} {fmt(p[1])}" for p in pts[1:])
-            parts.append("Z")
+    for ops in glyph_subpaths():
+        for op in ops:
+            if op[0] == "M":
+                parts.append(f"M{xy(op[1])}")
+            elif op[0] == "L":
+                parts.append(f"L{xy(op[1])}")
+            else:
+                parts.append(f"C{xy(op[1])} {xy(op[2])} {xy(op[3])}")
+        parts.append("Z")
     return "".join(parts)
 
 
