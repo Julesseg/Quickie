@@ -71,10 +71,13 @@ private struct EntryWidgetView: View {
             QuickieGlyph.image
                 .font(.title2)
         default:
-            // Home Screen: the glyph centered large over the tinted background.
+            // Home Screen: the glyph centered large, wearing the icon trail's
+            // lavender→white ramp — the symbol's baked-in orbit fade supplies
+            // the alpha half of the icon's trail, this supplies the color half
+            // a flat symbol can't carry itself.
             QuickieGlyph.image
                 .font(.system(size: 40, weight: .semibold))
-                .foregroundStyle(.white)
+                .foregroundStyle(QuickieGlyph.gradient)
         }
     }
 
@@ -83,7 +86,7 @@ private struct EntryWidgetView: View {
         case .accessoryCircular:
             AccessoryWidgetBackground()
         default:
-            Color.accentColor
+            QuickieGlyph.backdrop
         }
     }
 }
