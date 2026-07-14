@@ -10,18 +10,27 @@ Center's out-of-process symbol renderer needs — a bare path with no layer
 annotations renders in-process (widgets) but comes up empty in a control.
 
 The icon trail's along-the-trajectory alpha ramp survives here as a **baked-in
-layer fade**: the orbit ring is cut into TRAIL_SEGMENTS annular sectors, one
-symbol layer each, whose per-layer `opacity` (a plain CSS property on the
-layer's classes in the template's style block — the encoding Apple documents
-for custom-symbol layer opacity) eases from the TRAIL_ALPHA floor just past
-the release point up to opaque at the head, exactly like the icon. Baking it
-into the symbol is the point: layer opacity is the one styling channel that
-travels with a symbol everywhere it is rendered — including Control Center,
-which resolves only the symbol *reference* and tints it itself, so view-level
-gradients and tints never arrive there. A color gradient cannot ride along (a
-symbol template is solid fills only); the widget views layer the brand color
-ramp on top via `foregroundStyle`, where SwiftUI styling does apply. The dot
-and the glide arrow sit above the ring in one final opaque layer.
+layer fade**, built as a seamless base plus increments: layer 0 is the whole
+orbit ring, one unbroken path at the TRAIL_ALPHA floor, and on top of it the
+ring is cut into TRAIL_SEGMENTS annular sectors, one symbol layer each, whose
+per-layer `opacity` (a plain CSS property on the layer's classes in the
+template's style block — the encoding Apple documents for custom-symbol layer
+opacity) carries only the ramp's *increment above the floor*, easing to opaque
+at the head, exactly like the icon. The base-plus-increment split is seam
+control, not decoration: abutting translucent fills antialias a hairline at
+every shared edge, and with a seamless ring underneath, the faint tail has no
+seams at all and every remaining hairline dips only toward the base's opacity
+instead of all the way to the background. Sectors whose increment rounds
+below 0.01 (the template's 2-decimal opacity precision — the resolution that
+also bounds how fine a useful segment count can get) are omitted: the base
+already renders them. Baking all this into the symbol is the point: layer
+opacity is the one styling channel that travels with a symbol everywhere it
+is rendered — including Control Center, which resolves only the symbol
+*reference* and tints it itself, so view-level gradients and tints never
+arrive there. A color gradient cannot ride along (a symbol template is solid
+fills only); the widget views layer the brand color ramp on top via
+`foregroundStyle`, where SwiftUI styling does apply. The dot and the glide
+arrow sit above the ring in one final opaque layer.
 
 The one deliberate departure from the app icon: the glide arrow is extended
 (shaft 77.5 → 85, tip 82.5 → 90 in icon units) so it clears the orbit's
@@ -54,16 +63,17 @@ CX, CY = 50.0, 45.0
 ROT_DEG = 14.0
 
 # Orbit ring: the icon's rx=27/ry=17 ellipse stroked at ~6.5 -> outer edge
-# rx 30.25 / ry 20.25, inner (hole) edge rx 23.75 / ry 13.75. The ring is cut
-# into TRAIL_SEGMENTS annular sectors along the travel direction, one symbol
-# layer each, fading like the icon's trail (the icon's ease, a higher floor:
-# a tail at the icon's 0.12 would vanish at symbol point sizes). 32 sectors
-# keep the largest neighbor step around 0.05 opacity — no visible banding
-# even at widget sizes — where the icon needed 240 quads at 1024px.
+# rx 30.25 / ry 20.25, inner (hole) edge rx 23.75 / ry 13.75. A seamless base
+# ring at the TRAIL_ALPHA floor, then TRAIL_SEGMENTS annular sectors along the
+# travel direction carrying the ramp's increment above it (the icon's ease, a
+# higher floor: a tail at the icon's 0.12 would vanish at symbol point sizes).
+# 64 sectors is the finest useful cut: the largest neighbor step lands at the
+# template's own 2-decimal opacity resolution (~0.01-0.02), where the icon
+# needed 240 quads at 1024px.
 OUTER_RX, OUTER_RY = 30.25, 20.25
 INNER_RX, INNER_RY = 23.75, 13.75
 DOT_R = 6.5
-TRAIL_SEGMENTS = 32
+TRAIL_SEGMENTS = 64
 TRAIL_ALPHA = (0.3, 1.0)     # fade-in floor -> release (icon: 0.12 -> 0.95)
 TRAIL_ALPHA_EASE = 2.2       # icon's ramp: stays faint long, brightens late
 
@@ -129,9 +139,14 @@ def ellipse_arc_ops(rx, ry, t0, t1):
     return ops
 
 
-def ellipse_ops(rx, ry):
-    """Axis-aligned full ellipse about the orbit center, as one CW subpath."""
-    return [("M", (CX + rx, CY))] + ellipse_arc_ops(rx, ry, 0.0, 2.0 * math.pi)
+def ellipse_ops(rx, ry, ccw=False):
+    """Axis-aligned full ellipse about the orbit center, as one subpath.
+
+    Clockwise (screen coords, y down) unless `ccw`; the base ring's hole is
+    wound counterclockwise so nonzero winding cuts it out of the outer fill.
+    """
+    sweep = -2.0 * math.pi if ccw else 2.0 * math.pi
+    return [("M", (CX + rx, CY))] + ellipse_arc_ops(rx, ry, 0.0, sweep)
 
 
 def ring_sector_ops(u0, u1):
@@ -221,19 +236,26 @@ def head_ops():
 def glyph_layers():
     """The mark as symbol layers, back to front: (opacity, subpaths) pairs.
 
-    TRAIL_SEGMENTS ring sectors fading along the travel direction, then the
-    dot and the glide arrow as one opaque layer on top. The ramp is sampled at
-    each sector's leading edge, so the head sector lands at exactly 1.0 and
-    the trail melts into the arrow with no step at the release; opacities are
-    rounded to two decimals, so the slow tail end of the ease collapses into
-    a few equal-opacity steps — invisible at symbol sizes.
+    The seamless base ring at the fade's floor, then the ring sectors carrying
+    the ramp's increment above it, then the dot and the glide arrow as one
+    opaque layer on top. Source-over stacking makes the composite exact:
+    1 - (1-floor)(1-increment) equals the target ramp when the increment is
+    the eased travel parameter itself, so `u ** EASE` *is* each sector's
+    opacity. The ramp is sampled at each sector's leading edge, so the head
+    sector lands at exactly 1.0 and the trail melts into the arrow with no
+    step at the release. Increments are rounded to the template's 2-decimal
+    opacity precision, and sectors rounding below 0.01 are omitted — the base
+    ring already renders them, seamlessly.
     """
     floor, peak = TRAIL_ALPHA
-    layers = []
+    assert peak == 1.0, "increment math assumes the ramp peaks fully opaque"
+    layers = [(floor, [ellipse_ops(OUTER_RX, OUTER_RY),
+                       ellipse_ops(INNER_RX, INNER_RY, ccw=True)])]
     for i in range(TRAIL_SEGMENTS):
         u0, u1 = i / TRAIL_SEGMENTS, (i + 1) / TRAIL_SEGMENTS
-        alpha = floor + (peak - floor) * u1 ** TRAIL_ALPHA_EASE
-        layers.append((round(alpha, 2), [ring_sector_ops(u0, u1)]))
+        increment = round(u1 ** TRAIL_ALPHA_EASE, 2)
+        if increment >= 0.01:
+            layers.append((increment, [ring_sector_ops(u0, u1)]))
     layers.append((1.0, [ellipse_ops(DOT_R, DOT_R), shaft_ops(), head_ops()]))
     return layers
 
@@ -475,10 +497,12 @@ def main():
     OUT.write_text(build())
     xmin, ymin, xmax, ymax = glyph_bbox()
     width_s = (xmax - xmin) * GLYPH_HEIGHT_S / (ymax - ymin)
+    sectors = len(glyph_layers()) - 2  # minus the base ring and the dot/arrow
     print(f"wrote {OUT.relative_to(REPO)}")
     print(f"  S glyph: {width_s:.2f} x {GLYPH_HEIGHT_S} "
           f"(cap height {CAP_HEIGHT}), M glyph: {width_s * M_SCALE:.2f} wide, "
-          f"{TRAIL_SEGMENTS + 1} layers ({TRAIL_SEGMENTS} fading + 1 opaque)")
+          f"{sectors + 2} layers (base ring + {sectors}/{TRAIL_SEGMENTS} "
+          f"fading sectors + 1 opaque)")
 
 
 if __name__ == "__main__":
