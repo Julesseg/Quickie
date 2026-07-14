@@ -62,6 +62,8 @@ struct CustomActionEditorView: View {
                     eligibilityNote
                 }
 
+                symbolSection
+
                 Section("Alias (optional)") {
                     TextField("things", text: aliasBinding)
                         .textInputAutocapitalization(.never)
@@ -149,6 +151,47 @@ struct CustomActionEditorView: View {
                  : "To use this as a fallback (consuming your typed text), make its first argument free text.")
                 .accessibilityIdentifier("custom-action-eligibility-note")
         }
+    }
+
+    /// The optional **glyph picker** (CONTEXT.md → Custom Action; issue #163): a
+    /// navigation row previewing the current symbol (or "None") that pushes the
+    /// curated, fuzzy-searchable `GlyphPickerView`. Purely opt-in — leaving it "None"
+    /// keeps the kind-derived leading glyph on every surface, so an untouched action
+    /// looks exactly as before.
+    private var symbolSection: some View {
+        Section {
+            NavigationLink {
+                GlyphPickerView(selection: $def.glyph)
+            } label: {
+                HStack(spacing: 12) {
+                    // Preview the leading badge exactly as a surface renders it: the
+                    // chosen symbol over the kind's tint, or the derived glyph when None.
+                    // Read through `normalizedGlyph` so a blank value previews the
+                    // derived glyph rather than an empty badge.
+                    ProviderBadge(kind: previewKind, symbol: def.normalizedGlyph)
+                    Text("Symbol")
+                    Spacer(minLength: 8)
+                    Text(symbolValueLabel)
+                        .foregroundStyle(.secondary)
+                }
+            }
+            .accessibilityIdentifier("custom-action-symbol-row")
+        } footer: {
+            Text("Give this action its own symbol, shown everywhere it appears. Leave it as None to use the default glyph.")
+        }
+    }
+
+    /// The kind the badge preview uses — the shared shape→kind rule (a slotted template
+    /// is a Custom Action, a slot-less one a static link) so the preview tint matches
+    /// what the action will actually wear.
+    private var previewKind: ActionKind { def.derivedKind }
+
+    /// The trailing value label on the symbol row: the chosen symbol's human name, or
+    /// "None" when unset — read through the same normalization the surfaces use, so a
+    /// blank glyph reads "None" here exactly as it renders the derived glyph elsewhere.
+    private var symbolValueLabel: String {
+        guard let glyph = def.normalizedGlyph else { return "None" }
+        return CustomActionGlyphCatalog.all.first { $0.name == glyph }?.label ?? glyph
     }
 
     /// Bridges the model's single optional `alias` to the definition's `aliases`
@@ -328,6 +371,128 @@ private struct ArgumentRowEditor: View {
     }
 }
 
+/// The curated **glyph picker** (CONTEXT.md → Custom Action; issue #163): a
+/// searchable gallery of SF Symbols the user can set as a Custom Action's leading
+/// glyph, plus a "No symbol" row that clears back to the derived glyph. The search
+/// reuses the same `Matcher` fuzzy-find furniture the choice input method uses
+/// (`CustomActionGlyphCatalog.search`), so it ranks best-match-first exactly like a
+/// breadcrumb choice step. Selecting a symbol writes the binding and pops back.
+private struct GlyphPickerView: View {
+    @Environment(\.dismiss) private var dismiss
+    /// The definition's chosen glyph — written on selection, cleared by "No symbol".
+    @Binding var selection: String?
+
+    @State private var query = ""
+
+    /// The curated options ranked by the shared fuzzy matcher — best first.
+    private var results: [GlyphOption] {
+        CustomActionGlyphCatalog.search(query)
+    }
+
+    private let columns = [GridItem(.adaptive(minimum: 76), spacing: 12)]
+
+    var body: some View {
+        ScrollView {
+            LazyVGrid(columns: columns, spacing: 12) {
+                // The clear row leads so "back to the derived glyph" is always the
+                // first, thumb-reachable choice — a curated set never buries the reset.
+                GlyphClearCell(isSelected: selection == nil) {
+                    selection = nil
+                    dismiss()
+                }
+                ForEach(results) { option in
+                    GlyphCell(option: option, isSelected: option.name == selection) {
+                        selection = option.name
+                        dismiss()
+                    }
+                }
+            }
+            .padding()
+            if results.isEmpty {
+                Text("No symbols match “\(query)”.")
+                    .font(.callout)
+                    .foregroundStyle(.secondary)
+                    .padding()
+            }
+        }
+        .navigationTitle("Symbol")
+        .navigationBarTitleDisplayMode(.inline)
+        .searchable(text: $query, placement: .navigationBarDrawer(displayMode: .always), prompt: "Search symbols")
+        .autocorrectionDisabled()
+        .textInputAutocapitalization(.never)
+    }
+}
+
+/// One symbol cell in the picker: the glyph in a tinted badge over its label, with a
+/// selection ring on the current choice.
+private struct GlyphCell: View {
+    let option: GlyphOption
+    let isSelected: Bool
+    let onTap: () -> Void
+
+    var body: some View {
+        Button(action: onTap) {
+            VStack(spacing: 6) {
+                ZStack {
+                    RoundedRectangle(cornerRadius: 12, style: .continuous)
+                        .fill(isSelected ? Color.accentColor.opacity(0.18) : Color.secondary.opacity(0.12))
+                    Image(systemName: option.name)
+                        .font(.system(size: 22, weight: .regular))
+                        .foregroundStyle(isSelected ? Color.accentColor : .primary)
+                }
+                .frame(height: 56)
+                .overlay {
+                    if isSelected {
+                        RoundedRectangle(cornerRadius: 12, style: .continuous)
+                            .strokeBorder(Color.accentColor, lineWidth: 2)
+                    }
+                }
+                Text(option.label)
+                    .font(.caption2)
+                    .foregroundStyle(.secondary)
+                    .lineLimit(1)
+            }
+        }
+        .buttonStyle(.plain)
+        .accessibilityIdentifier("glyph-option.\(option.name)")
+        .accessibilityLabel(option.label)
+    }
+}
+
+/// The "No symbol" cell: clears the chosen glyph back to the kind-derived one.
+private struct GlyphClearCell: View {
+    let isSelected: Bool
+    let onTap: () -> Void
+
+    var body: some View {
+        Button(action: onTap) {
+            VStack(spacing: 6) {
+                ZStack {
+                    RoundedRectangle(cornerRadius: 12, style: .continuous)
+                        .fill(isSelected ? Color.accentColor.opacity(0.18) : Color.secondary.opacity(0.12))
+                    Image(systemName: "slash.circle")
+                        .font(.system(size: 22, weight: .regular))
+                        .foregroundStyle(.secondary)
+                }
+                .frame(height: 56)
+                .overlay {
+                    if isSelected {
+                        RoundedRectangle(cornerRadius: 12, style: .continuous)
+                            .strokeBorder(Color.accentColor, lineWidth: 2)
+                    }
+                }
+                Text("None")
+                    .font(.caption2)
+                    .foregroundStyle(.secondary)
+                    .lineLimit(1)
+            }
+        }
+        .buttonStyle(.plain)
+        .accessibilityIdentifier("glyph-option-none")
+        .accessibilityLabel("No symbol")
+    }
+}
+
 extension CustomActionDefinition {
     /// A save-ready copy: name and template trimmed, and the resolved fill order
     /// baked into `fillOrder` so the persisted order survives even if the stored
@@ -340,7 +505,10 @@ extension CustomActionDefinition {
             fillOrder: orderedTokenNames,
             // Prune config for any token the template dropped (hard mirror) before it
             // is persisted, so a deleted slot leaves nothing behind.
-            argumentSpecs: reconciledSpecs
+            argumentSpecs: reconciledSpecs,
+            // The chosen glyph rides through untouched (issue #163) — a blank one was
+            // already cleared to nil by the "No symbol" picker row.
+            glyph: glyph
         )
     }
 }
@@ -353,7 +521,8 @@ extension StoredCustomAction {
             aliases: alias.map { [$0] } ?? [],
             template: urlString,
             fillOrder: fillOrder,
-            argumentSpecs: argumentSpecs
+            argumentSpecs: argumentSpecs,
+            glyph: glyph
         )
     }
 
@@ -364,6 +533,7 @@ extension StoredCustomAction {
         alias = def.aliases.first
         fillOrder = def.orderedTokenNames
         argumentSpecs = def.reconciledSpecs
+        glyph = def.glyph
     }
 
     /// A fresh stored row from a saved definition — the create path's insert. A
@@ -382,7 +552,8 @@ extension StoredCustomAction {
             urlString: def.template,
             alias: def.aliases.first,
             fillOrder: def.orderedTokenNames,
-            argumentSpecs: def.reconciledSpecs
+            argumentSpecs: def.reconciledSpecs,
+            glyph: def.glyph
         )
     }
 }

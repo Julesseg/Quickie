@@ -100,6 +100,14 @@ public final class StoredCustomAction {
     /// vocabulary, and this framework deliberately holds the schema alone (ADR 0022).
     /// Optional so existing rows migrate without a value (every slot is then free text).
     public var argumentSpecsData: Data?
+    /// The user-chosen **leading glyph** (CONTEXT.md → Custom Action; issue #163): the
+    /// SF Symbol name the editor's glyph picker set, which replaces the kind-derived
+    /// leading glyph on every surface the action appears. `nil` (the default, so
+    /// existing rows migrate without a value) means *no chosen symbol* — the derived
+    /// glyph applies unchanged, a pure opt-in. Syncs through CloudKit like any other
+    /// attribute; a synced device on a build without this attribute simply never reads
+    /// it and renders the derived glyph, never a blank (the schema degrade path).
+    public var glyph: String?
     public var createdAt: Date = Date()
 
     public init(
@@ -109,6 +117,7 @@ public final class StoredCustomAction {
         alias: String? = nil,
         fillOrder: [String] = [],
         argumentSpecsData: Data? = nil,
+        glyph: String? = nil,
         createdAt: Date = Date()
     ) {
         self.id = id
@@ -117,6 +126,7 @@ public final class StoredCustomAction {
         self.alias = alias
         self.fillOrder = fillOrder
         self.argumentSpecsData = argumentSpecsData
+        self.glyph = glyph
         self.createdAt = createdAt
     }
 }

@@ -475,6 +475,95 @@ final class CustomActionUITests: XCTestCase {
         XCTAssertTrue(app.staticTexts["Dupe Me"].exists, "the original remains")
     }
 
+    // MARK: - Editor: the optional glyph picker (curated, searchable, clearable)
+
+    /// The editor offers an optional **glyph picker** (CONTEXT.md → Custom Action;
+    /// issue #163): the Symbol row reads "None" until a symbol is chosen from the
+    /// curated, fuzzy-searchable set, and the "No symbol" row clears it back. Proves
+    /// the picker furniture end to end — open, search, select, and clear — without
+    /// leaving the editor.
+    @MainActor
+    func testGlyphPickerSelectsAndClearsSymbol() throws {
+        let app = launchApp()
+        openCustomActionsPage(app)
+        openNewEditor(app)
+
+        setText("Mailer", in: app.textFields["custom-action-name-field"])
+        setText("https://example.com", in: app.textFields["custom-action-url-field"])
+
+        // The Symbol row starts at "None" — pure opt-in.
+        let symbolRow = app.buttons["custom-action-symbol-row"]
+        XCTAssertTrue(symbolRow.waitForExistence(timeout: 5), "the editor offers a Symbol row")
+        XCTAssertTrue(app.staticTexts["None"].exists, "no symbol is chosen by default")
+
+        // Open the picker and fuzzy-search by intent ("mail" → the envelope symbol),
+        // then select it.
+        symbolRow.tap()
+        XCTAssertTrue(app.buttons["glyph-option-none"].waitForExistence(timeout: 5),
+                      "the picker leads with a No-symbol clear cell")
+        let search = app.searchFields.firstMatch
+        XCTAssertTrue(search.waitForExistence(timeout: 5), "the picker is searchable")
+        search.tap()
+        search.typeText("mail")
+        let envelope = app.buttons["glyph-option.envelope"]
+        XCTAssertTrue(envelope.waitForExistence(timeout: 5),
+                      "fuzzy-searching by intent surfaces the envelope symbol")
+        envelope.tap()
+
+        // Back in the editor the Symbol row now reads the chosen symbol's label.
+        XCTAssertTrue(app.staticTexts["Mail"].waitForExistence(timeout: 5),
+                      "selecting a symbol updates the Symbol row's value")
+
+        // Re-open the picker and clear back to the derived glyph via "No symbol".
+        symbolRow.tap()
+        let none = app.buttons["glyph-option-none"]
+        XCTAssertTrue(none.waitForExistence(timeout: 5))
+        none.tap()
+        XCTAssertTrue(app.staticTexts["None"].waitForExistence(timeout: 5),
+                      "the No-symbol row clears back to the derived glyph")
+    }
+
+    /// A chosen glyph is stored on the Custom Action and survives a save + reopen —
+    /// the "syncs through the content store like any other attribute" guarantee, proven
+    /// at the store round-trip the editor drives (issue #163).
+    @MainActor
+    func testChosenGlyphPersistsAcrossSaveAndReopen() throws {
+        let app = launchApp()
+        openCustomActionsPage(app)
+        openNewEditor(app)
+
+        setText("Bookmarked", in: app.textFields["custom-action-name-field"])
+        setText("https://example.com", in: app.textFields["custom-action-url-field"])
+
+        // Choose a symbol.
+        app.buttons["custom-action-symbol-row"].tap()
+        let bookmark = app.buttons["glyph-option.bookmark"]
+        XCTAssertTrue(bookmark.waitForExistence(timeout: 5))
+        bookmark.tap()
+        XCTAssertTrue(app.staticTexts["Bookmark"].waitForExistence(timeout: 5),
+                      "the chosen symbol shows on the Symbol row")
+
+        // Save and find the authored row on the Management page.
+        let save = app.buttons["save-custom-action"]
+        XCTAssertTrue(save.isEnabled)
+        save.tap()
+
+        let authored = app.staticTexts["Bookmarked"]
+        var scrolls = 0
+        while !authored.exists && scrolls < 6 {
+            app.swipeUp()
+            scrolls += 1
+        }
+        XCTAssertTrue(authored.waitForExistence(timeout: 10), "the authored action is listed")
+
+        // Re-open its editor by tapping the row; the chosen symbol must have persisted.
+        authored.tap()
+        XCTAssertTrue(app.textFields["custom-action-name-field"].waitForExistence(timeout: 5),
+                      "tapping the row re-opens the editor")
+        XCTAssertTrue(app.staticTexts["Bookmark"].waitForExistence(timeout: 5),
+                      "the chosen symbol was stored and restored on reopen")
+    }
+
     // MARK: - End-to-end: typed arguments run through the breadcrumb
 
     /// A Custom Action mixing a text, a date, and a choice slot runs end to end: the

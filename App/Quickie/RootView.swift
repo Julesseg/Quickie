@@ -1676,7 +1676,10 @@ struct RootView: View {
     /// never copy stale text).
     private var widgetFavoritesProjection: [WidgetAction] {
         engine.home(showRecents: false).favorites.map { action in
-            WidgetAction(action: action, glyph: action.kind.symbol)
+            // A Custom Action's chosen glyph (issue #163) rides the snapshot so the
+            // widget draws it from the projection alone; `nil` denormalizes the
+            // kind-derived glyph, unchanged.
+            WidgetAction(action: action, glyph: action.glyph ?? action.kind.symbol)
         }
     }
 
@@ -1699,7 +1702,10 @@ struct RootView: View {
     /// create, edit, delete, enable, or disable that touches an eligible Action.
     private var eligibleCatalogProjection: [WidgetAction] {
         engine.eligibleActions().map { action in
-            WidgetAction(action: action, glyph: action.kind.symbol)
+            // A Custom Action's chosen glyph (issue #163) rides the catalog snapshot,
+            // so the Actions widget and Action control render it; `nil` denormalizes
+            // the kind-derived glyph.
+            WidgetAction(action: action, glyph: action.glyph ?? action.kind.symbol)
         }
     }
 

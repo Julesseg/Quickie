@@ -166,7 +166,10 @@ struct ActionRow: View {
 
     var body: some View {
         HStack(spacing: 12) {
-            ProviderBadge(kind: action.kind)
+            // A Custom Action's chosen glyph (issue #163) overrides the kind-derived
+            // one; `nil` falls through to the derived glyph, so an unset action is
+            // unchanged.
+            ProviderBadge(kind: action.kind, symbol: action.glyph)
             VStack(alignment: .leading, spacing: 2) {
                 Text(action.title)
                     .font(.body)

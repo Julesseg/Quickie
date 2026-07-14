@@ -185,7 +185,9 @@ struct FavoriteCard: View {
 
     var body: some View {
         HStack(spacing: 8) {
-            ProviderBadge(kind: action.kind)
+            // A Custom Action's chosen glyph (issue #163) overrides the derived one;
+            // `nil` keeps the derived glyph, so an unset Favorite is unchanged.
+            ProviderBadge(kind: action.kind, symbol: action.glyph)
             Text(action.title)
                 .font(.callout.weight(.medium))
                 .lineLimit(1)

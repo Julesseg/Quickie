@@ -159,8 +159,29 @@ private struct CustomActionRow: View {
     let onToggleDisabled: () -> Void
     let onEdit: () -> Void
 
+    /// The badge's tint follows the action's shape via the shared Core rule (a slotted
+    /// template is a Custom Action, a slot-less one a static link), matching the glyph
+    /// the result rows render.
+    private var badgeKind: ActionKind {
+        CustomActionDefinition.derivedKind(forTemplate: action.urlString)
+    }
+
+    /// The chosen leading glyph, normalized to *set* vs *unset* by the same Core rule
+    /// the produced Action uses — so a blank stored value shows no badge here exactly
+    /// as it renders the derived glyph on the result surfaces.
+    private var chosenGlyph: String? {
+        CustomActionDefinition.normalizedGlyph(action.glyph)
+    }
+
     var body: some View {
         HStack(spacing: 12) {
+            // The chosen glyph appears as a leading badge on the management-page row
+            // (CONTEXT.md → Custom Action; issue #163) — the same badge, tint, and
+            // weight the result rows wear. Purely opt-in: an action with no chosen
+            // symbol shows no badge here, so the row reads exactly as before.
+            if let glyph = chosenGlyph {
+                ProviderBadge(kind: badgeKind, symbol: glyph)
+            }
             VStack(alignment: .leading, spacing: 2) {
                 Text(action.title)
                     .font(.body)

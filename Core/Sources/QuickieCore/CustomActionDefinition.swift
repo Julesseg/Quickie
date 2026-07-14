@@ -50,19 +50,29 @@ public struct CustomActionDefinition: Equatable, Sendable {
     /// is ignored on read and pruned by `reconciledSpecs` — the same hard mirror the
     /// rows follow, so a deleted slot drops its config with no stashing.
     public var argumentSpecs: [String: ArgumentSpec]
+    /// The user-chosen **leading glyph** (CONTEXT.md → Custom Action; issue #163): an
+    /// SF Symbol name picked from the curated `CustomActionGlyphCatalog` in the editor,
+    /// which `makeAction` stamps onto the produced `Action.glyph` so it replaces the
+    /// kind-derived leading glyph on every surface. `nil` (the default) leaves the
+    /// derived glyph unchanged — a pure opt-in, so an action with no chosen symbol
+    /// looks exactly as before. `var` so it doubles as the editor's live view-model
+    /// surface, like the other fields.
+    public var glyph: String?
 
     public init(
         name: String,
         aliases: [String] = [],
         template: String,
         fillOrder: [String] = [],
-        argumentSpecs: [String: ArgumentSpec] = [:]
+        argumentSpecs: [String: ArgumentSpec] = [:],
+        glyph: String? = nil
     ) {
         self.name = name
         self.aliases = aliases
         self.template = template
         self.fillOrder = fillOrder
         self.argumentSpecs = argumentSpecs
+        self.glyph = glyph
     }
 
     /// The distinct `{name}` token names in **URL-appearance order** — the raw slots
@@ -284,7 +294,8 @@ public struct CustomActionDefinition: Equatable, Sendable {
                 aliases: aliases,
                 inputTypes: [],
                 outputType: .url,
-                content: .quicklink(id: id)
+                content: .quicklink(id: id),
+                glyph: normalizedGlyph
             ) { _ in .openURL(url) }
         }
         let template = self.template
@@ -308,11 +319,47 @@ public struct CustomActionDefinition: Equatable, Sendable {
             // stored record). Without the id it would read as `.none` and expose only
             // the universal Copy action deeplink.
             content: .customAction(id: id),
+            glyph: normalizedGlyph,
             effect: { _ in .none },
             multiStepEffect: { values in
                 CustomActionDefinition.fill(template: template, tokenNames: names, specs: specs, values: values)
             }
         )
+    }
+
+    /// The chosen glyph normalized to *set* vs *unset* (issue #163): a blank or
+    /// whitespace-only name collapses to `nil` so an "empty" glyph reads as unset (the
+    /// derived glyph applies) rather than an unrenderable blank symbol. The single
+    /// point the raw stored value becomes the leading-glyph override — `makeAction`
+    /// stamps it onto the Action, and the editor reads it so its "None" label can't
+    /// drift from what the surfaces actually render.
+    public var normalizedGlyph: String? {
+        Self.normalizedGlyph(glyph)
+    }
+
+    /// Normalizes a raw stored glyph string to *set* vs *unset* — the shared rule the
+    /// instance property and the App's management-page badge both read, so a
+    /// whitespace-only value reads as "no symbol" everywhere identically.
+    public static func normalizedGlyph(_ raw: String?) -> String? {
+        guard let raw, !raw.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+        else { return nil }
+        return raw
+    }
+
+    /// The `ActionKind` the produced Action wears, derived from **shape** (issue #163):
+    /// a slotted template is a `.customAction`, a slot-less one a static `.quicklink`
+    /// (the split `makeAction` applies). The single source of truth the editor's badge
+    /// preview and the management-page row share, so the shape→kind mapping — and the
+    /// tint it selects — never drifts across surfaces.
+    public var derivedKind: ActionKind {
+        Self.derivedKind(forTemplate: template)
+    }
+
+    /// The `ActionKind` a Custom Action with this URL template wears — exposed as a
+    /// static so a surface holding only a raw `urlString` (the management-page row)
+    /// resolves the same kind without rebuilding a definition.
+    public static func derivedKind(forTemplate template: String) -> ActionKind {
+        Action.templateContainsPlaceholder(template) ? .customAction : .quicklink
     }
 
     // MARK: - Save validation (the editor is the validator; ADR 0021, issue #94)
