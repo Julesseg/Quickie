@@ -79,14 +79,17 @@ public enum TypedContentDetector {
 
     /// The whole trimmed query as a **phone number**, returning its display form
     /// (trimmed, single trailing punctuation removed) or `nil` (CONTEXT.md →
-    /// Detected result). Accepts an optional leading `+` and the usual separators
-    /// (spaces, `-`, `.`, `()`), so `555-1212`, `(555) 123-4567`, and
-    /// `+1 555 123 4567` all read as one number while `call 555-1212` (prose) does
-    /// not. The number of *digits* must land inside `phoneDigitRange`, which is what
-    /// keeps `3.14` and a bare year like `2026` from firing.
+    /// Detected result). Accepts an optional leading `+` and the usual separators —
+    /// spaces, `-`, `()` — so `555-1212`, `(555) 123-4567`, and `+1 555 123 4567` all
+    /// read as one number while `call 555-1212` (prose) does not. The `.` is
+    /// deliberately **not** a separator: a dot-separated digit run is an IP address, a
+    /// long decimal, or a dotted date, not a phone number — the same all-numeric
+    /// dotted shape `url(in:)` excludes for the same reason. The number of *digits*
+    /// must also land inside `phoneDigitRange`, which keeps `3.14` and a bare year
+    /// like `2026` from firing.
     public static func phone(in query: String) -> String? {
         let candidate = strippingTrailingPunctuation(query.trimmingCharacters(in: .whitespacesAndNewlines))
-        let pattern = #"^\+?[0-9\s().\-]+$"#
+        let pattern = #"^\+?[0-9\s()\-]+$"#
         guard candidate.range(of: pattern, options: .regularExpression) != nil else { return nil }
         let digits = candidate.filter(\.isNumber).count
         guard phoneDigitRange.contains(digits) else { return nil }

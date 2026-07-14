@@ -99,6 +99,16 @@ struct TypedContentDetectionTests {
         #expect(TypedContentDetector.phone(in: "1234567890123456") == nil) // 16 digits — over the bound
     }
 
+    @Test("a dot-separated digit run is not a phone — IPs, long decimals, dotted dates")
+    func dottedNumericRunIsNotPhone() {
+        // `.` is not a phone separator: a dotted digit run with 7+ digits is an IP
+        // address, a long decimal (very on-brand for Computed), or a dotted date —
+        // the same all-numeric dotted shape url(in:) excludes.
+        #expect(TypedContentDetector.phone(in: "192.168.0.1") == nil)   // a local IP — 8 digits
+        #expect(TypedContentDetector.phone(in: "3.14159265") == nil)    // a bare decimal — 9 digits
+        #expect(TypedContentDetector.phone(in: "2026.01.15") == nil)    // a dotted date — 8 digits
+    }
+
     @Test("prose around a number never fires as a phone")
     func proseWithNumberDeclines() {
         #expect(TypedContentDetector.phone(in: "call 555-1212") == nil)
