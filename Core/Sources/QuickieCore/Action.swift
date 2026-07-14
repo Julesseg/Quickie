@@ -638,9 +638,18 @@ extension Action {
     /// surface renders a normal row. Its main action stages the text (CONTEXT.md
     /// → Stage); the Action carries only the entry's identity, and the app
     /// resolves it at the edge.
+    ///
+    /// `age` is the muted relative-age subtitle every entry wears (CONTEXT.md →
+    /// Pile, aging paragraph; issue #164) — "3w ago", formatted by `RelativeAge`
+    /// from the entry's persisted creation date and shown in the same
+    /// optional-subtitle channel a file row uses for its relative path. Optional
+    /// only so the many engine tests that don't care about aging can omit it;
+    /// the app always supplies it. Presentation only — it changes nothing about
+    /// the stage contract or matching.
     public static func pileEntry(
         id: String,
-        text: String
+        text: String,
+        age: String? = nil
     ) -> Action {
         let firstLine = text
             .split(separator: "\n", omittingEmptySubsequences: true)
@@ -650,6 +659,7 @@ extension Action {
             id: id,
             kind: .pile,
             title: String(firstLine.prefix(60)),
+            subtitle: age,
             aliases: [text],
             inputTypes: [],
             outputType: .text
