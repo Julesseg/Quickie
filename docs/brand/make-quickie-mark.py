@@ -57,12 +57,13 @@ ROT_DEG = 14.0
 # rx 30.25 / ry 20.25, inner (hole) edge rx 23.75 / ry 13.75. The ring is cut
 # into TRAIL_SEGMENTS annular sectors along the travel direction, one symbol
 # layer each, fading like the icon's trail (the icon's ease, a higher floor:
-# a tail at the icon's 0.12 would vanish at symbol point sizes, and 16 steps
-# ramp smoothly at those sizes where the icon needed 240 at 1024px).
+# a tail at the icon's 0.12 would vanish at symbol point sizes). 32 sectors
+# keep the largest neighbor step around 0.05 opacity — no visible banding
+# even at widget sizes — where the icon needed 240 quads at 1024px.
 OUTER_RX, OUTER_RY = 30.25, 20.25
 INNER_RX, INNER_RY = 23.75, 13.75
 DOT_R = 6.5
-TRAIL_SEGMENTS = 16
+TRAIL_SEGMENTS = 32
 TRAIL_ALPHA = (0.3, 1.0)     # fade-in floor -> release (icon: 0.12 -> 0.95)
 TRAIL_ALPHA_EASE = 2.2       # icon's ramp: stays faint long, brightens late
 
