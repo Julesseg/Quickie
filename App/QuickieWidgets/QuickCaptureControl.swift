@@ -13,7 +13,7 @@ import WidgetKit
 /// breadcrumb) matches the deep-link widget exactly.
 ///
 /// The control surfaces in the Control Center gallery with the app glyph (the same
-/// magnifying glass the deep-link widget shows, via `QuickieGlyph.app`) and the Quick
+/// Quickie mark the deep-link widget shows, via `QuickieGlyph.image`) and the Quick
 /// Capture title (drawn straight from `QuickCaptureIntent.title` so the label can't
 /// drift from the intent it invokes).
 ///
@@ -30,11 +30,11 @@ struct QuickCaptureControl: ControlWidget {
             // foregrounds the app and runs `perform()` in-app — the same door the
             // Quick Capture App Shortcut uses, not a second one.
             ControlWidgetButton(action: QuickCaptureIntent()) {
-                Label {
-                    Text(QuickCaptureIntent.title)
-                } icon: {
-                    Image(systemName: QuickieGlyph.app)
-                }
+                // `Label(_:image:)`, not an `icon:` closure wrapping an `Image`:
+                // Control Center archives the label out-of-process and resolves
+                // only symbol *references* — a custom symbol nested as a plain
+                // `Image` view silently renders nothing there.
+                Label(String(localized: QuickCaptureIntent.title), image: QuickieGlyph.name)
             }
         }
         .displayName(QuickCaptureIntent.title)

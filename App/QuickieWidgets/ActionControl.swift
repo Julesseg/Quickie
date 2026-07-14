@@ -50,10 +50,15 @@ private struct ActionControlLabel: View {
     let action: WidgetAction?
 
     var body: some View {
-        Label {
-            Text(action?.title ?? "Quickie")
-        } icon: {
-            Image(systemName: action?.glyph ?? QuickieGlyph.app)
+        // A resolved action wears its own SF Symbol; the unconfigured/stale
+        // fallback wears the brand mark. Both through `Label` initializers —
+        // never an `icon:` closure wrapping an `Image`: Control Center archives
+        // the label out-of-process and resolves only symbol *references*, so a
+        // nested `Image` view silently renders nothing there.
+        if let action {
+            Label(action.title, systemImage: action.glyph)
+        } else {
+            Label("Quickie", image: QuickieGlyph.name)
         }
     }
 }
