@@ -163,8 +163,16 @@ public enum SettingsKey {
     public static let reminderSteps = "reminder.steps"
     /// The New Reminder default-list choice: the target when the List step is off.
     public static let reminderList = "reminder.list"
-    /// The Calculator unit-conversion toggle (default on).
+    /// The Computed provider's five per-type toggles (ADR 0032), all default-on. The
+    /// keys keep the `calculator.` prefix because the persisted provider identity
+    /// stays `.calculator` — renaming would re-key stored state. Math and Unit
+    /// conversion gate the Calculator rows; URLs, Phone numbers, and Email addresses
+    /// gate the Detected result rows.
+    public static let calculatorMath = "calculator.math"
     public static let calculatorUnitConversion = "calculator.unitConversion"
+    public static let calculatorURL = "calculator.url"
+    public static let calculatorPhone = "calculator.phone"
+    public static let calculatorEmail = "calculator.email"
     /// The File Search inline-result cap stepper.
     public static let fileSearchInlineCap = "file-search.inlineCap"
     /// The Pile's Pending-query auto-save toggle (issue #152): on saves
@@ -260,11 +268,38 @@ public extension ProviderID {
                 ),
             ]
         case .calculator:
+            // The Computed provider's five per-type toggles (ADR 0032), all default-on,
+            // beneath the provider-level Enabled switch. Each suppresses exactly its
+            // rows; the three detection toggles off restore the pre-detection Calculator.
             return [
+                SettingOption(
+                    key: SettingsKey.calculatorMath,
+                    title: "Math",
+                    footer: "On answers arithmetic (e.g. \"23 * 7\"). Off keeps the row from appearing for a math expression.",
+                    kind: .toggle(default: true)
+                ),
                 SettingOption(
                     key: SettingsKey.calculatorUnitConversion,
                     title: "Unit conversion",
-                    footer: "On also answers offline unit conversions (e.g. \"10 km in mi\"). Off keeps the Calculator to arithmetic only.",
+                    footer: "On also answers offline unit conversions (e.g. \"10 km in mi\"). Off keeps Computed to arithmetic only.",
+                    kind: .toggle(default: true)
+                ),
+                SettingOption(
+                    key: SettingsKey.calculatorURL,
+                    title: "URLs",
+                    footer: "On turns a typed link or bare domain (e.g. \"apple.com\") into an Open row. Off leaves it to the web-search fallback.",
+                    kind: .toggle(default: true)
+                ),
+                SettingOption(
+                    key: SettingsKey.calculatorPhone,
+                    title: "Phone numbers",
+                    footer: "On turns a typed phone number (e.g. \"555-1212\") into Message and Call rows. Off suppresses them.",
+                    kind: .toggle(default: true)
+                ),
+                SettingOption(
+                    key: SettingsKey.calculatorEmail,
+                    title: "Email addresses",
+                    footer: "On turns a typed email address (e.g. \"me@work.com\") into an Email row. Off suppresses it.",
                     kind: .toggle(default: true)
                 ),
             ]

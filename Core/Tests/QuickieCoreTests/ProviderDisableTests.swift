@@ -55,7 +55,7 @@ struct ProviderDisableTests {
         // The dynamic injectors are kinds too (issue #67): Calculator declares
         // `.calculator`, so its type-triggered top row obeys the same switch as
         // an indexed catalog.
-        let providers: [Provider] = [CalculatorProvider(), IndexedProvider.builtIns()]
+        let providers: [Provider] = [ComputedProvider(), IndexedProvider.builtIns()]
 
         let enabled = SearchEngine(providers: providers)
         #expect(enabled.results(for: "5+5").map(\.id).contains("calc.math"))

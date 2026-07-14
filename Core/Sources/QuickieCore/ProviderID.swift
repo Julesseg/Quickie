@@ -45,7 +45,9 @@ public enum ProviderID: String, CaseIterable, Equatable, Hashable, Sendable {
         case .reminders: return "Reminders"
         case .events: return "Events"
         case .system: return "System"
-        case .calculator: return "Calculator"
+        // The persisted raw value stays `calculator` (ADR 0032) but the provider
+        // presents as **Computed** everywhere user-facing.
+        case .calculator: return "Computed"
         case .fileSearch: return "File Search"
         }
     }

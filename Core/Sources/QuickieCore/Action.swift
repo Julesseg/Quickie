@@ -766,18 +766,23 @@ extension Action {
         ) { _ in .openPage(.settings(panel: .fallbacks)) }
     }
 
-    /// The "Calculator" command (CONTEXT.md → Settings command row; ADR 0019):
-    /// the Calculator provider's typed row, deeplinking to its page under the
-    /// hub. Brand-new — as a dynamic injector it never had a management row, so
-    /// this is what makes the provider reachable (and, later, re-enableable) by
-    /// typing its name. Distinct from a calculator *result*, which only appears
-    /// when the query is a math expression.
+    /// The "Computed" command (CONTEXT.md → Settings command row; ADR 0019, 0032):
+    /// the Computed provider's typed row, deeplinking to its page under the hub.
+    /// Brand-new — as a dynamic injector it never had a management row, so this is
+    /// what makes the provider reachable (and re-enableable) by typing its name. The
+    /// provider presents as **Computed**, but "calculator", "converter", and
+    /// "detector" survive as typed aliases so the rename strands no one (ADR 0032).
+    /// Distinct from a Computed *result*, which only appears when the query is a math
+    /// expression, a conversion, or a detected URL / phone / email.
     public static func openCalculatorPage() -> Action {
         Action(
             id: "builtin.calculator-page",
             kind: .managementPage,
-            title: "Calculator",
-            aliases: ["calc", "calculator settings", "unit conversion"],
+            // "calculator", "converter", and "detector" are the aliases ADR 0032
+            // names; "calc" and "unit conversion" are the row's pre-rename aliases,
+            // kept so the rename strands no one who already types them.
+            title: "Computed",
+            aliases: ["calculator", "converter", "detector", "calc", "unit conversion"],
             inputTypes: [],
             outputType: .text
         ) { _ in .openPage(.settings(panel: .calculator)) }

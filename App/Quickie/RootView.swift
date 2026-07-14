@@ -68,10 +68,16 @@ struct RootView: View {
     @AppStorage(SettingsKey.eventCalendar) private var eventCalendar = ""
     @AppStorage(SettingsKey.eventEditor) private var eventUseEditor = false
 
-    /// The Calculator unit-conversion toggle and File Search inline-result cap — the
-    /// representative new schema options (ADR 0020; issue #69), read here so flipping
-    /// one on its provider page rebuilds the engine with the new provider config.
+    /// The Computed provider's five per-type toggles (ADR 0020, 0032) and the File
+    /// Search inline-result cap, read here so flipping one on its provider page
+    /// rebuilds the engine with the new provider config. Math and Unit conversion
+    /// gate the Calculator rows; URLs, Phone numbers, and Email addresses gate the
+    /// Detected result rows — all default-on.
+    @AppStorage(SettingsKey.calculatorMath) private var calculatorMath = true
     @AppStorage(SettingsKey.calculatorUnitConversion) private var calculatorUnitConversion = true
+    @AppStorage(SettingsKey.calculatorURL) private var calculatorURL = true
+    @AppStorage(SettingsKey.calculatorPhone) private var calculatorPhone = true
+    @AppStorage(SettingsKey.calculatorEmail) private var calculatorEmail = true
     @AppStorage(SettingsKey.fileSearchInlineCap) private var fileSearchInlineCap = 3
 
     /// The Pile's **Pending query** auto-save toggle (CONTEXT.md → Pending query;
@@ -271,10 +277,17 @@ struct RootView: View {
         )
         return SearchEngine(
             providers: [
-                // The Dynamic Calculator + unit-conversion Provider. The
-                // unit-conversion branch is gated by its schema toggle (ADR 0020;
-                // issue #69): off keeps the Calculator to arithmetic only.
-                CalculatorProvider(unitConversion: calculatorUnitConversion),
+                // The Computed provider (ADR 0032): the Calculator (math + unit
+                // conversion) plus Detected result rows (URL / phone / email). Each
+                // of its five schema toggles suppresses exactly its rows; the three
+                // detection toggles off restore the pre-detection Calculator.
+                ComputedProvider(
+                    math: calculatorMath,
+                    unitConversion: calculatorUnitConversion,
+                    url: calculatorURL,
+                    phone: calculatorPhone,
+                    email: calculatorEmail
+                ),
                 // File Search (CONTEXT.md → File Search; ADR 0015): a ranked-dynamic
                 // Provider serving the current filename snapshot. Its survivors are
                 // scored and ranked by match quality, never boosted to the top, so
@@ -1492,10 +1505,21 @@ struct RootView: View {
             case .copyText(let text), .copyAndStage(let text): return text
             default: return nil
             }
-        case .url, .quicklink:
-            // A Quicklink carries a real static URL just like a bare `.url` value, so
-            // both copy the string its open outcome would open. Its extra `.quicklink`
-            // identity only adds Edit — it changes nothing about what Copy resolves.
+        case .url:
+            // A bare `.url` value copies the string its open outcome would open —
+            // except a Detected result row (Computed) opens a `tel:`/`sms:`/`mailto:`
+            // URL whose *bare value* is the number or address the user typed, not the
+            // scheme URI (CONTEXT.md → Detected result). `bareValue` reduces those to
+            // the recipient and returns nil for a web URL, whose own string is already
+            // the value — so an Open row still copies `https://apple.com`.
+            if case .openURL(let url) = action.run(input: query) {
+                return TypedContentDetector.bareValue(forDetectedURL: url) ?? url.absoluteString
+            }
+            return nil
+        case .quicklink:
+            // A Quicklink carries a real static URL; it copies exactly the string its
+            // open outcome would open. Its `.quicklink` identity only adds Edit — it
+            // changes nothing about what Copy resolves.
             if case .openURL(let url) = action.run(input: query) { return url.absoluteString }
             return nil
         case .pileEntry(let id):
@@ -1525,9 +1549,21 @@ struct RootView: View {
             case .copyText(let text), .copyAndStage(let text): shareRequest = ShareRequest(items: [text])
             default: break
             }
-        case .url, .quicklink:
-            // Both share the static URL their open outcome carries (the sheet then
-            // offers link actions); a Quicklink's `.quicklink` identity only adds Edit.
+        case .url:
+            // A bare `.url` value shares the URL its open outcome carries (the sheet
+            // then offers link actions) — except a Detected result row's `tel:`/`sms:`/
+            // `mailto:` URL shares as its bare number/address string instead, the value
+            // the user typed (CONTEXT.md → Detected result); a web URL shares as a URL.
+            if case .openURL(let url) = action.run(input: query) {
+                if let bare = TypedContentDetector.bareValue(forDetectedURL: url) {
+                    shareRequest = ShareRequest(items: [bare])
+                } else {
+                    shareRequest = ShareRequest(items: [url])
+                }
+            }
+        case .quicklink:
+            // A Quicklink shares the static URL its open outcome carries; its
+            // `.quicklink` identity only adds Edit.
             if case .openURL(let url) = action.run(input: query) { shareRequest = ShareRequest(items: [url]) }
         case .pileEntry(let id):
             if let text = livePileEntries.first(where: { $0.actionID == id })?.text {

@@ -181,7 +181,7 @@ private struct ChoiceOptionRow: View {
 }
 
 /// The unified page for a provider with **no enumerable instances** (CONTEXT.md →
-/// Management page; ADR 0019): Calculator, Reminders, and Events show only the
+/// Management page; ADR 0019): Computed, Reminders, and Events show only the
 /// Options section — there is no content list to render beneath it. Content
 /// providers (File Search included, whose content is its folder grants) instead
 /// lead their own list pages with the same `ProviderOptionsSection`.
