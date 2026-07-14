@@ -5,9 +5,9 @@ import QuickieStoreKit
 
 /// The **Catalog** Browse page (CONTEXT.md → Catalog; ADR 0028; issue #143): a
 /// read-only, sectioned gallery of ready-made Custom Action templates, pushed from
-/// the "Browse catalog" row on the Custom Actions page. Each row shows the template's
-/// name, its URL, an optional "Requires <app>" note, and a per-entry **Install**
-/// button.
+/// the "Browse catalog" row on the Custom Actions page. Each row shows the entry's
+/// default-glyph badge, the template's name, its URL, an optional "Requires <app>"
+/// note, and a per-entry **Install** button.
 ///
 /// Install stamps out an *ordinary* Custom Action under a fresh id (`make(from:)`
 /// mints a UUID) and flashes a momentary "Added" confirmation — there is no
@@ -60,15 +60,26 @@ struct CatalogView: View {
     }
 }
 
-/// One Catalog entry row: name, URL template, optional "Requires <app>" note, and the
-/// Install button (which morphs to a momentary "Added" confirmation).
+/// One Catalog entry row: the entry's default-glyph badge, name, URL template,
+/// optional "Requires <app>" note, and the Install button (which morphs to a
+/// momentary "Added" confirmation).
 private struct CatalogEntryRow: View {
     let entry: CatalogEntry
     let justAdded: Bool
     let onInstall: () -> Void
 
+    /// The badge's tint follows the entry's shape via the shared Core rule (a slotted
+    /// template installs a Custom Action, a slot-less one a static link) — the same
+    /// badge the installed action's management-page row and result rows will wear.
+    private var badgeKind: ActionKind {
+        CustomActionDefinition.derivedKind(forTemplate: entry.template)
+    }
+
     var body: some View {
         HStack(spacing: 12) {
+            if let glyph = CustomActionDefinition.normalizedGlyph(entry.glyph) {
+                ProviderBadge(kind: badgeKind, symbol: glyph)
+            }
             VStack(alignment: .leading, spacing: 2) {
                 Text(entry.name)
                     .font(.body)

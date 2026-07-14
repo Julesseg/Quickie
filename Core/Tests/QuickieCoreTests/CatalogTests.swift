@@ -28,6 +28,47 @@ struct CatalogTests {
         }
     }
 
+    // MARK: - Default glyphs (every entry ships a best-match curated symbol)
+
+    @Test("every catalog entry carries a default glyph from the curated glyph catalog")
+    func everyEntryCarriesACuratedGlyph() {
+        // The curated set is what the editor's picker offers — a glyph outside it
+        // would render fine but be unreachable to re-pick after clearing, and could
+        // even be a typo'd, unrenderable symbol name. Membership pins both.
+        let curated = Set(CustomActionGlyphCatalog.all.map(\.name))
+        for entry in Catalog.entries {
+            let glyph = CustomActionDefinition.normalizedGlyph(entry.glyph)
+            #expect(glyph != nil, "\(entry.name) ships no default glyph")
+            if let glyph {
+                #expect(curated.contains(glyph), "\(entry.name)'s glyph '\(glyph)' is not in the curated catalog")
+            }
+        }
+    }
+
+    @Test("an entry's default glyph flows into the definition an install persists")
+    func glyphFlowsIntoInstalledDefinition() {
+        // Install persists `entry.definition` verbatim, and `makeAction` stamps the
+        // glyph onto the produced Action — so the row's badge, the installed action,
+        // and every result surface agree.
+        for entry in Catalog.entries {
+            #expect(entry.definition.glyph == entry.glyph, "\(entry.name)'s definition drops its glyph")
+            #expect(entry.definition.makeAction(id: entry.id)?.glyph == entry.glyph,
+                    "\(entry.name)'s Action does not wear its default glyph")
+        }
+    }
+
+    @Test("every default seed carries a curated default glyph")
+    func everySeedCarriesACuratedGlyph() {
+        let curated = Set(CustomActionGlyphCatalog.all.map(\.name))
+        for seed in CatalogSeed.all {
+            let glyph = seed.definition.normalizedGlyph
+            #expect(glyph != nil, "\(seed.id) ships no default glyph")
+            if let glyph {
+                #expect(curated.contains(glyph), "\(seed.id)'s glyph '\(glyph)' is not in the curated catalog")
+            }
+        }
+    }
+
     @Test("catalog entry ids are unique")
     func entryIDsAreUnique() {
         let ids = Catalog.entries.map(\.id)
@@ -102,6 +143,7 @@ struct CatalogTests {
             #expect(entry != nil, "\(seed.id) is missing from the Sites section")
             #expect(entry?.definition.template == seed.definition.template)
             #expect(entry?.definition.name == seed.definition.name)
+            #expect(entry?.definition.glyph == seed.definition.glyph)
         }
     }
 
@@ -115,6 +157,7 @@ struct CatalogTests {
             #expect(entry?.definition.template == seed.definition.template)
             #expect(entry?.definition.name == seed.definition.name)
             #expect(entry?.definition.aliases == seed.definition.aliases)
+            #expect(entry?.definition.glyph == seed.definition.glyph)
         }
     }
 }
