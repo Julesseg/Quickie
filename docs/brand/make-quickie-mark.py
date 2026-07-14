@@ -434,7 +434,10 @@ H_REFERENCE = (
 )
 
 
-def main():
+def build():
+    """The finished template, as a string — main() writes it to OUT, and
+    docs/brand/check-brand-assets.py byte-compares it against the checked-in
+    file to catch a stale or hand-edited symbolset."""
     xmin, ymin, xmax, ymax = glyph_bbox()
     scale_s = GLYPH_HEIGHT_S / (ymax - ymin)
     ymid = (ymin + ymax) / 2
@@ -464,12 +467,17 @@ def main():
     for key, value in margins.items():
         svg = svg.replace("{%s}" % key, fmt(value))
     assert not re.search(r"\{[A-Z_]+\}", svg), "unfilled skeleton placeholder"
+    return svg
 
-    OUT.write_text(svg)
+
+def main():
+    OUT.write_text(build())
+    xmin, ymin, xmax, ymax = glyph_bbox()
+    width_s = (xmax - xmin) * GLYPH_HEIGHT_S / (ymax - ymin)
     print(f"wrote {OUT.relative_to(REPO)}")
     print(f"  S glyph: {width_s:.2f} x {GLYPH_HEIGHT_S} "
-          f"(cap height {CAP_HEIGHT}), M glyph: {width_m:.2f} wide, "
-          f"{len(layers)} layers ({TRAIL_SEGMENTS} fading + 1 opaque)")
+          f"(cap height {CAP_HEIGHT}), M glyph: {width_s * M_SCALE:.2f} wide, "
+          f"{TRAIL_SEGMENTS + 1} layers ({TRAIL_SEGMENTS} fading + 1 opaque)")
 
 
 if __name__ == "__main__":

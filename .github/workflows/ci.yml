@@ -34,6 +34,20 @@ jobs:
         working-directory: Core
         run: swift test
 
+  # Generated brand assets (icon/mark SVGs) must match their generators, and
+  # QuickieGlyph.swift's hand-copied color literals must match the icon's
+  # constants — drift is silent otherwise (a malformed symbol even renders as
+  # an EMPTY Control Center glyph). Caveat: a docs/**-only push skips CI
+  # entirely (paths-ignore above), so a generator-only edit that forgot to
+  # regenerate is caught on the next full run rather than its own.
+  brand-assets:
+    name: Brand · generated assets in sync
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - name: Regenerate and compare brand assets
+        run: python3 docs/brand/check-brand-assets.py
+
   # Partition the XCUITest classes into shards so the (slow) UI suite can run
   # across several macOS runners in parallel. One sim-per-runner sidesteps the
   # contention that made same-runner `-parallel-testing-enabled` *slower* and
