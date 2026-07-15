@@ -39,8 +39,11 @@ ICONSET = REPO / "App/Quickie/Assets.xcassets/AppIcon.appiconset"
 
 # ---------------------------------------------------------------------------
 # Design constants (icon frame: 100x100 viewBox, orbit center (50,45), the
-# whole glyph rotated 14 degrees about the center).
+# whole glyph rotated 14 degrees and scaled by GLYPH_SCALE about the center).
 # ---------------------------------------------------------------------------
+GLYPH_SCALE = 1.2                   # glyph size about the orbit center; at 1.2
+                                    # every extreme (arrow tip/head, orbit rim)
+                                    # still clears the iOS squircle mask
 ORBIT_RX, ORBIT_RY = 27.0, 17.0     # trail centerline ellipse
 TRAIL_SEGMENTS = 240                # quads approximating the along-path ramp
 TRAIL_ALPHA = (0.12, 0.95)          # fade-in floor -> release
@@ -147,7 +150,8 @@ def build_svg(appearance):
     color_parts = [polygon(pts, paint(c)) for pts, c, _ in quads]
     color_parts.append(arrow(paint(WHITE)))
 
-    rot = '<g transform="rotate(14 50 45)">'
+    rot = (f'<g transform="translate(50 45) rotate(14) '
+           f'scale({fmt(GLYPH_SCALE)}) translate(-50 -45)">')
     lines = ['<svg width="1024" height="1024" viewBox="0 0 100 100" '
              'xmlns="http://www.w3.org/2000/svg">',
              "<defs>"]
@@ -186,48 +190,49 @@ def find_chromium():
     return None
 
 
+RENDER_PAD = 200  # some headless Chromium builds size the viewport ~90px short
+                  # of --window-size (the shipped light icon once ended at row
+                  # ~937); render taller than the icon and crop the pad back off
+
+
 def render(chromium, svg_path, png_path):
     subprocess.run(
         [chromium, "--headless", "--no-sandbox", "--disable-gpu",
-         f"--screenshot={png_path}", "--window-size=1024,1024",
+         f"--screenshot={png_path}", f"--window-size=1024,{1024 + RENDER_PAD}",
          "--force-device-scale-factor=1",
          "--default-background-color=00000000", "--hide-scrollbars",
          f"file://{svg_path}"],
         check=True, capture_output=True)
+    width, height, color, rows = decode_png(png_path)
+    if height > 1024:
+        write_png(png_path, width, 1024, color, rows[:1024])
 
 
-def assert_full_bleed(png_path):
-    """Fail if the opaque (light) render doesn't cover the full 1024x1024.
-
-    Some headless Chromium builds screenshot the SVG short of the window (the
-    shipped light icon once ended at row ~937), leaving transparent rows that
-    iOS composites as a white line at the squircle's bottom edge. Decode the
-    PNG (pure stdlib) and require fully opaque corners.
-    """
+def decode_png(png_path):
+    """Decode an RGB/RGBA PNG (pure stdlib) into (width, height, color, rows)."""
     data = png_path.read_bytes()
-    pos, idat, width, height = 8, b"", None, None
+    pos, idat, width, height, color = 8, b"", None, None, None
     while pos < len(data):
         (length,) = struct.unpack(">I", data[pos:pos + 4])
         kind = data[pos + 4:pos + 8]
         if kind == b"IHDR":
             width, height, _bits, color = struct.unpack(">IIBB", data[pos + 8:pos + 18])
-            if color == 2:
-                return  # RGB without alpha: every pixel is opaque, so full bleed
-            if color != 6:
+            if color not in (2, 6):
                 raise SystemExit(f"{png_path.name}: unexpected PNG color type {color}")
         elif kind == b"IDAT":
             idat += data[pos + 8:pos + 8 + length]
         pos += 12 + length
-    raw, stride = zlib.decompress(idat), width * 4
+    bpp = 4 if color == 6 else 3
+    raw, stride = zlib.decompress(idat), width * bpp
     prev = bytearray(stride)
     rows = []
     for y in range(height):
         offset = y * (stride + 1)
         filt, line = raw[offset], bytearray(raw[offset + 1:offset + 1 + stride])
         for i in range(stride):
-            a = line[i - 4] if i >= 4 else 0
+            a = line[i - bpp] if i >= bpp else 0
             b = prev[i]
-            c = prev[i - 4] if i >= 4 else 0
+            c = prev[i - bpp] if i >= bpp else 0
             if filt == 1:
                 line[i] = (line[i] + a) & 0xFF
             elif filt == 2:
@@ -240,6 +245,30 @@ def assert_full_bleed(png_path):
                 line[i] = (line[i] + (a if pa <= pb and pa <= pc else b if pb <= pc else c)) & 0xFF
         rows.append(line)
         prev = line
+    return width, height, color, rows
+
+
+def write_png(png_path, width, height, color, rows):
+    def chunk(kind, payload):
+        body = kind + payload
+        return struct.pack(">I", len(payload)) + body + struct.pack(">I", zlib.crc32(body))
+
+    ihdr = struct.pack(">IIBBBBB", width, height, 8, color, 0, 0, 0)
+    raw = b"".join(b"\x00" + bytes(row) for row in rows)
+    png_path.write_bytes(b"\x89PNG\r\n\x1a\n" + chunk(b"IHDR", ihdr)
+                         + chunk(b"IDAT", zlib.compress(raw, 9)) + chunk(b"IEND", b""))
+
+
+def assert_full_bleed(png_path):
+    """Fail if the opaque (light) render doesn't cover the full 1024x1024.
+
+    Even with render()'s padded window, a Chromium build could still screenshot
+    the SVG short of the icon, leaving transparent rows that iOS composites as
+    a white line at the squircle's bottom edge. Require fully opaque corners.
+    """
+    width, height, color, rows = decode_png(png_path)
+    if color == 2:
+        return  # RGB without alpha: every pixel is opaque, so full bleed
     corners = [(0, 0), (width - 1, 0), (0, height - 1), (width - 1, height - 1),
                (width // 2, height - 1)]
     for x, y in corners:
