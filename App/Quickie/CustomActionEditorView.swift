@@ -70,14 +70,26 @@ struct CustomActionEditorView: View {
                         // replays them onto the binding, placing the caret
                         // explicitly because a programmatic text replacement would
                         // otherwise reset it to the end of the field.
+                        //
+                        // The rewrite is applied on the *next* main-loop tick, not
+                        // inside this update: the field is still flushing the
+                        // keystroke that triggered the change, and a rewrite issued
+                        // mid-flush is overwritten by the field's own text sync
+                        // (under fast/synthesized typing the auto-close never
+                        // landed). The staleness guard drops the deferred rewrite
+                        // if another edit arrived first, so it can never clobber
+                        // newer input.
                         .onChange(of: def.template) { oldValue, newValue in
                             guard let adjustment = BraceAutoClose.adjusted(replacing: oldValue, with: newValue)
                             else { return }
-                            def.template = adjustment.text
-                            let caret = adjustment.text.index(
-                                adjustment.text.startIndex, offsetBy: adjustment.caretOffset
-                            )
-                            templateSelection = TextSelection(insertionPoint: caret)
+                            Task { @MainActor in
+                                guard def.template == newValue else { return }
+                                def.template = adjustment.text
+                                let caret = adjustment.text.index(
+                                    adjustment.text.startIndex, offsetBy: adjustment.caretOffset
+                                )
+                                templateSelection = TextSelection(insertionPoint: caret)
+                            }
                         }
                 } header: {
                     Text("URL template")

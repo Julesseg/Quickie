@@ -173,17 +173,32 @@ final class CustomActionUITests: XCTestCase {
         XCTAssertTrue(urlField.waitForExistence(timeout: 5))
         urlField.tap()
 
+        // The rewrite is applied a main-loop tick after the keystroke (the field
+        // must finish flushing the edit first), so poll for the value rather
+        // than reading it instantly.
         urlField.typeText("app://x?a={")
-        XCTAssertEqual(urlField.value as? String, "app://x?a={}",
-                       "typing { auto-closes the brace pair")
+        XCTAssertTrue(waitForValue("app://x?a={}", in: urlField),
+                      "typing { auto-closes the brace pair (was: \(urlField.value ?? ""))")
 
         // The caret sits between the braces, so the name lands inside the pair and
         // the user's own } collapses onto the auto-inserted close.
         urlField.typeText("title}")
-        XCTAssertEqual(urlField.value as? String, "app://x?a={title}",
-                       "the name lands inside the pair and } skips the auto-close")
+        XCTAssertTrue(waitForValue("app://x?a={title}", in: urlField),
+                      "the name lands inside the pair and } skips the auto-close (was: \(urlField.value ?? ""))")
         XCTAssertTrue(app.textFields["custom-action-arg.title"].waitForExistence(timeout: 5),
                       "the auto-closed slot mirrors an argument row")
+    }
+
+    /// Waits for a text field's value to settle to `expected` — the brace rules
+    /// rewrite the field one main-loop tick after the triggering keystroke, so an
+    /// instant read races the deferred update.
+    @MainActor
+    private func waitForValue(_ expected: String, in field: XCUIElement, timeout: TimeInterval = 5) -> Bool {
+        let settled = XCTNSPredicateExpectation(
+            predicate: NSPredicate(format: "value == %@", expected),
+            object: field
+        )
+        return XCTWaiter().wait(for: [settled], timeout: timeout) == .completed
     }
 
     /// The date slot's two default output formats are one-tap fills (format strings
