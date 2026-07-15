@@ -818,9 +818,7 @@ struct RootView: View {
                     // (CONTEXT.md → Shortcut Action): an import must never flood
                     // results — the user enables the ones they want from the
                     // Shortcuts page. Re-sync survivors keep their existing state.
-                    for name in importedNames {
-                        instanceEnablement.disable(Action.shortcutID(for: name))
-                    }
+                    instanceEnablement.disable(importedNames.map { Action.shortcutID(for: $0) })
                     return
                 }
                 if let deeplink = QuickieDeeplink.parse(url) { handleDeeplink(deeplink); return }
