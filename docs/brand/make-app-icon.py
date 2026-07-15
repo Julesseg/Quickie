@@ -46,6 +46,8 @@ TRAIL_SEGMENTS = 240                # quads approximating the along-path ramp
 TRAIL_ALPHA = (0.12, 0.95)          # fade-in floor -> release
 TRAIL_ALPHA_EASE = 2.2              # >1: stays faint long, brightens late
 TRAIL_WHITEN_EASE = 5.0             # color holds lavender, whitens on approach
+TRAIL_SOLID_FROM = 0.88             # ramps saturate here: solid white before the
+                                    # arrow overlaps the head, hiding its tail edge
 TRAIL_WIDTH = (5.5, 6.5)            # comet tail -> head stroke width
 LAVENDER = (203, 184, 255)          # #CBB8FF
 WHITE = (255, 255, 255)
@@ -87,8 +89,9 @@ def trail_quads():
         u0 = i / TRAIL_SEGMENTS
         u1 = min(1.0, (i + 1.6) / TRAIL_SEGMENTS)   # slight overlap: no AA seams
         um = (u0 + u1) / 2
-        alpha = TRAIL_ALPHA[0] + (TRAIL_ALPHA[1] - TRAIL_ALPHA[0]) * um ** TRAIL_ALPHA_EASE
-        color = mix(LAVENDER, WHITE, um ** TRAIL_WHITEN_EASE)
+        prog = min(1.0, um / TRAIL_SOLID_FROM)
+        alpha = TRAIL_ALPHA[0] + (TRAIL_ALPHA[1] - TRAIL_ALPHA[0]) * prog ** TRAIL_ALPHA_EASE
+        color = mix(LAVENDER, WHITE, prog ** TRAIL_WHITEN_EASE)
         pts = []
         for u, sign in ((u0, 1), (u1, 1), (u1, -1), (u0, -1)):
             t = math.radians(450 - 360 * u)
