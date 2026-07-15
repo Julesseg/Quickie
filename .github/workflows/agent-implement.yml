@@ -1,0 +1,52 @@
+name: Agent implement (Paseo)
+
+run-name: "Agent implement: issue #${{ inputs.issue }}"
+
+# Spawns a detached Paseo agent session on the self-hosted Mac runner to
+# implement one issue. Dispatched by unblock-dispatch.yml; can also be run
+# manually from the Actions tab for any issue number.
+# See docs/agents/auto-dispatch.md for the runner + Paseo setup.
+
+on:
+  workflow_dispatch:
+    inputs:
+      issue:
+        description: "Issue number to implement"
+        required: true
+        type: string
+
+permissions: {}
+
+jobs:
+  spawn:
+    runs-on: [self-hosted, macOS]
+    timeout-minutes: 15
+    steps:
+      - name: Spawn detached Paseo session
+        env:
+          ISSUE: ${{ inputs.issue }}
+          REPO: ${{ github.repository }}
+          PROJECT_DIR: ${{ vars.PASEO_PROJECT_DIR }}
+        run: |
+          set -euo pipefail
+          # Runner services start with a minimal PATH; include the usual
+          # CLI install locations.
+          export PATH="$PATH:/opt/homebrew/bin:/usr/local/bin:$HOME/.local/bin"
+          command -v paseo >/dev/null || { echo "::error::paseo CLI not found on the runner's PATH" >&2; exit 1; }
+          if [ -z "${PROJECT_DIR:-}" ]; then
+            echo "::error::Set the PASEO_PROJECT_DIR repository Actions variable to the Quickie checkout path on this Mac" >&2
+            exit 1
+          fi
+
+          prompt=$(cat <<EOF
+          Implement GitHub issue #${ISSUE} of ${REPO} end to end.
+
+          Read the issue first: \`gh issue view ${ISSUE} --comments\`. Follow AGENTS.md: implement all of it including any UI work, verify the logic with \`cd Core && swift test\`, and use Conventional Commit subjects and a matching PR title. You are working in an isolated worktree on branch claude/issue-${ISSUE}. When done, push with \`git push -u origin claude/issue-${ISSUE}\` and open a ready-for-review PR whose body contains "Closes #${ISSUE}".
+
+          If you cannot complete the issue, remove its \`agent-dispatched\` label and comment on the issue explaining what is missing.
+          EOF
+          )
+
+          # --detach: the session runs under the Paseo daemon, so it outlives
+          # this job; progress is visible in the Paseo apps.
+          paseo run --detach --provider claude --cwd "$PROJECT_DIR" --worktree "claude/issue-${ISSUE}" "$prompt"
