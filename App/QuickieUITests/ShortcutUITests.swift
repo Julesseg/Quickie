@@ -103,7 +103,12 @@ final class ShortcutUITests: XCTestCase {
             enabled.waitForExistence(timeout: 10),
             "the shortcut's page leads with its Enabled toggle"
         )
-        XCTAssertEqual(enabled.value as? String, "1", "an imported shortcut starts enabled")
+        // A *seeded* shortcut arrives pre-enabled: the seed hook hands tests
+        // surfaced, runnable rows (the state after a user enables their imports).
+        // A real URL import starts every new shortcut disabled — that wiring lives
+        // in the app root's onOpenURL, which XCUITest can't drive, and the pure
+        // added-names split is covered by QuickieCore's ShortcutImportTests.
+        XCTAssertEqual(enabled.value as? String, "1", "a seeded shortcut arrives pre-enabled")
 
         let acceptsInput = app.switches["shortcut-accepts-input.Start Workout"]
         XCTAssertTrue(

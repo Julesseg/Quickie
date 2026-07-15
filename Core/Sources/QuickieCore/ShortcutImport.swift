@@ -84,4 +84,15 @@ public enum ShortcutImport {
             ShortcutEntry(name: name, acceptsInput: toggleByName[name.lowercased()] ?? false)
         }
     }
+
+    /// The names in `names` that are **new** to `existing` — matched by name,
+    /// case-insensitively, exactly like `reconcile` — in payload order. These are
+    /// the fresh imports a sync adds; the app layer starts each one **disabled**
+    /// (CONTEXT.md → Disabled) so an import never floods results — the user
+    /// enables the shortcuts they actually want from the Shortcuts page, while a
+    /// re-sync's survivors keep whatever enablement they already have.
+    public static func addedNames(existing: [ShortcutEntry], names: [String]) -> [String] {
+        let known = Set(existing.map { $0.name.lowercased() })
+        return names.filter { !known.contains($0.lowercased()) }
+    }
 }

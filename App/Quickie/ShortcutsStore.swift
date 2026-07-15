@@ -48,6 +48,12 @@ final class ShortcutsStore {
     /// separate argv entries by the simulator (only the first name would survive),
     /// so the hook rejoins the comma-separated names into the newline payload the
     /// URL scheme really carries before handing it to `ingest`.
+    ///
+    /// Seeds arrive **pre-enabled**: a real URL import starts every new shortcut
+    /// instance-disabled (the app root disables the ingest's added names), but the
+    /// seed runs before the EnablementStore wiring exists and its job is to hand a
+    /// test surfaced, runnable rows without a per-shortcut enable dance — the state
+    /// a user reaches after enabling their imports.
     static let uitestSeedArgument = "-uitest-seed-shortcuts"
 
     /// The launch argument that seeds imported shortcuts **with `acceptsInput` on**
@@ -98,22 +104,27 @@ final class ShortcutsStore {
     /// Ingests a raw Sync-Shortcut payload — the whole import/re-sync round-trip:
     /// parse (split/trim/dedup/self-filter) then reconcile against the current set
     /// (universal auto-prune keyed by name, preserving each survivor's toggle), and
-    /// persist. Both a first import and a re-sync are this one call.
-    func ingest(payload: String) {
+    /// persist. Both a first import and a re-sync are this one call. Returns the
+    /// names the ingest **added** (case-insensitively new to the set) so the app
+    /// root can start each one instance-disabled — imported shortcuts are opt-in
+    /// (CONTEXT.md → Shortcut Action), while a re-sync's survivors keep their state.
+    @discardableResult
+    func ingest(payload: String) -> [String] {
         let names = ShortcutImport.parse(payload, selfName: Self.syncShortcutName)
+        let added = ShortcutImport.addedNames(existing: entries, names: names)
         entries = ShortcutImport.reconcile(existing: entries, names: names)
         persist()
+        return added
     }
 
-    /// Ingests the names carried by an inbound `quickie://import?names=…` URL,
-    /// returning whether the URL was the import route (so the app root can tell a
-    /// handled import from a URL meant for another handler). A non-import URL
-    /// leaves the set untouched.
-    @discardableResult
-    func handle(url: URL) -> Bool {
-        guard let payload = ShortcutImport.namesPayload(from: url) else { return false }
-        ingest(payload: payload)
-        return true
+    /// Ingests the names carried by an inbound `quickie://import?names=…` URL.
+    /// Returns the ingest's **added** names when the URL was the import route — so
+    /// the app root can start them disabled, and tell a handled import from a URL
+    /// meant for another handler — or `nil` for a non-import URL, which leaves the
+    /// set untouched.
+    func handle(url: URL) -> [String]? {
+        guard let payload = ShortcutImport.namesPayload(from: url) else { return nil }
+        return ingest(payload: payload)
     }
 
     /// Flips a shortcut's "accepts input" toggle (matched by name), then persists —

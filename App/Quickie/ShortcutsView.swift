@@ -51,8 +51,8 @@ struct ShortcutsView: View {
                 Text("Sync Shortcut")
             } footer: {
                 Text(ShortcutsStore.syncShortcutInstallURL == nil
-                     ? "Install the companion Sync Shortcut, then run it to import your shortcuts. Re-syncing rebuilds the list to match your library, keeping each \u{201C}accepts input\u{201D} setting."
-                     : "Run the Sync Shortcut to import your shortcuts. Re-syncing rebuilds the list to match your library, keeping each \u{201C}accepts input\u{201D} setting.")
+                     ? "Install the companion Sync Shortcut, then run it to import your shortcuts. New imports start disabled. Re-syncing rebuilds the list to match your library, keeping each \u{201C}accepts input\u{201D} setting."
+                     : "Run the Sync Shortcut to import your shortcuts. New imports start disabled. Re-syncing rebuilds the list to match your library, keeping each \u{201C}accepts input\u{201D} setting.")
             }
 
             if store.entries.isEmpty {
@@ -60,7 +60,7 @@ struct ShortcutsView: View {
                     ContentUnavailableView(
                         "No shortcuts yet",
                         systemImage: "arrow.trianglehead.2.clockwise.rotate.90",
-                        description: Text("Install and run the Sync Shortcut above to import your iOS Shortcuts. They'll show up here and in the result list.")
+                        description: Text("Install and run the Sync Shortcut above to import your iOS Shortcuts. They'll show up here — enable the ones you want in the result list.")
                     )
                 }
             } else {
@@ -85,7 +85,7 @@ struct ShortcutsView: View {
                 } header: {
                     Text("Imported shortcuts")
                 } footer: {
-                    Text("Tap a shortcut to enable or disable it and mark whether it accepts input. Swipe to remove one; a later re-sync re-adds it if it's still in your library.")
+                    Text("Imported shortcuts start disabled — tap one to enable it and mark whether it accepts input. Swipe to remove one; a later re-sync re-adds it (disabled again) if it's still in your library.")
                 }
             }
         }
@@ -146,7 +146,7 @@ struct ShortcutDetailView: View {
                 ))
                 .accessibilityIdentifier("shortcut-enabled.\(name)")
             } footer: {
-                Text("Turn off to hide this shortcut from results, Recents, and Favorites without removing it. It stays in the list and keeps this setting through a re-sync.")
+                Text("Imported shortcuts start disabled. Turn on to show this shortcut in results, Recents, and Favorites; turn off to hide it again without removing it. It stays in the list and keeps this setting through a re-sync.")
             }
 
             Section {

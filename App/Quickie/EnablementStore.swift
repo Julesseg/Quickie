@@ -46,4 +46,13 @@ final class EnablementStore {
         if disabled.contains(id) { disabled.remove(id) } else { disabled.insert(id) }
         defaults.set(Array(disabled), forKey: Self.disabledKey)
     }
+
+    /// Disables an action outright — the newly-imported-Shortcut path: every fresh
+    /// import starts hidden until the user enables it, so a sync never floods
+    /// results. Idempotent; persists only on a real change.
+    func disable(_ id: String) {
+        guard !disabled.contains(id) else { return }
+        disabled.insert(id)
+        defaults.set(Array(disabled), forKey: Self.disabledKey)
+    }
 }
