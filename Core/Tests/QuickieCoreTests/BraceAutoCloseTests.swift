@@ -39,7 +39,36 @@ struct BraceAutoCloseTests {
         #expect(BraceAutoClose.adjusted(replacing: "a?q=}", with: "a?q={}") == nil)
     }
 
-    @Test("a multi-character paste passes through untouched")
+    @Test("a coalesced keystroke burst ending in { auto-closes like a lone {")
+    func coalescedBurstEndingInOpenBraceAutoCloses() {
+        // Fast typing (and XCUITest's synthesized bursts) reaches the binding as
+        // one multi-character insertion — the rule keys on the run's last char.
+        #expect(
+            BraceAutoClose.adjusted(replacing: "", with: "app://x?a={")
+                == "app://x?a={}"
+        )
+    }
+
+    @Test("a coalesced burst ending in } skips over the close sitting after the caret")
+    func coalescedBurstSkipsOverAutoClose() {
+        // After the auto-close the caret sits between the braces; a coalesced
+        // "title}" burst lands before the auto-inserted `}` and its own close
+        // collapses onto it.
+        #expect(
+            BraceAutoClose.adjusted(replacing: "app://x?a={}", with: "app://x?a={title}}")
+                == "app://x?a={title}"
+        )
+    }
+
+    @Test("a burst ending in } after a completed token is kept — no skip-over backwards")
+    func coalescedBurstAfterCompletedTokenPassesThrough() {
+        // Only a lone `}` skips against the `}` *before* it (its insertion spot
+        // is ambiguous); a longer run's preceding `}` is just a finished token,
+        // so appending the next `&x={y}` chunk must keep its final close.
+        #expect(BraceAutoClose.adjusted(replacing: "a?t={x}", with: "a?t={x}&n={y}") == nil)
+    }
+
+    @Test("a balanced multi-character paste passes through untouched")
     func pastePassesThrough() {
         #expect(BraceAutoClose.adjusted(replacing: "", with: "things:///add?title={title}") == nil)
     }
