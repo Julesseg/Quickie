@@ -51,6 +51,17 @@ struct CustomActionEditorView: View {
                         .textInputAutocapitalization(.never)
                         .autocorrectionDisabled()
                         .accessibilityIdentifier("custom-action-url-field")
+                        // Typing `{` auto-closes to `{}`: the close is inserted
+                        // *behind* the caret (which sits right after the typed
+                        // brace), so the caret lands between the pair; typing `}`
+                        // against the auto-inserted close skips over it instead of
+                        // doubling. The text rules are pure and unit-tested in Core
+                        // (`BraceAutoClose`); this just replays them onto the binding.
+                        .onChange(of: def.template) { oldValue, newValue in
+                            if let adjusted = BraceAutoClose.adjusted(replacing: oldValue, with: newValue) {
+                                def.template = adjusted
+                            }
+                        }
                 } header: {
                     Text("URL template")
                 } footer: {
@@ -321,18 +332,45 @@ private struct ArgumentRowEditor: View {
     /// The single optional **date output-format** field (issue #96): its meaning
     /// decides whether the slot collects a date or a date-and-time — a format with a
     /// time raises a date+time picker, one without keeps it date-only — so there is no
-    /// separate toggle. Blank uses the ISO `yyyy-MM-dd` default.
+    /// separate toggle. Blank uses the ISO `yyyy-MM-dd` default. The two default
+    /// formats sit beneath as one-tap fills: format strings are fiddly to type and
+    /// the defaults cover almost every action, so each button stamps its string into
+    /// the field — date-only, or the timed default whose time tokens flip the slot
+    /// to a date-and-time picker.
     private var dateFormatField: some View {
         VStack(alignment: .leading, spacing: 6) {
             TextField(ArgumentSpec.defaultDateOnlyFormat, text: formatBinding(\.dateFormat))
                 .textInputAutocapitalization(.never)
                 .autocorrectionDisabled()
                 .accessibilityIdentifier("custom-action-date-format.\(row.name)")
+            HStack(spacing: 8) {
+                Button(ArgumentSpec.defaultDateOnlyFormat) {
+                    setDateFormat(ArgumentSpec.defaultDateOnlyFormat)
+                }
+                .accessibilityIdentifier("custom-action-date-default.\(row.name)")
+                Button(ArgumentSpec.defaultTimedFormat) {
+                    setDateFormat(ArgumentSpec.defaultTimedFormat)
+                }
+                .accessibilityIdentifier("custom-action-datetime-default.\(row.name)")
+            }
+            // Bordered (not the Form default) so each button hit-tests on its own
+            // frame rather than the whole row swallowing the tap.
+            .buttonStyle(.bordered)
+            .controlSize(.small)
+            .font(.caption.monospaced())
             Text("Blank uses \(ArgumentSpec.defaultDateOnlyFormat) (date only). Add a time — e.g. \(ArgumentSpec.defaultTimedFormat) — to pick a date and time.")
                 .font(.caption)
                 .foregroundStyle(.secondary)
         }
         .padding(.leading, 20)
+    }
+
+    /// Stamps a default format string into the date slot's config — the one-tap
+    /// alternative to typing it (the field mirrors the value immediately).
+    private func setDateFormat(_ format: String) {
+        var updated = spec
+        updated.dateFormat = format
+        def.setSpec(at: index, to: updated)
     }
 
     // MARK: - Option + format bindings (by position, through the definition)
