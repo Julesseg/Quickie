@@ -27,8 +27,10 @@ here rely on. Pure stdlib; deterministic. Run from the repo root:
 import math
 import os
 import shutil
+import struct
 import subprocess
 import tempfile
+import zlib
 from pathlib import Path
 
 REPO = Path(__file__).resolve().parents[2]
@@ -185,9 +187,63 @@ def render(chromium, svg_path, png_path):
     subprocess.run(
         [chromium, "--headless", "--no-sandbox", "--disable-gpu",
          f"--screenshot={png_path}", "--window-size=1024,1024",
+         "--force-device-scale-factor=1",
          "--default-background-color=00000000", "--hide-scrollbars",
          f"file://{svg_path}"],
         check=True, capture_output=True)
+
+
+def assert_full_bleed(png_path):
+    """Fail if the opaque (light) render doesn't cover the full 1024x1024.
+
+    Some headless Chromium builds screenshot the SVG short of the window (the
+    shipped light icon once ended at row ~937), leaving transparent rows that
+    iOS composites as a white line at the squircle's bottom edge. Decode the
+    PNG (pure stdlib) and require fully opaque corners.
+    """
+    data = png_path.read_bytes()
+    pos, idat, width, height = 8, b"", None, None
+    while pos < len(data):
+        (length,) = struct.unpack(">I", data[pos:pos + 4])
+        kind = data[pos + 4:pos + 8]
+        if kind == b"IHDR":
+            width, height, _bits, color = struct.unpack(">IIBB", data[pos + 8:pos + 18])
+            if color == 2:
+                return  # RGB without alpha: every pixel is opaque, so full bleed
+            if color != 6:
+                raise SystemExit(f"{png_path.name}: unexpected PNG color type {color}")
+        elif kind == b"IDAT":
+            idat += data[pos + 8:pos + 8 + length]
+        pos += 12 + length
+    raw, stride = zlib.decompress(idat), width * 4
+    prev = bytearray(stride)
+    rows = []
+    for y in range(height):
+        offset = y * (stride + 1)
+        filt, line = raw[offset], bytearray(raw[offset + 1:offset + 1 + stride])
+        for i in range(stride):
+            a = line[i - 4] if i >= 4 else 0
+            b = prev[i]
+            c = prev[i - 4] if i >= 4 else 0
+            if filt == 1:
+                line[i] = (line[i] + a) & 0xFF
+            elif filt == 2:
+                line[i] = (line[i] + b) & 0xFF
+            elif filt == 3:
+                line[i] = (line[i] + (a + b) // 2) & 0xFF
+            elif filt == 4:
+                p = a + b - c
+                pa, pb, pc = abs(p - a), abs(p - b), abs(p - c)
+                line[i] = (line[i] + (a if pa <= pb and pa <= pc else b if pb <= pc else c)) & 0xFF
+        rows.append(line)
+        prev = line
+    corners = [(0, 0), (width - 1, 0), (0, height - 1), (width - 1, height - 1),
+               (width // 2, height - 1)]
+    for x, y in corners:
+        if rows[y][x * 4 + 3] != 255:
+            raise SystemExit(
+                f"{png_path.name}: pixel ({x},{y}) is not opaque — Chromium rendered the "
+                "SVG short of the window; this would show as a white edge on the icon")
 
 
 def main():
@@ -203,6 +259,8 @@ def main():
             svg.write_text(build_svg(appearance))
             png = ICONSET / f"icon-1024-{appearance}.png"
             render(chromium, svg, png)
+            if appearance == "light":
+                assert_full_bleed(png)
             print(f"rendered {png.relative_to(REPO)}")
 
 
