@@ -74,7 +74,11 @@ struct InputBar: View {
             .onSubmit(onSubmit)
             .accessibilityIdentifier("search-input")
             .autocorrectionDisabled()
-            .textInputAutocapitalization(.never)
+            // Sentence-case autocapitalization: the keyboard opens shifted so a
+            // captured thought ("Buy milk") starts capitalized without a reach for
+            // the shift key. Matching is case-insensitive throughout, so a
+            // capitalized query never changes what search finds.
+            .textInputAutocapitalization(.sentences)
             // On a vertical-axis field the software keyboard's Return key inserts a
             // newline rather than firing `onSubmit`. A *lone trailing* newline is
             // that Return keypress: drop it and run the highlighted result's Enter
