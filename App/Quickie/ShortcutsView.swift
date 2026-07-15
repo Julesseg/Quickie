@@ -22,6 +22,10 @@ struct ShortcutsView: View {
     /// — softer than swipe-to-delete, which a re-sync would undo anyway.
     let enablement: EnablementStore
 
+    /// Whether the Remove-all confirmation dialog is up — a bulk delete is the
+    /// one destructive tap on this page, so it always asks first.
+    @State private var confirmingRemoveAll = false
+
     var body: some View {
         List {
             // The unified page shape (ADR 0019; issue #66): Options lead; the
@@ -82,6 +86,30 @@ struct ShortcutsView: View {
                         .accessibilityIdentifier("shortcut-row.\(entry.name)")
                     }
                     .onDelete(perform: delete)
+
+                    // The bulk version of swipe-to-delete: one confirmed tap
+                    // clears the whole imported set (a re-sync rebuilds it from
+                    // the library, everything arriving as a fresh disabled
+                    // import). Destructive, so it always asks first.
+                    Button(role: .destructive) {
+                        confirmingRemoveAll = true
+                    } label: {
+                        Label("Remove all", systemImage: "trash")
+                    }
+                    .accessibilityIdentifier("remove-all-shortcuts")
+                    .confirmationDialog(
+                        "Remove all imported shortcuts?",
+                        isPresented: $confirmingRemoveAll,
+                        titleVisibility: .visible
+                    ) {
+                        // Labeled distinctly from the triggering row so the two
+                        // controls never read (or hit-test) as the same button.
+                        Button("Remove all imported shortcuts", role: .destructive) {
+                            store.removeAll()
+                        }
+                    } message: {
+                        Text("This clears the imported list. Running the Sync Shortcut again re-imports whatever is in your library.")
+                    }
                 } header: {
                     Text("Imported shortcuts")
                 } footer: {

@@ -143,6 +143,16 @@ final class ShortcutsStore {
         persist()
     }
 
+    /// Removes **every** imported shortcut at once, then persists — the bulk
+    /// version of `delete`, behind the Shortcuts page's confirmed Remove-all
+    /// control. Identity is the name, so a later re-sync rebuilds the list from
+    /// the payload and everything re-arrives as a fresh (disabled) import.
+    func removeAll() {
+        guard !entries.isEmpty else { return }
+        entries = []
+        persist()
+    }
+
     private func persist() {
         if let data = try? JSONEncoder().encode(entries) {
             defaults.set(data, forKey: Self.entriesKey)
