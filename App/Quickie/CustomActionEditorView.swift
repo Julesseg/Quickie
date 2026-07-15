@@ -27,6 +27,13 @@ struct CustomActionEditorView: View {
     /// straight to the form, so `rows`/`arguments`/validation recompute per keystroke.
     @State private var def: CustomActionDefinition
 
+    /// The URL field's caret, bound so the brace auto-close can place it
+    /// **explicitly**: replacing a field's text programmatically resets the
+    /// caret to the end, so after a rewrite the caret is re-placed from the
+    /// rule's returned offset (between the pair after an auto-close, just past
+    /// the close after a skip-over).
+    @State private var templateSelection: TextSelection?
+
     init(
         definition: CustomActionDefinition,
         isNew: Bool,
@@ -46,21 +53,31 @@ struct CustomActionEditorView: View {
                 }
 
                 Section {
-                    TextField("things:///add?title={title}&notes={notes}", text: $def.template, axis: .vertical)
+                    TextField(
+                        "things:///add?title={title}&notes={notes}",
+                        text: $def.template,
+                        selection: $templateSelection,
+                        axis: .vertical
+                    )
                         .lineLimit(1...6)
                         .textInputAutocapitalization(.never)
                         .autocorrectionDisabled()
                         .accessibilityIdentifier("custom-action-url-field")
-                        // Typing `{` auto-closes to `{}`: the close is inserted
-                        // *behind* the caret (which sits right after the typed
-                        // brace), so the caret lands between the pair; typing `}`
-                        // against the auto-inserted close skips over it instead of
-                        // doubling. The text rules are pure and unit-tested in Core
-                        // (`BraceAutoClose`); this just replays them onto the binding.
+                        // Typing `{` auto-closes to `{}` with the caret between the
+                        // pair; typing `}` against the auto-inserted close skips
+                        // over it instead of doubling. The text and caret rules are
+                        // pure and unit-tested in Core (`BraceAutoClose`); this
+                        // replays them onto the binding, placing the caret
+                        // explicitly because a programmatic text replacement would
+                        // otherwise reset it to the end of the field.
                         .onChange(of: def.template) { oldValue, newValue in
-                            if let adjusted = BraceAutoClose.adjusted(replacing: oldValue, with: newValue) {
-                                def.template = adjusted
-                            }
+                            guard let adjustment = BraceAutoClose.adjusted(replacing: oldValue, with: newValue)
+                            else { return }
+                            def.template = adjustment.text
+                            let caret = adjustment.text.index(
+                                adjustment.text.startIndex, offsetBy: adjustment.caretOffset
+                            )
+                            templateSelection = TextSelection(insertionPoint: caret)
                         }
                 } header: {
                     Text("URL template")

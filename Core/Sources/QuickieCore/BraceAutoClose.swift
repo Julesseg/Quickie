@@ -2,14 +2,30 @@ import Foundation
 
 /// The URL-template field's **brace typing rules** (CONTEXT.md → Custom Action):
 /// the pure text transform behind the editor's auto-closing `{`. The editor feeds
-/// every keystroke's before/after pair through `adjusted(replacing:with:)` and
-/// replaces the field text when a rule fires — pure here so the tricky cases
-/// (pastes, deletions, adjacent braces, coalesced keystrokes) are unit-tested
-/// without a keyboard.
+/// every keystroke's before/after pair through `adjusted(replacing:with:)` and,
+/// when a rule fires, replaces the field text **and re-places the caret** from the
+/// returned offset — pure here so the tricky cases (pastes, deletions, adjacent
+/// braces, coalesced keystrokes, caret math) are unit-tested without a keyboard.
 public enum BraceAutoClose {
 
-    /// Returns the replacement text the field should show after an edit from
-    /// `old` to `new`, or `nil` when the edit needs no adjustment.
+    /// One applied brace rule: the replacement `text` and the character offset
+    /// the caret must sit at afterwards. The caret comes back explicitly because
+    /// the platform resets a text field's caret to the **end** whenever its text
+    /// is replaced programmatically — the editor re-places it from `caretOffset`:
+    /// between the pair after an auto-close, just past the close after a
+    /// skip-over.
+    public struct Adjustment: Equatable, Sendable {
+        public let text: String
+        public let caretOffset: Int
+
+        public init(text: String, caretOffset: Int) {
+            self.text = text
+            self.caretOffset = caretOffset
+        }
+    }
+
+    /// Returns the replacement the field should apply after an edit from `old`
+    /// to `new`, or `nil` when the edit needs no adjustment.
     ///
     /// Both rules key on one **contiguous insertion** — a shared prefix and
     /// suffix covering the whole old text. Length is deliberately *not* limited
@@ -19,18 +35,17 @@ public enum BraceAutoClose {
     /// edit (a deletion, a select-and-replace) passes through untouched.
     ///
     /// - Typing `{` auto-closes the pair: the returned text carries a `}`
-    ///   immediately after the inserted run, which lands *behind* the caret, so
-    ///   the caret ends up between the pair. Skipped when the next character is
-    ///   already a `}` — that keystroke re-opens an existing pair, it doesn't
-    ///   start one.
+    ///   immediately after the inserted run, and the caret offset points between
+    ///   the pair. Skipped when the next character is already a `}` — that
+    ///   keystroke re-opens an existing pair, it doesn't start one.
     /// - Typing `}` against the `}` sitting **after** the caret skips over it
-    ///   instead of doubling: the run's own close is dropped, so the keystroke
-    ///   reads as stepping past the auto-inserted brace. (A lone typed `}` also
-    ///   skips against a `}` right *before* it — a single character's insertion
-    ///   position inside a brace run is ambiguous — but a longer run never does:
-    ///   its preceding text ending in `}` is just a completed token.) `}}` never
-    ///   means anything in a `{name}` template, so the collapse is safe.
-    public static func adjusted(replacing old: String, with new: String) -> String? {
+    ///   instead of doubling: the run's own close is dropped and the caret lands
+    ///   just past the existing one. (A lone typed `}` also skips against a `}`
+    ///   right *before* it — a single character's insertion position inside a
+    ///   brace run is ambiguous — but a longer run never does: its preceding text
+    ///   ending in `}` is just a completed token.) `}}` never means anything in a
+    ///   `{name}` template, so the collapse is safe.
+    public static func adjusted(replacing old: String, with new: String) -> Adjustment? {
         let oldChars = Array(old)
         let newChars = Array(new)
         guard newChars.count > oldChars.count else { return nil }
@@ -55,7 +70,8 @@ public enum BraceAutoClose {
             guard runEnd == newChars.count || newChars[runEnd] != "}" else { return nil }
             var closed = newChars
             closed.insert("}", at: runEnd)
-            return String(closed)
+            // The caret stays where the typed `{` left it — between the pair.
+            return Adjustment(text: String(closed), caretOffset: runEnd)
         case "}":
             let closesAgainstNext = runEnd < newChars.count && newChars[runEnd] == "}"
             let loneCloseAfterClose = runEnd - runStart == 1
@@ -63,7 +79,13 @@ public enum BraceAutoClose {
             guard closesAgainstNext || loneCloseAfterClose else { return nil }
             var collapsed = newChars
             collapsed.remove(at: runEnd - 1)
-            return String(collapsed)
+            // The caret steps past the `}` that was skipped over: the one after
+            // the collapsed run (`closesAgainstNext`), or — for a lone `}` whose
+            // detected position trails an existing close — the run's own slot.
+            return Adjustment(
+                text: String(collapsed),
+                caretOffset: closesAgainstNext ? runEnd : runEnd - 1
+            )
         default:
             return nil
         }
