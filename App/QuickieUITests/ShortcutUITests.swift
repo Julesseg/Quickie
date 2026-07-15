@@ -142,14 +142,9 @@ final class ShortcutUITests: XCTestCase {
         let row = app.buttons["shortcut-row.Timer"]
         XCTAssertTrue(row.waitForExistence(timeout: 10), "the seeded shortcuts are listed")
 
-        // The Remove-all row sits at the bottom of the actions section — scroll
-        // it into view in case the lazy List hasn't realized it yet.
+        // The Remove-all row lives in the Sync Shortcut section beside the
+        // install/re-sync entry points it mirrors, so it's on screen already.
         let removeAll = app.buttons["remove-all-shortcuts"]
-        var scrolls = 0
-        while !removeAll.exists && scrolls < 6 {
-            app.swipeUp()
-            scrolls += 1
-        }
         XCTAssertTrue(removeAll.waitForExistence(timeout: 5), "the page offers a Remove all control")
         removeAll.tap()
 

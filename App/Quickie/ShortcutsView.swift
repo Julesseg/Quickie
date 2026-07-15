@@ -51,6 +51,35 @@ struct ShortcutsView: View {
                     Label("Re-sync now", systemImage: "arrow.triangle.2.circlepath")
                 }
                 .accessibilityIdentifier("resync-shortcuts")
+
+                // The bulk version of swipe-to-delete, kept beside the import
+                // entry points it mirrors: one confirmed tap clears the whole
+                // imported set (a re-sync rebuilds it from the library,
+                // everything arriving as a fresh disabled import). Destructive,
+                // so it always asks first — and the icon is tinted explicitly so
+                // it reads as red as the text does.
+                if !store.entries.isEmpty {
+                    Button(role: .destructive) {
+                        confirmingRemoveAll = true
+                    } label: {
+                        Label("Remove all", systemImage: "trash")
+                            .foregroundStyle(.red)
+                    }
+                    .accessibilityIdentifier("remove-all-shortcuts")
+                    .confirmationDialog(
+                        "Remove all imported shortcuts?",
+                        isPresented: $confirmingRemoveAll,
+                        titleVisibility: .visible
+                    ) {
+                        // Labeled distinctly from the triggering row so the two
+                        // controls never read (or hit-test) as the same button.
+                        Button("Remove all imported shortcuts", role: .destructive) {
+                            store.removeAll()
+                        }
+                    } message: {
+                        Text("This clears the imported list. Running the Sync Shortcut again re-imports whatever is in your library.")
+                    }
+                }
             } header: {
                 Text("Sync Shortcut")
             } footer: {
@@ -86,30 +115,6 @@ struct ShortcutsView: View {
                         .accessibilityIdentifier("shortcut-row.\(entry.name)")
                     }
                     .onDelete(perform: delete)
-
-                    // The bulk version of swipe-to-delete: one confirmed tap
-                    // clears the whole imported set (a re-sync rebuilds it from
-                    // the library, everything arriving as a fresh disabled
-                    // import). Destructive, so it always asks first.
-                    Button(role: .destructive) {
-                        confirmingRemoveAll = true
-                    } label: {
-                        Label("Remove all", systemImage: "trash")
-                    }
-                    .accessibilityIdentifier("remove-all-shortcuts")
-                    .confirmationDialog(
-                        "Remove all imported shortcuts?",
-                        isPresented: $confirmingRemoveAll,
-                        titleVisibility: .visible
-                    ) {
-                        // Labeled distinctly from the triggering row so the two
-                        // controls never read (or hit-test) as the same button.
-                        Button("Remove all imported shortcuts", role: .destructive) {
-                            store.removeAll()
-                        }
-                    } message: {
-                        Text("This clears the imported list. Running the Sync Shortcut again re-imports whatever is in your library.")
-                    }
                 } header: {
                     Text("Imported shortcuts")
                 } footer: {
