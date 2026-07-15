@@ -12,6 +12,11 @@ import Foundation
 /// Pure Core data so the seed definitions, their ids, and the first-run Fallback
 /// order (`FallbackActivation.firstRunEnabledIDs`) are all `swift test`-covered; the
 /// App's seeding pass is a thin edge that inserts these as `StoredCustomAction`s.
+///
+/// Each seed also carries a **default glyph** — the best-matching symbol from the
+/// curated `CustomActionGlyphCatalog` — so a seeded action wears a meaningful badge
+/// out of the box. It is the same opt-in `glyph` field a user sets by hand (issue
+/// #163): editable and clearable after seeding like any other chosen symbol.
 public enum CatalogSeed {
     /// One default seed: its fixed `seed.*` id and the definition it plants.
     public struct Seed: Equatable, Sendable {
@@ -29,7 +34,8 @@ public enum CatalogSeed {
         definition: CustomActionDefinition(
             name: "Search the web",
             aliases: ["search"],
-            template: "https://duckduckgo.com/?q={query}"
+            template: "https://duckduckgo.com/?q={query}",
+            glyph: "magnifyingglass"
         )
     )
 
@@ -43,7 +49,8 @@ public enum CatalogSeed {
         definition: CustomActionDefinition(
             name: "Search the App Store",
             aliases: ["app store"],
-            template: "itms-apps://search.itunes.apple.com/WebObjects/MZSearch.woa/wa/search?media=software&term={query}"
+            template: "itms-apps://search.itunes.apple.com/WebObjects/MZSearch.woa/wa/search?media=software&term={query}",
+            glyph: "bag"
         )
     )
 
@@ -52,7 +59,8 @@ public enum CatalogSeed {
         definition: CustomActionDefinition(
             name: "Wikipedia",
             aliases: ["wiki"],
-            template: "https://en.wikipedia.org/wiki/Special:Search?search={query}"
+            template: "https://en.wikipedia.org/wiki/Special:Search?search={query}",
+            glyph: "book"
         )
     )
 
@@ -61,7 +69,8 @@ public enum CatalogSeed {
         definition: CustomActionDefinition(
             name: "YouTube",
             aliases: ["yt", "youtube"],
-            template: "https://www.youtube.com/results?search_query={query}"
+            template: "https://www.youtube.com/results?search_query={query}",
+            glyph: "play.rectangle"
         )
     )
 
@@ -70,7 +79,8 @@ public enum CatalogSeed {
         definition: CustomActionDefinition(
             name: "Google Maps",
             aliases: ["maps"],
-            template: "https://www.google.com/maps/search/{query}"
+            template: "https://www.google.com/maps/search/{query}",
+            glyph: "map"
         )
     )
 
@@ -88,7 +98,8 @@ public enum CatalogSeed {
         definition: CustomActionDefinition(
             name: "YouTube",
             aliases: ["yt"],
-            template: "https://www.youtube.com"
+            template: "https://www.youtube.com",
+            glyph: "play.rectangle"
         )
     )
 
@@ -97,7 +108,8 @@ public enum CatalogSeed {
         definition: CustomActionDefinition(
             name: "Gmail",
             aliases: ["mail"],
-            template: "https://mail.google.com"
+            template: "https://mail.google.com",
+            glyph: "envelope"
         )
     )
 
@@ -106,7 +118,8 @@ public enum CatalogSeed {
         definition: CustomActionDefinition(
             name: "GitHub",
             aliases: ["gh"],
-            template: "https://github.com"
+            template: "https://github.com",
+            glyph: "curlybraces"
         )
     )
 
