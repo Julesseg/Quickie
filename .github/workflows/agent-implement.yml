@@ -25,7 +25,6 @@ jobs:
       - name: Spawn detached Paseo session
         env:
           ISSUE: ${{ inputs.issue }}
-          REPO: ${{ github.repository }}
           PROJECT_DIR: ${{ vars.PASEO_PROJECT_DIR }}
         run: |
           set -euo pipefail
@@ -38,15 +37,7 @@ jobs:
             exit 1
           fi
 
-          prompt=$(cat <<EOF
-          Implement GitHub issue #${ISSUE} of ${REPO} end to end.
-
-          Read the issue first: \`gh issue view ${ISSUE} --comments\`. Follow AGENTS.md: implement all of it including any UI work, verify the logic with \`cd Core && swift test\`, and use Conventional Commit subjects and a matching PR title. You are working in an isolated worktree on branch claude/issue-${ISSUE}. When done, push with \`git push -u origin claude/issue-${ISSUE}\` and open a ready-for-review PR whose body contains "Closes #${ISSUE}".
-
-          If you cannot complete the issue, remove its \`agent-dispatched\` label and comment on the issue explaining what is missing.
-          EOF
-          )
-
           # --detach: the session runs under the Paseo daemon, so it outlives
-          # this job; progress is visible in the Paseo apps.
-          paseo run --detach --provider claude --cwd "$PROJECT_DIR" --worktree "claude/issue-${ISSUE}" "$prompt"
+          # this job; progress is visible in the Paseo apps. The /implement
+          # skill in the repo config carries the full workflow instructions.
+          paseo run --detach --provider claude --cwd "$PROJECT_DIR" --worktree "claude/issue-${ISSUE}" "/implement issue #${ISSUE}"
