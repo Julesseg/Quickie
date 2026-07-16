@@ -6,7 +6,7 @@ disable-model-invocation: true
 
 Implement the work described by the user in the spec or tickets.
 
-First, if the work is a GitHub issue, claim it: `gh issue edit <number> --add-label "agent-dispatched"`. The label marks an agent session as in flight on the issue (it counts against the auto-dispatch in-flight cap — see `docs/agents/auto-dispatch.md`). It may already be present when the session was spawned by the dispatcher; that's fine, adding it is idempotent. If you give up on the issue, remove the label and comment on the issue explaining what's missing.
+First, if the work is a GitHub issue, add the `agent-dispatched` label: `gh issue edit <number> --add-label "agent-dispatched"`. If you give up on the issue, remove the label.
 
 Use /tdd where possible, at pre-agreed seams.
 
