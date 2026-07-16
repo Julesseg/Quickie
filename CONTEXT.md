@@ -169,6 +169,14 @@ _Avoid_: Detection row, smart suggestion, data detector (the mechanism, not the 
 The empty-query state shown the instant the app opens: the Clipboard prefill chip (when applicable), a **Favorites grid** pinned at the top of the screen over a progressive-blur band, and a Frecency "Recent" list that scrolls *under* that band. The tap-without-typing fast path. On the first keystroke the Favorites grid disappears and the live Result list takes the full height, still scrolling under the same blurred top band.
 _Avoid_: Landing, start screen, default view
 
+**Living backdrop**:
+The surface the Liquid Glass chrome refracts (ADR 0010): a subtle purple mesh gradient, adaptive to light/dark, that drifts very slowly on [[Home]] and stands still the moment a query exists — alive at rest, calm in use (ADR 0034). Static under Reduce Motion and Low Power Mode. Also hosts the [[Highlighted result]]'s gold hero glow, since glows are backdrop content the glass refracts, never overlaid blur.
+_Avoid_: Wallpaper, animated background, quiet backdrop (the pre-living static gradient it replaces)
+
+**Hint line**:
+The single rotating example line on [[Home]] beneath the brand mark, teaching by suggestion what the input accepts (a sum, a link, an app name…). One capability per hint, quiet instructive tone; rotation is an enumerated motion moment (ADR 0034), frozen under Reduce Motion. Distinct from the placeholder ("Start typing"), which never changes.
+_Avoid_: Placeholder (the static element), tips, onboarding copy (there is no onboarding — ADR 0012)
+
 **Favorites grid**:
 The 2×2 grid of small Favorite cards pinned at the top of Home over a progressive blur. Shows **at most four** Favorites, in pin order; it is the launch-time, tap-without-typing surface. Visible only on Home — it vanishes the moment the user starts typing, ceding the screen to results. Replaces the earlier horizontal Favorites chip row.
 _Avoid_: Favorites row, favorites bar
