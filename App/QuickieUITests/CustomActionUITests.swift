@@ -158,6 +158,79 @@ final class CustomActionUITests: XCTestCase {
         XCTAssertFalse(url.contains("{1}"), "the old numeric token is gone (was: \(url))")
     }
 
+    /// Typing `{` in the URL field auto-closes the pair (`{}`, caret between), and
+    /// typing the closing `}` afterwards steps over the auto-inserted close instead
+    /// of doubling it — so hand-typing a full template lands exactly the text typed.
+    /// The pure text rules are Core-tested (BraceAutoCloseTests); this proves the
+    /// field wiring keeps the caret usable through a real keyboard pass.
+    @MainActor
+    func testURLFieldAutoClosesBraces() throws {
+        let app = launchApp()
+        openCustomActionsPage(app)
+        openNewEditor(app)
+
+        let urlField = app.textFields["custom-action-url-field"]
+        XCTAssertTrue(urlField.waitForExistence(timeout: 5))
+        urlField.tap()
+
+        // The rewrite is applied a main-loop tick after the keystroke (the field
+        // must finish flushing the edit first), so poll for the value rather
+        // than reading it instantly.
+        urlField.typeText("app://x?a={")
+        XCTAssertTrue(waitForValue("app://x?a={}", in: urlField),
+                      "typing { auto-closes the brace pair (was: \(urlField.value ?? ""))")
+
+        // The caret sits between the braces, so the name lands inside the pair and
+        // the user's own } collapses onto the auto-inserted close.
+        urlField.typeText("title}")
+        XCTAssertTrue(waitForValue("app://x?a={title}", in: urlField),
+                      "the name lands inside the pair and } skips the auto-close (was: \(urlField.value ?? ""))")
+        XCTAssertTrue(app.textFields["custom-action-arg.title"].waitForExistence(timeout: 5),
+                      "the auto-closed slot mirrors an argument row")
+    }
+
+    /// Waits for a text field's value to settle to `expected` — the brace rules
+    /// rewrite the field one main-loop tick after the triggering keystroke, so an
+    /// instant read races the deferred update.
+    @MainActor
+    private func waitForValue(_ expected: String, in field: XCUIElement, timeout: TimeInterval = 5) -> Bool {
+        let settled = XCTNSPredicateExpectation(
+            predicate: NSPredicate(format: "value == %@", expected),
+            object: field
+        )
+        return XCTWaiter().wait(for: [settled], timeout: timeout) == .completed
+    }
+
+    /// The date slot's two default output formats are one-tap fills (format strings
+    /// are fiddly to type): each button stamps its string into the format field, and
+    /// the timed default's time tokens are what flip the slot to a date-and-time
+    /// picker downstream (Core-derived, `ArgumentSpec.dateIncludesTime`).
+    @MainActor
+    func testDateFormatDefaultsFillWithOneTap() throws {
+        let app = launchApp()
+        openCustomActionsPage(app)
+        openNewEditor(app)
+
+        setText("When", in: app.textFields["custom-action-name-field"])
+        setText("things:///add?when={when}", in: app.textFields["custom-action-url-field"])
+        setType(app, token: "when", to: "Date")
+
+        let formatField = app.textFields["custom-action-date-format.when"]
+        XCTAssertTrue(formatField.waitForExistence(timeout: 5), "the date slot reveals its format field")
+
+        let timedButton = app.buttons["custom-action-datetime-default.when"]
+        XCTAssertTrue(timedButton.waitForExistence(timeout: 5), "the timed default offers a one-tap fill")
+        timedButton.tap()
+        XCTAssertEqual(formatField.value as? String, "yyyy-MM-dd'T'HH:mm",
+                       "tapping the timed default stamps its format string into the field")
+
+        let dateButton = app.buttons["custom-action-date-default.when"]
+        XCTAssertTrue(dateButton.waitForExistence(timeout: 5), "the date-only default offers a one-tap fill")
+        dateButton.tap()
+        XCTAssertEqual(formatField.value as? String, "yyyy-MM-dd",
+                       "tapping the date-only default replaces the format with its string")
+    }
+
     // MARK: - Editor: Save gating + slot-less static link
 
     /// Save is gated on a valid definition. A slot-less schemed URL is a valid **static

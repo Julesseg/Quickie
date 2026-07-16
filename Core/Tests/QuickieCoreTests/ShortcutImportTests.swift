@@ -87,6 +87,27 @@ struct ShortcutImportTests {
         ])
     }
 
+    @Test("a first import reports every name as added — all start disabled")
+    func firstImportReportsAllNamesAsAdded() {
+        // The app layer disables each added name's action id, so a first import
+        // arrives fully disabled and the user opts shortcuts in one by one.
+        #expect(ShortcutImport.addedNames(existing: [], names: ["Timer", "Scan"]) == ["Timer", "Scan"])
+    }
+
+    @Test("a re-sync reports only the genuinely new names, matched case-insensitively")
+    func reSyncReportsOnlyNewNamesAsAdded() {
+        // Survivors — even respelled — are not "added": they keep whatever
+        // enablement the user already chose; only "Workout" starts disabled.
+        let existing = [
+            ShortcutEntry(name: "Timer", acceptsInput: true),
+            ShortcutEntry(name: "Scan", acceptsInput: false),
+        ]
+        #expect(
+            ShortcutImport.addedNames(existing: existing, names: ["timer", "Workout"])
+                == ["Workout"]
+        )
+    }
+
     @Test("renaming a shortcut reads as delete + re-add, dropping the old toggle")
     func renameIsDeletePlusReAdd() {
         // Identity is the name, so a renamed shortcut is a new name (input off)

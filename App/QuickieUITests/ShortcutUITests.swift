@@ -103,7 +103,12 @@ final class ShortcutUITests: XCTestCase {
             enabled.waitForExistence(timeout: 10),
             "the shortcut's page leads with its Enabled toggle"
         )
-        XCTAssertEqual(enabled.value as? String, "1", "an imported shortcut starts enabled")
+        // A *seeded* shortcut arrives pre-enabled: the seed hook hands tests
+        // surfaced, runnable rows (the state after a user enables their imports).
+        // A real URL import starts every new shortcut disabled — that wiring lives
+        // in the app root's onOpenURL, which XCUITest can't drive, and the pure
+        // added-names split is covered by QuickieCore's ShortcutImportTests.
+        XCTAssertEqual(enabled.value as? String, "1", "a seeded shortcut arrives pre-enabled")
 
         let acceptsInput = app.switches["shortcut-accepts-input.Start Workout"]
         XCTAssertTrue(
@@ -116,6 +121,43 @@ final class ShortcutUITests: XCTestCase {
         let control = acceptsInput.switches.firstMatch
         (control.exists ? control : acceptsInput).tap()
         XCTAssertNotEqual(app.state, .notRunning, "toggling accepts-input should not crash the app")
+    }
+
+    /// The Remove-all control clears the whole imported set in one confirmed tap
+    /// (the bulk version of swipe-to-delete): the rows vanish and the empty state
+    /// returns. A later re-sync would rebuild the list from the library, so the
+    /// clear is safe to offer this directly.
+    @MainActor
+    func testRemoveAllClearsImportedShortcuts() throws {
+        let app = launchApp(seed: "Timer,Start Workout")
+
+        let input = app.textFields["search-input"]
+        XCTAssertTrue(input.waitForExistence(timeout: 30))
+        input.tap()
+        input.typeText("shortcuts")
+        let command = app.buttons["builtin.shortcuts-page"]
+        XCTAssertTrue(command.waitForExistence(timeout: 5))
+        command.tap()
+
+        let row = app.buttons["shortcut-row.Timer"]
+        XCTAssertTrue(row.waitForExistence(timeout: 10), "the seeded shortcuts are listed")
+
+        // The Remove-all row lives in the Sync Shortcut section beside the
+        // install/re-sync entry points it mirrors, so it's on screen already.
+        let removeAll = app.buttons["remove-all-shortcuts"]
+        XCTAssertTrue(removeAll.waitForExistence(timeout: 5), "the page offers a Remove all control")
+        removeAll.tap()
+
+        // Destructive bulk action → it always confirms first. The dialog's
+        // confirm button is labeled distinctly from the triggering row.
+        let confirm = app.buttons["Remove all imported shortcuts"]
+        XCTAssertTrue(confirm.waitForExistence(timeout: 5), "removing all asks for confirmation")
+        confirm.tap()
+
+        XCTAssertTrue(row.waitForNonExistence(timeout: 5),
+                      "confirming clears every imported shortcut")
+        XCTAssertFalse(app.buttons["shortcut-row.Start Workout"].exists,
+                       "no imported row survives the bulk clear")
     }
 
     /// A Shortcut Action with `acceptsInput` **on** runs through the breadcrumb

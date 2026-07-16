@@ -46,4 +46,15 @@ final class EnablementStore {
         if disabled.contains(id) { disabled.remove(id) } else { disabled.insert(id) }
         defaults.set(Array(disabled), forKey: Self.disabledKey)
     }
+
+    /// Disables a batch of actions outright — the newly-imported-Shortcut path:
+    /// every fresh import starts hidden until the user enables it, so a sync never
+    /// floods results. One persisted write covers the whole batch; already-disabled
+    /// ids are no-ops, and an all-stale batch skips the write entirely.
+    func disable(_ ids: [String]) {
+        let fresh = Set(ids).subtracting(disabled)
+        guard !fresh.isEmpty else { return }
+        disabled.formUnion(fresh)
+        defaults.set(Array(disabled), forKey: Self.disabledKey)
+    }
 }

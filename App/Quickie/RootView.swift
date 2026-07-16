@@ -813,7 +813,14 @@ struct RootView: View {
             // deeplink door (run / entry). Each parser claims only its own hosts, so
             // order is immaterial and an unrecognized URL falls through untouched.
             .onOpenURL { url in
-                if shortcuts.handle(url: url) { return }
+                if let importedNames = shortcuts.handle(url: url) {
+                    // Freshly imported Shortcut Actions start instance-disabled
+                    // (CONTEXT.md → Shortcut Action): an import must never flood
+                    // results — the user enables the ones they want from the
+                    // Shortcuts page. Re-sync survivors keep their existing state.
+                    instanceEnablement.disable(importedNames.map { Action.shortcutID(for: $0) })
+                    return
+                }
                 if let deeplink = QuickieDeeplink.parse(url) { handleDeeplink(deeplink); return }
                 handleShortcutResult(url)
             }
