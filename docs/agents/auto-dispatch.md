@@ -17,9 +17,9 @@ Two workflows split detection from execution:
    each, it applies the `agent-dispatched` label (the idempotency guard) and
    fires `agent-implement.yml` with the issue number.
 2. **`agent-implement.yml`** (self-hosted Mac runner) runs
-   `paseo run --detach --worktree claude/issue-<N> …` with a prompt telling the
-   session to implement the issue per AGENTS.md, push, and open a PR that
-   closes it. `--detach` means the session runs under the Paseo daemon and
+   `paseo run --detach --worktree claude/issue-<N> "/implement issue #<N>"` —
+   the repo's `/implement` skill carries the full workflow instructions.
+   `--detach` means the session runs under the Paseo daemon and
    outlives the (short) runner job; `--worktree` keeps parallel sessions from
    clobbering one checkout.
 
