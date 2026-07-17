@@ -525,6 +525,11 @@ private struct DateStep: View {
                 }
             }
             .padding(16)
+            // Deliberately outside `QuickieRadius`: this is a full-width panel
+            // wrapping a month grid, not one of the three recurring surfaces that
+            // scale documents, and a step with a single caller would be a token
+            // pretending to be a rule. It rounds a little softer than a card
+            // because it is a lot bigger than one.
             .glassEffect(.regular, in: RoundedRectangle(cornerRadius: 24, style: .continuous))
             .padding(.horizontal, 16)
         }
@@ -973,7 +978,7 @@ private struct StepCrumb: View {
     /// pill, or advance from the next empty step (the same as Enter).
     let onTap: (() -> Void)?
 
-    private var shape: RoundedRectangle { RoundedRectangle(cornerRadius: 16, style: .continuous) }
+    private var shape: RoundedRectangle { RoundedRectangle(cornerRadius: QuickieRadius.card, style: .continuous) }
 
     /// The crumb's Liquid Glass. The current-step highlight *is* the glass tint —
     /// the accent crossfades out of the old crumb and into the new one as the

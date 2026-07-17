@@ -73,7 +73,7 @@ struct FileSearchBreadcrumbBar: View {
             .padding(.vertical, 9)
             .glassEffect(
                 isScope ? .regular.tint(.accentColor.opacity(0.4)) : .regular,
-                in: RoundedRectangle(cornerRadius: 16, style: .continuous)
+                in: RoundedRectangle(cornerRadius: QuickieRadius.card, style: .continuous)
             )
     }
 }

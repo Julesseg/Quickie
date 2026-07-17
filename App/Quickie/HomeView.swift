@@ -197,8 +197,8 @@ struct FavoriteCard: View {
         .padding(.horizontal, 12)
         .padding(.vertical, 12)
         .frame(maxWidth: .infinity, alignment: .leading)
-        .glassEffect(.regular.interactive(), in: RoundedRectangle(cornerRadius: 16, style: .continuous))
-        .contentShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
+        .glassEffect(.regular.interactive(), in: RoundedRectangle(cornerRadius: QuickieRadius.card, style: .continuous))
+        .contentShape(RoundedRectangle(cornerRadius: QuickieRadius.card, style: .continuous))
     }
 }
 

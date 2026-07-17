@@ -95,4 +95,117 @@ enum QuickieBrand {
     static var iconBackdrop: LinearGradient {
         LinearGradient(colors: [fieldTop, fieldBottom], startPoint: .top, endPoint: .bottom)
     }
+
+    // MARK: - The provider-badge palette
+    //
+    // One hue per `ActionKind`, so a Result row's leading badge says *what kind of
+    // thing this is* at a glance (issue #178). `ActionIcons` maps kind → hue; the
+    // literals live here because they are brand, and because one palette is what
+    // keeps the in-app rows, the Favorites grid, and both widgets on the same
+    // badges (they render the same `ProviderBadge` from the folder synced into
+    // both targets).
+    //
+    // Unlike the icon's palette above, these are not derived from anything — the
+    // icon has no opinion about what colour a Snippet is. They are built to rules
+    // instead, and `check-brand-assets.py` enforces the rules rather than the
+    // numbers:
+    //
+    // - **One lightness for the whole set (OKLCH L 0.55).** Every badge carries a
+    //   white glyph, so every badge owes it the same legibility: fixing lightness
+    //   pins white contrast into a 4.5–5.4:1 band across all fifteen, and leaves
+    //   *hue* as the only channel that varies — which is the channel that means
+    //   something. It also makes the set read as one family rather than fifteen
+    //   decisions, and it is why these are flat literals rather than an adaptive
+    //   pair like `accent`: an opaque badge at this lightness sits correctly on
+    //   both appearances, so there is nothing for dark mode to fix.
+    // - **Chroma to each hue's gamut ceiling, capped at 0.17.** sRGB cannot hold a
+    //   vivid teal at this lightness (h~200 tops out near 0.09), so an unclamped
+    //   set would let the magentas shout over a muted cyan band. The cap keeps the
+    //   family even; the ceiling keeps each hue as distinct as sRGB allows.
+    // - **Spaced by perceptual difference, not by hue angle.** Equal *degrees*
+    //   crowd the greens (where a 20° step is barely visible) and waste the
+    //   magentas (where it is obvious). These fifteen sit at roughly equal OKLab
+    //   distance along the ring, so no two kinds are much closer than any other
+    //   pair — the badges are as tellable-apart as fifteen hues can be.
+    // - **Two arcs are off-limits, which is why the ring has gaps.** The accent's
+    //   own hue (OKLCH ~290: `lightAccent` 289.7, `lavender` 296.4) is left empty
+    //   so a badge never reads as a broken accent — the exact failure the old
+    //   palette had, with a *blue* static-link badge beside what was then a blue
+    //   accent. And `gold`'s hue (~84) is left empty because ADR 0033 spends gold
+    //   in exactly one place, the Highlighted result's hero glow; a gold-ish badge
+    //   would be the "gold as a secondary accent" that ADR explicitly rejected.
+    //   The ring therefore runs 104°→255° and 325°→64°, and the badges flank the
+    //   accent rather than competing with it.
+    //
+    // Ring order below, so the neighbourhoods are visible: the cool arc after the
+    // gold gap, then the warm arc after the accent gap.
+
+    /// A File Search hit (`file`) — the manila of a folder tab.
+    static let badgeFile = Color(red: 111 / 255, green: 121 / 255, blue: 18 / 255)
+    /// The "Search Files" command (`searchFiles`) — beside `badgeFile`, because it
+    /// is the door to the same content.
+    static let badgeSearchFiles = Color(red: 80 / 255, green: 130 / 255, blue: 18 / 255)
+    /// A math result (`calculator`).
+    static let badgeCalculator = Color(red: 21 / 255, green: 137 / 255, blue: 42 / 255)
+    /// The "New Snippet" Fallback (`newSnippet`) — beside `badgeSnippet`, the thing
+    /// it creates.
+    static let badgeNewSnippet = Color(red: 22 / 255, green: 135 / 255, blue: 83 / 255)
+    /// A Snippet (`snippet`).
+    static let badgeSnippet = Color(red: 22 / 255, green: 131 / 255, blue: 115 / 255)
+    /// A System provider built-in (`system`) — first of the three chrome kinds,
+    /// which take the quiet cool end of the ring together.
+    static let badgeSystem = Color(red: 21 / 255, green: 128 / 255, blue: 143 / 255)
+    /// A management command row (`managementPage`).
+    static let badgeManagementPage = Color(red: 21 / 255, green: 123 / 255, blue: 169 / 255)
+    /// The Settings command row (`settings`). The one blue in the set, and a
+    /// deliberate one: it is 40° off the accent in OKLCH, far enough to read as a
+    /// choice rather than as the default tint the old palette looked like.
+    static let badgeSettings = Color(red: 19 / 255, green: 116 / 255, blue: 195 / 255)
+    /// A slotted Custom Action (`customAction`).
+    static let badgeCustomAction = Color(red: 167 / 255, green: 68 / 255, blue: 158 / 255)
+    /// A static, slot-less Custom Action (`quicklink`) — **off blue**, where it used
+    /// to sit. Adjacent to `badgeCustomAction` on purpose: ADR 0030 attributes both
+    /// kinds to the one Custom Actions provider, so they should look related. Their
+    /// glyphs (link vs. braces) carry the difference.
+    static let badgeQuicklink = Color(red: 177 / 255, green: 62 / 255, blue: 138 / 255)
+    /// An imported Shortcut Action (`shortcut`) — kept a clear step off
+    /// `badgeCustomAction`, which it used to share an indigo with.
+    static let badgeShortcut = Color(red: 186 / 255, green: 58 / 255, blue: 113 / 255)
+    /// The "Save for later" Fallback (`saveForLater`) — well clear of `badgePile`,
+    /// because a row must never read as the entries it creates.
+    static let badgeSaveForLater = Color(red: 191 / 255, green: 57 / 255, blue: 87 / 255)
+    /// A New Reminder capture (`reminder`).
+    static let badgeReminder = Color(red: 193 / 255, green: 60 / 255, blue: 54 / 255)
+    /// A New Event capture (`event`) — beside `badgeReminder`, its EventKit twin.
+    static let badgeEvent = Color(red: 187 / 255, green: 71 / 255, blue: 17 / 255)
+    /// A Pile entry (`pile`).
+    static let badgePile = Color(red: 169 / 255, green: 89 / 255, blue: 17 / 255)
+}
+
+/// The corner-radius scale — three steps, one per *kind of surface*, so a radius is
+/// chosen by asking "what is this?" rather than by eyeballing a neighbour (issue
+/// #178). It lives beside the brand's colors because it is the same sort of token,
+/// and in the folder synced into both targets so a widget cell and the in-app card
+/// it mirrors cannot drift apart.
+///
+/// The steps track the *size* of the thing being rounded — a radius that reads as
+/// generous on a 30pt badge reads as timid on a 50pt row — which is why there are
+/// three rather than one, and why they are not a series anyone should extend by
+/// pattern. Surfaces that are none of these three keep their own value and say so
+/// at the call site (the capture panel in `Capture`): a step with one caller would
+/// be a token pretending to be a rule.
+enum QuickieRadius {
+    /// The provider badge (30pt): tight enough that the squircle still reads as a
+    /// square carrying a symbol rather than as a dot.
+    static let badge: CGFloat = 8
+
+    /// Cards and pills (~50–60pt): the Favorites card and its widget-cell mirror,
+    /// the breadcrumb crumbs, the glyph-picker tiles. One step, because a crumb is
+    /// just a card that happens to hold text.
+    static let card: CGFloat = 16
+
+    /// Result rows (50pt single-line): tuned to a single-line row's half-height so
+    /// short rows read as clean pills, while a wrapping row keeps the *same*
+    /// rounding instead of ballooning into a stadium the way a `Capsule` would.
+    static let row: CGFloat = 25
 }
