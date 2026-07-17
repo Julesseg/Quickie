@@ -18,6 +18,15 @@ public enum MotionMoment: Sendable {
     /// which is why it dissolves slowly instead of springing, and why Reduce
     /// Motion stops it outright rather than shortening it (see `hintDwell`).
     case hintRotation
+    /// The [[Living backdrop]] mesh drifting between poses on Home (ADR 0034):
+    /// alive at rest, calm in use. Unlike every other moment it is not a one-shot
+    /// answer to an input — it is a slow, continuous loop, so it carries a
+    /// `.drift(period:)` rather than a spring or a fade. The App freezes it the
+    /// instant a query exists (results are read over a still backdrop, preserving
+    /// ADR 0010's type→choose→run protection), and renders it static under Reduce
+    /// Motion — where this degrades to a plain `.fade`, i.e. no drift — as well as
+    /// Low Power Mode and UI test, both decided at the App edge.
+    case backdropDrift
 }
 
 /// How a `MotionMoment` should move: a subtle, fast spring, or a plain crossfade.
@@ -28,6 +37,13 @@ public enum MotionStyle: Equatable, Sendable {
     case spring(response: Double, dampingFraction: Double)
     /// A plain crossfade — the Reduce Motion degradation.
     case fade(duration: Double)
+    /// A slow, continuous drift that loops rather than settling: the [[Living
+    /// backdrop]] mesh easing between poses (ADR 0034). `period` is the seconds
+    /// for one leg of the drift (the App loops it with an autoreverse). Distinct
+    /// from the one-shot spring/fade because it never lands — a query freezes it,
+    /// it does not finish. A *still* backdrop is expressed by degrading this to a
+    /// non-`.drift` style (Reduce Motion returns `.fade`).
+    case drift(period: Double)
 }
 
 /// The tight animation budget from ADR 0010 as a pure, testable decision: subtle
@@ -60,6 +76,13 @@ public struct MotionPolicy: Sendable {
             // A spring here would flick a word at someone who is mid-thought —
             // and any motion sharp enough to notice is a motion asking to be read.
             return .fade(duration: 0.8)
+        case .backdropDrift:
+            // 25s, the middle of ADR 0034's 20–30s band: slow enough that a
+            // seconds-long launcher session never sees a full cycle, so the
+            // backdrop reads as *living* rather than as something that moves. Far
+            // outside the spring budget on purpose — this is the one moment the
+            // user never triggers, so it must be impossible to catch in the act.
+            return .drift(period: 25)
         }
     }
 

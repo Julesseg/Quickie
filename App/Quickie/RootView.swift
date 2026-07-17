@@ -468,6 +468,41 @@ struct RootView: View {
         MotionPolicy(reduceMotion: reduceMotion).style(for: .captureTransition)
     }
 
+    /// Whether the [[Living backdrop]] mesh should drift right now, and the loop to
+    /// drive it with (ADR 0034). The *timing* lives in Core's `MotionPolicy`; this
+    /// only decides the four cases that force a still backdrop, in the order they
+    /// matter:
+    ///
+    /// - **Reduce Motion** collapses the moment to a `.fade` in Core, so `guard
+    ///   case .drift` alone stills the mesh — no App-side motion flag needed.
+    /// - **Anything but the bare Home landing**: `isHome` alone is not enough,
+    ///   because a capture clears the query (`query = ""`, see the
+    ///   `capture.isActive` handler below) and an empty-query file-search context
+    ///   is also `isHome` — so the mesh would resume drifting *behind* those
+    ///   surfaces. The drift runs only on the true landing (the same
+    ///   `isHome && !capture.isActive && !inFileSearch` the pending-query auto-save
+    ///   uses), keeping results read over a still backdrop through typing, results,
+    ///   and capture (ADR 0010's type→choose→run protection).
+    /// - **Low Power Mode**: ADR 0034 spends no battery on motion a seconds-long
+    ///   session would never see through anyway.
+    /// - **UI test**: the frozen-under-test behavior CI's XCUITest job gates
+    ///   (issue #79), shared with every other motion via `isInstantForUITesting`.
+    ///
+    /// Returns the drift loop when the mesh should move, or `nil` for a still
+    /// backdrop — one value, so nothing downstream can hold "should drift" and
+    /// "how" out of step.
+    private var backdropDriftAnimation: Animation? {
+        let style = MotionPolicy(reduceMotion: reduceMotion).style(for: .backdropDrift)
+        guard case .drift = style,
+              isHome,
+              !capture.isActive,
+              !inFileSearch,
+              !ProcessInfo.processInfo.isLowPowerModeEnabled,
+              !MotionStyle.isInstantForUITesting
+        else { return nil }
+        return style.animation
+    }
+
     /// The File Search inline cap, clamped through the declared stepper (ADR 0020;
     /// issue #69) so a stale or out-of-bounds store never drives the provider past
     /// its bounds — the same `clamped` the renderer reads through.
@@ -519,8 +554,9 @@ struct RootView: View {
                 // omitted term is 34pt against a 420pt falloff, which is why the glow
                 // still lands on the bar: it centers on the bar's safe-area line
                 // rather than its top edge, a difference nothing can see.
-                QuietBackdrop(
-                    glowLift: path.isEmpty ? lockedKeyboardInset : 0
+                LivingBackdrop(
+                    glowLift: path.isEmpty ? lockedKeyboardInset : 0,
+                    driftAnimation: backdropDriftAnimation
                 )
 
                 Group {
@@ -2005,8 +2041,12 @@ private enum ActiveSheet: Identifiable {
     }
 }
 
-/// The quiet adaptive backdrop the Liquid Glass chrome floats over (ADR 0010).
-private struct QuietBackdrop: View {
+/// The Living backdrop the Liquid Glass chrome floats over (ADR 0010, 0034): a
+/// subtle purple mesh that drifts very slowly on [[Home]] and freezes the instant
+/// a query exists — alive at rest, calm in use. The accent glow (here) and the
+/// gold hero glow (`ResultListView`) sit over it unchanged, since a glow is
+/// backdrop content the glass refracts, never overlaid blur.
+private struct LivingBackdrop: View {
     /// How far up from the screen bottom to sit the accent glow's center — the
     /// bar's own held keyboard inset. Zero returns it to the bottom (no keyboard,
     /// or a pushed page), where the bar itself sits.
@@ -2021,11 +2061,24 @@ private struct QuietBackdrop: View {
     /// job of a backdrop under ADR 0010.
     var glowLift: CGFloat = 0
 
+    /// The drift loop from Core's `MotionPolicy`, mapped to an `Animation` at the
+    /// edge (`Motion.swift`): a slow linear autoreverse. `nil` renders a still mesh
+    /// at its rest pose — a query exists, or Reduce Motion / Low Power Mode / UI
+    /// test. The parent (`RootView.backdropDriftAnimation`) owns that decision, so
+    /// "should drift" and "how" can never disagree here.
+    var driftAnimation: Animation?
+
+    /// Toggled to advance the mesh from its rest pose to its drifted pose. Driven
+    /// by a `repeatForever` autoreversing animation, so this single flip breathes
+    /// the mesh between the two poses forever — no per-frame view timer (ADR 0034).
+    @State private var drifted = false
+
     var body: some View {
-        LinearGradient(
-            colors: [Color(.systemBackground), Color(.secondarySystemBackground)],
-            startPoint: .top,
-            endPoint: .bottom
+        MeshGradient(
+            width: 3,
+            height: 3,
+            points: Self.meshPoints(drifted: drifted),
+            colors: QuickieBrand.backdropMesh
         )
         .overlay(alignment: .bottom) {
             RadialGradient(
@@ -2052,6 +2105,46 @@ private struct QuietBackdrop: View {
             .allowsHitTesting(false)
         }
         .ignoresSafeArea()
+        .onAppear(perform: syncDrift)
+        // Keyed off *whether* there is a loop, not the `Animation` itself, so this
+        // fires only on the still↔drifting transition — never mid-drift, when the
+        // same loop value is handed back on every re-render.
+        .onChange(of: driftAnimation != nil) { syncDrift() }
+    }
+
+    /// Start the drift loop when there is one, or freeze the mesh at its rest pose
+    /// the instant there is not (a query appeared, or the run degraded to static).
+    /// The freeze snaps with animations off, but the drift amplitude is small
+    /// enough (see `meshPoints`) that the return to rest is imperceptible — and it
+    /// lands exactly as the eye moves to the input and results, never on the
+    /// backdrop.
+    private func syncDrift() {
+        guard let driftAnimation else {
+            var transaction = Transaction()
+            transaction.disablesAnimations = true
+            withTransaction(transaction) { drifted = false }
+            return
+        }
+        // From rest, then let the repeating autoreverse carry it forever.
+        drifted = false
+        withAnimation(driftAnimation) { drifted = true }
+    }
+
+    /// The nine control points of a 3×3 mesh, row-major, at rest or drifted. Only
+    /// the interior and edge midpoints move; the four corners stay pinned at the
+    /// unit square so no edge tears. Each edge midpoint moves only *along* its edge
+    /// (a top point keeps `y == 0`, a left point keeps `x == 0`), so the mesh stays
+    /// a clean quad — only the center is free in both axes. The offsets are small
+    /// (≤ 0.1 of the screen) and asymmetric, so the drift reads as an organic sway
+    /// rather than a scan, and the still→drifted snap on freeze is invisible.
+    static func meshPoints(drifted: Bool) -> [SIMD2<Float>] {
+        let t: Float = drifted ? 1 : 0
+        func p(_ x: Float, _ y: Float) -> SIMD2<Float> { SIMD2(x, y) }
+        return [
+            p(0, 0), p(0.5 + 0.10 * t, 0), p(1, 0),
+            p(0, 0.5 - 0.08 * t), p(0.5 - 0.06 * t, 0.5 + 0.07 * t), p(1, 0.5 + 0.08 * t),
+            p(0, 1), p(0.5 - 0.10 * t, 1), p(1, 1),
+        ]
     }
 
     /// The glow's falloff radius — also half its frame height, which is what keeps it

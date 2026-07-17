@@ -56,7 +56,7 @@ struct MotionPolicyTests {
     }
 
     @Test("every animated moment degrades to a fade under Reduce Motion",
-          arguments: [MotionMoment.rowInsert, .inputFocus, .captureTransition, .hintRotation])
+          arguments: [MotionMoment.rowInsert, .inputFocus, .captureTransition, .hintRotation, .backdropDrift])
     func allMomentsFadeUnderReduceMotion(_ moment: MotionMoment) {
         let policy = MotionPolicy(reduceMotion: true)
         guard case .fade = policy.style(for: moment) else {
@@ -66,9 +66,10 @@ struct MotionPolicyTests {
     }
 
     @Test("springs stay within the tight budget — fast and barely bouncing",
-          // `.hintRotation` is deliberately absent: it is the one moment that
-          // crossfades rather than springs even when motion is allowed, so the
-          // spring budget has nothing to say about it (`hintRotationDissolves`).
+          // `.hintRotation` and `.backdropDrift` are deliberately absent: they are
+          // the moments that crossfade or loop rather than spring even when motion
+          // is allowed, so the spring budget has nothing to say about them
+          // (`hintRotationDissolves`, `backdropDrifts`).
           arguments: [MotionMoment.rowInsert, .inputFocus, .captureTransition])
     func springsStayWithinBudget(_ moment: MotionMoment) {
         // ADR 0010's "tight animation budget": subtle and fast. A long response or
@@ -148,5 +149,40 @@ struct MotionPolicyTests {
         // preserve, so a shorter fade would still be unrequested movement. The
         // line stops instead, and the App renders a single static hint.
         #expect(MotionPolicy(reduceMotion: true).hintDwell == nil)
+    }
+
+    // MARK: - The Living backdrop's drift (#184)
+
+    @Test("the backdrop drifts — a continuous loop, not a spring or a fade")
+    func backdropDrifts() {
+        // The one moment the user never triggers, so it never springs: it eases
+        // slowly and forever between poses, which is a `.drift`, not a transition.
+        guard case .drift = MotionPolicy(reduceMotion: false).style(for: .backdropDrift) else {
+            Issue.record("expected a drift, got \(MotionPolicy(reduceMotion: false).style(for: .backdropDrift))")
+            return
+        }
+    }
+
+    @Test("the drift period sits in ADR 0034's 20–30s band — alive at rest, never caught moving")
+    func driftPeriodStaysSlow() {
+        // Slow enough that a seconds-long launcher session never sees a full
+        // cycle (the whole point — motion the eye can ignore), but not so slow it
+        // stops reading as alive. ADR 0034 pins the band to 20–30s.
+        guard case .drift(let period) = MotionPolicy(reduceMotion: false).style(for: .backdropDrift) else {
+            Issue.record("expected a drift")
+            return
+        }
+        #expect(period >= 20 && period <= 30)
+    }
+
+    @Test("Reduce Motion stops the drift outright — a still backdrop, no loop")
+    func backdropIsStillUnderReduceMotion() {
+        // Degrades to a non-`.drift` style (the shared `.fade` path), so the App's
+        // "drift only if the style is `.drift`" rule renders a static mesh — the
+        // honest degradation for motion the user never asked for (ADR 0034).
+        let style = MotionPolicy(reduceMotion: true).style(for: .backdropDrift)
+        if case .drift = style {
+            Issue.record("expected Reduce Motion to stop the drift, still got \(style)")
+        }
     }
 }

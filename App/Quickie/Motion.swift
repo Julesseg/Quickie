@@ -30,6 +30,13 @@ extension MotionStyle {
         case .fade(let duration):
             // Reduce Motion degradation: a plain crossfade, no movement.
             return .easeInOut(duration: duration)
+        case .drift(let period):
+            // The Living backdrop's slow loop (ADR 0034): linear so the mesh eases
+            // at one calm, constant rate with no easing "pump" at the turns, and
+            // autoreversing so it breathes between two poses forever with no seam
+            // where the loop restarts. `nil` under UI test (handled above) freezes
+            // the mesh for XCUITest, like all motion (issue #79).
+            return .linear(duration: period).repeatForever(autoreverses: true)
         }
     }
 
@@ -44,6 +51,11 @@ extension MotionStyle {
         case .spring:
             return .move(edge: edge).combined(with: .opacity)
         case .fade:
+            return .opacity
+        case .drift:
+            // The backdrop never inserts or leaves — it is always present and
+            // only drifts in place — so it has no edge transition. A plain
+            // crossfade is the harmless default for a caller that never comes.
             return .opacity
         }
     }
