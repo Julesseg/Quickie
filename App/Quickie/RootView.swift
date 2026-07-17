@@ -506,7 +506,16 @@ struct RootView: View {
 
         NavigationStack(path: $path) {
             ZStack {
-                QuietBackdrop()
+                // The glow rides the bar. `lockedKeyboardInset` is measured from the
+                // *safe area* (the bar already sits above the home indicator), while
+                // the backdrop ignores it entirely — so adding the bottom inset back
+                // reconstructs the keyboard's overlap of the screen bottom, which is
+                // the bar's top edge in the backdrop's own coordinates. Zero on a
+                // pushed page, mirroring the bar's lift (issue #181 gives pages their
+                // own backdrop).
+                QuietBackdrop(
+                    glowLift: path.isEmpty ? lockedKeyboardInset + bottomSafeAreaInset : 0
+                )
 
                 Group {
                     if capture.isCapturing {
@@ -1991,6 +2000,20 @@ private enum ActiveSheet: Identifiable {
 
 /// The quiet adaptive backdrop the Liquid Glass chrome floats over (ADR 0010).
 private struct QuietBackdrop: View {
+    /// How far above the screen bottom to sit the accent glow's center — the
+    /// keyboard's top edge, which is where the input bar floats. Zero returns it
+    /// to the screen bottom (no keyboard, or a pushed page).
+    ///
+    /// The glow is anchored to the **bar**, not the screen, because the screen
+    /// bottom is not a place the user ever looks: the keyboard covers the lower
+    /// half from launch (the field is focused at zero-wall, ADR 0012), so a
+    /// bottom-centered glow buries its own center and leaks only the faint outer
+    /// edge of its falloff into view. Riding the bar puts the brightest point
+    /// under the input and the [[Highlighted result]] above it — where the eye
+    /// already is, and where there is glass to refract it, which is the entire
+    /// job of a backdrop under ADR 0010.
+    var glowLift: CGFloat = 0
+
     var body: some View {
         LinearGradient(
             colors: [Color(.systemBackground), Color(.secondarySystemBackground)],
@@ -2004,6 +2027,11 @@ private struct QuietBackdrop: View {
                 startRadius: 0,
                 endRadius: 420
             )
+            // Insets the gradient's *frame*, carrying its `.bottom` center up with
+            // it. The motion is free: `glowLift` is the bar's own held inset, so
+            // the glow rides the keyboard's spring on show/hide and tracks the
+            // finger unanimated through a swipe-dismiss, exactly like the bar.
+            .padding(.bottom, glowLift)
         }
         .ignoresSafeArea()
     }
