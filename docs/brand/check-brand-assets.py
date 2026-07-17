@@ -156,6 +156,13 @@ def white_contrast(rgb):
     return 1.05 / (0.2126 * r + 0.7152 * g + 0.0722 * b + 0.05)
 
 
+def action_kind_body():
+    """Just ActionKind's body — Action.swift declares plenty of other enums."""
+    source = ACTION_KIND.read_text()
+    start = source.index("public enum ActionKind")
+    return source[start:source.index("\n}\n", start)]
+
+
 def badge_failures(literals):
     """Every way the provider-badge ring can stop doing its job (issue #178).
 
@@ -165,7 +172,7 @@ def badge_failures(literals):
     up in the App is checked automatically, on its first CI run.
     """
     failures = []
-    kinds = re.findall(r"^    case (\w+)$", KIND_BLOCK(), re.M)
+    kinds = re.findall(r"^    case (\w+)$", action_kind_body(), re.M)
     tints = dict(re.findall(r"case \.(\w+): return QuickieBrand\.(badge\w+)",
                             ACTION_ICONS.read_text()))
 
@@ -247,13 +254,6 @@ def badge_failures(literals):
                                 "the Highlighted result's hero glow, never on a badge")
 
     return failures
-
-
-def KIND_BLOCK():
-    """Just ActionKind's body — the file declares plenty of other enums."""
-    source = ACTION_KIND.read_text()
-    start = source.index("public enum ActionKind")
-    return source[start:source.index("\n}\n", start)]
 
 
 def asset_colors(contents):
