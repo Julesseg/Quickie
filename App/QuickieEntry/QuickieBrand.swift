@@ -147,68 +147,63 @@ enum QuickieBrand {
 
     // MARK: - The Living backdrop's mesh (ADR 0034)
     //
-    // The surface the Liquid Glass chrome refracts (ADR 0010) is a subtle purple
-    // mesh — the two-stop quiet backdrop made living (ADR 0034). Three role
-    // stops, darkest → the mid *bloom*, adaptive per appearance:
+    // The surface the Liquid Glass chrome refracts (ADR 0010) — the two-stop quiet
+    // backdrop made living (ADR 0034). Nine stops, one per 3×3 mesh control point,
+    // row-major, adaptive per appearance.
     //
-    // - **Dark mode is the icon's own field.** `backdropCorner`/`backdropField`
-    //   are `fieldBottom`/`fieldTop` and the bloom is `lightAccent`, so the
-    //   backdrop reads as the app icon writ large rather than a recolored
-    //   stranger — the same move `iconBackdrop` makes for the widget tile.
-    // - **Light mode is a pale wash of the same purple axis over near-white.**
-    //   Kept deliberately faint: black body text and the Liquid Glass chrome sit
-    //   directly over this, so the mesh must never fight them (ADR 0010's
-    //   legibility line), and the accent glow and the gold hero glow have to
-    //   still read as *added* light over it. These three light values are the one
-    //   part of the backdrop the icon has no opinion about, so — like the badge
-    //   ring — they are built to that rule rather than derived from the generator.
+    // The stops are deliberately *not* one hue at nine lightnesses. A near-mono
+    // mesh has nothing to see move — its stops look alike, so the slow drift reads
+    // as a still image no matter how far the points travel. So the palette spreads
+    // across the purple axis (indigo → violet → magenta-purple, ~260–300°) with a
+    // couple of stops lifted into soft blooms: distinguishable zones whose edges
+    // the eye *can* follow as they drift. That is the whole reason the backdrop
+    // reads as alive rather than as wallpaper.
     //
-    // Only the light triples are inline literals here; each stop's dark half
-    // names an existing, generator-checked token, so `check-brand-assets.py` need
-    // not learn about the backdrop. They are `Color(uiColor:)` closures (not the
-    // `static let … = Color(red:…)` shape) precisely so that checker never scans
-    // them as drifted icon literals.
+    // - **Dark** stays low in lightness everywhere (a backdrop, never a light
+    //   source): the blooms are deep violets, not bright ones, so text and the
+    //   glass chrome stay legible (ADR 0010) — the hue spread, not brightness, is
+    //   what carries the motion.
+    // - **Light** is a near-white wash with a touch more of the purple axis than a
+    //   whisper, so the drift is visible without the mesh ever fighting black body
+    //   text.
+    //
+    // These are the one part of the backdrop the icon has no opinion about, so —
+    // like the badge ring — they are built to that rule rather than derived from
+    // the generator. They live in `Color(uiColor:)` closures (not the `static let
+    // … = Color(red:…)` shape), so `check-brand-assets.py` never scans them as
+    // drifted icon literals.
 
-    /// A mesh stop that is `dark` on the dark appearance and the given pale purple
-    /// (0–255 components) on light. The whole Living backdrop palette is built
-    /// from three of these; the App lays them out across a 3×3 mesh.
-    private static func backdropStop(
-        light: (r: CGFloat, g: CGFloat, b: CGFloat), dark: Color
-    ) -> Color {
-        Color(uiColor: UIColor { traits in
-            traits.userInterfaceStyle == .dark
-                ? UIColor(dark)
-                : UIColor(red: light.r / 255, green: light.g / 255, blue: light.b / 255, alpha: 1)
-        })
-    }
+    /// The dark-appearance mesh, row-major. Kept *very* dark — a near-black field
+    /// with only a breath of purple — so it reads as a calm backdrop, never a lit
+    /// screen; even the lifted stops (indices 4 and 7, the lower-center blooms) stay
+    /// deep. The hues still fan indigo → magenta-purple across the grid so the drift
+    /// keeps visible edges despite the low brightness.
+    private static let backdropMeshDark: [(CGFloat, CGFloat, CGFloat)] = [
+        (11, 8, 28), (13, 8, 33), (15, 9, 37),
+        (13, 9, 35), (31, 19, 68), (17, 10, 44),
+        (16, 10, 42), (27, 16, 60), (13, 8, 33),
+    ]
 
-    /// The backdrop's darkest stop — the four corners of the mesh.
-    ///
-    /// The three stops sit close together on purpose: a *subtle* mesh (ADR 0034),
-    /// so the drift is felt more than seen and the chrome + glows read cleanly over
-    /// it (ADR 0010). Dark mode never leaves the icon's own field (`fieldBottom` →
-    /// `fieldTop`), where even the brightest stop is a deep purple — the earlier
-    /// `lightAccent` bloom read as a spotlight, not a backdrop. Light mode is a
-    /// near-white with only a breath of the field's hue.
-    static let backdropCorner = backdropStop(light: (249, 248, 252), dark: fieldBottom)
-    /// The backdrop's mid stop — the edge midpoints, sitting between the corner's
-    /// `fieldBottom` and the bloom's `fieldTop` on the icon's own field axis.
-    static let backdropField = backdropStop(
-        light: (245, 243, 251), dark: Color(red: 33 / 255, green: 18 / 255, blue: 70 / 255))
-    /// The backdrop's brightest stop — the mesh's center, a faint purple bloom the
-    /// drift eases around. In dark mode it is the icon field's own top (`fieldTop`),
-    /// no brighter, so the backdrop never reads as a light source.
-    static let backdropBloom = backdropStop(light: (241, 238, 250), dark: fieldTop)
+    /// The light-appearance mesh, row-major: a lavender wash with real presence
+    /// (not a whisper of white) so the mesh is legibly *there*, with the same
+    /// indigo → magenta-purple fan and two deeper stops (4 and 7) as the blooms —
+    /// still pale enough that black text over it keeps a wide contrast margin.
+    private static let backdropMeshLight: [(CGFloat, CGFloat, CGFloat)] = [
+        (227, 222, 248), (219, 212, 246), (212, 203, 244),
+        (217, 209, 246), (201, 188, 240), (214, 205, 245),
+        (210, 200, 243), (204, 192, 241), (223, 217, 247),
+    ]
 
-    /// The nine mesh colors for a 3×3 [[Living backdrop]] (ADR 0034), row-major:
-    /// dark corners, mid edges, a bloom at the center. Adaptive, so a single array
-    /// serves both appearances — SwiftUI resolves each stop per color scheme.
+    /// The nine mesh colors for a 3×3 [[Living backdrop]] (ADR 0034), row-major.
+    /// Each is an adaptive `Color`, so one array serves both appearances — SwiftUI
+    /// resolves each stop per color scheme.
     static var backdropMesh: [Color] {
-        [
-            backdropCorner, backdropField, backdropCorner,
-            backdropField, backdropBloom, backdropField,
-            backdropCorner, backdropField, backdropCorner,
-        ]
+        zip(backdropMeshLight, backdropMeshDark).map { light, dark in
+            Color(uiColor: UIColor { traits in
+                let c = traits.userInterfaceStyle == .dark ? dark : light
+                return UIColor(red: c.0 / 255, green: c.1 / 255, blue: c.2 / 255, alpha: 1)
+            })
+        }
     }
 
     // MARK: - The provider-badge palette
