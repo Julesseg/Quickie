@@ -166,16 +166,24 @@ A [[Computed]] row produced by recognizing the query as a *value*: it fires only
 _Avoid_: Detection row, smart suggestion, data detector (the mechanism, not the concept)
 
 **Home**:
-The empty-query state shown the instant the app opens: the Clipboard prefill chip (when applicable), a **Favorites grid** pinned at the top of the screen over a progressive-blur band, and a Frecency "Recent" list that scrolls *under* that band. The tap-without-typing fast path. On the first keystroke the Favorites grid disappears and the live Result list takes the full height, still scrolling under the same blurred top band.
+The empty-query state shown the instant the app opens: the Clipboard prefill chip (when applicable), a **Favorites grid** pinned at the top of the screen over a progressive-blur band, and a Frecency "Recent" list that scrolls *under* that band. The tap-without-typing fast path. On the first keystroke the Favorites grid disappears and the live Result list takes the full height, still scrolling under the same blurred top band. Before the user has pinned or used anything there is nothing to show, and Home falls back to its **pre-anything** form: the [[Brand mark]], the "Start typing" placeholder, and the [[Hint line]] (ADR 0034).
 _Avoid_: Landing, start screen, default view
 
 **Living backdrop**:
 The surface the Liquid Glass chrome refracts (ADR 0010): a subtle purple mesh gradient, adaptive to light/dark, that drifts very slowly on [[Home]] and stands still the moment a query exists — alive at rest, calm in use (ADR 0034). Static under Reduce Motion and Low Power Mode. Also hosts the [[Highlighted result]]'s gold hero glow, since glows are backdrop content the glass refracts, never overlaid blur.
 _Avoid_: Wallpaper, animated background, quiet backdrop (the pre-living static gradient it replaces)
 
+**Brand mark**:
+The app icon's orbital Q — the same custom SF Symbol every [[Entry surface]] renders — drawn on [[pre-anything Home]] above the placeholder, painted in the brand's trail ramp (the icon's lavender whitening toward the release on dark; the same axis one step lighter on light, where the icon's own ramp would erase itself against the background — ADR 0033). The one place inside the app that says whose app this is, and the reason the mark's symbolset is shared by the app and widget targets rather than owned by the extension: the mark on the Home Screen and the mark inside must be the same mark.
+_Avoid_: Logo, app icon (the icon is the Home Screen artwork; the mark is the glyph isolated from it), splash
+
 **Hint line**:
-The single rotating example line on [[Home]] beneath the brand mark, teaching by suggestion what the input accepts (a sum, a link, an app name…). One capability per hint, quiet instructive tone; rotation is an enumerated motion moment (ADR 0034), frozen under Reduce Motion. Distinct from the placeholder ("Start typing"), which never changes.
-_Avoid_: Placeholder (the static element), tips, onboarding copy (there is no onboarding — ADR 0012)
+The single quiet line under [[pre-anything Home]]'s placeholder, rotating slowly (a ~7s dwell, a slow crossfade) through five examples — "Try 2+2" · "Paste a link" · "Type an app name" · "Jot something down" · "Search the web" — **one capability per hint**. It is how Quickie says what it accepts without a wall, a tour, or an empty-state paragraph (ADR 0012 forbids all three), and the one-capability-per-hint rule is the whole point: five phrasings of one trick would teach nothing. It only ever *suggests* — every hint is something the user could literally type — which is why it is a separate element from the placeholder, the instruction, which never changes. Rotation is an enumerated moment in the animation budget (ADR 0010), the specific moment introduced by ADR 0034 — the only one with nothing the user just did behind it, so it is tuned to *lose* an attention contest with the input rather than keep up with it. Under Reduce Motion or UI test the line is **frozen** to a single static hint rather than fading faster, because the rotation *is* the motion and there is no user action underneath it to preserve.
+_Avoid_: Tip, tooltip, coach mark, onboarding, placeholder (the placeholder is "Start typing" and is a different element)
+
+**pre-anything Home**:
+[[Home]] before the user has pinned a Favorite or used any Action — no grid, no Recent list, nothing of the user's own to show. Not a state to be fixed but where every user necessarily starts, and the only screen in the app that is empty *by definition*; that space is what the [[Brand mark]] and the [[Hint line]] spend (ADR 0034).
+_Avoid_: Empty state, zero state, first run (nothing here is once-only — it returns whenever Home has nothing to show)
 
 **Favorites grid**:
 The 2×2 grid of small Favorite cards pinned at the top of Home over a progressive blur. Shows **at most four** Favorites, in pin order; it is the launch-time, tap-without-typing surface. Visible only on Home — it vanishes the moment the user starts typing, ceding the screen to results. Replaces the earlier horizontal Favorites chip row.

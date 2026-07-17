@@ -12,6 +12,12 @@ public enum MotionMoment: Sendable {
     /// slides out toward the keyboard while the breadcrumb slides in from the top
     /// — a deliberate, whole-screen change rather than a keystroke-adjacent nudge.
     case captureTransition
+    /// The Home [[Hint line]] crossfading to its next hint (ADR 0034) — the only
+    /// moment with nothing the user just did behind it. Every other moment
+    /// *answers* an input; this one starts on its own while the screen sits idle,
+    /// which is why it dissolves slowly instead of springing, and why Reduce
+    /// Motion stops it outright rather than shortening it (see `hintDwell`).
+    case hintRotation
 }
 
 /// How a `MotionMoment` should move: a subtle, fast spring, or a plain crossfade.
@@ -48,6 +54,32 @@ public struct MotionPolicy: Sendable {
             // A whole-screen change, so the most deliberate of the budget — still
             // fast, and barely overshooting so a large surface settles cleanly.
             return .spring(response: 0.35, dampingFraction: 0.9)
+        case .hintRotation:
+            // The one moment outside the spring budget, because it is the one
+            // moment the user did not ask for: a slow dissolve the eye can ignore.
+            // A spring here would flick a word at someone who is mid-thought —
+            // and any motion sharp enough to notice is a motion asking to be read.
+            return .fade(duration: 0.8)
         }
+    }
+
+    /// How long a hint dwells before the [[Hint line]] crossfades to the next, or
+    /// `nil` when the line is **frozen** — a single hint, forever.
+    ///
+    /// Seven seconds is chosen against the wrong instinct: this is the one thing
+    /// on screen with nothing to answer to, so the cadence is set to lose an
+    /// attention contest with the input rather than win one. Long enough that the
+    /// line is furniture to anyone who is typing; short enough that a user who
+    /// glances up twice while thinking sees two different capabilities, which is
+    /// the entire point of the line (ADR 0034).
+    ///
+    /// Reduce Motion returns `nil` rather than a longer dwell or a faster fade:
+    /// unlike every other moment, there is no user action underneath this one to
+    /// preserve, so degrading it still leaves unrequested movement on screen. The
+    /// only honest degradation is to stop. The App renders `HintLine()`'s first
+    /// hint statically and never advances it — one hint still teaches something;
+    /// motion nobody asked for teaches nothing.
+    public var hintDwell: Double? {
+        reduceMotion ? nil : 7
     }
 }
