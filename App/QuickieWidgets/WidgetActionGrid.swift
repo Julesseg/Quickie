@@ -114,7 +114,12 @@ struct WidgetActionCellButton: View {
         }
         .padding(.horizontal, showsTitle ? 10 : 0)
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: showsTitle ? .leading : .center)
-        .background(WidgetCell.shape.fill(.quaternary.opacity(0.6)))
+        // The filled cell's platter takes the brand accent wash — the same faint
+        // purple the in-app Highlighted row wears — rather than neutral gray, so a
+        // pinned/chosen cell reads as Quickie's own surface (ADR 0033). The empty
+        // slot stays a dashed neutral tap target (`WidgetEmptyCellButton`): filled
+        // is brand, unfilled is chrome.
+        .background(WidgetCell.shape.fill(QuickieBrand.accentWash))
         .contentShape(WidgetCell.shape)
         .accessibilityLabel(action.title)
     }

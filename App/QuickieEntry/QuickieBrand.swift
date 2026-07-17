@@ -77,6 +77,20 @@ enum QuickieBrand {
         UIColor(traits.userInterfaceStyle == .dark ? lavender : lightAccent)
     })
 
+    /// The brand's **accent wash**: the adaptive accent at the same 0.12 opacity
+    /// the in-app [[Highlighted result]] row wears (`ResultListView`), so a
+    /// widget's filled cell platter and the Live Activity's Lock-Screen tint read
+    /// as the same faint purple the app already uses — accents, not backdrops (ADR
+    /// 0033). Deliberately low: it must sit under snapshot glyphs and query text
+    /// without competing, and it degrades to near-nothing when the system renders
+    /// a widget in its tinted/clear mode, which is the graceful failure ADR 0033
+    /// wants rather than a fight for the wallpaper. The app side reaches the
+    /// identical value inline as `Color.accentColor.opacity(0.12)` (its
+    /// `AccentColor` asset supplies the same adaptive pair); the widget extension
+    /// has no such asset, so it names this token — the same asset/token split the
+    /// `accent` itself lives under.
+    static var accentWash: Color { accent.opacity(0.12) }
+
     /// The icon trail's color ramp — lavender whitening toward the release, top
     /// to bottom, where the arrow departs — for surfaces where SwiftUI styling
     /// actually applies: widget and Live Activity views.

@@ -133,7 +133,9 @@ private struct ActionsWidgetView: View {
         VStack(spacing: 6) {
             QuickieGlyph.image
                 .font(.title3.weight(.semibold))
-                .foregroundStyle(.secondary)
+                // Brand-gradient mark on the system container — matching the
+                // Favorites widget's empty state and the Entry widget (ADR 0033).
+                .foregroundStyle(QuickieBrand.markGradient)
             Text("Long-press to choose actions")
                 .font(.footnote.weight(.medium))
                 .foregroundStyle(.secondary)
