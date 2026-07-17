@@ -145,6 +145,62 @@ enum QuickieBrand {
         LinearGradient(colors: [fieldTop, fieldBottom], startPoint: .top, endPoint: .bottom)
     }
 
+    // MARK: - The Living backdrop's mesh (ADR 0034)
+    //
+    // The surface the Liquid Glass chrome refracts (ADR 0010) is a subtle purple
+    // mesh — the two-stop quiet backdrop made living (ADR 0034). Three role
+    // stops, darkest → the mid *bloom*, adaptive per appearance:
+    //
+    // - **Dark mode is the icon's own field.** `backdropCorner`/`backdropField`
+    //   are `fieldBottom`/`fieldTop` and the bloom is `lightAccent`, so the
+    //   backdrop reads as the app icon writ large rather than a recolored
+    //   stranger — the same move `iconBackdrop` makes for the widget tile.
+    // - **Light mode is a pale wash of the same purple axis over near-white.**
+    //   Kept deliberately faint: black body text and the Liquid Glass chrome sit
+    //   directly over this, so the mesh must never fight them (ADR 0010's
+    //   legibility line), and the accent glow and the gold hero glow have to
+    //   still read as *added* light over it. These three light values are the one
+    //   part of the backdrop the icon has no opinion about, so — like the badge
+    //   ring — they are built to that rule rather than derived from the generator.
+    //
+    // Only the light triples are inline literals here; each stop's dark half
+    // names an existing, generator-checked token, so `check-brand-assets.py` need
+    // not learn about the backdrop. They are `Color(uiColor:)` closures (not the
+    // `static let … = Color(red:…)` shape) precisely so that checker never scans
+    // them as drifted icon literals.
+
+    /// A mesh stop that is `dark` on the dark appearance and the given pale purple
+    /// (0–255 components) on light. The whole Living backdrop palette is built
+    /// from three of these; the App lays them out across a 3×3 mesh.
+    private static func backdropStop(
+        light: (r: CGFloat, g: CGFloat, b: CGFloat), dark: Color
+    ) -> Color {
+        Color(uiColor: UIColor { traits in
+            traits.userInterfaceStyle == .dark
+                ? UIColor(dark)
+                : UIColor(red: light.r / 255, green: light.g / 255, blue: light.b / 255, alpha: 1)
+        })
+    }
+
+    /// The backdrop's darkest stop — the four corners of the mesh.
+    static let backdropCorner = backdropStop(light: (244, 241, 251), dark: fieldBottom)
+    /// The backdrop's mid stop — the edge midpoints, between corner and bloom.
+    static let backdropField = backdropStop(light: (236, 231, 249), dark: fieldTop)
+    /// The backdrop's brightest stop — the mesh's center, a faint purple bloom the
+    /// drift eases around.
+    static let backdropBloom = backdropStop(light: (228, 220, 247), dark: lightAccent)
+
+    /// The nine mesh colors for a 3×3 [[Living backdrop]] (ADR 0034), row-major:
+    /// dark corners, mid edges, a bloom at the center. Adaptive, so a single array
+    /// serves both appearances — SwiftUI resolves each stop per color scheme.
+    static var backdropMesh: [Color] {
+        [
+            backdropCorner, backdropField, backdropCorner,
+            backdropField, backdropBloom, backdropField,
+            backdropCorner, backdropField, backdropCorner,
+        ]
+    }
+
     // MARK: - The provider-badge palette
     //
     // One hue per `ActionKind`, so a Result row's leading badge says *what kind of
