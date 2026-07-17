@@ -38,13 +38,29 @@ Neither value works in both appearances, which is why a single literal was
 rejected: the lavender washes out to nothing on white, and the mid-purple
 disappears into a dark backdrop.
 
-**The accent is claimed twice, deliberately.** The `AccentColor` asset carries
-it so that *default* tinting — the 14 toggles, system controls, anything that
-never opts in — is brand purple with no per-view change and no way to forget.
-`QuickieBrand.accent` carries the same color as an explicit token, because the
-widget extension has no such asset and because gradients and rings need a
-`Color`, not an ambient. The two agreeing is a CI obligation, not a convention
-(below).
+**The accent is claimed twice, deliberately.** The **app** target's
+`AccentColor` asset carries it so that *default* tinting — the 14 toggles,
+system controls, anything that never opts in — is brand purple with no per-view
+change and no way to forget. `QuickieBrand.accent` carries the same color as an
+explicit token, for the **widget** extension (which has no such asset, by the
+rule below) and for gradients and rings, which need a `Color` rather than an
+ambient. The two agreeing is a CI obligation, not a convention (below).
+
+An accent asset in *each* catalog would have been the symmetric answer, and is
+rejected: two colorsets can disagree, which is the entire failure this ADR
+exists to prevent — and the asset's reach (everything, by default) is wrong for
+the extension specifically.
+
+**The brand only tints Quickie's own surface.** Where the app extends into
+shared chrome — the compact and minimal Dynamic Island, sitting beside the clock
+and every other app's glyphs — the **system** tint stays. Those presentations
+are a guest in someone else's layout, and a launcher insisting on its purple
+there is noise, not identity. Quickie's own surfaces (the Live Activity's
+expanded and Lock Screen presentations, the deep-link widget tile) wear the
+accent. This is why the widget extension deliberately has **no** `AccentColor`
+asset: an accent asset would tint *everything* in the extension by default,
+including the chrome that shouldn't have it, so those surfaces name
+`QuickieBrand.accent` explicitly and the rest keep `.tint`.
 
 **Gold appears in exactly one place: the Highlighted result's hero glow
 (#177).** The icon's warm mass (`DOT_COLOR` #FFC94F) is the thing the comet

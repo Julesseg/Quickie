@@ -84,7 +84,7 @@ def brand_palette(icon):
         "fieldBottom": rgb(icon.BG_BOTTOM),
         # ADR 0033: light mode's accent. The field itself is legible on white but
         # reads as near-black, so it is lifted to a mid lightness.
-        "midPurple": lift(field_top, 0.45),
+        "lightAccent": lift(field_top, 0.45),
     }
 
 
@@ -148,7 +148,7 @@ def main():
     # that *default* tinting — every toggle that names no color — is brand
     # purple). It must agree with the module's two accent literals.
     accent = asset_colors(json.loads(ACCENT_ASSET.read_text()))
-    for appearance, name in (("light", "midPurple"), ("dark", "lavender")):
+    for appearance, name in (("light", "lightAccent"), ("dark", "lavender")):
         got, want = accent.get(appearance), expected[name]
         if got != want:
             failures.append(f"{ACCENT_ASSET.relative_to(REPO)}'s {appearance} color is {got}, but "

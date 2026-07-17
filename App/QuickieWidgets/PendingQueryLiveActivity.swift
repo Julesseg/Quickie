@@ -7,9 +7,15 @@ import ActivityKit
 /// Screen / Dynamic Island and tappable to hop straight back to it.
 ///
 /// - **Compact and minimal** Dynamic Island: generic glyphs only — never the
-///   query text (it sits beside the clock and every other app's chrome).
+///   query text (it sits beside the clock and every other app's chrome). These
+///   keep the **system** tint: they sit in shared chrome next to the clock, so
+///   the brand doesn't get a vote there (ADR 0033).
 /// - **Expanded and Lock Screen**: the truncated query preview plus a
-///   return-arrow glyph expressing "return to it".
+///   return-arrow glyph expressing "return to it". These are Quickie's own
+///   surface, so the mark wears `QuickieBrand.accent` rather than `.tint` —
+///   this extension has no `AccentColor` asset (only the app target declares
+///   one), so `.tint` here resolves to *system blue*, which is exactly what
+///   ADR 0033 exists to end.
 ///
 /// The tap is a **plain open** — icon-equivalent, restoring the query — so no
 /// `widgetURL` is set: the system's default tap just opens the app, which is
@@ -26,7 +32,7 @@ struct PendingQueryLiveActivity: Widget {
             DynamicIsland {
                 DynamicIslandExpandedRegion(.leading) {
                     QuickieGlyph.image
-                        .foregroundStyle(.tint)
+                        .foregroundStyle(QuickieBrand.accent)
                 }
                 DynamicIslandExpandedRegion(.center) {
                     Text(context.state.preview)
@@ -61,7 +67,7 @@ private struct PendingQueryLockScreenView: View {
         HStack(spacing: 12) {
             QuickieGlyph.image
                 .font(.title3)
-                .foregroundStyle(.tint)
+                .foregroundStyle(QuickieBrand.accent)
             Text(preview)
                 .font(.callout.weight(.medium))
                 .lineLimit(1)

@@ -1,24 +1,35 @@
 import SwiftUI
 import UIKit
 
-/// The one place a brand color literal lives (ADR 0033). Every tinted surface —
-/// the [[Highlighted result]]'s ring and wash, the backdrop glow, the breadcrumb
-/// pills, the Enter hint, the Live Activity glyphs, the widget tiles — reads its
-/// color from here, so the app can never drift back onto system blue or onto a
-/// purple the icon doesn't actually contain.
+/// The one place a brand color literal lives (ADR 0033) — so nothing can drift
+/// back onto system blue, or onto a purple the icon doesn't actually contain.
 ///
-/// It lives in the folder synced into **both** the app and widget targets (like
-/// `ActionIcons` and `DeeplinkInbox`) because the brand is one brand: the widget
-/// extension previously hand-copied the icon's gradients into `QuickieGlyph`,
-/// which is exactly the drift this module exists to end.
+/// It reaches its surfaces two ways, deliberately. The **app** target mostly
+/// doesn't name this module at all: its `AccentColor` asset carries `accent`, so
+/// `Color.accentColor` and every control that names no color (the toggles) are
+/// brand purple with no opt-in — the ring and wash (`ResultListView`), the
+/// backdrop glow (`RootView`), the breadcrumb pills (`Capture`) all read the
+/// asset, which `check-brand-assets.py` pins to the literals below. The
+/// **widget** extension names this module directly instead (`EntryWidget`,
+/// `PendingQueryLiveActivity`), because it has **no** `AccentColor` asset — and
+/// deliberately must not gain one: an accent asset tints an extension's every
+/// surface by default, including the compact/minimal Dynamic Island, which ADR
+/// 0033 keeps system-tinted precisely because it is shared chrome. Naming the
+/// token per-surface is what makes that line drawable.
+///
+/// It lives in the folder synced into **both** targets (like `ActionIcons` and
+/// `DeeplinkInbox`) because the brand is one brand: the widget extension
+/// previously hand-copied the icon's gradients into `QuickieGlyph`, which is
+/// exactly the drift this module exists to end.
 ///
 /// The literals are hand-copied from `docs/brand/make-app-icon.py` — Swift can't
 /// read the Python constants — so `docs/brand/check-brand-assets.py` re-derives
-/// the whole palette from that generator on every full CI run and fails on
-/// drift, naming the constant and printing the number to paste. **Rename or
-/// retype one of the `static let ... = Color(red:green:blue:)` literals below
-/// and the check stops seeing it**: it matches them by name, in that exact
-/// shape.
+/// the palette from that generator on every full CI run and fails on drift,
+/// naming the constant and printing the number to paste. It matches them **by
+/// name**, in the exact `static let ... = Color(red:green:blue:)` shape below,
+/// and fails loudly on a name it can't find — so renaming one here means
+/// renaming its key in that script's `brand_palette`, and the check will say so
+/// rather than fall silent.
 enum QuickieBrand {
     // MARK: - The icon's palette
     //
@@ -40,29 +51,28 @@ enum QuickieBrand {
     static let fieldTop = Color(red: 46 / 255, green: 26 / 255, blue: 94 / 255)
     static let fieldBottom = Color(red: 15 / 255, green: 7 / 255, blue: 38 / 255)
 
-    /// Light mode's accent: the field's hue and saturation lifted to a mid HSL
-    /// lightness (0.45), 8.3:1 on white. Derived rather than picked — the field's
-    /// own `BG_TOP` is legible on white but reads as near-black, and an accent
-    /// has to look chosen. `check-brand-assets.py` runs the lift itself, so this
-    /// tracks the icon's field automatically.
-    static let midPurple = Color(red: 88 / 255, green: 50 / 255, blue: 180 / 255)
-
     // MARK: - Roles
 
-    /// The brand accent, adaptive: the mid-purple on light, the icon's lavender
+    /// Light mode's accent: a mid-purple, the field's hue and saturation lifted
+    /// to HSL lightness 0.45 — 8.3:1 on white. Derived rather than picked, and so
+    /// filed here rather than above: it appears nowhere in the icon, because the
+    /// field's own `BG_TOP` is legible on white but reads as near-black, and an
+    /// accent has to look chosen. `check-brand-assets.py` runs the same lift, so
+    /// this tracks the icon's field automatically.
+    static let lightAccent = Color(red: 88 / 255, green: 50 / 255, blue: 180 / 255)
+
+    /// The brand accent, adaptive: `lightAccent` on light, the icon's `lavender`
     /// on dark. Neither value survives both appearances — the lavender washes out
     /// on white, the mid-purple sinks into a dark backdrop — which is why there
-    /// is no single accent literal to point at (ADR 0033).
+    /// is no single accent literal to point at (ADR 0033), and why this is the
+    /// one token that can't be a plain constant.
     ///
-    /// The app also carries this in its `AccentColor` asset, so *default* tinting
-    /// (every toggle and system control that names no color) is brand purple with
-    /// no per-view opt-in; the asset and these two literals are held together by
-    /// `check-brand-assets.py`. This token is for the widget extension, which has
-    /// no such asset, and for the places that need a `Color` rather than an
-    /// ambient tint. A dynamic `UIColor` rather than an asset in each catalog:
-    /// one definition beats two colorsets that can disagree.
+    /// A dynamic `UIColor` rather than a colorset in each target's catalog: one
+    /// definition beats two assets that can disagree. The app's `AccentColor`
+    /// carries the same pair for ambient tinting (see the type comment), and
+    /// `check-brand-assets.py` holds the two together.
     static let accent = Color(uiColor: UIColor { traits in
-        UIColor(traits.userInterfaceStyle == .dark ? lavender : midPurple)
+        UIColor(traits.userInterfaceStyle == .dark ? lavender : lightAccent)
     })
 
     /// The icon trail's color ramp — lavender whitening toward the release, top
