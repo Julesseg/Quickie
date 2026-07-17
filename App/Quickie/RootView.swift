@@ -468,10 +468,9 @@ struct RootView: View {
         MotionPolicy(reduceMotion: reduceMotion).style(for: .captureTransition)
     }
 
-    /// Whether the [[Living backdrop]] mesh should drift right now, and the loop to
-    /// drive it with (ADR 0034). The *timing* lives in Core's `MotionPolicy`; this
-    /// only decides the four cases that force a still backdrop, in the order they
-    /// matter:
+    /// The [[Living backdrop]]'s drift period (seconds), or `nil` for a still mesh
+    /// (ADR 0034). The *timing* lives in Core's `MotionPolicy`; this only decides
+    /// the four cases that force a still backdrop, in the order they matter:
     ///
     /// - **Reduce Motion** collapses the moment to a `.fade` in Core, so `guard
     ///   case .drift` alone stills the mesh — no App-side motion flag needed.
@@ -488,19 +487,19 @@ struct RootView: View {
     /// - **UI test**: the frozen-under-test behavior CI's XCUITest job gates
     ///   (issue #79), shared with every other motion via `isInstantForUITesting`.
     ///
-    /// Returns the drift loop when the mesh should move, or `nil` for a still
-    /// backdrop — one value, so nothing downstream can hold "should drift" and
-    /// "how" out of step.
-    private var backdropDriftAnimation: Animation? {
+    /// Returns the period when the mesh should move, or `nil` for a still backdrop
+    /// — one value, so nothing downstream can hold "should drift" and "how fast"
+    /// out of step.
+    private var backdropDriftPeriod: Double? {
         let style = MotionPolicy(reduceMotion: reduceMotion).style(for: .backdropDrift)
-        guard case .drift = style,
+        guard case .drift(let period) = style,
               isHome,
               !capture.isActive,
               !inFileSearch,
               !ProcessInfo.processInfo.isLowPowerModeEnabled,
               !MotionStyle.isInstantForUITesting
         else { return nil }
-        return style.animation
+        return period
     }
 
     /// The File Search inline cap, clamped through the declared stepper (ADR 0020;
@@ -556,7 +555,7 @@ struct RootView: View {
                 // rather than its top edge, a difference nothing can see.
                 LivingBackdrop(
                     glowLift: path.isEmpty ? lockedKeyboardInset : 0,
-                    driftAnimation: backdropDriftAnimation
+                    driftPeriod: backdropDriftPeriod
                 )
 
                 Group {
@@ -2061,94 +2060,93 @@ private struct LivingBackdrop: View {
     /// job of a backdrop under ADR 0010.
     var glowLift: CGFloat = 0
 
-    /// The drift loop from Core's `MotionPolicy`, mapped to an `Animation` at the
-    /// edge (`Motion.swift`): a slow linear autoreverse. `nil` renders a still mesh
-    /// at its rest pose — a query exists, or Reduce Motion / Low Power Mode / UI
-    /// test. The parent (`RootView.backdropDriftAnimation`) owns that decision, so
-    /// "should drift" and "how" can never disagree here.
-    var driftAnimation: Animation?
-
-    /// Toggled to advance the mesh from its rest pose to its drifted pose. Driven
-    /// by a `repeatForever` autoreversing animation, so this single flip breathes
-    /// the mesh between the two poses forever — no per-frame view timer (ADR 0034).
-    @State private var drifted = false
+    /// The drift period from Core's `MotionPolicy` — seconds for one full
+    /// there-and-back sweep — or `nil` for a still mesh at its rest pose (a query
+    /// exists, or Reduce Motion / Low Power Mode / UI test). The parent
+    /// (`RootView.backdropDriftPeriod`) owns that decision, so "should drift" and
+    /// "how fast" can never disagree here.
+    var driftPeriod: Double?
 
     var body: some View {
+        mesh
+            .overlay(alignment: .bottom) {
+                RadialGradient(
+                    colors: [Color.accentColor.opacity(0.12), .clear],
+                    center: .center,
+                    startRadius: 0,
+                    endRadius: Self.glowRadius
+                )
+                // Size the frame to the falloff's *diameter* and center the glow in
+                // it, so the gradient reaches `.clear` exactly at its own top and
+                // bottom edges — it can then be moved anywhere without showing one.
+                // Insetting the frame instead (`.padding(.bottom, glowLift)`) puts
+                // the center on the frame's edge, which cuts the glow off at full
+                // strength and leaves a seam one `glowLift` tall under the bar. The
+                // left/right edges are the screen's own, so they need no such care.
+                .frame(height: Self.glowRadius * 2)
+                // Bottom-aligned, the center lands `glowRadius` above the screen
+                // bottom; this lands it on the bar. The motion is free: `glowLift`
+                // is the bar's own held keyboard inset, so the glow rides the
+                // keyboard's spring on show/hide and tracks the finger unanimated
+                // through a swipe-dismiss, exactly like the bar it sits under.
+                .offset(y: Self.glowRadius - glowLift)
+                // Decorative: the backdrop must never take a touch meant for the chrome.
+                .allowsHitTesting(false)
+            }
+            .ignoresSafeArea()
+    }
+
+    /// The mesh, drifting or still. When there is a period the points are recomputed
+    /// every frame from a `TimelineView(.animation)` clock — the reliable way to move
+    /// a `MeshGradient` (a `withAnimation` point swap does not interpolate it), and
+    /// *not* a hand-rolled view timer: the cadence (the period) is still Core's
+    /// single source of truth (ADR 0034), and the timeline only supplies the frame
+    /// clock. With no period the timeline is gone entirely, so a still backdrop costs
+    /// zero redraws the moment a query exists.
+    @ViewBuilder private var mesh: some View {
+        if let driftPeriod {
+            TimelineView(.animation) { context in
+                meshGradient(phase: Self.phase(at: context.date, period: driftPeriod))
+            }
+        } else {
+            meshGradient(phase: 0)
+        }
+    }
+
+    private func meshGradient(phase: Float) -> some View {
         MeshGradient(
             width: 3,
             height: 3,
-            points: Self.meshPoints(drifted: drifted),
+            points: Self.meshPoints(phase: phase),
             colors: QuickieBrand.backdropMesh
         )
-        .overlay(alignment: .bottom) {
-            RadialGradient(
-                colors: [Color.accentColor.opacity(0.12), .clear],
-                center: .center,
-                startRadius: 0,
-                endRadius: Self.glowRadius
-            )
-            // Size the frame to the falloff's *diameter* and center the glow in it,
-            // so the gradient reaches `.clear` exactly at its own top and bottom
-            // edges — it can then be moved anywhere without showing one. Insetting
-            // the frame instead (`.padding(.bottom, glowLift)`) puts the center on
-            // the frame's edge, which cuts the glow off at full strength and leaves
-            // a seam one `glowLift` tall under the bar. The left/right edges are the
-            // screen's own, so they need no such care.
-            .frame(height: Self.glowRadius * 2)
-            // Bottom-aligned, the center lands `glowRadius` above the screen bottom;
-            // this lands it on the bar. The motion is free: `glowLift` is the bar's
-            // own held keyboard inset, so the glow rides the keyboard's spring on
-            // show/hide and tracks the finger unanimated through a swipe-dismiss,
-            // exactly like the bar it sits under.
-            .offset(y: Self.glowRadius - glowLift)
-            // Decorative: the backdrop must never take a touch meant for the chrome.
-            .allowsHitTesting(false)
-        }
-        .ignoresSafeArea()
-        .onAppear(perform: syncDrift)
-        // Keyed off *whether* there is a loop, not the `Animation` itself, so this
-        // fires only on the still↔drifting transition — never mid-drift, when the
-        // same loop value is handed back on every re-render.
-        .onChange(of: driftAnimation != nil) { syncDrift() }
     }
 
-    /// Start the drift loop when there is one, or freeze the mesh at its rest pose
-    /// the instant there is not (a query appeared, or the run degraded to static).
-    /// The freeze snaps with animations off; the snap is invisible not because the
-    /// move is small (it isn't — see `meshPoints`) but because the mesh's color
-    /// contrast is low, so a low-contrast bloom jumping back reads as nothing. The
-    /// same low contrast is what keeps the *drift* gentle, so one choice buys both.
-    /// And it lands as the eye moves to the input and results, never the backdrop.
-    private func syncDrift() {
-        guard let driftAnimation else {
-            var transaction = Transaction()
-            transaction.disablesAnimations = true
-            withTransaction(transaction) { drifted = false }
-            return
-        }
-        // `drifted` is always false here (initial state, or reset by a prior
-        // freeze), so this single flip to true, carried by the repeating
-        // autoreverse, breathes the mesh between the two poses forever.
-        withAnimation(driftAnimation) { drifted = true }
+    /// A smooth 0…1 oscillation over `period` seconds: a sine so the sweep eases at
+    /// both turns with no seam where it reverses. One full rest→drift→rest cycle is
+    /// `period`. Driven off the timeline's own clock, so it needs no stored phase.
+    static func phase(at date: Date, period: Double) -> Float {
+        let t = date.timeIntervalSinceReferenceDate
+        return Float((sin(2 * .pi * t / period) + 1) / 2)
     }
 
-    /// The nine control points of a 3×3 mesh, row-major, at rest or drifted. Only
-    /// the interior and edge midpoints move; the four corners stay pinned at the
-    /// unit square so no edge tears. Each edge midpoint moves only *along* its edge
-    /// (a top point keeps `y == 0`, a left point keeps `x == 0`), so the mesh stays
-    /// a clean quad — only the center is free in both axes. The offsets are large
-    /// enough (~0.2 of the screen) and asymmetric that, paired with the mesh's low
-    /// color contrast, the slow drift is actually *perceptible* as the bloom sweeps
-    /// across the surface rather than reading as a still image — the whole point of
-    /// a Living backdrop (ADR 0034). The corners stay pinned, so no move is big
-    /// enough to fold the quad or push a stop off-screen.
-    static func meshPoints(drifted: Bool) -> [SIMD2<Float>] {
-        let t: Float = drifted ? 1 : 0
+    /// The nine control points of a 3×3 mesh, row-major, at drift `phase` (0 = rest,
+    /// 1 = full drift). Only the interior and edge midpoints move; the four corners
+    /// stay pinned at the unit square so no edge tears. Each edge midpoint moves only
+    /// *along* its edge (a top point keeps `y == 0`, a left point keeps `x == 0`), so
+    /// the mesh stays a clean quad — only the center is free in both axes. The
+    /// offsets are large (~0.3 of the screen) and asymmetric so that, paired with the
+    /// mesh's spread of distinguishable stops (`QuickieBrand.backdropMesh`), the slow
+    /// drift is actually *perceptible* as the blooms sweep across the surface rather
+    /// than reading as a still image — the whole point of a Living backdrop (ADR
+    /// 0034). The corners stay pinned, so no move folds the quad or pushes a stop
+    /// off-screen.
+    static func meshPoints(phase t: Float) -> [SIMD2<Float>] {
         func p(_ x: Float, _ y: Float) -> SIMD2<Float> { SIMD2(x, y) }
         return [
-            p(0, 0), p(0.5 + 0.20 * t, 0), p(1, 0),
-            p(0, 0.5 - 0.16 * t), p(0.5 - 0.14 * t, 0.5 + 0.16 * t), p(1, 0.5 + 0.18 * t),
-            p(0, 1), p(0.5 - 0.20 * t, 1), p(1, 1),
+            p(0, 0), p(0.5 + 0.28 * t, 0), p(1, 0),
+            p(0, 0.5 - 0.24 * t), p(0.5 - 0.22 * t, 0.5 + 0.26 * t), p(1, 0.5 + 0.28 * t),
+            p(0, 1), p(0.5 - 0.28 * t, 1), p(1, 1),
         ]
     }
 
