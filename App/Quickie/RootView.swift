@@ -2020,20 +2020,36 @@ private struct QuietBackdrop: View {
             startPoint: .top,
             endPoint: .bottom
         )
-        .overlay(alignment: .bottom) {
-            RadialGradient(
-                colors: [Color.accentColor.opacity(0.12), .clear],
-                center: .bottom,
-                startRadius: 0,
-                endRadius: 420
-            )
-            // Insets the gradient's *frame*, carrying its `.bottom` center up with
-            // it. The motion is free: `glowLift` is the bar's own held inset, so
-            // the glow rides the keyboard's spring on show/hide and tracks the
-            // finger unanimated through a swipe-dismiss, exactly like the bar.
-            .padding(.bottom, glowLift)
+        .overlay {
+            // The gradient always spans the full screen; only its *center* moves.
+            // Insetting the frame instead (`.padding(.bottom, glowLift)`) looks
+            // equivalent and is not: a `.bottom`-centered radial paints its
+            // strongest color along the frame's bottom edge, so clipping the frame
+            // at the bar cuts the glow off mid-strength and leaves a visible seam
+            // one `glowLift` tall under the input. Moving the center keeps every
+            // stop inside the screen, so the glow falls off in *every* direction —
+            // including down behind the keyboard, where it costs nothing and, more
+            // to the point, has no edge to show.
+            GeometryReader { proxy in
+                RadialGradient(
+                    colors: [Color.accentColor.opacity(0.12), .clear],
+                    center: UnitPoint(x: 0.5, y: glowCenterY(forHeight: proxy.size.height)),
+                    startRadius: 0,
+                    endRadius: 420
+                )
+            }
         }
         .ignoresSafeArea()
+    }
+
+    /// The glow's center as a fraction of the backdrop's height — `glowLift` points
+    /// up from the bottom, expressed in the unit space `RadialGradient` wants. The
+    /// motion is free: `glowLift` is the bar's own held keyboard inset, so the glow
+    /// rides the keyboard's spring on show/hide and tracks the finger unanimated
+    /// through a swipe-dismiss, exactly like the bar it sits under.
+    private func glowCenterY(forHeight height: CGFloat) -> CGFloat {
+        guard height > 0 else { return 1 }
+        return min(1, max(0, (height - glowLift) / height))
     }
 }
 
