@@ -81,7 +81,11 @@ private struct FavoritesWidgetView: View {
         VStack(spacing: 6) {
             QuickieGlyph.image
                 .font(.title3.weight(.semibold))
-                .foregroundStyle(.secondary)
+                // The empty state's mark wears the brand gradient (as the Entry
+                // widget's does), an accent on the system container rather than a
+                // gray placeholder (ADR 0033). The invitation copy stays
+                // `.secondary`: the mark carries the brand, the text stays quiet.
+                .foregroundStyle(QuickieBrand.markGradient)
             Text("Pin favorites in Quickie")
                 .font(.footnote.weight(.medium))
                 .foregroundStyle(.secondary)

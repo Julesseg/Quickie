@@ -12,10 +12,12 @@ import ActivityKit
 ///   the brand doesn't get a vote there (ADR 0033).
 /// - **Expanded and Lock Screen**: the truncated query preview plus a
 ///   return-arrow glyph expressing "return to it". These are Quickie's own
-///   surface, so the mark wears `QuickieBrand.accent` rather than `.tint` —
-///   this extension has no `AccentColor` asset (only the app target declares
-///   one), so `.tint` here resolves to *system blue*, which is exactly what
-///   ADR 0033 exists to end.
+///   surface, so the mark wears the brand gradient (`QuickieBrand.markGradient`,
+///   the icon trail's ramp the Entry widget already uses) over a faint brand
+///   wash (`QuickieBrand.accentWash`) rather than `.tint` on nothing — this
+///   extension has no `AccentColor` asset (only the app target declares one), so
+///   `.tint` here resolves to *system blue*, which is exactly what ADR 0033
+///   exists to end.
 ///
 /// The tap is a **plain open** — icon-equivalent, restoring the query — so no
 /// `widgetURL` is set: the system's default tap just opens the app, which is
@@ -32,7 +34,7 @@ struct PendingQueryLiveActivity: Widget {
             DynamicIsland {
                 DynamicIslandExpandedRegion(.leading) {
                     QuickieGlyph.image
-                        .foregroundStyle(QuickieBrand.accent)
+                        .foregroundStyle(QuickieBrand.markGradient)
                 }
                 DynamicIslandExpandedRegion(.center) {
                     Text(context.state.preview)
@@ -67,7 +69,7 @@ private struct PendingQueryLockScreenView: View {
         HStack(spacing: 12) {
             QuickieGlyph.image
                 .font(.title3)
-                .foregroundStyle(QuickieBrand.accent)
+                .foregroundStyle(QuickieBrand.markGradient)
             Text(preview)
                 .font(.callout.weight(.medium))
                 .lineLimit(1)
@@ -78,6 +80,10 @@ private struct PendingQueryLockScreenView: View {
                 .foregroundStyle(.secondary)
         }
         .padding(16)
-        .activityBackgroundTint(nil)
+        // A faint brand wash behind the banner instead of no tint — Quickie's own
+        // surface reads as Quickie's, without becoming a backdrop (ADR 0033). The
+        // system still supplies the material under it, so the query stays legible
+        // on any wallpaper.
+        .activityBackgroundTint(QuickieBrand.accentWash)
     }
 }
