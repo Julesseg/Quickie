@@ -28,6 +28,15 @@ final class SecondaryActionUITests: XCTestCase {
         // with a stale row from a previous run.
         app.launchArguments = ["--uitesting"]
         app.launchArguments.append("-uitest-instant-motion")
+        // Also reset the App Group *signals* (fallback enabled-list, disabled
+        // instances, app settings): those persist across launches on the shared
+        // simulator, and `--uitesting`'s in-memory store does not clear them. A
+        // shard-mate that demotes the always-present "Save for later" Fallback via
+        // its settings switch would otherwise leave it disabled for the Pile-entry
+        // test here, whose subject *is* that fallback — a cross-test leak that only
+        // surfaces once the two land on the same shard. Reset makes this class
+        // order-independent, matching how most UITest classes already launch.
+        app.launchArguments.append("-uitest-reset-signals")
         app.launch()
         return app
     }
