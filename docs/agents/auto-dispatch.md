@@ -17,18 +17,15 @@ Two workflows split detection from execution:
    each, it applies the `agent-dispatched` label (the idempotency guard) and
    fires `agent-implement.yml` with the issue number.
 2. **`agent-implement.yml`** (self-hosted Mac runner) runs
-   `paseo run --detach --model claude-opus-4-8 --thinking high --worktree
+   `paseo run --detach --model <model> --thinking <effort> --worktree
    claude/issue-<N> "/implement issue #<N>"` — the repo's `/implement` skill
    carries the full workflow instructions. `--detach` means the session runs
    under the Paseo daemon and outlives the (short) runner job; `--worktree`
    keeps parallel sessions from clobbering one checkout.
 
-   Model and reasoning effort are **pinned to Opus 4.8 at high effort** rather
-   than left to the daemon's defaults, which move as new models ship. Change
-   them in one place: the `paseo run` flags in `agent-implement.yml`. Valid
-   values come from `paseo` itself — the model IDs and `--thinking` options the
-   Claude provider accepts are listed by the daemon (`claude/opus`-family IDs
-   like `claude-opus-4-8`, efforts `low`/`medium`/`high`/`xhigh`/`max`).
+   Sessions run on **Opus 4.8 at high reasoning effort** by default, pinned
+   rather than inherited from the daemon. Both are overridable — see
+   [Model and reasoning effort](#model-and-reasoning-effort).
 
 ### Scope rules
 
@@ -42,6 +39,33 @@ Two workflows split detection from execution:
   any issue closes.
 - If a session gives up, it removes the issue's `agent-dispatched` label and
   comments — which frees a slot and makes the issue eligible again.
+
+### Model and reasoning effort
+
+Sessions default to **Opus 4.8 at high reasoning effort**. Two optional
+repository Actions variables override that without touching the workflow
+(Settings → Secrets and variables → Actions → Variables):
+
+| Variable         | Default           | Passed as    |
+| ---------------- | ----------------- | ------------ |
+| `PASEO_MODEL`    | `claude-opus-4-8` | `--model`    |
+| `PASEO_THINKING` | `high`            | `--thinking` |
+
+Leave a variable unset (or set it empty) to fall back to the default — unlike
+`PASEO_PROJECT_DIR`, neither is required. The defaults are pinned in the
+workflow rather than inherited from the Paseo daemon, whose own defaults move
+as new models ship.
+
+See the current legal values with `paseo provider models claude` (efforts are
+per-model, currently `low`/`medium`/`high`/`xhigh`/`max`/`ultracode` on the
+Opus and Sonnet lines).
+
+**The workflow validates both before spawning**, because `paseo run` itself
+does not: given an unknown `--model` it creates the session anyway rather than
+erroring, which would leave a typo'd variable silently running every issue on
+the wrong model. So the spawn step checks the pair against
+`paseo provider models claude --json` first and fails red — listing the valid
+values — instead of dispatching.
 
 ## One-time Mac setup
 
