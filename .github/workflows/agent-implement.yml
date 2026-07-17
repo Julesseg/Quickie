@@ -29,6 +29,7 @@ jobs:
           # Optional repo Actions variables; the defaults below apply when unset.
           PASEO_MODEL: ${{ vars.PASEO_MODEL }}
           PASEO_THINKING: ${{ vars.PASEO_THINKING }}
+          PASEO_MODE: ${{ vars.PASEO_MODE }}
         run: |
           set -euo pipefail
           # Runner services start with a minimal PATH; include the usual
@@ -46,6 +47,13 @@ jobs:
           export MODEL="${PASEO_MODEL:-claude-opus-4-8}"
           export THINKING="${PASEO_THINKING:-high}"
 
+          # Nobody is around to answer a permission prompt in a detached CI
+          # session, so the default mode ("Always Ask") would just stall until
+          # the daemon times it out. Bypass instead. Unlike --model/--thinking,
+          # `paseo run` rejects an unknown --mode outright, so this needs no
+          # validation below.
+          MODE="${PASEO_MODE:-bypassPermissions}"
+
           # `paseo run` accepts an unknown --model/--thinking without complaint
           # and spawns the session anyway, so a typo'd variable would silently
           # run on the wrong model. Check both against the provider first.
@@ -62,7 +70,7 @@ jobs:
               sys.exit("::error::PASEO_THINKING %r is not valid for %s. Available: %s"
                        % (thinking, model, ", ".join(options)))
           '
-          echo "Spawning session for issue #${ISSUE} on ${MODEL} at ${THINKING} reasoning effort"
+          echo "Spawning session for issue #${ISSUE} on ${MODEL} at ${THINKING} reasoning effort in ${MODE} mode"
 
           # --detach: the session runs under the Paseo daemon, so it outlives
           # this job; progress is visible in the Paseo apps. The /implement
@@ -71,6 +79,7 @@ jobs:
             --provider claude \
             --model "$MODEL" \
             --thinking "$THINKING" \
+            --mode "$MODE" \
             --cwd "$PROJECT_DIR" \
             --worktree "claude/issue-${ISSUE}" \
             "/implement issue #${ISSUE}"
