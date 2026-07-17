@@ -501,7 +501,7 @@ private struct GlyphCell: View {
         Button(action: onTap) {
             VStack(spacing: 6) {
                 ZStack {
-                    RoundedRectangle(cornerRadius: 12, style: .continuous)
+                    RoundedRectangle(cornerRadius: QuickieRadius.card, style: .continuous)
                         .fill(isSelected ? Color.accentColor.opacity(0.18) : Color.secondary.opacity(0.12))
                     Image(systemName: option.name)
                         .font(.system(size: 22, weight: .regular))
@@ -510,7 +510,7 @@ private struct GlyphCell: View {
                 .frame(height: 56)
                 .overlay {
                     if isSelected {
-                        RoundedRectangle(cornerRadius: 12, style: .continuous)
+                        RoundedRectangle(cornerRadius: QuickieRadius.card, style: .continuous)
                             .strokeBorder(Color.accentColor, lineWidth: 2)
                     }
                 }
@@ -535,7 +535,7 @@ private struct GlyphClearCell: View {
         Button(action: onTap) {
             VStack(spacing: 6) {
                 ZStack {
-                    RoundedRectangle(cornerRadius: 12, style: .continuous)
+                    RoundedRectangle(cornerRadius: QuickieRadius.card, style: .continuous)
                         .fill(isSelected ? Color.accentColor.opacity(0.18) : Color.secondary.opacity(0.12))
                     Image(systemName: "slash.circle")
                         .font(.system(size: 22, weight: .regular))
@@ -544,7 +544,7 @@ private struct GlyphClearCell: View {
                 .frame(height: 56)
                 .overlay {
                     if isSelected {
-                        RoundedRectangle(cornerRadius: 12, style: .continuous)
+                        RoundedRectangle(cornerRadius: QuickieRadius.card, style: .continuous)
                             .strokeBorder(Color.accentColor, lineWidth: 2)
                     }
                 }

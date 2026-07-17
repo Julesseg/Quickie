@@ -39,24 +39,33 @@ extension ActionKind {
         }
     }
 
-    /// The squircle's fill — one calm, distinct hue per provider.
+    /// The squircle's hue — one per provider, no two alike (issue #178).
+    ///
+    /// Every value comes from `QuickieBrand`'s curated ring, never from a system
+    /// color: the raw set this replaced had three kinds sharing `.gray`, two sharing
+    /// `.brown`, `customAction`/`shortcut` both on `.indigo`, and `quicklink` on the
+    /// `.blue` that used to *be* the accent — so the badge's whole job, saying which
+    /// provider a row came from, quietly failed on a third of the kinds. The brand
+    /// module documents how the ring is derived and why it leaves the accent's hue
+    /// and gold's hue empty; `check-brand-assets.py` holds this mapping to it,
+    /// failing if two kinds ever land on the same hue again.
     var tint: Color {
         switch self {
-        case .quicklink: return .blue
-        case .customAction: return .indigo
-        case .snippet: return .teal
-        case .pile: return .orange
-        case .shortcut: return .indigo
-        case .saveForLater: return .pink
-        case .newSnippet: return .purple
-        case .calculator: return .green
-        case .reminder: return .red
-        case .event: return .cyan
-        case .settings: return .gray
-        case .file: return .brown
-        case .searchFiles: return .brown
-        case .managementPage: return .gray
-        case .system: return .gray
+        case .quicklink: return QuickieBrand.badgeQuicklink
+        case .customAction: return QuickieBrand.badgeCustomAction
+        case .snippet: return QuickieBrand.badgeSnippet
+        case .pile: return QuickieBrand.badgePile
+        case .shortcut: return QuickieBrand.badgeShortcut
+        case .saveForLater: return QuickieBrand.badgeSaveForLater
+        case .newSnippet: return QuickieBrand.badgeNewSnippet
+        case .calculator: return QuickieBrand.badgeCalculator
+        case .reminder: return QuickieBrand.badgeReminder
+        case .event: return QuickieBrand.badgeEvent
+        case .settings: return QuickieBrand.badgeSettings
+        case .file: return QuickieBrand.badgeFile
+        case .searchFiles: return QuickieBrand.badgeSearchFiles
+        case .managementPage: return QuickieBrand.badgeManagementPage
+        case .system: return QuickieBrand.badgeSystem
         }
     }
 }
@@ -107,11 +116,22 @@ struct ProviderBadge: View {
     /// widget passes its snapshot's denormalized glyph so the badge truly renders
     /// from the snapshot alone (ADR 0025); in-app rows omit it and read the
     /// live lookup.
+    ///
+    /// Only the *symbol* is overridable — never the tint or the weight. A user who
+    /// picks their own glyph (issue #163) gets a badge that still reads as this
+    /// kind's badge with a different drawing inside it, rather than a foreign chip
+    /// in the row: the chosen symbol is more specific than the derived one, not
+    /// less native.
     var symbol: String? = nil
 
     var body: some View {
-        RoundedRectangle(cornerRadius: 8, style: .continuous)
-            .fill(kind.tint)
+        RoundedRectangle(cornerRadius: QuickieRadius.badge, style: .continuous)
+            // The hue's own subtle top-to-bottom luminosity ramp (issue #178) — the
+            // system's gradient, so the badge gains a little depth without a
+            // hand-rolled shadow under it (ADR 0010: depth is the glass's job, and
+            // the badge sits *on* glass; a drop shadow here would be a second, fake
+            // light source arguing with the material).
+            .fill(kind.tint.gradient)
             .frame(width: 30, height: 30)
             .overlay {
                 Image(systemName: symbol ?? kind.symbol)

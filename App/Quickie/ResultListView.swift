@@ -156,12 +156,10 @@ struct ActionRow: View {
     /// as a clean pill but a multi-line one (a file with a wrapping name over its
     /// relative-path subtitle) balloons into an oversized stadium. A fixed radius
     /// keeps the one-line pill look while giving tall rows the *same* rounding, so
-    /// the stack reads consistently. Tuned to a single-line row's half-height
-    /// (badge 30 + vertical padding 2×10 = 50) so short rows are unchanged.
-    private let cornerRadius: CGFloat = 25
-
+    /// the stack reads consistently. `QuickieRadius.row` is tuned to a single-line
+    /// row's half-height (badge 30 + vertical padding 2×10 = 50).
     private var rowShape: RoundedRectangle {
-        RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
+        RoundedRectangle(cornerRadius: QuickieRadius.row, style: .continuous)
     }
 
     var body: some View {

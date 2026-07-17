@@ -16,9 +16,10 @@ import QuickieCore
 /// app and widget targets). The widget performs the lane, it never re-decides it.
 
 /// The one cell shape both filled and empty cells wear, so their radii can never
-/// drift apart.
+/// drift apart — `QuickieRadius.card`, the same step the in-app Favorites card it
+/// mirrors uses, so the two surfaces stay one design rather than two.
 enum WidgetCell {
-    static var shape: RoundedRectangle { RoundedRectangle(cornerRadius: 12, style: .continuous) }
+    static var shape: RoundedRectangle { RoundedRectangle(cornerRadius: QuickieRadius.card, style: .continuous) }
 }
 
 /// The 2×2 grid shared by the Favorites and Actions widgets: the chosen cells in
