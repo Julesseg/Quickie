@@ -38,13 +38,24 @@ Neither value works in both appearances, which is why a single literal was
 rejected: the lavender washes out to nothing on white, and the mid-purple
 disappears into a dark backdrop.
 
-**The accent is claimed twice, deliberately.** The **app** target's
-`AccentColor` asset carries it so that *default* tinting — the 14 toggles,
-system controls, anything that never opts in — is brand purple with no per-view
-change and no way to forget. `QuickieBrand.accent` carries the same color as an
-explicit token, for the **widget** extension (which has no such asset, by the
-rule below) and for gradients and rings, which need a `Color` rather than an
-ambient. The two agreeing is a CI obligation, not a convention (below).
+**The accent is claimed three times, deliberately** — and it takes all three,
+because no one of them reaches everything:
+
+- The **app** target's `AccentColor` asset resolves `Color.accentColor` and the
+  `.tint` shape style: the ring, the wash, the glow, the Enter hint, Form row
+  glyphs.
+- **`RootView().tint(.accentColor)`** claims the *ambient* tint. The asset alone
+  does **not** reach every control — a `Toggle`'s switch ignores the accent and
+  renders system **green** — so all 14 toggles stayed green when the asset went
+  purple. One modifier at the root is what makes the accent unforgettable: a
+  control that names no color inherits it, rather than each site having to
+  remember `.tint`.
+- **`QuickieBrand.accent`**, the explicit token, for the **widget** extension
+  (which has no asset, by the rule below) and for gradients, which need a
+  `Color` rather than an ambient.
+
+All three agreeing is a CI obligation for the two that carry literals (below);
+the ambient reads the asset, so it cannot drift.
 
 An accent asset in *each* catalog would have been the symmetric answer, and is
 rejected: two colorsets can disagree, which is the entire failure this ADR

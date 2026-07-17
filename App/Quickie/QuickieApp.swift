@@ -96,7 +96,15 @@ struct QuickieApp: App {
 
     var body: some Scene {
         WindowGroup {
+            // Claim the ambient tint for the brand (ADR 0033). The `AccentColor`
+            // asset alone does *not* reach every control: a `Toggle`'s switch
+            // ignores the accent and renders system **green** unless an ambient
+            // tint is set, so all 14 of them stayed green when the asset went
+            // purple. Setting it once here is what makes the accent unforgettable
+            // — a control that names no color inherits it rather than each Toggle
+            // having to remember `.tint`.
             RootView()
+                .tint(.accentColor)
         }
         .modelContainer(container)
     }

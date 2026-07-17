@@ -6,10 +6,12 @@ import UIKit
 ///
 /// It reaches its surfaces two ways, deliberately. The **app** target mostly
 /// doesn't name this module at all: its `AccentColor` asset carries `accent`, so
-/// `Color.accentColor` and every control that names no color (the toggles) are
-/// brand purple with no opt-in — the ring and wash (`ResultListView`), the
-/// backdrop glow (`RootView`), the breadcrumb pills (`Capture`) all read the
-/// asset, which `check-brand-assets.py` pins to the literals below. The
+/// `Color.accentColor` and `.tint` resolve to brand purple — the ring and wash
+/// (`ResultListView`), the backdrop glow (`RootView`), the breadcrumb pills
+/// (`Capture`) all read the asset, which `check-brand-assets.py` pins to the
+/// literals below. (The asset is not quite enough on its own: a `Toggle`'s
+/// switch ignores the accent and renders system green, so `QuickieApp` also
+/// claims the *ambient* tint once at the root — see ADR 0033.) The
 /// **widget** extension names this module directly instead (`EntryWidget`,
 /// `PendingQueryLiveActivity`), because it has **no** `AccentColor` asset — and
 /// deliberately must not gain one: an accent asset tints an extension's every
