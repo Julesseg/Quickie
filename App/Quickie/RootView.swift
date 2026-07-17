@@ -506,15 +506,21 @@ struct RootView: View {
 
         NavigationStack(path: $path) {
             ZStack {
-                // The glow rides the bar. `lockedKeyboardInset` is measured from the
-                // *safe area* (the bar already sits above the home indicator), while
-                // the backdrop ignores it entirely — so adding the bottom inset back
-                // reconstructs the keyboard's overlap of the screen bottom, which is
-                // the bar's top edge in the backdrop's own coordinates. Zero on a
+                // The glow rides the bar, on the bar's own held inset — zero on a
                 // pushed page, mirroring the bar's lift (issue #181 gives pages their
                 // own backdrop).
+                //
+                // This is the bar's inset *exactly*, not the keyboard's overlap of the
+                // screen bottom: the two differ by the bottom safe area, and reading
+                // that (`bottomSafeAreaInset`, a `UIApplication` walk) from `body`
+                // silently broke the result list — SwiftUI dropped the update that
+                // renders the rows, so typing produced nothing, with no crash and no
+                // slowdown to point at. Never read UIKit view state from `body`. The
+                // omitted term is 34pt against a 420pt falloff, which is why the glow
+                // still lands on the bar: it centers on the bar's safe-area line
+                // rather than its top edge, a difference nothing can see.
                 QuietBackdrop(
-                    glowLift: path.isEmpty ? lockedKeyboardInset + bottomSafeAreaInset : 0
+                    glowLift: path.isEmpty ? lockedKeyboardInset : 0
                 )
 
                 Group {
@@ -2000,13 +2006,13 @@ private enum ActiveSheet: Identifiable {
 
 /// The quiet adaptive backdrop the Liquid Glass chrome floats over (ADR 0010).
 private struct QuietBackdrop: View {
-    /// How far above the screen bottom to sit the accent glow's center — the
-    /// keyboard's top edge, which is where the input bar floats. Zero returns it
-    /// to the screen bottom (no keyboard, or a pushed page).
+    /// How far up from the screen bottom to sit the accent glow's center — the
+    /// bar's own held keyboard inset. Zero returns it to the bottom (no keyboard,
+    /// or a pushed page), where the bar itself sits.
     ///
     /// The glow is anchored to the **bar**, not the screen, because the screen
     /// bottom is not a place the user ever looks: the keyboard covers the lower
-    /// half from launch (the field is focused at zero-wall, ADR 0012), so a
+    /// third from launch (the field is focused at zero-wall, ADR 0012), so a
     /// bottom-centered glow buries its own center and leaks only the faint outer
     /// edge of its falloff into view. Riding the bar puts the brightest point
     /// under the input and the [[Highlighted result]] above it — where the eye
@@ -2020,37 +2026,36 @@ private struct QuietBackdrop: View {
             startPoint: .top,
             endPoint: .bottom
         )
-        .overlay {
-            // The gradient always spans the full screen; only its *center* moves.
-            // Insetting the frame instead (`.padding(.bottom, glowLift)`) looks
-            // equivalent and is not: a `.bottom`-centered radial paints its
-            // strongest color along the frame's bottom edge, so clipping the frame
-            // at the bar cuts the glow off mid-strength and leaves a visible seam
-            // one `glowLift` tall under the input. Moving the center keeps every
-            // stop inside the screen, so the glow falls off in *every* direction —
-            // including down behind the keyboard, where it costs nothing and, more
-            // to the point, has no edge to show.
-            GeometryReader { proxy in
-                RadialGradient(
-                    colors: [Color.accentColor.opacity(0.12), .clear],
-                    center: UnitPoint(x: 0.5, y: glowCenterY(forHeight: proxy.size.height)),
-                    startRadius: 0,
-                    endRadius: 420
-                )
-            }
+        .overlay(alignment: .bottom) {
+            RadialGradient(
+                colors: [Color.accentColor.opacity(0.12), .clear],
+                center: .center,
+                startRadius: 0,
+                endRadius: Self.glowRadius
+            )
+            // Size the frame to the falloff's *diameter* and center the glow in it,
+            // so the gradient reaches `.clear` exactly at its own top and bottom
+            // edges — it can then be moved anywhere without showing one. Insetting
+            // the frame instead (`.padding(.bottom, glowLift)`) puts the center on
+            // the frame's edge, which cuts the glow off at full strength and leaves
+            // a seam one `glowLift` tall under the bar. The left/right edges are the
+            // screen's own, so they need no such care.
+            .frame(height: Self.glowRadius * 2)
+            // Bottom-aligned, the center lands `glowRadius` above the screen bottom;
+            // this lands it on the bar. The motion is free: `glowLift` is the bar's
+            // own held keyboard inset, so the glow rides the keyboard's spring on
+            // show/hide and tracks the finger unanimated through a swipe-dismiss,
+            // exactly like the bar it sits under.
+            .offset(y: Self.glowRadius - glowLift)
+            // Decorative: the backdrop must never take a touch meant for the chrome.
+            .allowsHitTesting(false)
         }
         .ignoresSafeArea()
     }
 
-    /// The glow's center as a fraction of the backdrop's height — `glowLift` points
-    /// up from the bottom, expressed in the unit space `RadialGradient` wants. The
-    /// motion is free: `glowLift` is the bar's own held keyboard inset, so the glow
-    /// rides the keyboard's spring on show/hide and tracks the finger unanimated
-    /// through a swipe-dismiss, exactly like the bar it sits under.
-    private func glowCenterY(forHeight height: CGFloat) -> CGFloat {
-        guard height > 0 else { return 1 }
-        return min(1, max(0, (height - glowLift) / height))
-    }
+    /// The glow's falloff radius — also half its frame height, which is what keeps it
+    /// seamless (see `body`).
+    private static let glowRadius: CGFloat = 420
 }
 
 /// A brief, non-blocking confirmation shown at the bottom (issue #37): a silent
