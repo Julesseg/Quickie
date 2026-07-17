@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Generate the Quickie mark custom SF Symbol template.
 
-Rebuilds App/QuickieWidgets/Assets.xcassets/QuickieMark.symbolset/quickie-mark.svg
+Rebuilds App/QuickieEntry/Brand.xcassets/QuickieMark.symbolset/quickie-mark.svg
 from the same geometry as docs/brand/app-icon.svg ("Orbital Q (glide)"), emitted
 into a canonical SF Symbols template (v.7.0) skeleton: the exact Notes/Guides/
 style structure the SF Symbols app exports, including the symbol layer classes
@@ -50,7 +50,7 @@ import re
 from pathlib import Path
 
 REPO = Path(__file__).resolve().parents[2]
-OUT = REPO / "App/QuickieWidgets/Assets.xcassets/QuickieMark.symbolset/quickie-mark.svg"
+OUT = REPO / "App/QuickieEntry/Brand.xcassets/QuickieMark.symbolset/quickie-mark.svg"
 
 # ---------------------------------------------------------------------------
 # Geometry, in the app icon's 100x100 frame (docs/brand/app-icon.svg), in the

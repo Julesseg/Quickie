@@ -203,19 +203,115 @@ struct FavoriteCard: View {
 }
 
 /// The minimal pre-anything Home: shown before the user has pinned a Favorite or
-/// used any Action, its only job is to fill the space above the input.
+/// used any Action. It used to have one job — fill the space above the input —
+/// and grew two more, because it is the only screen in the app that is *empty by
+/// definition* and therefore the only place with room to say what Quickie is: the
+/// **brand mark** above (drawn in the brand ramp, ADR 0033), and the rotating
+/// [[Hint line]] below (ADR 0034's enumerated moment).
+///
+/// Read top to bottom it says who (the mark), what to do ("Start typing"), and
+/// what is worth typing (the hint). The three stay separate elements on purpose —
+/// the placeholder is the instruction and never changes; only the hint rotates.
 struct HomePlaceholder: View {
     var body: some View {
         VStack {
             Spacer()
-            Text("Start typing")
-                .font(.callout)
-                .foregroundStyle(.tertiary)
-                .accessibilityIdentifier("home-placeholder")
+            VStack(spacing: 20) {
+                brandMark
+                VStack(spacing: 8) {
+                    Text("Start typing")
+                        .font(.callout)
+                        .foregroundStyle(.tertiary)
+                        .accessibilityIdentifier("home-placeholder")
+                    HintLineView()
+                }
+            }
             Spacer()
         }
         .frame(maxWidth: .infinity)
     }
+
+    /// The app icon's orbital Q, in the brand's trail ramp — the same symbol the
+    /// widgets and controls render (`QuickieGlyph`), so the mark a user taps on
+    /// the Home Screen is the mark that greets them inside.
+    ///
+    /// A fixed point size rather than a Dynamic Type text style: it is the one
+    /// thing here that isn't reading matter, and at accessibility sizes a scaling
+    /// mark would push the line it exists to introduce off the screen.
+    private var brandMark: some View {
+        QuickieGlyph.image
+            .font(.system(size: 56))
+            .foregroundStyle(QuickieBrand.adaptiveMarkGradient)
+            .accessibilityIdentifier("home-brand-mark")
+            .accessibilityLabel("Quickie")
+    }
+}
+
+/// The Home **Hint line** (ADR 0034): one of Core's five hints at a time, dissolving
+/// slowly into the next so the empty Home teaches Quickie's breadth by suggestion.
+///
+/// Every timing here is `MotionPolicy`'s (the dwell, the crossfade, and whether the
+/// line rotates at all); this view only renders what Core decides and never invents
+/// a cadence of its own.
+private struct HintLineView: View {
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+
+    var body: some View {
+        let policy = MotionPolicy(reduceMotion: reduceMotion)
+        if let dwell = policy.hintDwellUnlessFrozen {
+            RotatingHint(dwell: dwell, animation: policy.style(for: .hintRotation).animation)
+        } else {
+            // Frozen: one hint, held. Deliberately the *same* rendering as the
+            // rotating line rather than a stand-in — a Reduce Motion user should
+            // see the Hint line, just not the rotation.
+            hintText(HintLine().current)
+        }
+    }
+}
+
+/// The rotating form: advances the line on Core's dwell and crossfades between
+/// hints.
+private struct RotatingHint: View {
+    let dwell: Double
+    let animation: Animation?
+    @State private var line = HintLine()
+
+    var body: some View {
+        hintText(line.current)
+            // `.task` rather than a `Timer` publisher: it is tied to this view's
+            // identity, so a parent re-render can't quietly restart the dwell (a
+            // publisher rebuilt in `init` resubscribes and does exactly that), and
+            // it cancels itself when Home gives way to the Result list on the first
+            // keystroke — the rotation must never outlive the screen that shows it.
+            .task {
+                while !Task.isCancelled {
+                    try? await Task.sleep(for: .seconds(dwell))
+                    if Task.isCancelled { return }
+                    withAnimation(animation) { line.advance() }
+                }
+            }
+    }
+}
+
+/// The Hint line's one rendering, shared by both forms.
+///
+/// Quieter than the placeholder above it — smaller, same tertiary weight. The
+/// hint is a suggestion, not a second instruction, and if it ever competed with
+/// "Start typing" for the eye it would be doing the opposite of its job.
+///
+/// `contentTransition(.opacity)` is what makes the swap a crossfade *in place*:
+/// the two hints dissolve through each other on one line, where a transition on
+/// an `.id`-keyed `Text` would briefly lay both out and nudge the layout.
+@ViewBuilder
+private func hintText(_ hint: String) -> some View {
+    Text(hint)
+        .font(.footnote)
+        .foregroundStyle(.tertiary)
+        .contentTransition(.opacity)
+        // Stable across the rotation: the identifier names the *line*, not the
+        // hint currently in it, so a test can wait on the element without racing
+        // the copy (the frozen rendering is what lets it assert the text).
+        .accessibilityIdentifier("home-hint")
 }
 
 // MARK: - Status-bar bleed

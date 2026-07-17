@@ -56,7 +56,7 @@ struct MotionPolicyTests {
     }
 
     @Test("every animated moment degrades to a fade under Reduce Motion",
-          arguments: [MotionMoment.rowInsert, .inputFocus, .captureTransition])
+          arguments: [MotionMoment.rowInsert, .inputFocus, .captureTransition, .hintRotation])
     func allMomentsFadeUnderReduceMotion(_ moment: MotionMoment) {
         let policy = MotionPolicy(reduceMotion: true)
         guard case .fade = policy.style(for: moment) else {
@@ -66,6 +66,9 @@ struct MotionPolicyTests {
     }
 
     @Test("springs stay within the tight budget — fast and barely bouncing",
+          // `.hintRotation` is deliberately absent: it is the one moment that
+          // crossfades rather than springs even when motion is allowed, so the
+          // spring budget has nothing to say about it (`hintRotationDissolves`).
           arguments: [MotionMoment.rowInsert, .inputFocus, .captureTransition])
     func springsStayWithinBudget(_ moment: MotionMoment) {
         // ADR 0010's "tight animation budget": subtle and fast. A long response or
@@ -85,5 +88,65 @@ struct MotionPolicyTests {
             return
         }
         #expect(duration <= 0.2)
+    }
+
+    // MARK: - The Hint line's rotation (#182)
+
+    @Test("the Hint line dissolves rather than springs, even when motion is allowed")
+    func hintRotationDissolves() {
+        // Every other moment answers something the user just did, so it springs.
+        // The Hint line is the one thing Quickie animates on its own initiative —
+        // it must read as ambient, never as a nudge asking to be looked at.
+        let policy = MotionPolicy(reduceMotion: false)
+        guard case .fade = policy.style(for: .hintRotation) else {
+            Issue.record("expected a fade, got \(policy.style(for: .hintRotation))")
+            return
+        }
+    }
+
+    @Test("the Hint crossfade is slow — a dissolve, not a keystroke-speed swap")
+    func hintCrossfadeIsSlow() {
+        guard case .fade(let hint) = MotionPolicy(reduceMotion: false).style(for: .hintRotation),
+              case .fade(let reduceMotion) = MotionPolicy(reduceMotion: true).style(for: .rowInsert) else {
+            Issue.record("expected fades")
+            return
+        }
+        // Comfortably slower than the brief Reduce Motion degradation, and slow
+        // enough that peripheral vision reads it as a dissolve rather than a cut.
+        #expect(hint > reduceMotion)
+        #expect(hint >= 0.5)
+    }
+
+    @Test("each hint dwells long enough to read and ignore")
+    func hintDwellIsUnhurried() {
+        guard let dwell = MotionPolicy(reduceMotion: false).hintDwell else {
+            Issue.record("expected the line to rotate when motion is allowed")
+            return
+        }
+        // Long enough that the line never competes with the input for attention,
+        // short enough that a user who looks up twice sees two different hints.
+        #expect(dwell >= 5)
+        #expect(dwell <= 10)
+    }
+
+    @Test("a hint outlasts its own crossfade")
+    func hintOutlastsItsCrossfade() {
+        // Otherwise the line would spend its life mid-dissolve and never settle
+        // on anything legible.
+        let policy = MotionPolicy(reduceMotion: false)
+        guard let dwell = policy.hintDwell,
+              case .fade(let crossfade) = policy.style(for: .hintRotation) else {
+            Issue.record("expected a rotating line with a crossfade")
+            return
+        }
+        #expect(dwell > crossfade * 2)
+    }
+
+    @Test("Reduce Motion freezes the line rather than fading it faster")
+    func reduceMotionFreezesTheHintLine() {
+        // The rotation *is* the motion: there is no gesture underneath it to
+        // preserve, so a shorter fade would still be unrequested movement. The
+        // line stops instead, and the App renders a single static hint.
+        #expect(MotionPolicy(reduceMotion: true).hintDwell == nil)
     }
 }

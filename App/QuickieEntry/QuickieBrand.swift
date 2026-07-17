@@ -95,6 +95,11 @@ enum QuickieBrand {
     /// to bottom, where the arrow departs — for surfaces where SwiftUI styling
     /// actually applies: widget and Live Activity views.
     ///
+    /// For marks drawn on the **icon's own field** (or another dark surface),
+    /// which is every widget use of it. On the app's adaptive backdrop, reach for
+    /// `adaptiveMarkGradient` instead — both ends of this ramp are chosen against
+    /// a deep purple field, and neither survives white.
+    ///
     /// Not for Control Center labels: a control tints its symbol itself, which is
     /// why the *fade* half of the icon's look is baked into the symbol's layers
     /// instead (see `QuickieGlyph`). The white end has no counterpart in the icon
@@ -102,6 +107,35 @@ enum QuickieBrand {
     static var markGradient: LinearGradient {
         LinearGradient(colors: [lavender, .white], startPoint: .top, endPoint: .bottom)
     }
+
+    /// The trail's ramp for a mark on the **app's** backdrop — Home's brand mark
+    /// (ADR 0033's adaptive-on-white trade) — where the surface behind it is
+    /// `systemBackground`: white on light, black on dark.
+    ///
+    /// The same ADR 0033 problem the accent has, in gradient form: `markGradient`
+    /// is drawn on the icon's deep field everywhere else, and on white it fails at
+    /// *both* ends — it starts at the lavender that ADR 0033 already says washes
+    /// out there, and ends at the background exactly, erasing the release. The
+    /// mark would read as a pale, clipped ghost of itself.
+    ///
+    /// So the ramp is expressed on the brand *axis* rather than as two literals:
+    /// **the accent, lightening one step toward the release**. On dark that
+    /// resolves to precisely `markGradient` — the icon's own lavender → white,
+    /// unchanged. On light it becomes `lightAccent` → `lavender`: the same purple,
+    /// the same direction of travel, stopping one step short of the background
+    /// instead of dissolving into it. The trail still *fades* on both — that half
+    /// of the look is the symbol's baked-in per-layer opacity (`QuickieGlyph`),
+    /// which needs no color to do its job.
+    static var adaptiveMarkGradient: LinearGradient {
+        LinearGradient(colors: [accent, markRelease], startPoint: .top, endPoint: .bottom)
+    }
+
+    /// Where `adaptiveMarkGradient` lands at the release: white on dark (the
+    /// icon's own end), the lavender on light. One step lighter than `accent` in
+    /// each appearance, which is all the ramp ever means.
+    private static let markRelease = Color(uiColor: UIColor { traits in
+        traits.userInterfaceStyle == .dark ? .white : UIColor(lavender)
+    })
 
     /// The icon's background gradient, for the deep-link widget tile — under
     /// `markGradient` the tile reads as the app icon writ large rather than a

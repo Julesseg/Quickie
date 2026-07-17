@@ -57,3 +57,22 @@ extension MotionStyle {
         edgeTransition(from: .bottom).animation(animation)
     }
 }
+
+extension MotionPolicy {
+    /// How long each hint dwells before the [[Hint line]] crossfades to the next,
+    /// or `nil` when the line is **frozen** to a single static hint (ADR 0034).
+    ///
+    /// Core's `hintDwell` already freezes the line for Reduce Motion; this folds
+    /// the App edge's UI-test freeze in beside it, the same collapse
+    /// `MotionStyle.animation` makes under the same flag (issue #79). Core can't
+    /// make this half of the call — the launch argument is not something a pure,
+    /// platform-agnostic policy can see.
+    ///
+    /// Freezing under test is not only about flake: a line that rewrites itself
+    /// every seven seconds would make every existing `home-placeholder` wait a
+    /// race against the clock, and there is nothing to gain from testing the
+    /// rotation's *timing* through a UI test that would have to sit and watch it.
+    var hintDwellUnlessFrozen: Double? {
+        MotionStyle.isInstantForUITesting ? nil : hintDwell
+    }
+}
