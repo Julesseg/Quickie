@@ -118,10 +118,14 @@ enum QuickieBrand {
     //   decisions, and it is why these are flat literals rather than an adaptive
     //   pair like `accent`: an opaque badge at this lightness sits correctly on
     //   both appearances, so there is nothing for dark mode to fix.
-    // - **Chroma to each hue's gamut ceiling, capped at 0.17.** sRGB cannot hold a
-    //   vivid teal at this lightness (h~200 tops out near 0.09), so an unclamped
-    //   set would let the magentas shout over a muted cyan band. The cap keeps the
-    //   family even; the ceiling keeps each hue as distinct as sRGB allows.
+    // - **Chroma to each hue's full gamut ceiling, capped at 0.24.** Every hue is
+    //   pushed as saturated as sRGB allows at this lightness — the vivid end of the
+    //   dial (issue #189's prototype compared it against a muted set and this one won
+    //   on distinctness). sRGB simply can't hold a vivid teal here (h~200 tops out
+    //   near 0.09), so the cool arc stays quieter than the warm one and the set
+    //   tilts warm — an accepted trade for badges that read boldly. The 0.24 cap
+    //   only binds on the magentas, whose ceiling runs higher; it keeps the loudest
+    //   hues from pulling clean out of the family.
     // - **Spaced by perceptual difference, not by hue angle.** Equal *degrees*
     //   crowd the greens (where a 20° step is barely visible) and waste the
     //   magentas (where it is obvious). These fifteen sit at roughly equal OKLab
@@ -141,45 +145,45 @@ enum QuickieBrand {
     // gold gap, then the warm arc after the accent gap.
 
     /// A File Search hit (`file`) — the manila of a folder tab.
-    static let badgeFile = Color(red: 111 / 255, green: 121 / 255, blue: 18 / 255)
+    static let badgeFile = Color(red: 110 / 255, green: 122 / 255, blue: 0 / 255)
     /// The "Search Files" command (`searchFiles`) — beside `badgeFile`, because it
     /// is the door to the same content.
-    static let badgeSearchFiles = Color(red: 80 / 255, green: 130 / 255, blue: 18 / 255)
+    static let badgeSearchFiles = Color(red: 71 / 255, green: 132 / 255, blue: 0 / 255)
     /// A math result (`calculator`).
-    static let badgeCalculator = Color(red: 21 / 255, green: 137 / 255, blue: 42 / 255)
+    static let badgeCalculator = Color(red: 0 / 255, green: 138 / 255, blue: 26 / 255)
     /// The "New Snippet" Fallback (`newSnippet`) — beside `badgeSnippet`, the thing
     /// it creates.
-    static let badgeNewSnippet = Color(red: 22 / 255, green: 135 / 255, blue: 83 / 255)
+    static let badgeNewSnippet = Color(red: 0 / 255, green: 136 / 255, blue: 79 / 255)
     /// A Snippet (`snippet`).
-    static let badgeSnippet = Color(red: 22 / 255, green: 131 / 255, blue: 115 / 255)
+    static let badgeSnippet = Color(red: 0 / 255, green: 132 / 255, blue: 114 / 255)
     /// A System provider built-in (`system`) — first of the three chrome kinds,
     /// which take the quiet cool end of the ring together.
-    static let badgeSystem = Color(red: 21 / 255, green: 128 / 255, blue: 143 / 255)
+    static let badgeSystem = Color(red: 0 / 255, green: 128 / 255, blue: 142 / 255)
     /// A management command row (`managementPage`).
-    static let badgeManagementPage = Color(red: 21 / 255, green: 123 / 255, blue: 169 / 255)
+    static let badgeManagementPage = Color(red: 0 / 255, green: 123 / 255, blue: 173 / 255)
     /// The Settings command row (`settings`). The one blue in the set, and a
     /// deliberate one: it is 40° off the accent in OKLCH, far enough to read as a
     /// choice rather than as the default tint the old palette looked like.
-    static let badgeSettings = Color(red: 19 / 255, green: 116 / 255, blue: 195 / 255)
+    static let badgeSettings = Color(red: 0 / 255, green: 116 / 255, blue: 200 / 255)
     /// A slotted Custom Action (`customAction`).
-    static let badgeCustomAction = Color(red: 167 / 255, green: 68 / 255, blue: 158 / 255)
+    static let badgeCustomAction = Color(red: 185 / 255, green: 20 / 255, blue: 176 / 255)
     /// A static, slot-less Custom Action (`quicklink`) — **off blue**, where it used
     /// to sit. Adjacent to `badgeCustomAction` on purpose: ADR 0030 attributes both
     /// kinds to the one Custom Actions provider, so they should look related. Their
     /// glyphs (link vs. braces) carry the difference.
-    static let badgeQuicklink = Color(red: 177 / 255, green: 62 / 255, blue: 138 / 255)
+    static let badgeQuicklink = Color(red: 197 / 255, green: 0 / 255, blue: 146 / 255)
     /// An imported Shortcut Action (`shortcut`) — kept a clear step off
     /// `badgeCustomAction`, which it used to share an indigo with.
-    static let badgeShortcut = Color(red: 186 / 255, green: 58 / 255, blue: 113 / 255)
+    static let badgeShortcut = Color(red: 204 / 255, green: 0 / 255, blue: 113 / 255)
     /// The "Save for later" Fallback (`saveForLater`) — well clear of `badgePile`,
     /// because a row must never read as the entries it creates.
-    static let badgeSaveForLater = Color(red: 191 / 255, green: 57 / 255, blue: 87 / 255)
+    static let badgeSaveForLater = Color(red: 210 / 255, green: 0 / 255, blue: 76 / 255)
     /// A New Reminder capture (`reminder`).
-    static let badgeReminder = Color(red: 193 / 255, green: 60 / 255, blue: 54 / 255)
+    static let badgeReminder = Color(red: 214 / 255, green: 0 / 255, blue: 14 / 255)
     /// A New Event capture (`event`) — beside `badgeReminder`, its EventKit twin.
-    static let badgeEvent = Color(red: 187 / 255, green: 71 / 255, blue: 17 / 255)
+    static let badgeEvent = Color(red: 195 / 255, green: 60 / 255, blue: 0 / 255)
     /// A Pile entry (`pile`).
-    static let badgePile = Color(red: 169 / 255, green: 89 / 255, blue: 17 / 255)
+    static let badgePile = Color(red: 174 / 255, green: 85 / 255, blue: 0 / 255)
 }
 
 /// The corner-radius scale — three steps, one per *kind of surface*, so a radius is

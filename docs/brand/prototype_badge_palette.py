@@ -246,8 +246,8 @@ def render(ring, lightness, chroma):
 def main():
     p = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     p.add_argument("--lightness", type=float, default=0.55, help="OKLCH L for the whole set (shipped: 0.55)")
-    p.add_argument("--chroma-cap", type=float, default=0.17, help="max chroma any badge may use (shipped: 0.17)")
-    p.add_argument("--chroma-frac", type=float, default=0.95, help="fraction of each hue's gamut ceiling to use")
+    p.add_argument("--chroma-cap", type=float, default=0.24, help="max chroma any badge may use (shipped: 0.24)")
+    p.add_argument("--chroma-frac", type=float, default=1.00, help="fraction of each hue's gamut ceiling to use (shipped: 1.0)")
     p.add_argument("--no-render", action="store_true", help="skip the swatch PNGs (drops the Pillow dependency)")
     args = p.parse_args()
 
