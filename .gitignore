@@ -14,3 +14,7 @@ build/
 
 # Python (brand asset generators)
 __pycache__/
+
+# Throwaway prototype swatches (docs/brand/prototype_badge_variants.py)
+docs/brand/badge_variants_*.png
+docs/brand/badge_palette_*.png
