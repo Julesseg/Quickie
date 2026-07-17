@@ -34,10 +34,11 @@ jobs:
         working-directory: Core
         run: swift test
 
-  # Generated brand assets (icon/mark SVGs) must match their generators, and
-  # QuickieGlyph.swift's hand-copied color literals must match the icon's
-  # constants — drift is silent otherwise (a malformed symbol even renders as
-  # an EMPTY Control Center glyph). Caveat: a docs/**-only push skips CI
+  # Generated brand assets (icon/mark SVGs) must match their generators, and the
+  # two hand-copies of the icon's palette — QuickieBrand.swift's Color literals
+  # and the AccentColor asset's JSON — must match the constants they were copied
+  # from (ADR 0033). Drift is silent otherwise (a malformed symbol even renders
+  # as an EMPTY Control Center glyph). Caveat: a docs/**-only push skips CI
   # entirely (paths-ignore above), so a generator-only edit that forgot to
   # regenerate is caught on the next full run rather than its own.
   brand-assets:
