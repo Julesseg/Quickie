@@ -18,15 +18,26 @@ import Foundation
 /// ("Start typing"); the hint says what is worth typing, and is a separate
 /// element precisely so the two never blur into one changing sentence.
 ///
+/// The rotation order is **randomized**, not fixed: a line that always cycled in
+/// the same order reads as a canned reel, and the eye learns to tune out its
+/// rhythm. But it randomizes as a **shuffle bag**, not by picking each next hint
+/// independently — the point of the line is that every capability gets seen, and
+/// naive random would let one hint recur while another never showed in a short
+/// session. Each pass is a fresh shuffle of all five, so within any five
+/// consecutive rotations the user sees every capability exactly once, in an order
+/// that changes each pass and never repeats a hint back to back.
+///
 /// Core owns the copy and the cycling; the App owns only the crossfade between
 /// `current` values and asks `MotionPolicy` when to `advance()`.
 public struct HintLine: Equatable, Sendable {
-    /// The hints, in rotation order — one per capability, deliberately.
+    /// The hints — one per capability, deliberately.
     ///
-    /// Ordered to open on the least expected: arithmetic in a launcher is the
-    /// fastest way to say "this is not a list of apps", and the app-name hint —
-    /// the one thing a user would already assume — sits in the middle where it
-    /// reads as one capability among several rather than as the headline.
+    /// The **first** entry is the one deliberate position left: it is what the
+    /// line opens on before any rotation, and the single hint shown when the line
+    /// is frozen (Reduce Motion, UI test). Arithmetic in a launcher is the fastest
+    /// way to say "this is not a list of apps", so it earns the one guaranteed
+    /// slot. After that first hint the order is shuffled (see the type comment),
+    /// so the remaining four have no fixed sequence to read into.
     public static let hints: [String] = [
         "Try 2+2",
         "Paste a link",
@@ -38,20 +49,54 @@ public struct HintLine: Equatable, Sendable {
     /// Which hint the line is showing, as an index into `hints`.
     private var index: Int
 
+    /// The remaining shuffled indices for this pass, popped from the end. Refilled
+    /// with a fresh shuffle of all five when it empties — that refill is where the
+    /// order is randomized, and where a back-to-back repeat is ruled out.
+    private var bag: [Int]
+
     /// A fresh line, showing the first hint. Also the frozen rendering: under
     /// Reduce Motion or UI test the App builds this and never advances it, so
     /// `hints[0]` has to stand on its own.
     public init() {
         index = 0
+        bag = []
     }
 
     /// The hint on screen now.
     public var current: String { Self.hints[index] }
 
-    /// Moves to the next hint, wrapping at the end. Home can sit open for as
-    /// long as the user leaves it open, so the line cycles rather than running
-    /// out and stranding whichever hint happened to be last.
+    /// Moves to the next hint at random, using the system generator. Home can sit
+    /// open for as long as the user leaves it open, so the line never runs out:
+    /// each exhausted pass reshuffles into the next.
     public mutating func advance() {
-        index = (index + 1) % Self.hints.count
+        var generator = SystemRandomNumberGenerator()
+        advance(using: &generator)
+    }
+
+    /// `advance()` with an injected generator, so a test can drive the rotation
+    /// deterministically.
+    public mutating func advance<G: RandomNumberGenerator>(using generator: inout G) {
+        // A single-hint line (were the list ever trimmed to one) has nowhere to
+        // go; leave it where it is rather than reshuffle a bag of one forever.
+        guard Self.hints.count > 1 else { return }
+        if bag.isEmpty {
+            refill(using: &generator)
+        }
+        index = bag.removeLast()
+    }
+
+    /// Fills `bag` with a fresh shuffle of every index, arranged so the *next*
+    /// hint popped is never the one on screen now — the seam between two passes is
+    /// the only place a plain shuffle could repeat a hint, and a repeat there
+    /// would read as the crossfade stuttering on nothing.
+    private mutating func refill<G: RandomNumberGenerator>(using generator: inout G) {
+        var shuffled = Array(Self.hints.indices).shuffled(using: &generator)
+        // The end of the array is popped first. If that would replay `index`, swap
+        // it to the front (which is popped last, by which point the screen has
+        // moved on). Safe because there is always more than one index here.
+        if shuffled.last == index {
+            shuffled.swapAt(shuffled.count - 1, 0)
+        }
+        bag = shuffled
     }
 }
