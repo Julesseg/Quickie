@@ -247,7 +247,7 @@ struct HomePlaceholder: View {
     }
 }
 
-/// The Home **Hint line** (ADR 0034): one of Core's five hints at a time, dissolving
+/// The Home **Hint line** (ADR 0034): one of Core's hints at a time, dissolving
 /// slowly into the next so the empty Home teaches Quickie's breadth by suggestion.
 ///
 /// Every timing here is `MotionPolicy`'s (the dwell, the crossfade, and whether the
