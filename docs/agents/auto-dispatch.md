@@ -17,11 +17,18 @@ Two workflows split detection from execution:
    each, it applies the `agent-dispatched` label (the idempotency guard) and
    fires `agent-implement.yml` with the issue number.
 2. **`agent-implement.yml`** (self-hosted Mac runner) runs
-   `paseo run --detach --worktree claude/issue-<N> "/implement issue #<N>"` —
-   the repo's `/implement` skill carries the full workflow instructions.
-   `--detach` means the session runs under the Paseo daemon and
-   outlives the (short) runner job; `--worktree` keeps parallel sessions from
-   clobbering one checkout.
+   `paseo run --detach --model claude-opus-4-8 --thinking high --worktree
+   claude/issue-<N> "/implement issue #<N>"` — the repo's `/implement` skill
+   carries the full workflow instructions. `--detach` means the session runs
+   under the Paseo daemon and outlives the (short) runner job; `--worktree`
+   keeps parallel sessions from clobbering one checkout.
+
+   Model and reasoning effort are **pinned to Opus 4.8 at high effort** rather
+   than left to the daemon's defaults, which move as new models ship. Change
+   them in one place: the `paseo run` flags in `agent-implement.yml`. Valid
+   values come from `paseo` itself — the model IDs and `--thinking` options the
+   Claude provider accepts are listed by the daemon (`claude/opus`-family IDs
+   like `claude-opus-4-8`, efforts `low`/`medium`/`high`/`xhigh`/`max`).
 
 ### Scope rules
 

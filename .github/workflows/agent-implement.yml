@@ -40,4 +40,12 @@ jobs:
           # --detach: the session runs under the Paseo daemon, so it outlives
           # this job; progress is visible in the Paseo apps. The /implement
           # skill in the repo config carries the full workflow instructions.
-          paseo run --detach --provider claude --cwd "$PROJECT_DIR" --worktree "claude/issue-${ISSUE}" "/implement issue #${ISSUE}"
+          # --model/--thinking are pinned rather than left to the daemon's
+          # defaults, which move as new models ship.
+          paseo run --detach \
+            --provider claude \
+            --model claude-opus-4-8 \
+            --thinking high \
+            --cwd "$PROJECT_DIR" \
+            --worktree "claude/issue-${ISSUE}" \
+            "/implement issue #${ISSUE}"
