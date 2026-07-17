@@ -1,17 +1,18 @@
 import Foundation
 
-/// The Home **Hint line** (ADR 0034): five quiet, instructive examples shown
-/// under the brand mark on the pre-anything Home, rotating slowly so the app
-/// teaches its own breadth by suggestion.
+/// The Home **Hint line** (ADR 0034): a handful of quiet, instructive examples
+/// shown under the brand mark on the pre-anything Home, rotating slowly so the
+/// app teaches its own breadth by suggestion.
 ///
 /// It exists because ADR 0012 rules out the usual way to say what a launcher
-/// accepts — there is no first-run wall, no tour, no empty-state paragraph. A
-/// user who only ever learns that Quickie opens apps has an app launcher, not
-/// Quickie. The line is the whole onboarding, so it is **one capability per
-/// hint** (arithmetic, links, apps, capture, the web) rather than five phrasings
-/// of one trick — that invariant is what `HintLineTests` guards, and it is the
-/// reason the copy lives in Core next to the capabilities it advertises rather
-/// than as loose strings in a view.
+/// accepts — there is no first-run wall, no tour, no empty-state paragraph. And
+/// Quickie is deliberately *not* an app launcher (ADR 0001), so it can't lean on
+/// what a user already expects a launcher to do — the line is where it says what
+/// it actually is. So each hint is **one capability** (arithmetic, links, file
+/// search, capture, reminders, events, phone numbers, the web) rather than
+/// several phrasings of one trick — that invariant is what `HintLineTests`
+/// guards, and it is the reason the copy lives in Core next to the capabilities
+/// it advertises rather than as loose strings in a view.
 ///
 /// It only ever *suggests*: each hint is an example the user could type, never
 /// an instruction or a call to action. The placeholder still says what to do
@@ -23,9 +24,9 @@ import Foundation
 /// rhythm. But it randomizes as a **shuffle bag**, not by picking each next hint
 /// independently — the point of the line is that every capability gets seen, and
 /// naive random would let one hint recur while another never showed in a short
-/// session. Each pass is a fresh shuffle of all five, so within any five
-/// consecutive rotations the user sees every capability exactly once, in an order
-/// that changes each pass and never repeats a hint back to back.
+/// session. Each pass is a fresh shuffle of the whole list, so across one pass
+/// the user sees every capability exactly once, in an order that changes each
+/// pass and never repeats a hint back to back.
 ///
 /// Core owns the copy and the cycling; the App owns only the crossfade between
 /// `current` values and asks `MotionPolicy` when to `advance()`.
@@ -37,12 +38,15 @@ public struct HintLine: Equatable, Sendable {
     /// is frozen (Reduce Motion, UI test). Arithmetic in a launcher is the fastest
     /// way to say "this is not a list of apps", so it earns the one guaranteed
     /// slot. After that first hint the order is shuffled (see the type comment),
-    /// so the remaining four have no fixed sequence to read into.
+    /// so the rest have no fixed sequence to read into.
     public static let hints: [String] = [
         "Try 2+2",
         "Paste a link",
-        "Type an app name",
+        "Find a file",
         "Jot something down",
+        "Add a reminder",
+        "Add an event",
+        "Call a number",
         "Search the web",
     ]
 
@@ -50,7 +54,7 @@ public struct HintLine: Equatable, Sendable {
     private var index: Int
 
     /// The remaining shuffled indices for this pass, popped from the end. Refilled
-    /// with a fresh shuffle of all five when it empties — that refill is where the
+    /// with a fresh shuffle of every index when it empties — that refill is where the
     /// order is randomized, and where a back-to-back repeat is ruled out.
     private var bag: [Int]
 

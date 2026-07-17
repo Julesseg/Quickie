@@ -2,7 +2,7 @@ import Foundation
 import Testing
 @testable import QuickieCore
 
-// The Home Hint line (ADR 0034): the five quiet, instructive examples that teach
+// The Home Hint line (ADR 0034): the quiet, instructive examples that teach
 // Quickie's breadth by suggestion rather than by a first-run wall (ADR 0012).
 // The copy and the cycling live here so "one capability per hint" is an asserted
 // invariant rather than a convention the next edit can quietly break; the App
@@ -12,7 +12,7 @@ struct HintLineTests {
     /// A small seedable generator so the *random* rotation can be exercised
     /// deterministically — `SystemRandomNumberGenerator` can't be seeded, and a
     /// flaky shuffle test is worse than none. SplitMix64: standard, well-mixed,
-    /// enough for a five-item shuffle.
+    /// enough for a small shuffle.
     struct SeededGenerator: RandomNumberGenerator {
         private var state: UInt64
         init(seed: UInt64) { state = seed }
@@ -25,12 +25,15 @@ struct HintLineTests {
         }
     }
 
-    @Test("the line offers five hints")
-    func lineOffersFiveHints() {
-        #expect(HintLine.hints.count == 5)
+    @Test("the line offers several hints — enough to teach breadth, few enough to stay quiet")
+    func lineOffersSeveralHints() {
+        // Not pinned to an exact count (the copy set grows as capabilities land),
+        // but bounded: one or two hints wouldn't teach breadth, and a dozen would
+        // turn a quiet line into a reel no one reads through.
+        #expect((5...10).contains(HintLine.hints.count))
     }
 
-    @Test("every hint is distinct — five phrasings of one trick would teach nothing")
+    @Test("every hint is distinct — several phrasings of one trick would teach nothing")
     func hintsAreDistinct() {
         #expect(Set(HintLine.hints).count == HintLine.hints.count)
     }
@@ -78,10 +81,11 @@ struct HintLineTests {
     @Test("every hint appears exactly once per pass — the whole point is coverage",
           arguments: [UInt64(1), 2, 3, 42, 12345])
     func everyHintAppearsOncePerPass(seed: UInt64) {
-        // A shuffle bag, not independent random draws: within any five consecutive
-        // rotations the user must see every capability once. Each bag is exactly
-        // five advances (the first `advance()` refills, then five pops drain it),
-        // so a pass is aligned to the very first advance — no warm-up needed.
+        // A shuffle bag, not independent random draws: within any one pass (a run
+        // of `hints.count` rotations) the user must see every capability once. Each
+        // bag is exactly that many advances (the first `advance()` refills, then
+        // the pops drain it), so a pass is aligned to the very first advance — no
+        // warm-up needed.
         var generator = SeededGenerator(seed: seed)
         var line = HintLine()
 
@@ -92,7 +96,7 @@ struct HintLineTests {
                 seenThisPass.append(line.current)
             }
             #expect(Set(seenThisPass) == Set(HintLine.hints),
-                    "a pass of five rotations should show all five hints, saw \(seenThisPass)")
+                    "one pass should show every hint exactly once, saw \(seenThisPass)")
         }
     }
 
