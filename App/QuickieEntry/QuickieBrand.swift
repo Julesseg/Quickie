@@ -44,9 +44,10 @@ enum QuickieBrand {
     static let lavender = Color(red: 203 / 255, green: 184 / 255, blue: 255 / 255)
 
     /// The icon's warm mass, the thing the comet orbits (`DOT_COLOR`). ADR 0033
-    /// spends it in **exactly one place** — the Highlighted result's hero glow
-    /// (#177). It marks the app's center of gravity, and only scarcity lets it
-    /// keep meaning that.
+    /// spends it in **exactly one place** — the Highlighted result's hero
+    /// treatment (#177): its soft gold glow that slides side to side while you type
+    /// and settles when you stop. It marks the app's center of gravity, and only
+    /// scarcity lets it keep meaning that.
     static let gold = Color(red: 255 / 255, green: 201 / 255, blue: 79 / 255)
 
     /// The icon field's deep purples, top and bottom (`BG_TOP` / `BG_BOTTOM`).
@@ -184,7 +185,7 @@ enum QuickieBrand {
     //   so a badge never reads as a broken accent — the exact failure the old
     //   palette had, with a *blue* static-link badge beside what was then a blue
     //   accent. And `gold`'s hue (~84) is left empty because ADR 0033 spends gold
-    //   in exactly one place, the Highlighted result's hero glow; a gold-ish badge
+    //   in exactly one place, the Highlighted result's hero treatment; a gold-ish badge
     //   would be the "gold as a secondary accent" that ADR explicitly rejected.
     //   The ring therefore runs 104°→255° and 325°→64°, and the badges flank the
     //   accent rather than competing with it.

@@ -78,7 +78,7 @@ there is real room to explore inside them.
      is left empty, so a badge never reads as a *broken accent*. This is the exact
      failure the old palette had.
    - **Gold's hue** (~84°) is left empty, because ADR 0033 spends gold in exactly
-     one place — the Highlighted result's hero glow — and a gold-ish badge would
+     one place — the Highlighted result's hero treatment — and a gold-ish badge would
      be the "gold as a secondary accent" that ADR explicitly rejected.
 
    So the ring runs **104°→255°** and **325°→64°**, and the badges *flank* the

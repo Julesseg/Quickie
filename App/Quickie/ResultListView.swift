@@ -11,6 +11,9 @@ import QuickieCore
 /// as the default, since pressing Return runs exactly its main action.
 struct ResultListView: View {
     let results: [Action]
+    /// The live query, forwarded to the highlighted row so its gold glow can stir
+    /// on each keystroke and settle when typing stops (issue #177).
+    var query: String = ""
     let onRun: (Action) -> Void
     /// Whether a row's Action is pinned — drives its Pin/Unpin menu label.
     let isFavorite: (Action) -> Bool
@@ -61,7 +64,7 @@ struct ResultListView: View {
                             Button {
                                 onRun(action)
                             } label: {
-                                ActionRow(action: action, isHighlighted: rank == 0)
+                                ActionRow(action: action, isHighlighted: rank == 0, query: query)
                             }
                             .buttonStyle(.plain)
                             .accessibilityIdentifier(action.id)
@@ -150,6 +153,11 @@ struct StatusBarBlurBand: View {
 struct ActionRow: View {
     let action: Action
     var isHighlighted: Bool = false
+    /// The live query, passed only by the result lists so the highlighted row's
+    /// gold glow can stir back into motion on each keystroke and settle when typing
+    /// stops (issue #177). Empty everywhere the row is never highlighted (Home, the
+    /// lifted preview), where it does nothing.
+    var query: String = ""
 
     /// The row's corner radius — a **fixed** value shared by every row, not a
     /// capsule. A `Capsule` rounds by half the height, so a single-line row reads
@@ -189,22 +197,114 @@ struct ActionRow: View {
         .padding(.vertical, 10)
         .frame(maxWidth: .infinity)
         .glassEffect(.regular.interactive(), in: rowShape)
-        // A hairline accent ring plus a soft accent wash lift the highlighted row
-        // above the stack so it reads as the default without shouting (ADR 0010
-        // budget).
+        // The gold hero treatment lives on the row itself, not on the backdrop: a
+        // glow behind the glass can't be kept to one row — it bleeds behind the
+        // neighbours above it — so the Highlighted result carries its own gold
+        // (issue #177). It is a *soft gradient glow* rather than a flat wash: a
+        // radial gold, faint at the row's centre and gone before its edges, that
+        // slides gently side to side while a query is still being typed and settles
+        // to centre about a second after the last keystroke (`HeroGlow`) — so the
+        // hero row feels alive while you type and calm once you've stopped. Gold is
+        // spent here and nowhere else (ADR 0033, enforced by `check-brand-assets.py`).
         .overlay {
             if isHighlighted {
-                rowShape
-                    .fill(Color.accentColor.opacity(0.12))
-                    .overlay {
-                        rowShape.strokeBorder(Color.accentColor.opacity(0.5), lineWidth: 1)
-                    }
-                    .allowsHitTesting(false)
+                HeroGlow(shape: rowShape, query: query)
             }
         }
         .padding(.horizontal, 12)
         .contentShape(rowShape)
         .accessibilityAddTraits(isHighlighted ? .isSelected : [])
+    }
+}
+
+/// The Highlighted result's gold glow: a soft radial gold, clipped to the row, that
+/// **slides gently side to side while the query is still being typed** and settles
+/// back to centre about a second after the last keystroke (issue #177). So the hero
+/// row shimmers while you type and comes to rest once you've stopped — the "alive at
+/// rest / calm in use" budget (ADR 0034) read the other way round: the one flicker
+/// of life is *tied to* the act of typing and ends with it, rather than running
+/// forever under settled results.
+///
+/// Motion is driven off the `query` string, not per-keystroke view work: each change
+/// stirs the swing (if it isn't already going) and *debounces* a settle ~1s out, so
+/// a burst of keystrokes keeps it moving smoothly and only the pause at the end lands
+/// it. It degrades like the rest of the budget — under Reduce Motion and UI test the
+/// glow is simply static and centred, no swing, no timer.
+private struct HeroGlow: View {
+    var shape: RoundedRectangle
+    /// The live query; each change re-stirs the swing and resets the settle timer.
+    var query: String
+
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    /// The glow's horizontal offset, animated between ∓`amplitude` while swinging.
+    @State private var swing: CGFloat = 0
+    /// Whether the repeating swing is currently running (so a keystroke mid-swing
+    /// doesn't restart it — it just pushes the settle further out).
+    @State private var swinging = false
+    /// The debounced "typing has stopped" task, cancelled and rescheduled per change.
+    @State private var settleTask: Task<Void, Never>?
+    /// The short delay that lets the glow glide to one extreme before the repeating
+    /// swing begins (see `stir`), cancelled if typing stops inside that window.
+    @State private var startTask: Task<Void, Never>?
+
+    /// The glow swings only when motion is allowed; otherwise it is a plain centred
+    /// radial with no animation and no timer (Reduce Motion, UI test).
+    private var animates: Bool { !reduceMotion && !MotionStyle.isInstantForUITesting }
+
+    /// How far the glow swings to each side of centre while typing — small enough to
+    /// read as a shimmer of the light, not the row sliding. At rest `swing == 0`, so
+    /// the glow sits dead centre; while typing it oscillates `-amplitude … +amplitude`.
+    private let amplitude: CGFloat = 16
+
+    var body: some View {
+        RadialGradient(
+            colors: [QuickieBrand.gold.opacity(0.2), .clear],
+            center: .center,
+            startRadius: 0,
+            endRadius: 220
+        )
+        .offset(x: swing)
+        // Keep the drifting glow inside the row — its bright centre slides, but the
+        // light never spills past the capsule onto a neighbour.
+        .clipShape(shape)
+        .allowsHitTesting(false)
+        .onChange(of: query) { _, _ in stir() }
+        .onDisappear { settleTask?.cancel(); startTask?.cancel() }
+    }
+
+    /// A keystroke: start the side-to-side swing if it isn't already going, and push
+    /// the settle a fresh second into the future so a run of keystrokes keeps it
+    /// alive and only the final pause brings it to rest.
+    private func stir() {
+        guard animates else { return }
+        if !swinging {
+            swinging = true
+            // `repeatForever(autoreverses:)` oscillates between the value it starts at
+            // and its target, so a *symmetric* swing about centre has to begin at one
+            // extreme. Glide there first (a soft ease from centre, no jump), then —
+            // once arrived — start the repeating leg that carries it across to the far
+            // side and back forever. Sequenced with a task rather than a delayed
+            // animation because two `withAnimation`s on the same value in one tick
+            // would just clobber each other (only the last target survives).
+            withAnimation(.easeInOut(duration: 0.6)) { swing = -amplitude }
+            startTask?.cancel()
+            startTask = Task { @MainActor in
+                try? await Task.sleep(for: .seconds(0.6))
+                if Task.isCancelled || !swinging { return }
+                withAnimation(.easeInOut(duration: 1.2).repeatForever(autoreverses: true)) {
+                    swing = amplitude
+                }
+            }
+        }
+        settleTask?.cancel()
+        settleTask = Task { @MainActor in
+            try? await Task.sleep(for: .seconds(1))
+            if Task.isCancelled { return }
+            swinging = false
+            // Replace the repeating animation with a single ease back to centre —
+            // "on the last keystroke it takes a second to settle."
+            withAnimation(.easeOut(duration: 1.0)) { swing = 0 }
+        }
     }
 }
 

@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
-"""Fail if a generated brand asset or a hand-copied brand constant drifted.
+"""Fail if a generated brand asset drifted, a brand constant drifted, or the
+gold budget was overspent.
 
 The brand pipeline has seams its generators cannot police themselves, first
 flagged in PR #169 review:
@@ -22,6 +23,11 @@ flagged in PR #169 review:
      sharing .brown, and two on .indigo. There is no app-side unit test
      target (the App's logic lives in QuickieCore, which ADR 0033 keeps
      color-free), so this script is where that invariant is executable.
+  4. ADR 0033 spends gold on exactly one thing — the Highlighted result's hero
+     treatment — and that scarcity *is* the decision ("two accent colors is no
+     accent"). Unlike the rest of this script it checks no value: nothing is
+     wrong with any one use of gold, only with a second *place*, which no review
+     of a diff in isolation would catch. So the budget is counted here, by file.
 
 Also re-parses the emitted symbolset as XML: Control Center's out-of-process
 renderer draws a malformed template as an *empty* glyph, the least visible
@@ -54,6 +60,7 @@ BRAND_SWIFT = REPO / "App/QuickieEntry/QuickieBrand.swift"
 ACCENT_ASSET = REPO / "App/Quickie/Assets.xcassets/AccentColor.colorset/Contents.json"
 ACTION_ICONS = REPO / "App/QuickieEntry/ActionIcons.swift"
 ACTION_KIND = REPO / "Core/Sources/QuickieCore/Action.swift"
+APP = REPO / "App"
 
 
 def load(stem):
@@ -236,7 +243,7 @@ def badge_failures(literals):
                             f".{a} and .{b} would not be tellable apart at a glance")
 
     # The accent's hue and gold's are reserved (ADR 0033). A badge in the accent's
-    # zone reads as a broken accent; a gold-ish badge spends the hero glow's budget.
+    # zone reads as a broken accent; a gold-ish badge spends the hero treatment's budget.
     axis = {n: oklab_hue(literals[n]) for n in ("lightAccent", "lavender") if n in literals}
     for kind, rgb in sorted(colors.items()):
         hue = oklab_hue(rgb)
@@ -251,9 +258,30 @@ def badge_failures(literals):
             if gap < BADGE_GOLD_CLEARANCE:
                 failures.append(f"{BRAND_SWIFT.relative_to(REPO)}: {tints[kind]} is {gap:.1f}deg from "
                                 f"gold (needs {BADGE_GOLD_CLEARANCE}) — ADR 0033 spends gold only on "
-                                "the Highlighted result's hero glow, never on a badge")
+                                "the Highlighted result's hero treatment, never on a badge")
 
     return failures
+
+
+def gold_files():
+    """The files that name the gold token, outside the module that defines it.
+
+    ADR 0033's budget is *one place*, not one mention: the hero treatment tints
+    the row's glass, draws a resting ring, and lights the moving arcs — three
+    honest references to gold, all in the one view that renders the Highlighted
+    result. So the unit counted is the file, not the line: a second *file* is the
+    second place the ADR forbids, while the treatment is free to spend gold as
+    many times as one row needs.
+
+    A plain text match, comments included: a comment that spells the token out is
+    rare, and "don't name it, describe it" is the right answer if one ever does —
+    the budget is about where gold appears, and prose about gold is not gold.
+    """
+    return sorted(
+        str(path.relative_to(REPO))
+        for path in APP.rglob("*.swift")
+        if path != BRAND_SWIFT and "QuickieBrand.gold" in path.read_text()
+    )
 
 
 def asset_colors(contents):
@@ -316,6 +344,19 @@ def main():
     # the icon — the icon has no opinion about what colour a Snippet is — so it is
     # checked against its *rules* rather than against a generator.
     failures.extend(badge_failures(found))
+
+    # ADR 0033's gold budget: one place, and the scarcity is the point. Counted
+    # by file rather than valued — see this module's docstring and `gold_files`.
+    files = gold_files()
+    if not files:
+        failures.append("nothing uses QuickieBrand.gold — ADR 0033 spends it on the "
+                        "Highlighted result's hero treatment (ResultListView, issue #177). If "
+                        "the treatment is gone on purpose, the ADR has to say so first")
+    elif len(files) > 1:
+        failures.append(f"QuickieBrand.gold appears in {len(files)} files ({', '.join(files)}), "
+                        "but ADR 0033 spends it in exactly one place — the Highlighted result's "
+                        "hero treatment. Gold marks the row Enter runs; a second place is what "
+                        "stops it meaning that, so this is a budget, not a palette entry")
 
     for failure in failures:
         print(f"FAIL: {failure}", file=sys.stderr)
