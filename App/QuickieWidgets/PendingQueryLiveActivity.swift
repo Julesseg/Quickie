@@ -6,10 +6,15 @@ import ActivityKit
 /// 30-second window is open, the unfinished query is glanceable on the Lock
 /// Screen / Dynamic Island and tappable to hop straight back to it.
 ///
-/// - **Compact and minimal** Dynamic Island: generic glyphs only — never the
-///   query text (it sits beside the clock and every other app's chrome). These
-///   keep the **system** tint: they sit in shared chrome next to the clock, so
-///   the brand doesn't get a vote there (ADR 0033).
+/// - **Compact and minimal** Dynamic Island: the mark only — never the query
+///   text (it sits beside the clock and every other app's chrome). The glyph
+///   wears the solid `QuickieBrand.accent` (not the gradient — too small a mark
+///   to read a ramp). `.tint` was the first intent here (ADR 0033's "shared
+///   chrome keeps the system tint"), but this extension has **no** `AccentColor`
+///   asset, so `.tint` resolves to *system blue* rather than a neutral system
+///   tint — a stray blue mark next to the clock, not the wallpaper-respecting
+///   neutral the ADR assumed. The brand accent is the honest read of that intent
+///   in an asset-less extension.
 /// - **Expanded and Lock Screen**: the truncated query preview plus a
 ///   return-arrow glyph expressing "return to it". These are Quickie's own
 ///   surface, so the mark wears the brand gradient (`QuickieBrand.markGradient`,
@@ -32,9 +37,16 @@ struct PendingQueryLiveActivity: Widget {
             PendingQueryLockScreenView(preview: context.state.preview)
         } dynamicIsland: { context in
             DynamicIsland {
+                // The two side glyphs share one font (`.title3`) and both stretch
+                // to the region's full height, centered — so the mark and the
+                // return arrow sit on the same vertical line as each other and as
+                // the taller center text, instead of the mark riding up to the top
+                // of its region while the arrow floats mid-height.
                 DynamicIslandExpandedRegion(.leading) {
                     QuickieGlyph.image
+                        .font(.title3)
                         .foregroundStyle(QuickieBrand.markGradient)
+                        .frame(maxHeight: .infinity, alignment: .center)
                 }
                 DynamicIslandExpandedRegion(.center) {
                     Text(context.state.preview)
@@ -44,17 +56,19 @@ struct PendingQueryLiveActivity: Widget {
                 }
                 DynamicIslandExpandedRegion(.trailing) {
                     Image(systemName: "arrow.uturn.backward")
+                        .font(.title3)
                         .foregroundStyle(.secondary)
+                        .frame(maxHeight: .infinity, alignment: .center)
                 }
             } compactLeading: {
                 QuickieGlyph.image
-                    .foregroundStyle(.tint)
+                    .foregroundStyle(QuickieBrand.accent)
             } compactTrailing: {
                 Image(systemName: "arrow.uturn.backward")
                     .foregroundStyle(.secondary)
             } minimal: {
                 QuickieGlyph.image
-                    .foregroundStyle(.tint)
+                    .foregroundStyle(QuickieBrand.accent)
             }
         }
     }
