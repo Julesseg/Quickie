@@ -77,7 +77,7 @@ private struct EntryWidgetView: View {
             // a flat symbol can't carry itself.
             QuickieGlyph.image
                 .font(.system(size: 40, weight: .semibold))
-                .foregroundStyle(QuickieGlyph.gradient)
+                .foregroundStyle(QuickieBrand.markGradient)
         }
     }
 
@@ -86,7 +86,7 @@ private struct EntryWidgetView: View {
         case .accessoryCircular:
             AccessoryWidgetBackground()
         default:
-            QuickieGlyph.backdrop
+            QuickieBrand.iconBackdrop
         }
     }
 }

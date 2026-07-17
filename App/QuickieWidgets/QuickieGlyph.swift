@@ -18,8 +18,8 @@ import SwiftUI
 /// *reference* and applies its own tint — view-level styling like a
 /// `foregroundStyle` gradient never arrives there, and a symbol template cannot
 /// hold color gradients at all (solid fills only), so the fade carries the
-/// icon's motion everywhere and `gradient` adds the color ramp where SwiftUI
-/// styling does apply. The symbolset's SVG must stay a
+/// icon's motion everywhere and `QuickieBrand.markGradient` adds the color ramp
+/// where SwiftUI styling does apply. The symbolset's SVG must stay a
 /// *canonical* SF Symbols template (the layout the SF Symbols app exports, with
 /// the layer classes `monochrome-N` / `hierarchical-N:primary` /
 /// `multicolor-N:tintColor` on every variant path) — regenerate it with
@@ -37,30 +37,4 @@ enum QuickieGlyph {
     /// one place that distinction lives. Not for Control Center labels (see
     /// `name`).
     static var image: Image { Image(name) }
-
-    /// The icon trail's color ramp — lavender whitening toward the release
-    /// (`docs/brand/make-app-icon.py`'s LAVENDER → WHITE, top to bottom, where
-    /// the arrow departs) — for surfaces where SwiftUI styling actually applies:
-    /// widget and Live Activity views. Not for Control Center labels — a control
-    /// tints its symbol itself, which is exactly why the fade half of the icon's
-    /// look is baked into the symbol layers instead (see the type comment).
-    static var gradient: LinearGradient {
-        LinearGradient(
-            colors: [Color(red: 203 / 255, green: 184 / 255, blue: 255 / 255), .white],
-            startPoint: .top,
-            endPoint: .bottom)
-    }
-
-    /// The icon's background gradient (`make-app-icon.py`'s BG_TOP → BG_BOTTOM
-    /// deep purples), for the deep-link widget tile — under `gradient` the tile
-    /// reads as the app icon writ large rather than a recolored stranger.
-    static var backdrop: LinearGradient {
-        LinearGradient(
-            colors: [
-                Color(red: 46 / 255, green: 26 / 255, blue: 94 / 255),
-                Color(red: 15 / 255, green: 7 / 255, blue: 38 / 255),
-            ],
-            startPoint: .top,
-            endPoint: .bottom)
-    }
 }
