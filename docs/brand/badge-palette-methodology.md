@@ -59,11 +59,14 @@ there is real room to explore inside them.
    adaptive light/dark pair like the accent: an opaque color at this lightness
    sits correctly on both appearances.)
 
-2. **Chroma to each hue's gamut ceiling, capped (0.17).** Push each hue as
-   saturated as sRGB allows *at that lightness*, then cap it. Without the cap the
-   magentas (which have chroma to spare) would shout over the teals (which top out
-   around 0.09), and the family falls apart. The cap keeps it even; the ceiling
-   keeps each hue as distinct as sRGB permits.
+2. **Chroma to each hue's full gamut ceiling, capped (0.24).** Push each hue as
+   saturated as sRGB allows *at that lightness* (`--chroma-frac 1.0`), then cap it.
+   This is the *vivid* end of the dial — the shipped ring was picked here (PR #189)
+   after a side-by-side against a muted alternative, because muting collapsed too
+   many kind-pairs below the separation floor. The teals top out around 0.09, so
+   the cool arc stays quieter than the warm one and the family tilts warm — an
+   accepted trade for bolder badges. The 0.24 cap only binds on the magentas, whose
+   ceiling runs higher; it stops the loudest hues from leaving the family entirely.
 
 3. **Space by perceptual difference, not hue angle.** Place the hues at equal
    OKLab arc-length along the allowed ring, so no neighbour-pair is much closer
@@ -132,8 +135,8 @@ invariants as CI. Run with no args and it reproduces the shipped palette exactly
 and prints `READY`.
 
 ```
-python3 docs/brand/prototype_badge_palette.py                       # shipped palette
-python3 docs/brand/prototype_badge_palette.py --chroma-cap 0.20     # bolder
+python3 docs/brand/prototype_badge_palette.py                       # shipped palette (vivid)
+python3 docs/brand/prototype_badge_palette.py --chroma-cap 0.13     # muter
 python3 docs/brand/prototype_badge_palette.py --lightness 0.58 ...  # needs band widening (see above)
 python3 docs/brand/prototype_badge_palette.py --no-render           # skip PNGs / Pillow
 ```
@@ -143,8 +146,8 @@ The knobs, and what each explores:
 | Knob | Default | What moving it does |
 |------|---------|---------------------|
 | `--lightness` | 0.55 | Darker/lighter whole set. Trades contrast headroom for vividness. **Requires band edits** to pass the check. |
-| `--chroma-cap` | 0.17 | How saturated the richest hues get. Higher = bolder, and lets the magentas pull ahead of the teals. |
-| `--chroma-frac` | 0.95 | How close each hue hugs its own gamut ceiling. Below ~0.85 the set goes dusty. |
+| `--chroma-cap` | 0.24 | How saturated the richest hues get. Higher = bolder, and lets the magentas pull ahead of the teals. |
+| `--chroma-frac` | 1.00 | How close each hue hugs its own gamut ceiling. Below ~0.85 the set goes dusty. |
 | `arcs` (in `main()`) | `[(104,255),(325,424)]` | The allowed ring. **Widen the gaps** to give the accent or gold more breathing room; narrow them to fit hues more loosely. The gaps *are* the reserved zones. |
 | `KIND_ORDER` | (top of file) | Which kind lands in which neighbourhood. Reorder to change semantic adjacencies. |
 
