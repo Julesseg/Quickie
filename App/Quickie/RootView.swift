@@ -2114,10 +2114,11 @@ private struct LivingBackdrop: View {
 
     /// Start the drift loop when there is one, or freeze the mesh at its rest pose
     /// the instant there is not (a query appeared, or the run degraded to static).
-    /// The freeze snaps with animations off, but the drift amplitude is small
-    /// enough (see `meshPoints`) that the return to rest is imperceptible — and it
-    /// lands exactly as the eye moves to the input and results, never on the
-    /// backdrop.
+    /// The freeze snaps with animations off; the snap is invisible not because the
+    /// move is small (it isn't — see `meshPoints`) but because the mesh's color
+    /// contrast is low, so a low-contrast bloom jumping back reads as nothing. The
+    /// same low contrast is what keeps the *drift* gentle, so one choice buys both.
+    /// And it lands as the eye moves to the input and results, never the backdrop.
     private func syncDrift() {
         guard let driftAnimation else {
             var transaction = Transaction()
@@ -2125,8 +2126,9 @@ private struct LivingBackdrop: View {
             withTransaction(transaction) { drifted = false }
             return
         }
-        // From rest, then let the repeating autoreverse carry it forever.
-        drifted = false
+        // `drifted` is always false here (initial state, or reset by a prior
+        // freeze), so this single flip to true, carried by the repeating
+        // autoreverse, breathes the mesh between the two poses forever.
         withAnimation(driftAnimation) { drifted = true }
     }
 
@@ -2134,16 +2136,19 @@ private struct LivingBackdrop: View {
     /// the interior and edge midpoints move; the four corners stay pinned at the
     /// unit square so no edge tears. Each edge midpoint moves only *along* its edge
     /// (a top point keeps `y == 0`, a left point keeps `x == 0`), so the mesh stays
-    /// a clean quad — only the center is free in both axes. The offsets are small
-    /// (≤ 0.1 of the screen) and asymmetric, so the drift reads as an organic sway
-    /// rather than a scan, and the still→drifted snap on freeze is invisible.
+    /// a clean quad — only the center is free in both axes. The offsets are large
+    /// enough (~0.2 of the screen) and asymmetric that, paired with the mesh's low
+    /// color contrast, the slow drift is actually *perceptible* as the bloom sweeps
+    /// across the surface rather than reading as a still image — the whole point of
+    /// a Living backdrop (ADR 0034). The corners stay pinned, so no move is big
+    /// enough to fold the quad or push a stop off-screen.
     static func meshPoints(drifted: Bool) -> [SIMD2<Float>] {
         let t: Float = drifted ? 1 : 0
         func p(_ x: Float, _ y: Float) -> SIMD2<Float> { SIMD2(x, y) }
         return [
-            p(0, 0), p(0.5 + 0.10 * t, 0), p(1, 0),
-            p(0, 0.5 - 0.08 * t), p(0.5 - 0.06 * t, 0.5 + 0.07 * t), p(1, 0.5 + 0.08 * t),
-            p(0, 1), p(0.5 - 0.10 * t, 1), p(1, 1),
+            p(0, 0), p(0.5 + 0.20 * t, 0), p(1, 0),
+            p(0, 0.5 - 0.16 * t), p(0.5 - 0.14 * t, 0.5 + 0.16 * t), p(1, 0.5 + 0.18 * t),
+            p(0, 1), p(0.5 - 0.20 * t, 1), p(1, 1),
         ]
     }
 

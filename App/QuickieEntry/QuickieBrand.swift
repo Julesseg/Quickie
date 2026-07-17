@@ -183,12 +183,22 @@ enum QuickieBrand {
     }
 
     /// The backdrop's darkest stop — the four corners of the mesh.
-    static let backdropCorner = backdropStop(light: (244, 241, 251), dark: fieldBottom)
-    /// The backdrop's mid stop — the edge midpoints, between corner and bloom.
-    static let backdropField = backdropStop(light: (236, 231, 249), dark: fieldTop)
+    ///
+    /// The three stops sit close together on purpose: a *subtle* mesh (ADR 0034),
+    /// so the drift is felt more than seen and the chrome + glows read cleanly over
+    /// it (ADR 0010). Dark mode never leaves the icon's own field (`fieldBottom` →
+    /// `fieldTop`), where even the brightest stop is a deep purple — the earlier
+    /// `lightAccent` bloom read as a spotlight, not a backdrop. Light mode is a
+    /// near-white with only a breath of the field's hue.
+    static let backdropCorner = backdropStop(light: (249, 248, 252), dark: fieldBottom)
+    /// The backdrop's mid stop — the edge midpoints, sitting between the corner's
+    /// `fieldBottom` and the bloom's `fieldTop` on the icon's own field axis.
+    static let backdropField = backdropStop(
+        light: (245, 243, 251), dark: Color(red: 33 / 255, green: 18 / 255, blue: 70 / 255))
     /// The backdrop's brightest stop — the mesh's center, a faint purple bloom the
-    /// drift eases around.
-    static let backdropBloom = backdropStop(light: (228, 220, 247), dark: lightAccent)
+    /// drift eases around. In dark mode it is the icon field's own top (`fieldTop`),
+    /// no brighter, so the backdrop never reads as a light source.
+    static let backdropBloom = backdropStop(light: (241, 238, 250), dark: fieldTop)
 
     /// The nine mesh colors for a 3×3 [[Living backdrop]] (ADR 0034), row-major:
     /// dark corners, mid edges, a bloom at the center. Adaptive, so a single array
