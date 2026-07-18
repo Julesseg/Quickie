@@ -278,7 +278,7 @@ private struct HeroGlow: View {
             colors: [QuickieBrand.gold.opacity(peakOpacity), .clear],
             center: .center,
             startRadius: 0,
-            endRadius: 220
+            endRadius: 150
         )
         // Oversize the gradient by the swing's reach: offset slides the whole view,
         // and a row-sized one would drag a hard-edged uncovered strip in behind it
@@ -327,15 +327,15 @@ private struct HeroGlow: View {
             // side and back forever. Sequenced with a task rather than a delayed
             // animation because two `withAnimation`s on the same value in one tick
             // would just clobber each other (only the last target survives).
-            withAnimation(.easeInOut(duration: 0.6)) {
+            withAnimation(.easeInOut(duration: 0.3)) {
                 swing = -amplitude
                 peakOpacity = 0.32
             }
             startTask?.cancel()
             startTask = Task { @MainActor in
-                try? await Task.sleep(for: .seconds(0.6))
+                try? await Task.sleep(for: .seconds(0.3))
                 if Task.isCancelled || !swinging { return }
-                withAnimation(.easeInOut(duration: 1.2).repeatForever(autoreverses: true)) {
+                withAnimation(.easeInOut(duration: 0.6).repeatForever(autoreverses: true)) {
                     swing = amplitude
                 }
             }
