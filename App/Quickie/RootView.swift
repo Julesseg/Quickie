@@ -2183,9 +2183,10 @@ private struct LivingBackdrop: View {
     ]
 
     /// The travelling bloom's falloff radius — also half its frame, the seam rule
-    /// above. Small on purpose: the ball should read as an object crossing the
-    /// screen, not a lighting change.
-    private static let bloomRadius: CGFloat = 130
+    /// above. Sized to read as an object crossing the screen, not a lighting
+    /// change — but with real presence: 130 read as a dot lost on the field, so
+    /// the ball spans about half the screen's width before its fade completes.
+    private static let bloomRadius: CGFloat = 200
 
     /// The glow's falloff radius — also half its frame height, which is what keeps it
     /// seamless (see `body`).
