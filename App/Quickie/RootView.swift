@@ -2041,10 +2041,11 @@ private enum ActiveSheet: Identifiable {
 }
 
 /// The Living backdrop the Liquid Glass chrome floats over (ADR 0010, 0034): a
-/// subtle purple mesh that drifts very slowly on [[Home]] and freezes the instant
-/// a query exists — alive at rest, calm in use. The accent glow (here) and the
-/// gold hero glow (`ResultListView`) sit over it unchanged, since a glow is
-/// backdrop content the glass refracts, never overlaid blur.
+/// still, subtle purple mesh field with one compact bloom ball sweeping slowly
+/// up and down it on [[Home]], frozen the instant a query exists — alive at
+/// rest, calm in use. The accent glow (here) and the gold hero glow
+/// (`ResultListView`) sit over it unchanged, since a glow is backdrop content
+/// the glass refracts, never overlaid blur.
 private struct LivingBackdrop: View {
     /// How far up from the screen bottom to sit the accent glow's center — the
     /// bar's own held keyboard inset. Zero returns it to the bottom (no keyboard,
@@ -2061,14 +2062,15 @@ private struct LivingBackdrop: View {
     var glowLift: CGFloat = 0
 
     /// The drift period from Core's `MotionPolicy` — seconds for one full
-    /// there-and-back sweep — or `nil` for a still mesh at its rest pose (a query
-    /// exists, or Reduce Motion / Low Power Mode / UI test). The parent
-    /// (`RootView.backdropDriftPeriod`) owns that decision, so "should drift" and
-    /// "how fast" can never disagree here.
+    /// there-and-back sweep of the bloom ball — or `nil` for a still backdrop with
+    /// the ball at its rest pose (a query exists, or Reduce Motion / Low Power
+    /// Mode / UI test). The parent (`RootView.backdropDriftPeriod`) owns that
+    /// decision, so "should drift" and "how fast" can never disagree here.
     var driftPeriod: Double?
 
     var body: some View {
-        mesh
+        meshField
+            .overlay { bloom }
             .overlay(alignment: .bottom) {
                 // A steeper falloff than a plain two-stop gradient: most of the
                 // fade happens in the first half of the radius, so the glow reads
@@ -2104,30 +2106,63 @@ private struct LivingBackdrop: View {
             .ignoresSafeArea()
     }
 
-    /// The mesh, drifting or still. When there is a period the points are recomputed
-    /// every frame from a `TimelineView(.animation)` clock — the reliable way to move
-    /// a `MeshGradient` (a `withAnimation` point swap does not interpolate it), and
-    /// *not* a hand-rolled view timer: the cadence (the period) is still Core's
-    /// single source of truth (ADR 0034), and the timeline only supplies the frame
-    /// clock. With no period the timeline is gone entirely, so a still backdrop costs
-    /// zero redraws the moment a query exists.
-    @ViewBuilder private var mesh: some View {
-        if let driftPeriod {
-            TimelineView(.animation) { context in
-                meshGradient(phase: Self.phase(at: context.date, period: driftPeriod))
-            }
-        } else {
-            meshGradient(phase: 0)
-        }
-    }
-
-    private func meshGradient(phase: Float) -> some View {
+    /// The quiet field the bloom sweeps over: a *static* mesh at one organic pose.
+    /// The motion moved off the mesh entirely — a 3×3 mesh's control points sit
+    /// ~half a screen apart, so any color lifted at one smears into a broad column
+    /// no matter how its points travel, which is the opposite of the compact ball
+    /// the backdrop should show. The mesh now only supplies the calm color wash.
+    private var meshField: some View {
         MeshGradient(
             width: 3,
             height: 3,
-            points: Self.meshPoints(phase: phase),
+            points: Self.meshPoints,
             colors: QuickieBrand.backdropMesh
         )
+    }
+
+    /// The travelling bloom — the one living element (ADR 0034). When there is a
+    /// period its position is recomputed every frame from a `TimelineView(.animation)`
+    /// clock; the cadence (the period) is still Core's single source of truth, and
+    /// the timeline only supplies the frame clock. With no period the timeline is
+    /// gone entirely, so a still backdrop costs zero redraws the moment a query
+    /// exists.
+    @ViewBuilder private var bloom: some View {
+        if let driftPeriod {
+            TimelineView(.animation) { context in
+                bloomBall(phase: Self.phase(at: context.date, period: driftPeriod))
+            }
+        } else {
+            bloomBall(phase: 0)
+        }
+    }
+
+    /// A compact ball of brand violet fading to clear within its own radius — most
+    /// of the fade in the first half, so it reads as a localized pool of color, not
+    /// a wash. It sweeps the screen's vertical center line from near the top down
+    /// past center and back (`phase` 0…1), a travel of ~0.6 of the screen height.
+    private func bloomBall(phase: Float) -> some View {
+        GeometryReader { geo in
+            RadialGradient(
+                stops: [
+                    .init(color: QuickieBrand.backdropBloom.opacity(0.85), location: 0),
+                    .init(color: QuickieBrand.backdropBloom.opacity(0.25), location: 0.5),
+                    .init(color: .clear, location: 1),
+                ],
+                center: .center,
+                startRadius: 0,
+                endRadius: Self.bloomRadius
+            )
+            // Size the frame to the falloff's diameter and position by center, so
+            // the gradient reaches `.clear` exactly at its own edge and can sit
+            // anywhere on screen without showing one (the same seam rule as the
+            // accent glow below).
+            .frame(width: Self.bloomRadius * 2, height: Self.bloomRadius * 2)
+            .position(
+                x: geo.size.width / 2,
+                y: (0.15 + 0.65 * CGFloat(phase)) * geo.size.height
+            )
+        }
+        .allowsHitTesting(false)
     }
 
     /// A smooth 0…1 oscillation over `period` seconds: a sine so the sweep eases at
@@ -2138,34 +2173,19 @@ private struct LivingBackdrop: View {
         return Float((sin(2 * .pi * t / period) + 1) / 2)
     }
 
-    /// The nine control points of a 3×3 mesh, row-major, at drift `phase` (0 = rest,
-    /// 1 = full drift). Only the interior and edge midpoints move; the four corners
-    /// stay pinned at the unit square so no edge tears. Each edge midpoint moves only
-    /// *along* its edge (a top point keeps `y == 0`, a left point keeps `x == 0`), so
-    /// the mesh stays a clean quad — only the center is free in both axes. The
-    /// offsets are large (~0.6 of the screen) and asymmetric so that, paired with the
-    /// mesh's spread of distinguishable stops (`QuickieBrand.backdropMesh`), the slow
-    /// drift is actually *perceptible* as the blooms sweep across the surface rather
-    /// than reading as a still image — the whole point of a Living backdrop (ADR
-    /// 0034). The corners stay pinned, so no move folds the quad or pushes a stop
-    /// off-screen.
-    static func meshPoints(phase t: Float) -> [SIMD2<Float>] {
-        func p(_ x: Float, _ y: Float) -> SIMD2<Float> { SIMD2(x, y) }
-        // A vertical sweep: the interior + side-edge midpoints slide top→bottom
-        // together, carrying the bright center bloom from near the top (~0.18)
-        // down past center (~0.78) and back — a ~0.6-tall travel, deliberately
-        // large so the low-contrast mesh unmistakably reads as *moving* (the
-        // earlier ~0.36 horizontal sweep did not). The side midpoints run at
-        // slightly different rates so the bloom breathes rather than riding an
-        // elevator; the top/bottom midpoints stay put (they can only slide
-        // horizontally, and the motion should read purely up-and-down). Corners
-        // stay pinned so no edge tears.
-        return [
-            p(0, 0), p(0.5, 0), p(1, 0),
-            p(0, 0.25 + 0.50 * t), p(0.5, 0.18 + 0.60 * t), p(1, 0.32 + 0.44 * t),
-            p(0, 1), p(0.5, 1), p(1, 1),
-        ]
-    }
+    /// The nine control points of the static 3×3 field, row-major: corners pinned
+    /// at the unit square, the interior row nudged off-grid so the wash keeps an
+    /// organic tilt rather than reading as three flat bands.
+    static let meshPoints: [SIMD2<Float>] = [
+        SIMD2(0, 0), SIMD2(0.5, 0), SIMD2(1, 0),
+        SIMD2(0, 0.55), SIMD2(0.42, 0.48), SIMD2(1, 0.45),
+        SIMD2(0, 1), SIMD2(0.5, 1), SIMD2(1, 1),
+    ]
+
+    /// The travelling bloom's falloff radius — also half its frame, the seam rule
+    /// above. Small on purpose: the ball should read as an object crossing the
+    /// screen, not a lighting change.
+    private static let bloomRadius: CGFloat = 130
 
     /// The glow's falloff radius — also half its frame height, which is what keeps it
     /// seamless (see `body`).
