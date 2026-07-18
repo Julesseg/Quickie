@@ -196,7 +196,6 @@ struct ActionRow: View {
         .padding(.horizontal, 16)
         .padding(.vertical, 10)
         .frame(maxWidth: .infinity)
-        .glassEffect(.regular.interactive(), in: rowShape)
         // The gold hero treatment lives on the row itself, not on the backdrop: a
         // glow behind the glass can't be kept to one row — it bleeds behind the
         // neighbours above it — so the Highlighted result carries its own gold
@@ -206,11 +205,15 @@ struct ActionRow: View {
         // to centre about a second after the last keystroke (`HeroGlow`) — so the
         // hero row feels alive while you type and calm once you've stopped. Gold is
         // spent here and nowhere else (ADR 0033, enforced by `check-brand-assets.py`).
+        // The overlay sits *before* `glassEffect`, so the glow is part of the row's
+        // content and the glass renders over it — the light reads as lit within the
+        // glass rather than a wash painted on top of it.
         .overlay {
             if isHighlighted {
-                HeroGlow(shape: rowShape, query: query)
+                HeroGlow(shape: rowShape, query: query, heroID: action.id)
             }
         }
+        .glassEffect(.regular.interactive(), in: rowShape)
         .padding(.horizontal, 12)
         .contentShape(rowShape)
         .accessibilityAddTraits(isHighlighted ? .isSelected : [])
@@ -234,6 +237,11 @@ private struct HeroGlow: View {
     var shape: RoundedRectangle
     /// The live query; each change re-stirs the swing and resets the settle timer.
     var query: String
+    /// The Action this glow sits on. A keystroke that *re-ranks* a new Action into
+    /// the hero slot restarts the cycle from the top — the glow visibly re-announces
+    /// the new best match — where a keystroke that keeps the same hero only extends
+    /// the swing already in flight (issue #177).
+    var heroID: String = ""
 
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     /// The glow's horizontal offset, animated between ∓`amplitude` while swinging.
@@ -251,25 +259,58 @@ private struct HeroGlow: View {
     /// radial with no animation and no timer (Reduce Motion, UI test).
     private var animates: Bool { !reduceMotion && !MotionStyle.isInstantForUITesting }
 
-    /// How far the glow swings to each side of centre while typing — small enough to
-    /// read as a shimmer of the light, not the row sliding. At rest `swing == 0`, so
-    /// the glow sits dead centre; while typing it oscillates `-amplitude … +amplitude`.
-    private let amplitude: CGFloat = 16
+    /// How far the glow swings to each side of centre while typing. Tuned on the
+    /// simulator with a frame-by-frame pixel diff: at ±16 the drift of this soft,
+    /// 220-radius gradient changed row pixels by ~1/255 — running, but literally
+    /// imperceptible. The travel has to be a meaningful fraction of the row's width
+    /// for the light to read as *sliding*; at rest `swing == 0` it sits dead centre.
+    private let amplitude: CGFloat = 90
+
+    /// The gold's peak opacity: brighter mid-swing so the moving light is
+    /// unmistakably alive, easing back to the shipped resting wash as it settles.
+    /// Animated explicitly inside `stir`/settle (not via an `.animation(value:)`
+    /// modifier, which would also capture the offset in the same transaction and
+    /// clobber the settle's own 1s ease).
+    @State private var peakOpacity: CGFloat = 0.2
 
     var body: some View {
         RadialGradient(
-            colors: [QuickieBrand.gold.opacity(0.2), .clear],
+            colors: [QuickieBrand.gold.opacity(peakOpacity), .clear],
             center: .center,
             startRadius: 0,
             endRadius: 220
         )
+        // Oversize the gradient by the swing's reach: offset slides the whole view,
+        // and a row-sized one would drag a hard-edged uncovered strip in behind it
+        // (the gradient is still faintly gold at the row's edge, so the cut shows).
+        .padding(.horizontal, -amplitude)
         .offset(x: swing)
         // Keep the drifting glow inside the row — its bright centre slides, but the
         // light never spills past the capsule onto a neighbour.
         .clipShape(shape)
         .allowsHitTesting(false)
+        // The first keystroke of a query *creates* this view (Home swaps to the
+        // result list), so no `onChange` fires for it — the appear is the keystroke.
+        .onAppear { if !query.isEmpty { stir() } }
         .onChange(of: query) { _, _ in stir() }
+        // A new Action in the hero slot restarts the cycle from the top; same-hero
+        // keystrokes above only extend it. Order between the two onChanges in one
+        // update doesn't matter: restarting wins either way (`stir` on a swinging
+        // glow is a no-op, `restart` always begins afresh).
+        .onChange(of: heroID) { _, _ in restart() }
         .onDisappear { settleTask?.cancel(); startTask?.cancel() }
+    }
+
+    /// The keystroke changed which Action is the hero: kill the current swing and
+    /// begin a fresh cycle, so the glow visibly re-announces the new best match.
+    private func restart() {
+        guard animates else { return }
+        startTask?.cancel()
+        settleTask?.cancel()
+        // No snap to centre: `stir`'s opening glide animates from wherever the old
+        // swing left off, so the restart reads as the light changing course.
+        swinging = false
+        stir()
     }
 
     /// A keystroke: start the side-to-side swing if it isn't already going, and push
@@ -286,7 +327,10 @@ private struct HeroGlow: View {
             // side and back forever. Sequenced with a task rather than a delayed
             // animation because two `withAnimation`s on the same value in one tick
             // would just clobber each other (only the last target survives).
-            withAnimation(.easeInOut(duration: 0.6)) { swing = -amplitude }
+            withAnimation(.easeInOut(duration: 0.6)) {
+                swing = -amplitude
+                peakOpacity = 0.32
+            }
             startTask?.cancel()
             startTask = Task { @MainActor in
                 try? await Task.sleep(for: .seconds(0.6))
@@ -303,7 +347,10 @@ private struct HeroGlow: View {
             swinging = false
             // Replace the repeating animation with a single ease back to centre —
             // "on the last keystroke it takes a second to settle."
-            withAnimation(.easeOut(duration: 1.0)) { swing = 0 }
+            withAnimation(.easeOut(duration: 1.0)) {
+                swing = 0
+                peakOpacity = 0.2
+            }
         }
     }
 }
