@@ -550,7 +550,7 @@ struct RootView: View {
                 // silently broke the result list — SwiftUI dropped the update that
                 // renders the rows, so typing produced nothing, with no crash and no
                 // slowdown to point at. Never read UIKit view state from `body`. The
-                // omitted term is 34pt against a 260pt falloff, which is why the glow
+                // omitted term is 34pt against a 140pt falloff, which is why the glow
                 // still lands on the bar: it centers on the bar's safe-area line
                 // rather than its top edge, a difference nothing can see.
                 LivingBackdrop(
@@ -2143,7 +2143,7 @@ private struct LivingBackdrop: View {
     /// stay pinned at the unit square so no edge tears. Each edge midpoint moves only
     /// *along* its edge (a top point keeps `y == 0`, a left point keeps `x == 0`), so
     /// the mesh stays a clean quad — only the center is free in both axes. The
-    /// offsets are large (~0.3 of the screen) and asymmetric so that, paired with the
+    /// offsets are large (~0.6 of the screen) and asymmetric so that, paired with the
     /// mesh's spread of distinguishable stops (`QuickieBrand.backdropMesh`), the slow
     /// drift is actually *perceptible* as the blooms sweep across the surface rather
     /// than reading as a still image — the whole point of a Living backdrop (ADR
@@ -2151,22 +2151,25 @@ private struct LivingBackdrop: View {
     /// off-screen.
     static func meshPoints(phase t: Float) -> [SIMD2<Float>] {
         func p(_ x: Float, _ y: Float) -> SIMD2<Float> { SIMD2(x, y) }
-        // A mostly-horizontal sweep: the interior + top/bottom-edge midpoints slide
-        // left→right together, carrying the bright center bloom from left-of-centre
-        // (~0.32) across to right-of-centre (~0.68) and back — a ~0.36-wide travel,
-        // large on purpose so the low-contrast dark mesh still reads as *moving*.
-        // A little vertical wobble on the side midpoints keeps it organic rather
-        // than a metronome. Corners stay pinned so no edge tears.
+        // A vertical sweep: the interior + side-edge midpoints slide top→bottom
+        // together, carrying the bright center bloom from near the top (~0.18)
+        // down past center (~0.78) and back — a ~0.6-tall travel, deliberately
+        // large so the low-contrast mesh unmistakably reads as *moving* (the
+        // earlier ~0.36 horizontal sweep did not). The side midpoints run at
+        // slightly different rates so the bloom breathes rather than riding an
+        // elevator; the top/bottom midpoints stay put (they can only slide
+        // horizontally, and the motion should read purely up-and-down). Corners
+        // stay pinned so no edge tears.
         return [
-            p(0, 0), p(0.35 + 0.30 * t, 0), p(1, 0),
-            p(0, 0.55 - 0.12 * t), p(0.32 + 0.36 * t, 0.48 + 0.08 * t), p(1, 0.45 + 0.12 * t),
-            p(0, 1), p(0.35 + 0.30 * t, 1), p(1, 1),
+            p(0, 0), p(0.5, 0), p(1, 0),
+            p(0, 0.25 + 0.50 * t), p(0.5, 0.18 + 0.60 * t), p(1, 0.32 + 0.44 * t),
+            p(0, 1), p(0.5, 1), p(1, 1),
         ]
     }
 
     /// The glow's falloff radius — also half its frame height, which is what keeps it
     /// seamless (see `body`).
-    private static let glowRadius: CGFloat = 260
+    private static let glowRadius: CGFloat = 140
 }
 
 /// A brief, non-blocking confirmation shown at the bottom (issue #37): a silent
