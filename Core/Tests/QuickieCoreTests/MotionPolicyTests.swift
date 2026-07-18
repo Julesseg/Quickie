@@ -163,16 +163,18 @@ struct MotionPolicyTests {
         }
     }
 
-    @Test("the drift period sits in ADR 0034's 20–30s band — alive at rest, never caught moving")
+    @Test("the drift is slow but not imperceptible — a calm, visible sweep")
     func driftPeriodStaysSlow() {
-        // Slow enough that a seconds-long launcher session never sees a full
-        // cycle (the whole point — motion the eye can ignore), but not so slow it
-        // stops reading as alive. ADR 0034 pins the band to 20–30s.
+        // Bounded on both sides: fast enough that the eye actually catches the
+        // sweep against the low-contrast mesh (ADR 0034 rejected an imperceptibly
+        // slow drift), slow enough to still read as calm rather than restless. The
+        // band brackets the tuned ~12s cycle; the original 20–30s guess landed on
+        // the wrong side of "perceptible".
         guard case .drift(let period) = MotionPolicy(reduceMotion: false).style(for: .backdropDrift) else {
             Issue.record("expected a drift")
             return
         }
-        #expect(period >= 20 && period <= 30)
+        #expect(period >= 8 && period <= 18)
     }
 
     @Test("Reduce Motion stops the drift outright — a still backdrop, no loop")

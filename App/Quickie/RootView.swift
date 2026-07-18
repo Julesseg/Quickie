@@ -2143,10 +2143,16 @@ private struct LivingBackdrop: View {
     /// off-screen.
     static func meshPoints(phase t: Float) -> [SIMD2<Float>] {
         func p(_ x: Float, _ y: Float) -> SIMD2<Float> { SIMD2(x, y) }
+        // A mostly-horizontal sweep: the interior + top/bottom-edge midpoints slide
+        // left→right together, carrying the bright center bloom from left-of-centre
+        // (~0.32) across to right-of-centre (~0.68) and back — a ~0.36-wide travel,
+        // large on purpose so the low-contrast dark mesh still reads as *moving*.
+        // A little vertical wobble on the side midpoints keeps it organic rather
+        // than a metronome. Corners stay pinned so no edge tears.
         return [
-            p(0, 0), p(0.5 + 0.28 * t, 0), p(1, 0),
-            p(0, 0.5 - 0.24 * t), p(0.5 - 0.22 * t, 0.5 + 0.26 * t), p(1, 0.5 + 0.28 * t),
-            p(0, 1), p(0.5 - 0.28 * t, 1), p(1, 1),
+            p(0, 0), p(0.35 + 0.30 * t, 0), p(1, 0),
+            p(0, 0.55 - 0.12 * t), p(0.32 + 0.36 * t, 0.48 + 0.08 * t), p(1, 0.45 + 0.12 * t),
+            p(0, 1), p(0.35 + 0.30 * t, 1), p(1, 1),
         ]
     }
 
