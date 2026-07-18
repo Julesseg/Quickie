@@ -173,29 +173,36 @@ enum QuickieBrand {
     // … = Color(red:…)` shape), so `check-brand-assets.py` never scans them as
     // drifted icon literals.
 
-    /// The dark-appearance mesh, row-major. A near-black field with the two lifted
-    /// stops (indices 4 and 7, the travelling blooms) raised well clear of it —
-    /// bright enough that the bloom's *center* is unmistakable as it sweeps, since
-    /// a bloom only a breath above the field left the drift readable solely by its
-    /// faint edges. Still deep violets, not a light source: text and the glass
-    /// chrome keep their legibility margin (ADR 0010), and the hues still fan
-    /// indigo → magenta-purple across the grid.
+    /// The dark-appearance mesh, row-major. Kept *very* dark — a near-black field
+    /// with only a breath of purple — so it reads as a calm backdrop, never a lit
+    /// screen. The field is deliberately quiet: the visible life is the travelling
+    /// bloom (`backdropBloom`), a separate ball `LivingBackdrop` sweeps over this
+    /// mesh, so no stop here needs to carry the motion.
     private static let backdropMeshDark: [(CGFloat, CGFloat, CGFloat)] = [
         (11, 8, 28), (13, 8, 33), (15, 9, 37),
-        (13, 9, 35), (64, 40, 132), (17, 10, 44),
-        (16, 10, 42), (50, 30, 104), (13, 8, 33),
+        (13, 9, 35), (31, 19, 68), (17, 10, 44),
+        (16, 10, 42), (27, 16, 60), (13, 8, 33),
     ]
 
-    /// The light-appearance mesh, row-major: a lavender wash with the same two
-    /// bloom stops (4 and 7) pushed noticeably deeper and more saturated than the
-    /// field — the pale wash swallowed a bloom only a step darker, leaving the
-    /// sweep's center too faint to follow. Still pale enough that black text over
-    /// it keeps a wide contrast margin.
+    /// The light-appearance mesh, row-major: a pale lavender wash, quiet for the
+    /// same reason as the dark field — the travelling bloom ball carries the
+    /// motion, so the wash only has to stay legible under black text.
     private static let backdropMeshLight: [(CGFloat, CGFloat, CGFloat)] = [
         (227, 222, 248), (219, 212, 246), (212, 203, 244),
-        (217, 209, 246), (168, 144, 228), (214, 205, 245),
-        (210, 200, 243), (186, 166, 234), (223, 217, 247),
+        (217, 209, 246), (201, 188, 240), (214, 205, 245),
+        (210, 200, 243), (204, 192, 241), (223, 217, 247),
     ]
+
+    /// The travelling bloom's color — the compact ball of violet `LivingBackdrop`
+    /// sweeps down the quiet mesh field. Adaptive like the mesh: a lit violet over
+    /// the near-black dark field, a saturated lavender the light wash can't swallow.
+    static var backdropBloom: Color {
+        Color(uiColor: UIColor { traits in
+            traits.userInterfaceStyle == .dark
+                ? UIColor(red: 96 / 255, green: 60 / 255, blue: 190 / 255, alpha: 1)
+                : UIColor(red: 150 / 255, green: 122 / 255, blue: 222 / 255, alpha: 1)
+        })
+    }
 
     /// The nine mesh colors for a 3×3 [[Living backdrop]] (ADR 0034), row-major.
     /// Each is an adaptive `Color`, so one array serves both appearances — SwiftUI
