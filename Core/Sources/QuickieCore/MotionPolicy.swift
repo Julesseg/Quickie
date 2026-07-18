@@ -77,14 +77,15 @@ public struct MotionPolicy: Sendable {
             // and any motion sharp enough to notice is a motion asking to be read.
             return .fade(duration: 0.8)
         case .backdropDrift:
-            // 12s for a full there-and-back sweep (~6s each leg). ADR 0034 first
+            // 6s for a full there-and-back sweep (~3s each leg). ADR 0034 first
             // guessed 20–30s, but at that pace the drift was imperceptible against
             // the deliberately low-contrast mesh — which is the "imperceptibly slow"
             // outcome that ADR *rejected*. The eye reads velocity, so the honest way
             // to keep the backdrop subtle in color yet visibly alive is to move a
-            // little quicker. Still far slower than any spring, and gone the instant
-            // a query exists — the one moment the user never triggers.
-            return .drift(period: 12)
+            // little quicker; 12s was tried and still read too languid. Still far
+            // slower than any spring, and gone the instant a query exists — the one
+            // moment the user never triggers.
+            return .drift(period: 6)
         }
     }
 

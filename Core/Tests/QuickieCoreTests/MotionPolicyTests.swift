@@ -168,13 +168,13 @@ struct MotionPolicyTests {
         // Bounded on both sides: fast enough that the eye actually catches the
         // sweep against the low-contrast mesh (ADR 0034 rejected an imperceptibly
         // slow drift), slow enough to still read as calm rather than restless. The
-        // band brackets the tuned ~12s cycle; the original 20–30s guess landed on
-        // the wrong side of "perceptible".
+        // band brackets the tuned ~6s cycle; the original 20–30s guess (and the
+        // first 12s tuning) landed on the wrong side of "perceptible".
         guard case .drift(let period) = MotionPolicy(reduceMotion: false).style(for: .backdropDrift) else {
             Issue.record("expected a drift")
             return
         }
-        #expect(period >= 8 && period <= 18)
+        #expect(period >= 4 && period <= 9)
     }
 
     @Test("Reduce Motion stops the drift outright — a still backdrop, no loop")
