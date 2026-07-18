@@ -550,7 +550,7 @@ struct RootView: View {
                 // silently broke the result list — SwiftUI dropped the update that
                 // renders the rows, so typing produced nothing, with no crash and no
                 // slowdown to point at. Never read UIKit view state from `body`. The
-                // omitted term is 34pt against a 420pt falloff, which is why the glow
+                // omitted term is 34pt against a 260pt falloff, which is why the glow
                 // still lands on the bar: it centers on the bar's safe-area line
                 // rather than its top edge, a difference nothing can see.
                 LivingBackdrop(
@@ -2070,8 +2070,16 @@ private struct LivingBackdrop: View {
     var body: some View {
         mesh
             .overlay(alignment: .bottom) {
+                // A steeper falloff than a plain two-stop gradient: most of the
+                // fade happens in the first half of the radius, so the glow reads
+                // as a localized pool of light under the bar rather than a broad
+                // wash over the lower screen.
                 RadialGradient(
-                    colors: [Color.accentColor.opacity(0.12), .clear],
+                    stops: [
+                        .init(color: Color.accentColor.opacity(0.14), location: 0),
+                        .init(color: Color.accentColor.opacity(0.04), location: 0.5),
+                        .init(color: .clear, location: 1),
+                    ],
                     center: .center,
                     startRadius: 0,
                     endRadius: Self.glowRadius
@@ -2158,7 +2166,7 @@ private struct LivingBackdrop: View {
 
     /// The glow's falloff radius — also half its frame height, which is what keeps it
     /// seamless (see `body`).
-    private static let glowRadius: CGFloat = 420
+    private static let glowRadius: CGFloat = 260
 }
 
 /// A brief, non-blocking confirmation shown at the bottom (issue #37): a silent
