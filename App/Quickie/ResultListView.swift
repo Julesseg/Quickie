@@ -11,9 +11,6 @@ import QuickieCore
 /// as the default, since pressing Return runs exactly its main action.
 struct ResultListView: View {
     let results: [Action]
-    /// The live query, forwarded to the highlighted row so its gold glow can stir
-    /// on each keystroke and settle when typing stops (issue #177).
-    var query: String = ""
     let onRun: (Action) -> Void
     /// Whether a row's Action is pinned — drives its Pin/Unpin menu label.
     let isFavorite: (Action) -> Bool
@@ -64,7 +61,7 @@ struct ResultListView: View {
                             Button {
                                 onRun(action)
                             } label: {
-                                ActionRow(action: action, isHighlighted: rank == 0, query: query)
+                                ActionRow(action: action, isHighlighted: rank == 0)
                             }
                             .buttonStyle(.plain)
                             .accessibilityIdentifier(action.id)
@@ -153,11 +150,6 @@ struct StatusBarBlurBand: View {
 struct ActionRow: View {
     let action: Action
     var isHighlighted: Bool = false
-    /// The live query, passed only by the result lists so the highlighted row's
-    /// gold glow can stir back into motion on each keystroke and settle when typing
-    /// stops (issue #177). Empty everywhere the row is never highlighted (Home, the
-    /// lifted preview), where it does nothing.
-    var query: String = ""
 
     /// The row's corner radius — a **fixed** value shared by every row, not a
     /// capsule. A `Capsule` rounds by half the height, so a single-line row reads
@@ -201,16 +193,16 @@ struct ActionRow: View {
         // neighbours above it — so the Highlighted result carries its own gold
         // (issue #177). It is a *soft gradient glow* rather than a flat wash: a
         // radial gold, faint at the row's centre and gone before its edges, that
-        // slides gently side to side while a query is still being typed and settles
-        // to centre about a second after the last keystroke (`HeroGlow`) — so the
-        // hero row feels alive while you type and calm once you've stopped. Gold is
+        // swings once when a new Action lands in the hero slot and settles to
+        // centre about a second later (`HeroGlow`) — so the glow announces a change
+        // of best match and stays calm while typing merely re-confirms it. Gold is
         // spent here and nowhere else (ADR 0033, enforced by `check-brand-assets.py`).
         // The overlay sits *before* `glassEffect`, so the glow is part of the row's
         // content and the glass renders over it — the light reads as lit within the
         // glass rather than a wash painted on top of it.
         .overlay {
             if isHighlighted {
-                HeroGlow(shape: rowShape, query: query, heroID: action.id)
+                HeroGlow(shape: rowShape, heroID: action.id)
             }
         }
         .glassEffect(.regular.interactive(), in: rowShape)
@@ -221,38 +213,30 @@ struct ActionRow: View {
 }
 
 /// The Highlighted result's gold glow: a soft radial gold, clipped to the row, that
-/// **slides gently side to side while the query is still being typed** and settles
-/// back to centre about a second after the last keystroke (issue #177). So the hero
-/// row shimmers while you type and comes to rest once you've stopped — the "alive at
-/// rest / calm in use" budget (ADR 0034) read the other way round: the one flicker
-/// of life is *tied to* the act of typing and ends with it, rather than running
-/// forever under settled results.
+/// **swings once when a new Action lands in the hero slot** and settles back to
+/// centre about a second later (issue #177). So the glow reads as announcing a new
+/// best match — the "alive at rest / calm in use" budget (ADR 0034) read the other
+/// way round: the one flicker of life is *tied to* the answer changing, and a run
+/// of keystrokes that keeps the same hero leaves the light at rest.
 ///
-/// Motion is driven off the `query` string, not per-keystroke view work: each change
-/// stirs the swing (if it isn't already going) and *debounces* a settle ~1s out, so
-/// a burst of keystrokes keeps it moving smoothly and only the pause at the end lands
-/// it. It degrades like the rest of the budget — under Reduce Motion and UI test the
-/// glow is simply static and centred, no swing, no timer.
+/// Motion is driven off `heroID`, not the query: a keystroke that *re-ranks* a new
+/// Action into the hero slot restarts the announce cycle from the top, and one that
+/// merely re-confirms the sitting hero does nothing at all. It degrades like the
+/// rest of the budget — under Reduce Motion and UI test the glow is simply static
+/// and centred, no swing, no timer.
 private struct HeroGlow: View {
     var shape: RoundedRectangle
-    /// The live query; each change re-stirs the swing and resets the settle timer.
-    var query: String
-    /// The Action this glow sits on. A keystroke that *re-ranks* a new Action into
-    /// the hero slot restarts the cycle from the top — the glow visibly re-announces
-    /// the new best match — where a keystroke that keeps the same hero only extends
-    /// the swing already in flight (issue #177).
-    var heroID: String = ""
+    /// The Action this glow sits on; a change of occupant restarts the announce
+    /// cycle so the glow visibly greets the new best match.
+    var heroID: String
 
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     /// The glow's horizontal offset, animated between ∓`amplitude` while swinging.
     @State private var swing: CGFloat = 0
-    /// Whether the repeating swing is currently running (so a keystroke mid-swing
-    /// doesn't restart it — it just pushes the settle further out).
-    @State private var swinging = false
-    /// The debounced "typing has stopped" task, cancelled and rescheduled per change.
+    /// The pending settle that ends the cycle, cancelled when a new hero restarts it.
     @State private var settleTask: Task<Void, Never>?
     /// The short delay that lets the glow glide to one extreme before the repeating
-    /// swing begins (see `stir`), cancelled if typing stops inside that window.
+    /// swing begins (see `stir`), cancelled if a new hero lands inside that window.
     @State private var startTask: Task<Void, Never>?
 
     /// The glow swings only when motion is allowed; otherwise it is a plain centred
@@ -289,64 +273,55 @@ private struct HeroGlow: View {
         // light never spills past the capsule onto a neighbour.
         .clipShape(shape)
         .allowsHitTesting(false)
-        // The first keystroke of a query *creates* this view (Home swaps to the
-        // result list), so no `onChange` fires for it — the appear is the keystroke.
-        .onAppear { if !query.isEmpty { stir() } }
-        .onChange(of: query) { _, _ in stir() }
-        // A new Action in the hero slot restarts the cycle from the top; same-hero
-        // keystrokes above only extend it. Order between the two onChanges in one
-        // update doesn't matter: restarting wins either way (`stir` on a swinging
-        // glow is a no-op, `restart` always begins afresh).
+        // The first result list of a query *creates* this view (Home swaps to the
+        // result list), so no `onChange` fires for the first hero — the appear is
+        // its announcement.
+        .onAppear { stir() }
         .onChange(of: heroID) { _, _ in restart() }
         .onDisappear { settleTask?.cancel(); startTask?.cancel() }
     }
 
-    /// The keystroke changed which Action is the hero: kill the current swing and
-    /// begin a fresh cycle, so the glow visibly re-announces the new best match.
+    /// The hero slot changed hands: kill the cycle in flight and begin a fresh one,
+    /// so the glow visibly re-announces the new best match.
     private func restart() {
         guard animates else { return }
         startTask?.cancel()
         settleTask?.cancel()
         // No snap to centre: `stir`'s opening glide animates from wherever the old
-        // swing left off, so the restart reads as the light changing course.
-        swinging = false
+        // cycle left off, so the restart reads as the light changing course.
         stir()
     }
 
-    /// A keystroke: start the side-to-side swing if it isn't already going, and push
-    /// the settle a fresh second into the future so a run of keystrokes keeps it
-    /// alive and only the final pause brings it to rest.
+    /// One announce cycle: glide to an extreme, swing across, and ease back to
+    /// centre about a second in — a single visible pass, not a loop that runs for
+    /// as long as typing does.
     private func stir() {
         guard animates else { return }
-        if !swinging {
-            swinging = true
-            // `repeatForever(autoreverses:)` oscillates between the value it starts at
-            // and its target, so a *symmetric* swing about centre has to begin at one
-            // extreme. Glide there first (a soft ease from centre, no jump), then —
-            // once arrived — start the repeating leg that carries it across to the far
-            // side and back forever. Sequenced with a task rather than a delayed
-            // animation because two `withAnimation`s on the same value in one tick
-            // would just clobber each other (only the last target survives).
-            withAnimation(.easeInOut(duration: 0.3)) {
-                swing = -amplitude
-                peakOpacity = 0.32
-            }
-            startTask?.cancel()
-            startTask = Task { @MainActor in
-                try? await Task.sleep(for: .seconds(0.3))
-                if Task.isCancelled || !swinging { return }
-                withAnimation(.easeInOut(duration: 0.6).repeatForever(autoreverses: true)) {
-                    swing = amplitude
-                }
+        // `repeatForever(autoreverses:)` oscillates between the value it starts at
+        // and its target, so a *symmetric* swing about centre has to begin at one
+        // extreme. Glide there first (a soft ease from centre, no jump), then —
+        // once arrived — start the repeating leg that carries it across to the far
+        // side and back until the settle lands. Sequenced with a task rather than a
+        // delayed animation because two `withAnimation`s on the same value in one
+        // tick would just clobber each other (only the last target survives).
+        withAnimation(.easeInOut(duration: 0.3)) {
+            swing = -amplitude
+            peakOpacity = 0.32
+        }
+        startTask?.cancel()
+        startTask = Task { @MainActor in
+            try? await Task.sleep(for: .seconds(0.3))
+            if Task.isCancelled { return }
+            withAnimation(.easeInOut(duration: 0.6).repeatForever(autoreverses: true)) {
+                swing = amplitude
             }
         }
         settleTask?.cancel()
         settleTask = Task { @MainActor in
             try? await Task.sleep(for: .seconds(1))
             if Task.isCancelled { return }
-            swinging = false
             // Replace the repeating animation with a single ease back to centre —
-            // "on the last keystroke it takes a second to settle."
+            // the announcement takes about a second to come to rest.
             withAnimation(.easeOut(duration: 1.0)) {
                 swing = 0
                 peakOpacity = 0.2

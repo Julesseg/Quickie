@@ -534,7 +534,7 @@ struct RootView: View {
                     } else if inFileSearch {
                         // The scoped file-browsing surface (ADR 0014): an uncapped,
                         // full-height list of filename matches under the breadcrumb.
-                        FileSearchResultList(results: fileResults, query: query, onRun: run)
+                        FileSearchResultList(results: fileResults, onRun: run)
                             .transition(captureMotion.edgeTransition(from: .bottom))
                     } else if isHome {
                         HomeView(
@@ -550,7 +550,6 @@ struct RootView: View {
                     } else {
                         ResultListView(
                             results: engine.results(for: query),
-                            query: query,
                             onRun: run,
                             isFavorite: { signals.isFavorite($0.id) },
                             canFavorite: { signals.canFavorite($0.id) },
