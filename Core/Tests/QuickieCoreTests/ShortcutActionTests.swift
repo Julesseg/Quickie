@@ -98,6 +98,42 @@ struct ShortcutActionTests {
         #expect(Action.shortcut(name: "Timer").id != Action.shortcut(name: "Scan").id)
     }
 
+    @Test("a Shortcut Action carries its user-defined alias, matched and pilled")
+    func carriesUserDefinedAlias() {
+        // The one optional alias (issue #198) rides as the Action's sole alias, so the
+        // matcher scores it alongside the title and the row wears it as an Alias pill
+        // (the same single-alias convention the Custom Action editor uses).
+        let action = Action.shortcut(name: "Translate", alias: "tr")
+        #expect(action.aliases == ["tr"])
+        #expect(action.aliasPill == "tr")
+    }
+
+    @Test("a blank or nil alias carries no alias and shows no pill")
+    func blankAliasCarriesNone() {
+        // A blank field reads as *unset* (trimmed to empty → none), so an
+        // all-whitespace alias never becomes a matchable empty alias or an empty pill.
+        #expect(Action.shortcut(name: "Translate").aliases.isEmpty)
+        #expect(Action.shortcut(name: "Translate", alias: "   ").aliases.isEmpty)
+        #expect(Action.shortcut(name: "Translate", alias: "   ").aliasPill == nil)
+        // A surrounding-whitespace alias is trimmed to its bare word.
+        #expect(Action.shortcut(name: "Translate", alias: "  tr  ").aliases == ["tr"])
+    }
+
+    @Test("typing the alias surfaces the shortcut in the Result list")
+    func aliasSurfacesShortcutInResults() {
+        // The alias is real matching fodder: typing it finds the shortcut even when
+        // the query matches nothing in the title (issue #198 AC).
+        let engine = SearchEngine(providers: [
+            IndexedProvider(catalog: [Action.shortcut(name: "Convert Currency", alias: "fx")])
+        ])
+        let row = engine.rows(for: "fx").first { $0.action.title == "Convert Currency" }
+        #expect(row != nil)
+        // The alias out-scored the (non-matching) title, so it wins — the pill bolds
+        // and the title stays plain (the single-source rule from #195/#196).
+        #expect(row?.match?.winningCandidate == .alias(0))
+        #expect(row?.match?.titleBold == [])
+    }
+
     @Test("the Shortcuts command deeplinks to the Shortcuts provider page")
     func shortcutsCommandOpensItsPage() {
         // Typed "shortcuts" surfaces the provider's Settings command row

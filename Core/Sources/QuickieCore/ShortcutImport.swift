@@ -1,18 +1,40 @@
 import Foundation
 
 /// One imported Shortcut Action's persisted state (issue #45; ADR 0007): the
-/// shortcut's **name** (its identity — `Get My Shortcuts` returns no stable IDs)
-/// and the per-row **`acceptsInput`** toggle, the only way Quickie learns a
-/// shortcut takes input since import is names-only. `Codable` so the app can
-/// persist the set as JSON in the shared App Group `UserDefaults`, mirroring the
+/// shortcut's **name** (its identity — `Get My Shortcuts` returns no stable IDs),
+/// the per-row **`acceptsInput`** toggle (the only way Quickie learns a shortcut
+/// takes input since import is names-only), and an optional user-defined **alias**
+/// (issue #198) — the single extra name the matcher scores alongside the title, the
+/// same single-alias convention the Custom Action editor uses. `Codable` so the app
+/// can persist the set as JSON in the shared App Group `UserDefaults`, mirroring the
 /// `FallbacksStore` pattern — no CloudKit.
 public struct ShortcutEntry: Codable, Equatable, Sendable {
     public let name: String
     public var acceptsInput: Bool
+    /// The one optional user-defined alias, edited inline on the Shortcuts page
+    /// (issue #198). `nil` (the default) means no alias — no pill, nothing extra to
+    /// match. Optional so decoding a pre-#198 payload (which lacks the key) reads as
+    /// no alias rather than failing, the same forward-compat the `acceptsInput`
+    /// default gives.
+    public var alias: String?
 
-    public init(name: String, acceptsInput: Bool = false) {
+    public init(name: String, acceptsInput: Bool = false, alias: String? = nil) {
         self.name = name
         self.acceptsInput = acceptsInput
+        self.alias = alias
+    }
+
+    /// Normalizes a raw alias string to *set* vs *unset* (issue #198): trim
+    /// whitespace, and a blank result collapses to `nil` (no alias). The one place
+    /// the rule lives, so the Shortcuts page's field writer (`ShortcutsStore.setAlias`)
+    /// and the `Action.shortcut` factory agree — an all-whitespace field never becomes
+    /// a matchable empty alias or an empty pill. Mirrors
+    /// `CustomActionDefinition.normalizedGlyph` for the glyph (issue #163).
+    public static func normalizedAlias(_ raw: String?) -> String? {
+        guard let trimmed = raw?.trimmingCharacters(in: .whitespacesAndNewlines),
+              !trimmed.isEmpty
+        else { return nil }
+        return trimmed
     }
 }
 
@@ -71,17 +93,25 @@ public enum ShortcutImport {
     /// Reconciles a parsed name list into the persisted entry set — the **universal
     /// auto-prune** a re-sync performs (ADR 0007). Rebuilds the set to mirror the
     /// payload: it keeps existing names (**preserving each survivor's `acceptsInput`
-    /// toggle**), adds names not seen before with input off, and drops names absent
-    /// from the payload. Matching is by name, case-insensitively. Order follows the
-    /// payload. A first import is just this against an empty `existing`, and — since
-    /// identity is the name — a rename reads as delete + re-add (old toggle lost).
+    /// toggle and its alias**, issue #198), adds names not seen before with input off
+    /// and no alias, and drops names absent from the payload. Matching is by name,
+    /// case-insensitively. Order follows the payload. A first import is just this
+    /// against an empty `existing`, and — since identity is the name — a rename reads
+    /// as delete + re-add, so the renamed shortcut loses both toggle and alias.
     public static func reconcile(existing: [ShortcutEntry], names: [String]) -> [ShortcutEntry] {
-        let toggleByName = Dictionary(
-            existing.map { ($0.name.lowercased(), $0.acceptsInput) },
+        // Key the whole survivor by name so both `acceptsInput` and `alias` carry
+        // forward together — the alias survives a re-sync exactly as the toggle does.
+        let existingByName = Dictionary(
+            existing.map { ($0.name.lowercased(), $0) },
             uniquingKeysWith: { first, _ in first }
         )
         return names.map { name in
-            ShortcutEntry(name: name, acceptsInput: toggleByName[name.lowercased()] ?? false)
+            let survivor = existingByName[name.lowercased()]
+            return ShortcutEntry(
+                name: name,
+                acceptsInput: survivor?.acceptsInput ?? false,
+                alias: survivor?.alias
+            )
         }
     }
 

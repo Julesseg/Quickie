@@ -116,4 +116,58 @@ struct ShortcutImportTests {
         let entries = ShortcutImport.reconcile(existing: existing, names: ["New Name"])
         #expect(entries == [ShortcutEntry(name: "New Name", acceptsInput: false)])
     }
+
+    // MARK: - Alias survival (issue #198)
+
+    @Test("a re-sync preserves a survivor's alias alongside its toggle")
+    func reSyncPreservesAlias() {
+        // The alias rides the name-keyed store exactly as `acceptsInput` does
+        // (issue #198): a survivor keeps its alias across a re-sync, matched
+        // case-insensitively by name.
+        let existing = [
+            ShortcutEntry(name: "Translate", acceptsInput: true, alias: "tr"),
+            ShortcutEntry(name: "Scan", acceptsInput: false, alias: nil),
+        ]
+        let entries = ShortcutImport.reconcile(existing: existing, names: ["translate", "Scan"])
+        #expect(entries == [
+            // "translate" survives and keeps *both* its toggle and its alias.
+            ShortcutEntry(name: "translate", acceptsInput: true, alias: "tr"),
+            // "Scan" survives with no alias, unchanged.
+            ShortcutEntry(name: "Scan", acceptsInput: false, alias: nil),
+        ])
+    }
+
+    @Test("a removed shortcut drops with its alias; a fresh import arrives alias-less")
+    func removalAndFreshImportDropAlias() {
+        // A name absent from the payload is pruned, taking its alias with it; a
+        // renamed shortcut (a new name, since identity is the name) arrives fresh —
+        // input off and no alias, the same documented trade-off as the toggle.
+        let existing = [
+            ShortcutEntry(name: "Old Name", acceptsInput: true, alias: "old"),
+            ShortcutEntry(name: "Gone", acceptsInput: false, alias: "g"),
+        ]
+        let entries = ShortcutImport.reconcile(existing: existing, names: ["New Name"])
+        #expect(entries == [ShortcutEntry(name: "New Name", acceptsInput: false, alias: nil)])
+    }
+
+    @Test("normalizedAlias trims and collapses a blank to nil — the shared set/unset rule")
+    func normalizedAliasSetVsUnset() {
+        // The one place the *set vs unset* rule lives, shared by the Shortcuts page's
+        // field writer and the `Action.shortcut` factory (issue #198).
+        #expect(ShortcutEntry.normalizedAlias("  tr  ") == "tr")
+        #expect(ShortcutEntry.normalizedAlias("tr") == "tr")
+        #expect(ShortcutEntry.normalizedAlias("   ") == nil)
+        #expect(ShortcutEntry.normalizedAlias("") == nil)
+        #expect(ShortcutEntry.normalizedAlias(nil) == nil)
+    }
+
+    @Test("a pre-#198 payload without the alias key decodes as no alias")
+    func decodesLegacyPayloadWithoutAlias() throws {
+        // The `alias` field is optional so a stored set written before #198 (only
+        // `name`/`acceptsInput`) still decodes — the missing key reads as no alias
+        // rather than failing, the forward-compat the `acceptsInput` default gives.
+        let legacy = #"[{"name":"Timer","acceptsInput":true}]"#.data(using: .utf8)!
+        let decoded = try JSONDecoder().decode([ShortcutEntry].self, from: legacy)
+        #expect(decoded == [ShortcutEntry(name: "Timer", acceptsInput: true, alias: nil)])
+    }
 }

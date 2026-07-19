@@ -136,6 +136,18 @@ final class ShortcutsStore {
         persist()
     }
 
+    /// Sets a shortcut's optional user-defined **alias** (matched by name), then
+    /// persists (issue #198) — the Shortcuts page's inline alias field writes here,
+    /// mirroring `toggleAcceptsInput`. The alias is normalized to *set vs unset*: a
+    /// blank or whitespace-only value clears it (`nil`), so clearing the field removes
+    /// the alias and its pill. The stored value carries into the built Shortcut Action
+    /// as its sole alias and survives a re-sync via `ShortcutImport.reconcile`.
+    func setAlias(_ alias: String, for name: String) {
+        guard let index = entries.firstIndex(where: { $0.name == name }) else { return }
+        entries[index].alias = ShortcutEntry.normalizedAlias(alias)
+        persist()
+    }
+
     /// Removes an imported shortcut by name, then persists. (A later re-sync that
     /// still lists the name would re-add it with input off — identity is the name.)
     func delete(_ name: String) {
