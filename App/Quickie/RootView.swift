@@ -2129,18 +2129,25 @@ private struct LivingBackdrop: View {
     @ViewBuilder private var bloom: some View {
         if let driftPeriod {
             TimelineView(.animation) { context in
-                bloomBall(phase: Self.phase(at: context.date, period: driftPeriod))
+                bloomBall(
+                    yPhase: Self.phase(at: context.date, period: driftPeriod),
+                    xPhase: Self.phase(at: context.date, period: driftPeriod * Self.sidewaysPeriodRatio)
+                )
             }
         } else {
-            bloomBall(phase: 0)
+            // At rest the ball sits centered on the screen's vertical axis
+            // (xPhase 0.5 is the sideways oscillation's midpoint), near the top
+            // of its vertical travel.
+            bloomBall(yPhase: 0, xPhase: 0.5)
         }
     }
 
     /// A compact ball of brand violet fading to clear within its own radius — most
     /// of the fade in the first half, so it reads as a localized pool of color, not
-    /// a wash. It sweeps the screen's vertical center line from near the top down
-    /// past center and back (`phase` 0…1), a travel of ~0.6 of the screen height.
-    private func bloomBall(phase: Float) -> some View {
+    /// a wash. `yPhase` (0…1) sweeps it from near the top down past center — a
+    /// travel of ~0.6 of the screen height; `xPhase` (0…1) wanders it a modest
+    /// ~0.15-screen-width to either side of center.
+    private func bloomBall(yPhase: Float, xPhase: Float) -> some View {
         GeometryReader { geo in
             RadialGradient(
                 stops: [
@@ -2158,8 +2165,8 @@ private struct LivingBackdrop: View {
             // accent glow below).
             .frame(width: Self.bloomRadius * 2, height: Self.bloomRadius * 2)
             .position(
-                x: geo.size.width / 2,
-                y: (0.15 + 0.65 * CGFloat(phase)) * geo.size.height
+                x: (0.5 + Self.sidewaysAmplitude * (2 * CGFloat(xPhase) - 1)) * geo.size.width,
+                y: (0.15 + 0.65 * CGFloat(yPhase)) * geo.size.height
             )
         }
         .allowsHitTesting(false)
@@ -2188,6 +2195,19 @@ private struct LivingBackdrop: View {
     /// 200 still too slight, so the ball's bright core spans most of the screen's
     /// width while the quick fade keeps its edge well inside the field.
     private static let bloomRadius: CGFloat = 280
+
+    /// The sideways oscillation's period, as a multiple of the vertical one: the
+    /// golden ratio, the most irrational of ratios — the two sines can never fall
+    /// back into sync, so the ball's path never repeats a cycle. Against a
+    /// divisible ratio (2×, 3×) the path closes into the same figure every few
+    /// seconds and reads as a machine; this wanders, which is what makes it read
+    /// as natural.
+    private static let sidewaysPeriodRatio: Double = (1 + 5.0.squareRoot()) / 2
+
+    /// How far the sideways wander reaches to either side of center, as a fraction
+    /// of the screen's width. Modest on purpose: the vertical sweep is the motion,
+    /// this only keeps it from riding a rail.
+    private static let sidewaysAmplitude: CGFloat = 0.15
 
     /// The glow's falloff radius — also half its frame height, which is what keeps it
     /// seamless (see `body`).
