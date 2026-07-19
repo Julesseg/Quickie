@@ -1967,7 +1967,7 @@ struct RootView: View {
     /// carrying an `openURL` is tappable and lingers longer (so there is time to
     /// tap it), with `systemImage` trailing the text as the open affordance; a
     /// plain one fades after a beat. `success` marks a copy/success confirmation,
-    /// which wears a leading checkmark glyph (ADR 0033 polish); a failure stays a
+    /// which wears a leading checkmark glyph (issue #179's polish ride-along); a failure stays a
     /// plain, unadorned acknowledgement.
     private func flashConfirmation(_ message: String, success: Bool = false, systemImage: String? = nil, openURL url: URL? = nil) {
         let new = Toast(message: message, isSuccess: success, systemImage: systemImage, openURL: url)
@@ -2224,7 +2224,7 @@ private struct Toast {
     let id = UUID()
     let message: String
     /// Whether this is a copy/success confirmation — the toasts that wear a
-    /// leading checkmark glyph (ADR 0033 polish). A failure acknowledgement
+    /// leading checkmark glyph (issue #179's polish ride-along). A failure acknowledgement
     /// ("File not found", "Shortcut failed") stays glyph-less and plain.
     var isSuccess = false
     var systemImage: String?
@@ -2244,7 +2244,7 @@ private struct ConfirmationToast: View {
         VStack {
             Spacer()
             HStack(spacing: 8) {
-                // The leading success glyph (ADR 0033 polish): a filled checkmark
+                // The leading success glyph (issue #179's polish ride-along): a filled checkmark
                 // in the accent tint, so a copy/success confirmation reads as done
                 // at a glance. Failures stay glyph-less; the trailing `systemImage`
                 // remains the tappable toast's open affordance, unchanged.

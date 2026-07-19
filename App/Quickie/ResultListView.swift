@@ -169,16 +169,13 @@ struct ActionRow: View {
     /// treatment scales with Dynamic Type like every other row.
     private var isComputed: Bool { action.kind == .calculator }
 
-    /// The title, with tabular digits on a Computed row. Built as `Text` (not via
-    /// a view modifier) because `monospacedDigit` is applied conditionally and
-    /// `Text.monospacedDigit()` keeps the result a `Text`.
-    private var titleText: Text {
-        let title = Text(action.title)
-        return isComputed ? title.monospacedDigit() : title
-    }
-
-    private func subtitleText(_ subtitle: String) -> Text {
-        let text = Text(subtitle)
+    /// Wraps a row string as `Text`, with tabular digits when this is a Computed
+    /// row. Built as `Text` (not via a view modifier) because `monospacedDigit`
+    /// is applied conditionally and `Text.monospacedDigit()` keeps the result a
+    /// `Text`. Shared by the title and subtitle so the two channels can't
+    /// disagree on the treatment.
+    private func rowText(_ string: String) -> Text {
+        let text = Text(string)
         return isComputed ? text.monospacedDigit() : text
     }
 
@@ -196,11 +193,11 @@ struct ActionRow: View {
                 // number / address) and the expression on a Calculator row, so it
                 // gets the tabular treatment too — but stays in the muted default
                 // design; only titles wear the rounded face.
-                titleText
+                rowText(action.title)
                     .font(.system(.body, design: .rounded))
                     .foregroundStyle(.primary)
                 if let subtitle = action.subtitle {
-                    subtitleText(subtitle)
+                    rowText(subtitle)
                         .font(.caption)
                         .foregroundStyle(.secondary)
                 }
