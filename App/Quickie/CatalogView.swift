@@ -44,6 +44,11 @@ struct CatalogView: View {
         }
         .navigationTitle("Browse catalog")
         .navigationBarTitleDisplayMode(.inline)
+        // Backdrop parity with every other Management page (issue #181): the Catalog
+        // is pushed by a `NavigationLink` rather than a `ManagementPage` destination,
+        // so it opts into the shared backdrop directly instead of at the launcher's
+        // `navigationDestination`.
+        .managementBackdrop()
     }
 
     /// Installs an entry: inserts a fresh-id ordinary Custom Action and flashes the

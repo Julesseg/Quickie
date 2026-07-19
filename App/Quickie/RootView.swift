@@ -809,6 +809,13 @@ struct RootView: View {
             // the root, never on app backgrounding mid-page.
             .navigationDestination(for: ManagementPage.self) {
                 destinationView(for: $0)
+                    // Every pushed Management/Settings page sits over the shared
+                    // backdrop with the grouped-gray background hidden (issue #181),
+                    // so a push reads as staying in the app. Applied once here it
+                    // covers all `ManagementPage` destinations — Settings, every
+                    // provider page, and the Pile; the Catalog, pushed by a plain
+                    // `NavigationLink` from Custom Actions, carries it on its own view.
+                    .managementBackdrop()
                     // The launcher's input is focused — the keyboard is up — at
                     // the instant a page is pushed, and removing the input (the
                     // `path.isEmpty` inset above) drops the keyboard *while* the
@@ -2211,6 +2218,33 @@ private struct LivingBackdrop: View {
     /// The glow's falloff radius — also half its frame height, which is what keeps it
     /// seamless (see `body`).
     private static let glowRadius: CGFloat = 140
+
+    /// The still, no-drift pose a pushed page sits over (issue #181): the ball at
+    /// its rest position and the glow at the screen bottom, with no timeline. Names
+    /// the "no bar, no drift" intent so call sites don't read as bare `0`/`nil`.
+    static var atRest: LivingBackdrop { LivingBackdrop(glowLift: 0, driftPeriod: nil) }
+}
+
+extension View {
+    /// Gives a pushed Management/Settings page backdrop parity with the launcher
+    /// (issue #181; ADR 0010/0034): hides the stock grouped-gray scroll background
+    /// and lays the same shared backdrop the launcher renders behind the page, so
+    /// pushing one no longer looks like leaving the app. Native Form/List controls
+    /// (ADR 0020) and the full-screen push (ADR 0019) are untouched — only the
+    /// background changes.
+    ///
+    /// The backdrop is *still* here: the living drift (ADR 0034) belongs to Home,
+    /// and a settings page carries no query, so it takes the rest pose with no
+    /// timeline (`driftPeriod: nil`) and no bar to ride (`glowLift: 0`) — zero
+    /// redraws, and non-interactive so it never steals a touch from the controls.
+    ///
+    /// `scrollContentBackground(.hidden)` sets the background visibility in the
+    /// environment, so it reaches the page's `Form`/`List` (and any nested one)
+    /// without each page needing to opt in.
+    func managementBackdrop() -> some View {
+        scrollContentBackground(.hidden)
+            .background { LivingBackdrop.atRest }
+    }
 }
 
 /// A brief, non-blocking confirmation shown at the bottom (issue #37): a silent
