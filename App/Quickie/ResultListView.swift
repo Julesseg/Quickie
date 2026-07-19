@@ -200,16 +200,7 @@ struct ActionRow: View {
         guard let bold = match?.titleBold, !bold.isEmpty else {
             return rowText(action.title)
         }
-        let boldOffsets = Set(bold)
-        var attributed = AttributedString()
-        for (offset, character) in action.title.enumerated() {
-            var piece = AttributedString(String(character))
-            if boldOffsets.contains(offset) {
-                piece.inlinePresentationIntent = .stronglyEmphasized
-            }
-            attributed.append(piece)
-        }
-        return Text(attributed)
+        return .matchHighlighted(action.title, bold: bold)
     }
 
     var body: some View {
@@ -469,6 +460,30 @@ extension View {
         } preview: {
             preview()
         }
+    }
+}
+
+extension Text {
+    /// The shared **Match highlight** rendering (CONTEXT.md → Match highlight; issue
+    /// #195): `string` as `Text` with the given character offsets bold, used by both
+    /// the Result list rows and the breadcrumb's choice list so a match reads the same
+    /// everywhere. Bold is applied as `.stronglyEmphasized` inline intent so it
+    /// composes with whatever base font the caller sets rather than replacing it.
+    /// Offsets index `string`'s Characters as the Core alignment produced them; an
+    /// out-of-range offset from a rare count-changing fold simply doesn't bold, never
+    /// crashes. An empty `bold` returns plain `Text`.
+    static func matchHighlighted(_ string: String, bold: [Int]) -> Text {
+        guard !bold.isEmpty else { return Text(string) }
+        let boldOffsets = Set(bold)
+        var attributed = AttributedString()
+        for (offset, character) in string.enumerated() {
+            var piece = AttributedString(String(character))
+            if boldOffsets.contains(offset) {
+                piece.inlinePresentationIntent = .stronglyEmphasized
+            }
+            attributed.append(piece)
+        }
+        return Text(attributed)
     }
 }
 

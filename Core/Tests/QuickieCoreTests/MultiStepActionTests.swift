@@ -189,4 +189,26 @@ struct MultiStepActionTests {
         // prefix) above "Wishlist", and "Personal" excluded entirely.
         #expect(session.options(matching: "w").map(\.id) == ["work", "wishlist"])
     }
+
+    @Test("a choice step carries a Match highlight per option")
+    func choiceOptionsCarryMatchHighlight() {
+        let lists = [
+            ChoiceOption(id: "work", label: "Work"),
+            ChoiceOption(id: "wishlist", label: "Wishlist"),
+        ]
+        let action = Action.newReminder(steps: [.list], lists: lists)
+        var session = MultiStepAction(action: action)
+        _ = session.commit(.text("Buy milk")) // now on the list choice step
+
+        // A filter bolds the matched letters of each surviving label, exactly as the
+        // Result list rows do: "wi" prefixes "Wishlist" (0–1); "Work" is dropped
+        // because it has no 'i' after the 'w'.
+        let matched = session.matchedOptions(matching: "wi")
+        #expect(matched.map(\.id) == ["wishlist"])
+        #expect(matched.first?.match?.titleBold == [0, 1])
+        #expect(matched.first?.match?.winningCandidate == .title)
+
+        // The browse-all (empty filter) list carries no highlight — nothing matched.
+        #expect(session.matchedOptions(matching: "").allSatisfy { $0.match == nil })
+    }
 }

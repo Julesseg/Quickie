@@ -14,6 +14,24 @@ public struct ChoiceOption: Identifiable, Equatable, Sendable {
     }
 }
 
+/// A filtered choice option paired with its **Match highlight** (issue #195): the
+/// option plus the query letters that found their place in its `label`, so the
+/// breadcrumb's fuzzy choice list bolds a match exactly as the [[Result list]]
+/// rows do — the choice-list analog of `ResultRow`. `match` is `nil` on the
+/// browse-all list (nothing typed): a label bolds only once a filter matches it,
+/// and a choice option has no aliases, so its label is always the winning candidate.
+public struct ChoiceMatch: Identifiable, Sendable {
+    public let option: ChoiceOption
+    public let match: MatchHighlight?
+
+    public var id: String { option.id }
+
+    public init(option: ChoiceOption, match: MatchHighlight? = nil) {
+        self.option = option
+        self.match = match
+    }
+}
+
 /// A value committed for an Argument — what a sealed breadcrumb pill carries
 /// (issue #37). Each case is the result of one input method: free `text`, a
 /// picked `date` (with whether the user included a time, which decides a
