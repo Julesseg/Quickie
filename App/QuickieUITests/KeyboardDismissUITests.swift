@@ -35,17 +35,37 @@ final class KeyboardDismissUITests: XCTestCase {
         let input = app.textFields["search-input"]
         XCTAssertTrue(input.waitForExistence(timeout: 10), "bottom input should exist on launch")
         input.tap()
-        // A broad query surfaces many command rows (every built-in containing
-        // "s", plus the web-search fallback), so the list is tall enough to scroll
-        // and the drag registers as a real scroll-dismiss.
+        // A broad query surfaces many rows, so the list is tall enough to scroll and
+        // the drag registers as a real scroll-dismiss. "s" name-matches most command
+        // rows plus the enabled fallbacks, which — since issue #197 — each surface a
+        // second time (a ranked duplicate on top of the bottom fallback row), making
+        // the list taller still.
         input.typeText("s")
 
-        let row = app.buttons["builtin.settings"]
-        XCTAssertTrue(row.waitForExistence(timeout: 5), "typing surfaces the Settings command row")
+        XCTAssertTrue(
+            app.buttons["builtin.settings"].waitForExistence(timeout: 5),
+            "typing surfaces the Settings command row"
+        )
         XCTAssertTrue(
             app.keyboards.firstMatch.waitForExistence(timeout: 5),
             "typing brings the keyboard up"
         )
+
+        // Drag from the **Highlighted result row** (rank 0): it is always rendered
+        // just above the input bar, so it stays on-screen however tall the list grows.
+        // A specific mid-list command row (the old `builtin.settings` start) scrolls
+        // off the top of a small screen once the list is long enough — the dual-row
+        // fallbacks (issue #197) pushed it above the top edge on the CI iPhone SE — and
+        // a drag begun from an off-screen coordinate never engages the list's pan.
+        // Scope the "selected" lookup to result rows by id prefix so it can't match the
+        // keyboard's selected shift key. `boosted`/`ranked`/`fallback` rows all carry a
+        // `builtin.`/`seed.`-prefixed id here.
+        let resultRows = app.buttons.matching(
+            NSPredicate(format: "identifier BEGINSWITH 'builtin.' OR identifier BEGINSWITH 'seed.'")
+        )
+        XCTAssertTrue(resultRows.firstMatch.waitForExistence(timeout: 5), "the result list rendered")
+        let row = resultRows.allElementsBoundByIndex.first { $0.isSelected }
+        let highlighted = try XCTUnwrap(row, "the Highlighted result row (rank 0) is present and on-screen")
 
         // Drag down into the keyboard region, starting *on a result row* so the
         // gesture is owned by the result list's scroll view — that is the view
@@ -56,7 +76,7 @@ final class KeyboardDismissUITests: XCTestCase {
         // flick that never reaches the keyboard won't commit, so this is a firm,
         // continuous press-drag to the bottom of the screen (past the input bar,
         // over the keyboard), held briefly so the dismissal sticks.
-        let start = row.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5))
+        let start = highlighted.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5))
         let end = app.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.98))
         start.press(
             forDuration: 0.1,
@@ -75,7 +95,10 @@ final class KeyboardDismissUITests: XCTestCase {
             input.value as? String, "s",
             "dismissing the keyboard leaves the query text unchanged"
         )
-        XCTAssertTrue(row.exists, "the results are preserved after dismissing the keyboard")
+        XCTAssertTrue(
+            app.buttons["builtin.settings"].exists,
+            "the results are preserved after dismissing the keyboard"
+        )
 
         // Tapping the input field re-summons the keyboard.
         input.tap()
