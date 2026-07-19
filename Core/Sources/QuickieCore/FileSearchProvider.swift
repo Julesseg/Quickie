@@ -86,9 +86,9 @@ public struct FileSearchProvider: Provider {
     /// context; ADR 0014): the uncapped, ungated counterpart to `candidates(for:)`.
     /// The scoped file-browsing surface shows *every* filename match, not just the
     /// contiguous ones the inline path allows, and never caps the count — so a
-    /// scattered or typo hit the root list holds back still appears here. An empty/whitespace
-    /// query **browses everything**, ordered by name, so entering the context lists
-    /// the whole file set before the user has typed a filter.
+    /// scattered or typo hit the root list holds back still appears here. An
+    /// empty/whitespace query **browses everything**, ordered by name, so entering
+    /// the context lists the whole file set before the user has typed a filter.
     public func contextMatches(for query: String) -> [Action] {
         let trimmed = query.trimmingCharacters(in: .whitespacesAndNewlines)
 

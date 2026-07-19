@@ -6,9 +6,9 @@ import Testing
 // 0015): it owns its own filename snapshot and prefilters it — so a large file
 // set never floods the central catalog — then scores the survivors with the
 // Matcher, keeps only contiguous (substring-or-better) matches (ADR 0035), and
-// caps how many surface inline. These
-// tests pin that behaviour against a plain in-memory index; the SearchEngine
-// tests cover where the survivors then land in the Result list.
+// caps how many surface inline. These tests pin that behaviour against a plain
+// in-memory index; the SearchEngine tests cover where the survivors then land
+// in the Result list.
 struct FileSearchProviderTests {
 
     private func provider(_ entries: [FileEntry], inlineCap: Int = 3) -> FileSearchProvider {
