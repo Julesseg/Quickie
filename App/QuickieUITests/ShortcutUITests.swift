@@ -288,15 +288,16 @@ final class ShortcutUITests: XCTestCase {
         )
     }
 
-    /// A shortcut's inline **alias** field (issue #198): each row on the Shortcuts
-    /// page carries an alias text field; typing an alias persists it (via the real
-    /// `setAlias` store path), and back in the launcher the alias both surfaces the
-    /// shortcut by name and rides its result row as an Alias pill. The re-sync
-    /// survival and single-source bolding are covered deterministically by
-    /// QuickieCore's ShortcutImportTests / AliasPillTests; this proves the field
-    /// wiring and the pill actually render on the real row.
+    /// A shortcut's **alias** field on its settings page (issue #198): each
+    /// shortcut's detail page carries an alias text field beside its Enabled /
+    /// Accepts-input toggles; typing an alias persists it (via the real `setAlias`
+    /// store path), and back in the launcher the alias both surfaces the shortcut by
+    /// name and rides its result row as an Alias pill. The re-sync survival and
+    /// single-source bolding are covered deterministically by QuickieCore's
+    /// ShortcutImportTests / AliasPillTests; this proves the field wiring and the
+    /// pill actually render on the real row.
     @MainActor
-    func testInlineAliasFieldMatchesAndPills() throws {
+    func testAliasFieldMatchesAndPills() throws {
         let app = launchApp(seed: "Translate")
 
         let input = app.textFields["search-input"]
@@ -307,16 +308,25 @@ final class ShortcutUITests: XCTestCase {
         XCTAssertTrue(command.waitForExistence(timeout: 5))
         command.tap()
 
-        // Every row shows an alias field. Type an alias into Translate's — its
-        // binding writes straight through `setAlias` on each keystroke.
+        // Tap the row to open the shortcut's settings page, where the alias field
+        // lives beside the toggles.
+        let pageRow = app.buttons["shortcut-row.Translate"]
+        XCTAssertTrue(pageRow.waitForExistence(timeout: 10), "the Shortcuts page lists the import")
+        pageRow.tap()
+
+        // The settings page carries an alias field. Type an alias — its binding
+        // writes straight through `setAlias` on each keystroke.
         let aliasField = app.textFields["shortcut-alias-field.Translate"]
         XCTAssertTrue(aliasField.waitForExistence(timeout: 10),
-                      "each Shortcuts-page row carries an inline alias field")
+                      "the shortcut's settings page carries an alias field")
         aliasField.tap()
         aliasField.typeText("xq")
 
-        // Back to the launcher (the alias is already persisted).
+        // Back to the launcher (through the detail page, then the Shortcuts page).
+        // The alias is already persisted; the two back taps return to the input.
         let back = app.navigationBars.buttons.firstMatch
+        XCTAssertTrue(back.waitForExistence(timeout: 10))
+        back.tap()
         XCTAssertTrue(back.waitForExistence(timeout: 10))
         back.tap()
 
