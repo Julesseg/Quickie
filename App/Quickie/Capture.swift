@@ -244,9 +244,11 @@ final class CaptureModel {
 
     /// The current choice step's options, fuzzy-filtered by the typed text and
     /// ranked best-first (the app renders them reversed, best nearest the thumb),
-    /// weighting typos for the active keyboard layout.
-    func choiceOptions() -> [ChoiceOption] {
-        session?.options(matching: stepText, layout: layout) ?? []
+    /// weighting typos for the active keyboard layout. Each carries its Match
+    /// highlight (issue #195) so the choice list bolds the matched letters of a label
+    /// like the Result list rows.
+    func choiceOptions() -> [ChoiceMatch] {
+        session?.matchedOptions(matching: stepText, layout: layout) ?? []
     }
 
     /// Commits the current text step. A **required** step ignores an empty value so
@@ -273,7 +275,7 @@ final class CaptureModel {
     /// Enter on a choice step commits the best (highlighted) option.
     func commitHighlightedChoice() {
         guard let best = choiceOptions().first else { return }
-        commitChoice(best)
+        commitChoice(best.option)
     }
 
     /// Commits the current step the way Enter would — the highlighted choice, the
@@ -432,14 +434,19 @@ private struct ChoiceList: View {
         ScrollView {
             GlassEffectContainer(spacing: 6) {
                 VStack(spacing: 6) {
-                    ForEach(options.reversed()) { option in
+                    ForEach(options.reversed()) { choice in
                         Button {
-                            model.commitChoice(option)
+                            model.commitChoice(choice.option)
                         } label: {
-                            ChoiceRow(label: option.label, symbol: symbol, isHighlighted: option.id == bestID)
+                            ChoiceRow(
+                                label: choice.option.label,
+                                symbol: symbol,
+                                isHighlighted: choice.id == bestID,
+                                match: choice.match
+                            )
                         }
                         .buttonStyle(.plain)
-                        .accessibilityIdentifier("choice-\(option.id)")
+                        .accessibilityIdentifier("choice-\(choice.id)")
                     }
                 }
                 .frame(maxWidth: .infinity)
@@ -461,12 +468,15 @@ private struct ChoiceRow: View {
     /// The leading glyph, declared by the choice step (a calendar, a list bullet…).
     let symbol: String
     var isHighlighted: Bool
+    /// The **Match highlight** (issue #195): which label letters to bold because the
+    /// filter found its place there. `nil` on the browse-all list (nothing typed).
+    var match: MatchHighlight? = nil
 
     var body: some View {
         HStack(spacing: 12) {
             Image(systemName: symbol)
                 .foregroundStyle(.secondary)
-            Text(label)
+            Text.matchHighlighted(label, bold: match?.titleBold ?? [])
                 .font(.body)
             Spacer(minLength: 8)
             if isHighlighted {
@@ -937,7 +947,7 @@ private struct BreadcrumbSteps: View {
                 // reads as the value about to be sealed. Empty only when nothing
                 // matches the filter.
                 if let best = model.choiceOptions().first {
-                    return (best.label, false)
+                    return (best.option.label, false)
                 }
                 return ("—", true)
             default:

@@ -102,16 +102,19 @@ public struct MultiStepAction {
         return .collecting
     }
 
-    /// The current choice Argument's options filtered by `filter`, ranked
-    /// best-first by the same `Matcher` the Result list uses (CONTEXT.md → Input
-    /// method) — the app renders them in the reversed list so the best match sits
-    /// nearest the thumb. An empty filter shows every option in its supplied order;
-    /// outside a choice step there are no options.
-    public func options(matching filter: String, layout: KeyboardLayout = .qwerty) -> [ChoiceOption] {
+    /// The current choice Argument's options filtered by `filter`, each paired with
+    /// its **Match highlight** (issue #195) and ranked best-first by the same
+    /// `Matcher` the Result list uses (CONTEXT.md → Input method, Match highlight) —
+    /// the app renders them in the reversed list so the best match sits nearest the
+    /// thumb, bolding the matched letters of each label. An empty filter shows every
+    /// option in its supplied order with no highlight (nothing was matched); outside
+    /// a choice step there are no options. The highlight is computed only for the
+    /// options actually returned, mirroring the Result list's rows.
+    public func matchedOptions(matching filter: String, layout: KeyboardLayout = .qwerty) -> [ChoiceMatch] {
         guard case .choice(let options)? = current?.inputMethod else { return [] }
 
         let trimmed = filter.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !trimmed.isEmpty else { return options }
+        guard !trimmed.isEmpty else { return options.map { ChoiceMatch(option: $0, match: nil) } }
 
         return options
             .compactMap { option -> (option: ChoiceOption, score: Double)? in
@@ -120,7 +123,19 @@ public struct MultiStepAction {
                 return (option, score)
             }
             .sorted { $0.score != $1.score ? $0.score > $1.score : $0.option.label < $1.option.label }
-            .map(\.option)
+            .map {
+                ChoiceMatch(
+                    option: $0.option,
+                    match: MatchHighlight.titleMatch(query: trimmed, title: $0.option.label, layout: layout)
+                )
+            }
+    }
+
+    /// The filtered choice options without their highlights — the `option`-only
+    /// projection of `matchedOptions(matching:layout:)`, for callers keying off id or
+    /// order alone, so the two can't drift.
+    public func options(matching filter: String, layout: KeyboardLayout = .qwerty) -> [ChoiceOption] {
+        matchedOptions(matching: filter, layout: layout).map(\.option)
     }
 }
 
