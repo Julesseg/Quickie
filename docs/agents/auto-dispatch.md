@@ -1,8 +1,9 @@
 # Auto-dispatch: unblocked issues → Paseo agent sessions
 
-When a PR merges and closes an issue that was blocking other issues, the newly
-unblocked issues get implemented automatically: a fresh Claude Code session is
-spawned for each one via [Paseo](https://paseo.sh) on a self-hosted Mac runner.
+When a PR merges and closes an issue, any `ready-for-agent` issue with no open
+blockers — newly unblocked or never blocked — gets implemented automatically: a
+fresh Claude Code session is spawned for each one via [Paseo](https://paseo.sh)
+on a self-hosted Mac runner.
 Sessions run on the Mac's Claude subscription login (no API credits) and are
 visible in the Paseo desktop/mobile apps.
 
@@ -11,11 +12,13 @@ visible in the Paseo desktop/mobile apps.
 Two workflows split detection from execution:
 
 1. **`unblock-dispatch.yml`** (GitHub-hosted, pure scripting) runs on every
-   `issues: closed` event where the issue was closed as *completed*. It scans
-   open `ready-for-agent` issues, parses each body's `## Blocked by` section
-   (`- #N` bullets), and keeps issues whose blockers are now all closed. For
-   each, it applies the `agent-dispatched` label (the idempotency guard) and
-   fires `agent-implement.yml` with the issue number.
+   `issues: closed` event where the issue was closed as *completed* (and on
+   manual `workflow_dispatch`, which performs the same scan). It scans open
+   `ready-for-agent` issues, parses each body's `## Blocked by` section
+   (`- #N` bullets), and keeps issues whose blockers are all closed —
+   including issues that never had blockers. For each, it applies the
+   `agent-dispatched` label (the idempotency guard) and fires
+   `agent-implement.yml` with the issue number.
 2. **`agent-implement.yml`** (self-hosted Mac runner) runs
    `paseo run --detach --model <model> --thinking <effort> --worktree
    claude/issue-<N> "/implement issue #<N>"` — the repo's `/implement` skill
@@ -30,13 +33,14 @@ Two workflows split detection from execution:
 ### Scope rules
 
 - Only issues labeled `ready-for-agent` are dispatched.
-- Only issues that were **actually blocked** (at least one `- #N` bullet under
-  `## Blocked by`) qualify — never-blocked issues are started manually, and
-  epics (`[Epic]` title prefix) are always skipped.
-- At most **3** issues carry the `agent-dispatched` label at once. Unblocked
-  issues beyond the cap are deferred; because every dispatcher run re-scans all
-  formerly-blocked open issues, they're picked up automatically the next time
-  any issue closes.
+- Any such issue with **no open blockers** qualifies — whether its
+  `## Blocked by` list (`- #N` bullets) is now fully closed or it never had
+  blockers at all. Epics (`[Epic]` title prefix) are always skipped.
+- Each run spawns at most **2** new sessions, and at most **3** issues carry
+  the `agent-dispatched` label at once. Startable issues beyond either cap are
+  deferred; because every dispatcher run re-scans all open ready issues,
+  they're picked up automatically the next time any issue closes (or the
+  dispatcher is run manually).
 - If a session gives up, it removes the issue's `agent-dispatched` label and
   comments — which frees a slot and makes the issue eligible again.
 
@@ -89,7 +93,11 @@ The `agent-dispatched` label is created automatically on first dispatch.
 
 ## Manual dispatch
 
+`unblock-dispatch.yml` can be run manually from the Actions tab to scan and
+dispatch startable issues without waiting for a close event — handy right after
+labeling new issues `ready-for-agent`.
+
 `agent-implement.yml` also accepts a manual run from the Actions tab with any
-issue number — handy for kicking off a never-blocked issue through the same
-pipeline. Add the `agent-dispatched` label yourself if you want it counted
+issue number — handy for forcing a specific issue through the pipeline out of
+order. Add the `agent-dispatched` label yourself if you want it counted
 against the in-flight cap.

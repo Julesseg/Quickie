@@ -1,15 +1,18 @@
 name: Unblock dispatch
 
 # When an issue is completed (typically auto-closed by a merged PR), find
-# `ready-for-agent` issues whose "## Blocked by" list is now fully closed and
-# dispatch an agent-implement run for each, up to an in-flight cap. Issues
-# deferred by the cap are picked up automatically on the next close event,
-# because every run re-scans all formerly-blocked open issues.
+# `ready-for-agent` issues with no open blockers — whether their "## Blocked by"
+# list is now fully closed or they were never blocked at all — and dispatch an
+# agent-implement run for each, up to a per-run cap on new sessions and an
+# in-flight cap. Issues deferred by the caps are picked up automatically on the
+# next close event, because every run re-scans all open ready issues. A manual
+# run (workflow_dispatch) performs the same scan without a close event.
 # See docs/agents/auto-dispatch.md.
 
 on:
   issues:
     types: [closed]
+  workflow_dispatch:
 
 # Serialize runs so two near-simultaneous closes can't double-dispatch the
 # same issue. A cancelled pending run is harmless: each run re-scans
@@ -31,14 +34,16 @@ jobs:
         with:
           script: |
             const MAX_IN_FLIGHT = 3;
+            const MAX_NEW_PER_RUN = 2;
             const DISPATCH_LABEL = 'agent-dispatched';
             const READY_LABEL = 'ready-for-agent';
             const WORKFLOW_FILE = 'agent-implement.yml';
 
             const { owner, repo } = context.repo;
-            const closed = context.payload.issue;
+            // Absent on workflow_dispatch, which runs the same scan manually.
+            const closed = context.payload.issue ?? null;
 
-            if (closed.state_reason !== 'completed') {
+            if (closed && closed.state_reason !== 'completed') {
               core.info(`Issue #${closed.number} closed as "${closed.state_reason}"; not dispatching.`);
               return;
             }
@@ -61,7 +66,7 @@ jobs:
               return [...ownText.matchAll(/^\s*-\s*[\w./-]*#(\d+)/gm)].map(m => Number(m[1]));
             }
 
-            const stateCache = new Map([[closed.number, 'closed']]);
+            const stateCache = new Map(closed ? [[closed.number, 'closed']] : []);
             async function isClosed(num) {
               if (!stateCache.has(num)) {
                 const { data } = await github.rest.issues.get({ owner, repo, issue_number: num });
@@ -74,37 +79,36 @@ jobs:
               owner, repo, state: 'open', labels: READY_LABEL, per_page: 100,
             });
 
-            const unblocked = [];
+            // Any ready issue with no open blockers is startable — whether its
+            // "## Blocked by" list is now fully closed or it never had one.
+            const startable = [];
             for (const issue of open) {
               if (issue.pull_request) continue;
               if (issue.labels.some(l => l.name === DISPATCH_LABEL)) continue;
               // Epics get sliced by a human before any agent grabs them.
               if (/^\[epic\]/i.test(issue.title)) continue;
-              // Never-blocked issues ("Blocked by: None") are started manually;
-              // this automation only chains work that a merge just unblocked.
               const blockers = blockersOf(issue.body);
-              if (blockers.length === 0) continue;
               let allClosed = true;
               for (const b of blockers) {
                 if (!(await isClosed(b))) { allClosed = false; break; }
               }
-              if (allClosed) unblocked.push(issue);
+              if (allClosed) startable.push({ issue, blockers });
             }
-            unblocked.sort((a, b) => a.number - b.number);
+            startable.sort((a, b) => a.issue.number - b.issue.number);
 
-            if (unblocked.length === 0) {
-              core.info('No newly unblocked ready-for-agent issues.');
+            if (startable.length === 0) {
+              core.info('No startable ready-for-agent issues.');
               return;
             }
 
             const inFlight = await github.paginate(github.rest.issues.listForRepo, {
               owner, repo, state: 'open', labels: DISPATCH_LABEL, per_page: 100,
             });
-            const slots = Math.max(0, MAX_IN_FLIGHT - inFlight.length);
-            const toDispatch = unblocked.slice(0, slots);
-            const deferred = unblocked.slice(slots);
+            const slots = Math.min(MAX_NEW_PER_RUN, Math.max(0, MAX_IN_FLIGHT - inFlight.length));
+            const toDispatch = startable.slice(0, slots);
+            const deferred = startable.slice(slots);
 
-            for (const issue of toDispatch) {
+            for (const { issue, blockers } of toDispatch) {
               await github.rest.issues.addLabels({
                 owner, repo, issue_number: issue.number, labels: [DISPATCH_LABEL],
               });
@@ -113,12 +117,15 @@ jobs:
                 ref: context.payload.repository.default_branch,
                 inputs: { issue: String(issue.number) },
               });
+              const reason = closed && blockers.includes(closed.number)
+                ? `Unblocked by #${closed.number}`
+                : blockers.length > 0 ? 'All blockers are closed' : 'Ready with no blockers';
               await github.rest.issues.createComment({
                 owner, repo, issue_number: issue.number,
-                body: `🤖 Unblocked by #${closed.number} — dispatched an agent session to implement this issue.`,
+                body: `🤖 ${reason} — dispatched an agent session to implement this issue.`,
               });
               core.notice(`Dispatched #${issue.number}: ${issue.title}`);
             }
-            for (const issue of deferred) {
-              core.notice(`#${issue.number} is unblocked but deferred (in-flight cap ${MAX_IN_FLIGHT}); the next close event will pick it up.`);
+            for (const { issue } of deferred) {
+              core.notice(`#${issue.number} is startable but deferred (max ${MAX_NEW_PER_RUN} new sessions per run, in-flight cap ${MAX_IN_FLIGHT}); the next run will pick it up.`);
             }
