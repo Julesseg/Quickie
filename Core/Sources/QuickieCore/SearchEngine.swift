@@ -130,10 +130,16 @@ public struct SearchEngine {
         provider.id.map(enablement.isEffectivelyEnabled) ?? true
     }
 
-    /// The ranked Result list for `query`, best match first. An empty or
-    /// whitespace-only query returns `[]` — the signal for the app to show the
-    /// Home placeholder rather than a Result list.
-    public func results(for query: String) -> [Action] {
+    /// The ranked Result list for `query` as **rows** — each Action plus its region
+    /// and optional Match highlight (CONTEXT.md → Match highlight, Result list; issue
+    /// #195), best match first. An empty or whitespace-only query returns `[]` — the
+    /// signal for the app to show the Home placeholder rather than a Result list.
+    ///
+    /// This is the shape the app renders and taps: the `region` carries *how* each
+    /// row earned its place (so the seed-and-commit decision keys off it directly),
+    /// and the `match` bolds the query letters that found their place — computed only
+    /// for the rows this returns, never in the scoring hot loop.
+    public func rows(for query: String) -> [ResultRow] {
         let trimmed = query.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty else { return [] }
 
@@ -146,9 +152,9 @@ public struct SearchEngine {
         // is name-scored and ranked by the blend (match score + favorite +
         // frecency + provider weight), so an exact command name still outranks a
         // strong filename hit.
-        var boosted: [Action] = []  // boosted-dynamic: type-triggered, floats top
-        var ranked: [Ranked] = []   // indexed + ranked-dynamic: scored + blended
-        var fallbacks: [Action] = [] // pinned to the bottom region
+        var boosted: [ResultRow] = []  // boosted-dynamic: type-triggered, floats top
+        var ranked: [Ranked] = []      // indexed + ranked-dynamic: scored + blended
+        var fallbacks: [Action] = []   // pinned to the bottom region
         for provider in providers where isLive(provider) {
             let weight: Double = provider.weight
             for action in provider.candidates(for: trimmed) {
@@ -174,14 +180,16 @@ public struct SearchEngine {
                 } else if provider.kind == .dynamic {
                     // Boosted-dynamic results skip name-matching — the Provider
                     // already decided they apply (Provider.swift: "boosted-dynamic
-                    // … already query-relevant").
-                    boosted.append(action)
-                } else if let raw = bestScore(for: action, query: trimmed) {
+                    // … already query-relevant"). A boosted row never name-matched,
+                    // so it carries no Match highlight.
+                    boosted.append(ResultRow(action: action, region: .boosted, match: nil))
+                } else if let best = bestMatch(for: action, query: trimmed) {
                     // Indexed or ranked-dynamic: name-matched and dropped when the
                     // query misses. A File Search survivor lands here so its match
                     // quality — not its provider — decides where it ranks.
-                    let blended: Double = blend(raw: raw, weight: weight, id: action.id)
-                    ranked.append(Ranked(action: action, raw: raw, blended: blended))
+                    let blended: Double = blend(raw: best.score, weight: weight, id: action.id)
+                    let match = matchHighlight(for: action, winning: best.candidate, query: trimmed)
+                    ranked.append(Ranked(action: action, raw: best.score, blended: blended, match: match))
                 }
             }
         }
@@ -189,17 +197,33 @@ public struct SearchEngine {
         ranked.sort(by: rank)
         fallbacks.sort(by: orderFallbacks)
 
-        return boosted + ranked.map(\.action) + fallbacks
+        return boosted
+            + ranked.map { ResultRow(action: $0.action, region: .ranked, match: $0.match) }
+            + fallbacks.map { ResultRow(action: $0, region: .fallback, match: nil) }
     }
 
-    /// The highlighted result for `query` — the single best row, `results[0]`,
+    /// The ranked Result list for `query`, best match first — the `action`-only
+    /// projection of `rows(for:)` for callers that don't need each row's region or
+    /// highlight. An empty or whitespace-only query returns `[]`, the app's signal to
+    /// show Home rather than a Result list.
+    public func results(for query: String) -> [Action] {
+        rows(for: query).map(\.action)
+    }
+
+    /// The highlighted result row for `query` — the single best row, `rows[0]`,
     /// rendered nearest the input and the thumb (CONTEXT.md → Highlighted result).
-    /// Pressing Enter runs exactly this row's main action; an empty/whitespace
-    /// query returns `nil`, which is the no-op signal — on Home, Enter does
-    /// nothing. A thin read over `results(for:)` so the selection rule lives in
-    /// one place and can't drift from the list.
+    /// Pressing Enter runs exactly this row's main action, and its region drives the
+    /// app's seed-and-commit; an empty/whitespace query returns `nil`, the no-op
+    /// signal — on Home, Enter does nothing. A thin read over `rows(for:)` so the
+    /// selection rule lives in one place and can't drift from the list.
+    public func highlightedRow(for query: String) -> ResultRow? {
+        rows(for: query).first
+    }
+
+    /// The highlighted result's Action — the `action`-only projection of
+    /// `highlightedRow(for:)`, kept for callers that only need what Enter runs.
     public func highlighted(for query: String) -> Action? {
-        results(for: query).first
+        highlightedRow(for: query)?.action
     }
 
     /// The two sections of the empty-query Home state (CONTEXT.md → Home): the
@@ -453,11 +477,14 @@ public struct SearchEngine {
 
     /// A scored match in flight: the raw matcher score (which fixes its tier)
     /// alongside the blended score the user's signals produce (which orders it
-    /// within that tier).
+    /// within that tier), plus the Match highlight to render once it survives the
+    /// sort (computed up front for a returned row, so a dropped candidate pays
+    /// nothing).
     private struct Ranked {
         let action: Action
         let raw: Double
         let blended: Double
+        let match: MatchHighlight
     }
 
     /// Folds the user's ranking signals into a raw match score (issue #9 AC #3):
@@ -504,11 +531,38 @@ public struct SearchEngine {
         return lhs.title != rhs.title ? lhs.title < rhs.title : lhs.id < rhs.id
     }
 
-    /// The best match score across an Action's title and its aliases — a query
-    /// that hits any of an Action's names surfaces it.
-    private func bestScore(for action: Action, query: String) -> Double? {
-        ([action.title] + action.aliases)
-            .compactMap { Matcher.score(query: query, candidate: $0, layout: layout) }
-            .max()
+    /// The best match across an Action's title and its aliases — a query that hits
+    /// any of an Action's names surfaces it — reported as the winning score *and*
+    /// which candidate earned it. The score is the same `max` the old `bestScore`
+    /// returned, so ranking is unchanged; the candidate identity is what the Match
+    /// highlight's **single-source rule** keys off. The title wins ties: an alias
+    /// must *strictly* out-score it to claim the match and leave the title plain.
+    private func bestMatch(for action: Action, query: String) -> (score: Double, candidate: MatchHighlight.Candidate)? {
+        var best: (score: Double, candidate: MatchHighlight.Candidate)?
+        if let titleScore = Matcher.score(query: query, candidate: action.title, layout: layout) {
+            best = (titleScore, .title)
+        }
+        for (index, alias) in action.aliases.enumerated() {
+            guard let aliasScore = Matcher.score(query: query, candidate: alias, layout: layout) else { continue }
+            if best == nil || aliasScore > best!.score {
+                best = (aliasScore, .alias(index))
+            }
+        }
+        return best
+    }
+
+    /// The Match highlight for a name-matched row (CONTEXT.md → Match highlight;
+    /// issue #195). Under the **single-source rule** the title bolds only when it was
+    /// the winning candidate; when an alias out-scored it the title stays fully plain
+    /// (the alias-pill ticket adds the pill-side bolding), so the winning identity
+    /// still rides the row as groundwork.
+    private func matchHighlight(for action: Action, winning candidate: MatchHighlight.Candidate, query: String) -> MatchHighlight {
+        let titleBold: [Int]
+        if case .title = candidate {
+            titleBold = Matcher.matchOffsets(query: query, candidate: action.title, layout: layout) ?? []
+        } else {
+            titleBold = []
+        }
+        return MatchHighlight(winningCandidate: candidate, titleBold: titleBold)
     }
 }

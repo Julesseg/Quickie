@@ -527,16 +527,20 @@ struct RootView: View {
         // keystroke — uncapped, and browsing everything before a filter is typed
         // (ADR 0014) — so its results and highlight come from the provider's
         // `contextMatches`, not the central engine.
-        let fileResults = inFileSearch
+        let fileResults: [ResultRow] = inFileSearch
             ? FileSearchProvider(
                 index: fileIndex.index,
                 layout: keyboardLayout.layout,
                 disabledFolders: indexedFolders.disabledFolderIDs
-            ).contextMatches(for: query)
+            ).contextRows(for: query)
             : []
-        let highlighted = inFileSearch
+        // The highlighted row (CONTEXT.md → Highlighted result): the file context's
+        // best row when scoped, else the engine's top row. Carried as a `ResultRow`
+        // so Enter's seed-and-commit keys off its region like a tap does.
+        let highlightedRow: ResultRow? = inFileSearch
             ? fileResults.first
-            : (isHome ? nil : engine.highlighted(for: query))
+            : (isHome ? nil : engine.highlightedRow(for: query))
+        let highlighted = highlightedRow?.action
 
         NavigationStack(path: $path) {
             ZStack {
@@ -569,12 +573,17 @@ struct RootView: View {
                     } else if inFileSearch {
                         // The scoped file-browsing surface (ADR 0014): an uncapped,
                         // full-height list of filename matches under the breadcrumb.
-                        FileSearchResultList(results: fileResults, onRun: run)
+                        // A file row never rides the fallback region (a file is
+                        // self-contained, not query-consuming), so it always opens
+                        // verb-first — no region to thread through.
+                        FileSearchResultList(results: fileResults, onRun: { run($0) })
                             .transition(captureMotion.edgeTransition(from: .bottom))
                     } else if isHome {
                         HomeView(
                             content: engine.home(showRecents: showRecents),
-                            onRun: run,
+                            // A Home Favorite/Recent tap is always verb-first — no
+                            // Result-list region, so it opens the breadcrumb empty.
+                            onRun: { run($0) },
                             isFavorite: { signals.isFavorite($0.id) },
                             canFavorite: { signals.canFavorite($0.id) },
                             onToggleFavorite: toggleFavorite,
@@ -584,7 +593,7 @@ struct RootView: View {
                         .transition(captureMotion.edgeTransition(from: .bottom))
                     } else {
                         ResultListView(
-                            results: engine.results(for: query),
+                            results: engine.rows(for: query),
                             onRun: run,
                             isFavorite: { signals.isFavorite($0.id) },
                             canFavorite: { signals.canFavorite($0.id) },
@@ -669,7 +678,7 @@ struct RootView: View {
                                     focused: $inputFocused,
                                     placeholder: inFileSearch ? "Search files…" : "Type to search…",
                                     returnKey: highlighted?.returnKeyLabel ?? ReturnKeyLabel.none,
-                                    onSubmit: { if let highlighted { run(highlighted) } },
+                                    onSubmit: { if let highlightedRow { run(highlightedRow) } },
                                     glassNamespace: glassNamespace
                                 )
                                 // The clipboard paste chip belongs to Home, not the
@@ -1254,11 +1263,26 @@ struct RootView: View {
         signals.toggleFavorite(action.id)
     }
 
+    /// Runs a tapped **row** — the Result list's entry point (CONTEXT.md → Match
+    /// highlight; issue #195). The row's `region` decides seed-and-commit: a
+    /// `.fallback` row consumes the typed query as its first step, anything else opens
+    /// verb-first. Keying off the region carried on the row replaces re-deriving "is
+    /// this an enabled fallback?" from the Action — behavior identical, since a row is
+    /// `.fallback` exactly when the old check held.
+    private func run(_ row: ResultRow) {
+        run(row.action, region: row.region)
+    }
+
     /// Runs a row's main action. A multi-step capture (New Reminder) begins its
     /// breadcrumb instead of performing an outcome straight away; everything else
     /// performs its `ActionOutcome` at the platform edge. Selecting an Action
     /// records a frecency event (issue #9 AC #2).
-    private func run(_ action: Action) {
+    ///
+    /// `region` is the tapped row's Result-list region when it came from one (a
+    /// tapped or Enter-run row); it is `nil` for a verb-first run with no row — a
+    /// Home Favorite/Recent tap or a file row — which always opens the breadcrumb
+    /// empty. Only a `.fallback` region seeds-and-commits the typed query.
+    private func run(_ action: Action, region: ResultRegion? = nil) {
         // The light run beat (ADR 0034) on the single path every run funnels
         // through — a result-row tap, a Favorite tap, or Enter on the Highlighted
         // result — so the tap is felt whether it fires an outcome or opens a
@@ -1266,15 +1290,18 @@ struct RootView: View {
         // policy's other moments, fired at their own sites.
         Haptics.play(.runAction)
         signals.record(action.id)
+        // The seed the tapped row's region commits: the typed query for a fallback
+        // row, `nil` for anything else (CONTEXT.md → Fallback Action; issue #114).
+        let seed = fallbackSeed(for: region)
         // Selected from the bottom fallback region, a capture seeds-and-commits the
         // typed query as its first step — the free-text Title (issue #145 follow-up) —
         // so it continues at step 2; verb-first (a name match) it opens empty.
         if action.kind == .reminder {
-            startReminderCapture(seed: fallbackSeed(for: action))
+            startReminderCapture(seed: seed)
             return
         }
         if action.kind == .event {
-            startEventCapture(seed: fallbackSeed(for: action))
+            startEventCapture(seed: seed)
             return
         }
         // An input-accepting Shortcut Action (its `acceptsInput` toggle on, so it
@@ -1284,7 +1311,7 @@ struct RootView: View {
         // query as that input, so it runs in one tap (CONTEXT.md → Fallback Action;
         // issue #114); verb-first it opens the breadcrumb empty.
         if action.kind == .shortcut && !action.arguments.isEmpty {
-            startShortcutCapture(name: action.title, seed: fallbackSeed(for: action))
+            startShortcutCapture(name: action.title, seed: seed)
             return
         }
         // A Custom Action always runs through the breadcrumb (CONTEXT.md → Custom
@@ -1293,7 +1320,7 @@ struct RootView: View {
         // continues at step 2), while verb-first (a name match) opens the breadcrumb
         // empty at Argument 1.
         if action.kind == .customAction {
-            startCustomActionCapture(action)
+            startCustomActionCapture(action, seed: seed)
             return
         }
         perform(action.run(input: query))
@@ -1369,27 +1396,25 @@ struct RootView: View {
     /// multi-slot one continues at step 2 with the seeded first pill sealed; a
     /// verb-first (name-matched) selection passes no seed, opening the breadcrumb
     /// empty. Opening a URL needs no permission, so the session starts straight away.
-    private func startCustomActionCapture(_ action: Action) {
+    private func startCustomActionCapture(_ action: Action, seed: String?) {
         capture.start(
             CustomActionCapture(action: action),
             layout: keyboardLayout.layout,
-            seed: fallbackSeed(for: action)
+            seed: seed
         )
     }
 
-    /// The query to **seed-and-commit** as Argument 1 when a fallback row is selected
-    /// from the bottom region (CONTEXT.md → Fallback Action; issue #114) — else `nil`,
-    /// opening the breadcrumb empty. Seeds only when the action is an *enabled*
-    /// fallback (so a pooled, verb-first selection opens empty — an enabled fallback is
-    /// deduped out of name matches, so any selection of it is a region selection) and
-    /// something was actually typed (a pinned Favorite tapped on Home has an empty
-    /// query, and seeding it would instantly fire a one-slot fallback with a blank
-    /// value instead of asking for one).
-    private func fallbackSeed(for action: Action) -> String? {
-        let trimmed = query.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !trimmed.isEmpty,
-              action.isFallbackEligible,
-              fallbacks.resolvedEnabled(for: eligibleFallbackIDs).contains(action.id)
+    /// The query to **seed-and-commit** as Argument 1 when a **fallback-region** row
+    /// is selected (CONTEXT.md → Fallback Action; issue #114) — else `nil`, opening
+    /// the breadcrumb empty. Keys off the tapped row's region rather than re-deriving
+    /// fallback membership from the Action: a row is `.fallback` exactly when it is an
+    /// enabled fallback riding the bottom region, so a pooled verb-first selection
+    /// (a `.ranked` row) and a Home tap (no region) both open empty. The trim guard is
+    /// belt-and-braces — the Result list only produces rows for a non-empty query, so
+    /// a `.fallback` region already implies typed text.
+    private func fallbackSeed(for region: ResultRegion?) -> String? {
+        guard region == .fallback,
+              !query.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
         else { return nil }
         return query
     }

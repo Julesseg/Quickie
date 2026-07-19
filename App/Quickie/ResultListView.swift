@@ -10,8 +10,11 @@ import QuickieCore
 /// rendered with distinct emphasis and a `⏎` + main-action-glyph hint so it reads
 /// as the default, since pressing Return runs exactly its main action.
 struct ResultListView: View {
-    let results: [Action]
-    let onRun: (Action) -> Void
+    /// The ranked rows to render (CONTEXT.md → Result list; issue #195): each an
+    /// Action plus its region and Match highlight, so a row bolds why it surfaced and
+    /// a tap knows whether it rides the fallback region.
+    let results: [ResultRow]
+    let onRun: (ResultRow) -> Void
     /// Whether a row's Action is pinned — drives its Pin/Unpin menu label.
     let isFavorite: (Action) -> Bool
     /// Whether a row can still be pinned (false once the Favorites cap is hit).
@@ -57,11 +60,12 @@ struct ResultListView: View {
                         // its own animation (Motion.swift), so the layout around it
                         // applies instantly.
                         ForEach(results.indices.reversed(), id: \.self) { rank in
-                            let action = results[rank]
+                            let row = results[rank]
+                            let action = row.action
                             Button {
-                                onRun(action)
+                                onRun(row)
                             } label: {
-                                ActionRow(action: action, isHighlighted: rank == 0)
+                                ActionRow(action: action, isHighlighted: rank == 0, match: row.match)
                             }
                             .buttonStyle(.plain)
                             .accessibilityIdentifier(action.id)
@@ -75,7 +79,7 @@ struct ResultListView: View {
                             ) {
                                 // The lifted preview: a copy of this row, so the
                                 // long-pressed result detaches as a floating card.
-                                ActionRow(action: action)
+                                ActionRow(action: action, match: row.match)
                                     .frame(maxWidth: .infinity)
                             }
                             .transition(rowMotion.insertionTransition)
@@ -150,6 +154,10 @@ struct StatusBarBlurBand: View {
 struct ActionRow: View {
     let action: Action
     var isHighlighted: Bool = false
+    /// The **Match highlight** (CONTEXT.md → Match highlight; issue #195): which
+    /// title letters to bold because the query found its place there. `nil` on a
+    /// boosted, fallback, or Home row — those never name-matched, so they stay plain.
+    var match: MatchHighlight? = nil
 
     /// The row's corner radius — a **fixed** value shared by every row, not a
     /// capsule. A `Capsule` rounds by half the height, so a single-line row reads
@@ -179,6 +187,29 @@ struct ActionRow: View {
         return isComputed ? text.monospacedDigit() : text
     }
 
+    /// The title as `Text`, with the **Match highlight**'s letters bold when this row
+    /// name-matched (CONTEXT.md → Match highlight; issue #195). Bolding is applied as
+    /// `.stronglyEmphasized` inline intent on the matched character offsets so it
+    /// composes with the row's rounded face rather than replacing it; with no match
+    /// (a boosted, fallback, or Home row) it falls through to plain `rowText`, so a
+    /// Computed row keeps its tabular digits. The offsets index the title's Characters
+    /// one-to-one with the Core alignment, so an accented letter bolds correctly.
+    private func titleText() -> Text {
+        guard let bold = match?.titleBold, !bold.isEmpty else {
+            return rowText(action.title)
+        }
+        let boldOffsets = Set(bold)
+        var attributed = AttributedString()
+        for (offset, character) in action.title.enumerated() {
+            var piece = AttributedString(String(character))
+            if boldOffsets.contains(offset) {
+                piece.inlinePresentationIntent = .stronglyEmphasized
+            }
+            attributed.append(piece)
+        }
+        return Text(attributed)
+    }
+
     var body: some View {
         HStack(spacing: 12) {
             // A Custom Action's chosen glyph (issue #163) overrides the kind-derived
@@ -193,7 +224,7 @@ struct ActionRow: View {
                 // number / address) and the expression on a Calculator row, so it
                 // gets the tabular treatment too — but stays in the muted default
                 // design; only titles wear the rounded face.
-                rowText(action.title)
+                titleText()
                     .font(.system(.body, design: .rounded))
                     .foregroundStyle(.primary)
                 if let subtitle = action.subtitle {
