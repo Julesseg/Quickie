@@ -162,6 +162,26 @@ struct ActionRow: View {
         RoundedRectangle(cornerRadius: QuickieRadius.row, style: .continuous)
     }
 
+    /// Whether this row is a Computed result (the Calculator's answer / conversion
+    /// or a Detected value — ADR 0032): the rows whose text is a *value*, rendered
+    /// with monospaced (tabular) digits so it reads as an answer, not prose
+    /// (ADR 0033). `Text.monospacedDigit()` swaps digit glyphs only, so the
+    /// treatment scales with Dynamic Type like every other row.
+    private var isComputed: Bool { action.kind == .calculator }
+
+    /// The title, with tabular digits on a Computed row. Built as `Text` (not via
+    /// a view modifier) because `monospacedDigit` is applied conditionally and
+    /// `Text.monospacedDigit()` keeps the result a `Text`.
+    private var titleText: Text {
+        let title = Text(action.title)
+        return isComputed ? title.monospacedDigit() : title
+    }
+
+    private func subtitleText(_ subtitle: String) -> Text {
+        let text = Text(subtitle)
+        return isComputed ? text.monospacedDigit() : text
+    }
+
     var body: some View {
         HStack(spacing: 12) {
             // A Custom Action's chosen glyph (issue #163) overrides the kind-derived
@@ -169,11 +189,18 @@ struct ActionRow: View {
             // unchanged.
             ProviderBadge(kind: action.kind, symbol: action.glyph)
             VStack(alignment: .leading, spacing: 2) {
-                Text(action.title)
-                    .font(.body)
+                // Rounded chrome type (ADR 0033), with tabular digits on a Computed
+                // row so the answer reads as an answer: `5` and `1` take the same
+                // advance and the value sits still as the expression grows. The
+                // subtitle carries the computed *value* on a Detected row (the URL /
+                // number / address) and the expression on a Calculator row, so it
+                // gets the tabular treatment too — but stays in the muted default
+                // design; only titles wear the rounded face.
+                titleText
+                    .font(.system(.body, design: .rounded))
                     .foregroundStyle(.primary)
                 if let subtitle = action.subtitle {
-                    Text(subtitle)
+                    subtitleText(subtitle)
                         .font(.caption)
                         .foregroundStyle(.secondary)
                 }

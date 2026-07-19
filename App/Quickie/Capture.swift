@@ -1015,6 +1015,9 @@ private struct StepCrumb: View {
                 .fixedSize(horizontal: false, vertical: true)
                 .frame(maxWidth: .infinity, alignment: .leading)
         }
+        // Rounded launcher chrome on the pills (ADR 0033), applied to the crumb as
+        // a whole so the label caption above the value matches.
+        .fontDesign(.rounded)
         .padding(.horizontal, 12)
         .padding(.vertical, 9)
         .frame(width: width, alignment: .leading)

@@ -189,7 +189,9 @@ struct FavoriteCard: View {
             // `nil` keeps the derived glyph, so an unset Favorite is unchanged.
             ProviderBadge(kind: action.kind, symbol: action.glyph)
             Text(action.title)
-                .font(.callout.weight(.medium))
+                // Rounded launcher chrome (ADR 0033), same face as the result-row
+                // titles so a pinned Action reads identically to its ranked row.
+                .font(.system(.callout, design: .rounded).weight(.medium))
                 .lineLimit(1)
             Spacer(minLength: 4)
             MainActionGlyph(mainAction: action.mainAction)

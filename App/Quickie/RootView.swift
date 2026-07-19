@@ -788,6 +788,7 @@ struct RootView: View {
                 // brief acknowledgement.
                 flashConfirmation(
                     new.message,
+                    success: !new.isError,
                     systemImage: new.openURL == nil ? nil : "arrow.up.right",
                     openURL: new.openURL
                 )
@@ -1395,7 +1396,7 @@ struct RootView: View {
             // A Snippet copy resolves the query too (same rule): the flash is
             // the acknowledgement, Home the landing.
             UIPasteboard.general.string = text
-            flashConfirmation("Copied")
+            flashConfirmation("Copied", success: true)
             query = ""
         case .copyAndStage(let text):
             // A math result's main action (CONTEXT.md → main action): copy the
@@ -1407,7 +1408,7 @@ struct RootView: View {
             // so there is no page to pop.
             UIPasteboard.general.string = text
             query = text
-            flashConfirmation("Copied")
+            flashConfirmation("Copied", success: true)
         case .saveToPile(let text):
             // The silent "Save for later" capture (CONTEXT.md → Pile; ADR 0018):
             // drop the typed text straight into the Pile — no editor, no confirm,
@@ -1417,7 +1418,7 @@ struct RootView: View {
             // diverge on what counts as an empty capture.
             if let entryText = HeadlineAppShortcut.pileText(fromDictated: text) {
                 modelContext.insert(StoredPileEntry(text: entryText))
-                flashConfirmation("Saved for later")
+                flashConfirmation("Saved for later", success: true)
             }
             query = ""
         case .stagePileEntry(let id):
@@ -1490,7 +1491,7 @@ struct RootView: View {
                 return
             }
             UIPasteboard.general.string = text
-            flashConfirmation("Copied")
+            flashConfirmation("Copied", success: true)
         case .share:
             presentShare(for: action)
         case .revealInFiles:
@@ -1513,7 +1514,7 @@ struct RootView: View {
             // one pure constructor so the id is percent-encoded consistently (issue
             // #120). Available on every row, a content-less command included.
             UIPasteboard.general.string = QuickieDeeplink.runURL(id: action.id).absoluteString
-            flashConfirmation("Copied deeplink")
+            flashConfirmation("Copied deeplink", success: true)
         }
     }
 
@@ -1893,7 +1894,7 @@ struct RootView: View {
         // Commit synchronously for the same invalidated-snapshot reason `stage`
         // does: the engine rebuilds off the `@Query` on the next keystroke.
         try? modelContext.save()
-        flashConfirmation(PendingQuery.savedConfirmation(for: entryText))
+        flashConfirmation(PendingQuery.savedConfirmation(for: entryText), success: true)
     }
 
     /// Clears every scoped context back to the launcher root before a deeplink acts
@@ -1965,9 +1966,11 @@ struct RootView: View {
     /// Flashes a brief, non-blocking toast acknowledging a silent outcome. A toast
     /// carrying an `openURL` is tappable and lingers longer (so there is time to
     /// tap it), with `systemImage` trailing the text as the open affordance; a
-    /// plain one fades after a beat.
-    private func flashConfirmation(_ message: String, systemImage: String? = nil, openURL url: URL? = nil) {
-        let new = Toast(message: message, systemImage: systemImage, openURL: url)
+    /// plain one fades after a beat. `success` marks a copy/success confirmation,
+    /// which wears a leading checkmark glyph (ADR 0033 polish); a failure stays a
+    /// plain, unadorned acknowledgement.
+    private func flashConfirmation(_ message: String, success: Bool = false, systemImage: String? = nil, openURL url: URL? = nil) {
+        let new = Toast(message: message, isSuccess: success, systemImage: systemImage, openURL: url)
         toastToken = new.id
         withAnimation { toast = new }
         let lifetime: Duration = url == nil ? .seconds(1.6) : .seconds(4)
@@ -2220,6 +2223,10 @@ private struct LivingBackdrop: View {
 private struct Toast {
     let id = UUID()
     let message: String
+    /// Whether this is a copy/success confirmation — the toasts that wear a
+    /// leading checkmark glyph (ADR 0033 polish). A failure acknowledgement
+    /// ("File not found", "Shortcut failed") stays glyph-less and plain.
+    var isSuccess = false
     var systemImage: String?
     var openURL: URL?
 }
@@ -2237,8 +2244,17 @@ private struct ConfirmationToast: View {
         VStack {
             Spacer()
             HStack(spacing: 8) {
+                // The leading success glyph (ADR 0033 polish): a filled checkmark
+                // in the accent tint, so a copy/success confirmation reads as done
+                // at a glance. Failures stay glyph-less; the trailing `systemImage`
+                // remains the tappable toast's open affordance, unchanged.
+                if toast.isSuccess {
+                    Image(systemName: "checkmark.circle.fill")
+                        .font(.callout.weight(.semibold))
+                        .foregroundStyle(.tint)
+                }
                 Text(toast.message)
-                    .font(.callout.weight(.medium))
+                    .font(.system(.callout, design: .rounded).weight(.medium))
                 if let image = toast.systemImage {
                     Image(systemName: image)
                         .font(.callout.weight(.semibold))

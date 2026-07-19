@@ -67,7 +67,10 @@ struct InputBar: View {
         // keyboard.
         TextField(placeholder, text: $query, axis: .vertical)
             .textFieldStyle(.plain)
-            .font(.title3)
+            // Rounded launcher chrome (ADR 0033): the input pairs with the
+            // squircle/glass language; a text style (not a fixed size) so it keeps
+            // scaling with Dynamic Type.
+            .font(.system(.title3, design: .rounded))
             .lineLimit(1...InputBarGrowth.maxLines)
             .focused(focused)
             .submitLabel(returnKey.submitLabel)
