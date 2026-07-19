@@ -475,6 +475,32 @@ public struct Action: Identifiable, Sendable {
     public var isWidgetEligible: Bool {
         isStandaloneRunnable
     }
+
+    /// The user-authored **alias** this row wears as an [[Alias pill]] (CONTEXT.md →
+    /// Alias pill; issue #196) — the dim capsule after the title that re-teaches the
+    /// name the user defined, shown on every such row all the time, query or not.
+    /// Present only on Actions whose alias is a user-chosen *name*: a **Custom Action**
+    /// (slotted `.customAction` or static `.quicklink`) or a **Shortcut** (once
+    /// Shortcuts gain aliases — moot today, so a Shortcut pills only when it carries
+    /// one). `nil` everywhere else, which carves out the two shapes whose "alias" is
+    /// not a user memory to re-teach:
+    /// - a **built-in command** row, whose aliases are matching fodder / rename-
+    ///   insurance (the Computed row's "calc", "converter") — rendering them would bury
+    ///   the row in permanent chrome;
+    /// - a **Pile entry**, whose sole alias is its entire body text (how a titleless
+    ///   blob stays searchable), not a defined name.
+    ///
+    /// One pill per row: the editors collect at most one alias, so the first *is* it —
+    /// and it is the same alias `MatchHighlight`'s single-source rule bolds when it
+    /// claims the match.
+    public var aliasPill: String? {
+        switch kind {
+        case .customAction, .quicklink, .shortcut:
+            return aliases.first
+        default:
+            return nil
+        }
+    }
 }
 
 /// The closest system Return-key submit label for the highlighted result's main

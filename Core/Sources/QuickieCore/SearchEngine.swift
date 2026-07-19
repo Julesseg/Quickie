@@ -552,18 +552,26 @@ public struct SearchEngine {
         return best
     }
 
-    /// The Match highlight for a name-matched row (CONTEXT.md → Match highlight;
-    /// issue #195). Under the **single-source rule** the title bolds only when it was
-    /// the winning candidate; when an alias out-scored it the title stays fully plain
-    /// (the alias-pill ticket adds the pill-side bolding), so the winning identity
-    /// still rides the row as groundwork.
+    /// The Match highlight for a name-matched row (CONTEXT.md → Match highlight, Alias
+    /// pill; issues #195, #196). Under the **single-source rule** exactly one side
+    /// bolds: when the title won, its matched letters bold and the alias side stays
+    /// empty; when an alias out-scored it, the title stays fully plain and the
+    /// **winning alias**'s matched letters ride as `aliasBold`, which the [[Alias pill]]
+    /// bolds. The winning identity always rides the row, so a Custom Action whose
+    /// alias claimed the match re-teaches that alias with its found letters lit.
     private func matchHighlight(for action: Action, winning candidate: MatchHighlight.Candidate, query: String) -> MatchHighlight {
-        let titleBold: [Int]
-        if case .title = candidate {
-            titleBold = Matcher.matchOffsets(query: query, candidate: action.title, layout: layout) ?? []
-        } else {
-            titleBold = []
+        switch candidate {
+        case .title:
+            let titleBold = Matcher.matchOffsets(query: query, candidate: action.title, layout: layout) ?? []
+            return MatchHighlight(winningCandidate: candidate, titleBold: titleBold)
+        case .alias(let index):
+            // Bold the query letters that found their place in the winning alias — the
+            // one the pill renders. A count-changing fold can leave the offsets empty;
+            // the pill then simply stays dim, never crashes.
+            let aliasBold = action.aliases.indices.contains(index)
+                ? (Matcher.matchOffsets(query: query, candidate: action.aliases[index], layout: layout) ?? [])
+                : []
+            return MatchHighlight(winningCandidate: candidate, titleBold: [], aliasBold: aliasBold)
         }
-        return MatchHighlight(winningCandidate: candidate, titleBold: titleBold)
     }
 }

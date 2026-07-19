@@ -48,9 +48,34 @@ public struct MatchHighlight: Equatable, Sendable {
     /// (the single-source rule: a non-winning title stays fully plain).
     public let titleBold: [Int]
 
-    public init(winningCandidate: Candidate, titleBold: [Int]) {
+    /// Character offsets into the **winning alias** to bold, ascending — the query
+    /// letters that found their place there (CONTEXT.md → Alias pill; issue #196).
+    /// Non-empty only when an alias was the strict match winner; empty when the title
+    /// won or tied (the single-source rule, mirrored: a non-winning alias's pill stays
+    /// dim). The offsets index the alias `winningCandidate` names, which for an
+    /// alias-pill-bearing Action is its sole alias — the one the pill renders — so the
+    /// view bolds the pill with exactly these.
+    public let aliasBold: [Int]
+
+    public init(winningCandidate: Candidate, titleBold: [Int], aliasBold: [Int] = []) {
         self.winningCandidate = winningCandidate
         self.titleBold = titleBold
+        self.aliasBold = aliasBold
+    }
+
+    /// The bold offsets for the [[Alias pill]] showing `pill` — the pill-side of the
+    /// **single-source rule**, resolved here rather than in the view so the
+    /// winner↔pill correlation lives next to the spans it gates (CONTEXT.md → Alias
+    /// pill; issue #196). Returns `aliasBold` only when an alias was the match winner
+    /// *and* it is the very alias the pill renders (`aliases[index] == pill`); empty
+    /// when the title won, or when some other alias won than the one shown. `aliases`
+    /// is the rendered Action's `aliases`, the array `winningCandidate`'s index points
+    /// into — for a pill-bearing Action that is its sole alias, so the guard is exact.
+    public func pillBold(for pill: String, aliases: [String]) -> [Int] {
+        guard case .alias(let index) = winningCandidate,
+              aliases.indices.contains(index),
+              aliases[index] == pill else { return [] }
+        return aliasBold
     }
 
     /// The highlight for a row whose **title** is the matched candidate — the common

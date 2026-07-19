@@ -203,6 +203,16 @@ struct ActionRow: View {
         return .matchHighlighted(action.title, bold: bold)
     }
 
+    /// The row title in its rounded chrome face (ADR 0033) — the styling shared by the
+    /// plain and the pill-bearing layouts, so the two can't drift. Only pill rows clamp
+    /// it to one line (below); a title with no pill keeps its natural wrapping — a file
+    /// row's long name still flows over its relative-path subtitle rather than truncating.
+    private var styledTitle: some View {
+        titleText()
+            .font(.system(.body, design: .rounded))
+            .foregroundStyle(.primary)
+    }
+
     var body: some View {
         HStack(spacing: 12) {
             // A Custom Action's chosen glyph (issue #163) overrides the kind-derived
@@ -217,9 +227,25 @@ struct ActionRow: View {
                 // number / address) and the expression on a Calculator row, so it
                 // gets the tabular treatment too — but stays in the muted default
                 // design; only titles wear the rounded face.
-                titleText()
-                    .font(.system(.body, design: .rounded))
-                    .foregroundStyle(.primary)
+                //
+                // The **Alias pill** rides inline right after the title (issue #196),
+                // reading as part of the name ("Things 〔th〕"). Only a pill row clamps
+                // its title to one line — with the pill held at its intrinsic size
+                // (`fixedSize`), a long title truncates around the pill rather than
+                // shoving it off the row. A pill-less row keeps the title's natural
+                // wrapping (a file's long name still flows over its subtitle). The pill
+                // asks Core whether it owns the match (`pillBold`) rather than
+                // re-deriving the single-source rule here.
+                if let pill = action.aliasPill {
+                    HStack(spacing: 6) {
+                        styledTitle
+                            .lineLimit(1)
+                        AliasPill(alias: pill, bold: match?.pillBold(for: pill, aliases: action.aliases) ?? [])
+                            .accessibilityIdentifier("alias-pill.\(action.id)")
+                    }
+                } else {
+                    styledTitle
+                }
                 if let subtitle = action.subtitle {
                     rowText(subtitle)
                         .font(.caption)
@@ -375,6 +401,45 @@ private struct HeroGlow: View {
                 peakOpacity = 0.2
             }
         }
+    }
+}
+
+/// The **Alias pill** (CONTEXT.md → Alias pill; issue #196): the small, dim,
+/// caption-sized capsule a Custom Action (or an aliased Shortcut) wears right after
+/// its title, so the user re-learns the alias they defined — shown on every such row
+/// all the time, query or not. A *memory aid*, not a match explanation on its own:
+/// it stays dim by default, and the **Match highlight**'s single-source rule layers
+/// bolding on top only when the alias strictly outscored the title (`bold` carries
+/// the matched letters then; empty otherwise, including on every fallback-region and
+/// Home row, which carry no match — so the pill never bolds there).
+private struct AliasPill: View {
+    let alias: String
+    /// The matched-letter offsets to bold, from the winning alias's alignment — empty
+    /// unless the alias claimed the match, keeping the pill dim.
+    var bold: [Int] = []
+
+    var body: some View {
+        pillText
+            .font(.caption)
+            // Dim: the pill reads as a quiet memory aid, not a second title. When it
+            // wins the match the bold letters emphasize *through* this same secondary
+            // tint — weight alone marks the match, so an unmatched pill and a matched
+            // one share one colour.
+            .foregroundStyle(.secondary)
+            .lineLimit(1)
+            .padding(.horizontal, 6)
+            .padding(.vertical, 1)
+            .background(Capsule(style: .continuous).fill(.quaternary))
+            // Hold the pill's intrinsic size so a long title truncates around it
+            // rather than shoving it out of the row (issue #196 AC).
+            .fixedSize()
+    }
+
+    /// The alias as `Text`, with its matched letters bold when the alias won — via the
+    /// same shared `matchHighlighted` builder the title and the choice list use, so a
+    /// match reads identically wherever it lands. Plain `Text` when `bold` is empty.
+    private var pillText: Text {
+        bold.isEmpty ? Text(alias) : .matchHighlighted(alias, bold: bold)
     }
 }
 
