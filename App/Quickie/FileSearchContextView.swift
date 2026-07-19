@@ -66,7 +66,9 @@ struct FileSearchBreadcrumbBar: View {
     /// current capture step) or the live filter value beside it.
     private func crumb(_ text: String, isScope: Bool) -> some View {
         Text(text)
-            .font(.subheadline.weight(isScope ? .semibold : .regular))
+            // Rounded launcher chrome on the pills (ADR 0033), matching the
+            // capture breadcrumb's crumbs.
+            .font(.system(.subheadline, design: .rounded).weight(isScope ? .semibold : .regular))
             .foregroundStyle(isScope ? .primary : .secondary)
             .lineLimit(1)
             .padding(.horizontal, 12)
