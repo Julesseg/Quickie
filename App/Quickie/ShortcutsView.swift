@@ -26,13 +26,6 @@ struct ShortcutsView: View {
     /// one destructive tap on this page, so it always asks first.
     @State private var confirmingRemoveAll = false
 
-    /// The shortcut whose settings page is pushed, driven by a name-tap on its row
-    /// (issue #198). Programmatic navigation — rather than wrapping the whole row in
-    /// a `NavigationLink` — so the inline alias field can own its own hit area
-    /// without the link swallowing its taps. The name (its identity) is a valid
-    /// `Hashable` route.
-    @State private var detailTarget: String?
-
     var body: some View {
         List {
             // The unified page shape (ADR 0019; issue #66): Options lead; the
@@ -105,38 +98,31 @@ struct ShortcutsView: View {
                 }
             } else {
                 Section {
-                    // Each row pairs the name (tap opens the shortcut's settings
-                    // page — the Enabled and Accepts-input switches, kept off the row
-                    // so two toggles never read as one mushy control) with an inline
-                    // **alias** field (issue #198). One word is not worth an editor
-                    // sheet, so it is edited right here; the field owns its own hit
-                    // area, leaving the name-tap navigation and swipe-to-delete intact.
+                    // Each shortcut is a navigation row into its own settings page —
+                    // its Enabled switch, Accepts-input toggle, and alias field, kept
+                    // off the list row so several controls never read as one mushy
+                    // control. The row carries only the name and swipe-to-delete.
                     ForEach(store.entries, id: \.name) { entry in
-                        ShortcutAliasRow(
-                            name: entry.name,
-                            isDisabled: enablement.isDisabled(Action.shortcutID(for: entry.name)),
-                            alias: Binding(
-                                get: { store.entries.first { $0.name == entry.name }?.alias ?? "" },
-                                set: { store.setAlias($0, for: entry.name) }
-                            ),
-                            onOpen: { detailTarget = entry.name }
-                        )
+                        NavigationLink {
+                            ShortcutDetailView(name: entry.name, store: store, enablement: enablement)
+                        } label: {
+                            Text(entry.name)
+                                .foregroundStyle(
+                                    enablement.isDisabled(Action.shortcutID(for: entry.name))
+                                        ? .secondary : .primary
+                                )
+                        }
+                        .accessibilityIdentifier("shortcut-row.\(entry.name)")
                     }
                     .onDelete(perform: delete)
                 } header: {
                     Text("Imported shortcuts")
                 } footer: {
-                    Text("Imported shortcuts start disabled — tap a name to enable it and mark whether it accepts input. Give one an alias to search it by another name — it shows on the result row as a pill. Swipe to remove one; a later re-sync re-adds it (disabled again, no alias) if it's still in your library.")
+                    Text("Imported shortcuts start disabled — tap one to enable it, mark whether it accepts input, and give it a search alias. Swipe to remove one; a later re-sync re-adds it (disabled again, no alias) if it's still in your library.")
                 }
             }
         }
         .navigationTitle("Shortcuts")
-        // A name-tap on any row pushes that shortcut's settings page. Keyed by name
-        // (the shortcut's identity), so a re-sync that drops the pushed shortcut
-        // leaves the page reading its live state, exactly as the toggles do.
-        .navigationDestination(item: $detailTarget) { name in
-            ShortcutDetailView(name: name, store: store, enablement: enablement)
-        }
     }
 
     /// A `shortcuts://` run URL for the installed companion Sync Shortcut — the
@@ -164,61 +150,12 @@ struct ShortcutsView: View {
     }
 }
 
-/// One row on the Shortcuts page (issue #198): the shortcut's name on the left
-/// (tapping it opens the settings page) and its inline **alias** field on the
-/// right. The two split their taps — a plain `Button` over the name navigates, the
-/// `TextField` edits — so the alias can be typed without the row's tap navigating
-/// away, and swipe-to-delete (owned by the enclosing `ForEach`) stays untouched.
-///
-/// The alias field is dim with a placeholder, and its binding writes straight
-/// through `ShortcutsStore.setAlias`, which normalizes a blank back to no alias —
-/// so clearing the field removes the alias and its pill.
-private struct ShortcutAliasRow: View {
-    let name: String
-    let isDisabled: Bool
-    @Binding var alias: String
-    let onOpen: () -> Void
-
-    var body: some View {
-        HStack(spacing: 12) {
-            // The name owns the leading, flexible half and carries the navigation.
-            // A plain-styled Button (not a NavigationLink) keeps the row's tap target
-            // off the trailing text field — and still exposes a `button` element the
-            // UI tests tap by `shortcut-row.<name>`.
-            Button(action: onOpen) {
-                HStack(spacing: 6) {
-                    Text(name)
-                        .foregroundStyle(isDisabled ? .secondary : .primary)
-                    Spacer(minLength: 0)
-                    Image(systemName: "chevron.forward")
-                        .font(.footnote.weight(.semibold))
-                        .foregroundStyle(.tertiary)
-                }
-                .contentShape(Rectangle())
-            }
-            .buttonStyle(.plain)
-            .accessibilityIdentifier("shortcut-row.\(name)")
-
-            // The inline alias editor — dim, right-aligned, a fixed slice of the row
-            // so a long name truncates rather than crowding it out. Autocaps/correct
-            // off: an alias is a terse handle, not prose.
-            TextField("Alias", text: $alias)
-                .multilineTextAlignment(.trailing)
-                .foregroundStyle(.secondary)
-                .textInputAutocapitalization(.never)
-                .autocorrectionDisabled()
-                .submitLabel(.done)
-                .frame(maxWidth: 130)
-                .accessibilityIdentifier("shortcut-alias-field.\(name)")
-        }
-    }
-}
-
-/// One imported shortcut's own settings page (issue #68 follow-up): the
-/// **Enabled** switch (the instance-level Disabled toggle) and the **Accepts
-/// input** switch, each in its own explained section — the two verbs a single
-/// list row couldn't hold apart. Pushed from the Shortcuts page's navigation
-/// rows, riding the launcher's stack like every other pushed page.
+/// One imported shortcut's own settings page (issue #68 follow-up; issue #198):
+/// the **Enabled** switch (the instance-level Disabled toggle), the **Accepts
+/// input** switch, and the optional **Alias** field, each in its own explained
+/// section — the several controls a single list row couldn't hold apart. Pushed
+/// from the Shortcuts page's navigation rows, riding the launcher's stack like
+/// every other pushed page.
 struct ShortcutDetailView: View {
     let name: String
     let store: ShortcutsStore
@@ -232,6 +169,17 @@ struct ShortcutDetailView: View {
     /// up, and a deleted entry simply reads as input-off.
     private var acceptsInput: Bool {
         store.entries.first(where: { $0.name == name })?.acceptsInput ?? false
+    }
+
+    /// The shortcut's current alias, read live from the store (like `acceptsInput`),
+    /// bound to the field. Its setter routes through `ShortcutsStore.setAlias`, which
+    /// normalizes a blank back to no alias — so clearing the field removes the alias
+    /// and its pill (issue #198).
+    private var aliasBinding: Binding<String> {
+        Binding(
+            get: { store.entries.first(where: { $0.name == name })?.alias ?? "" },
+            set: { store.setAlias($0, for: name) }
+        )
     }
 
     var body: some View {
@@ -254,6 +202,21 @@ struct ShortcutDetailView: View {
                 .accessibilityIdentifier("shortcut-accepts-input.\(name)")
             } footer: {
                 Text("Turn on for a shortcut that takes text — Quickie collects the input before running it, since the import can't tell.")
+            }
+
+            Section {
+                // One optional alias — the single-alias convention the Custom Action
+                // editor uses (a whole editor sheet for one word is ceremony, so it
+                // lives here beside the toggles). Autocaps/correct off: an alias is a
+                // terse handle, not prose.
+                TextField("Alias", text: aliasBinding)
+                    .textInputAutocapitalization(.never)
+                    .autocorrectionDisabled()
+                    .accessibilityIdentifier("shortcut-alias-field.\(name)")
+            } header: {
+                Text("Alias")
+            } footer: {
+                Text("Give this shortcut another name to find it by — typing the alias surfaces it, and its result rows wear the alias as a pill. Clear the field to remove it. The alias survives a re-sync.")
             }
         }
         .navigationTitle(name)
