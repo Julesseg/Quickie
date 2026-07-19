@@ -155,6 +155,201 @@ public enum Matcher {
         return fuzzyCeiling * (span - weighted) / span
     }
 
+    // MARK: - Match highlight alignment
+
+    /// The candidate character offsets the query "found their place" in — the
+    /// **Match highlight** (CONTEXT.md → Match highlight; issue #195). Returns the
+    /// bold-worthy offsets (ascending, into `candidate`'s Character array), or `nil`
+    /// when the query doesn't match the candidate at all — the same accept/reject
+    /// decision `score` makes, so a row that ranks always has an alignment and a
+    /// non-match never claims one.
+    ///
+    /// This is the read-back companion to `score`: it re-derives which tier and
+    /// reading won and backtracks the alignment, run **only for the handful of rows
+    /// actually returned** — the scoring hot loop stays untouched. Offsets index the
+    /// *original* candidate's Characters: normalization folds case and diacritics
+    /// one-grapheme-to-one, so offset *i* of the normalized form is offset *i* of the
+    /// original (matching `cafe` against "Café" bolds the accented letter).
+    ///
+    /// The tiers mirror the scoring rules:
+    /// - **Subsequence** — when the query occurs as a contiguous run, bold the
+    ///   leftmost such run (the prefix/substring preference); only when no contiguous
+    ///   occurrence exists, fall back to the greedy leftmost subsequence embedding.
+    /// - **Multi-word** — each token aligns independently and the union is bolded,
+    ///   the reading taken only when it out-scores the whole-query one (as in `score`).
+    /// - **Typo tier** — only the *exactly-aligned* characters of the edit-distance
+    ///   alignment bold; a substituted or transposed position is an edit, not a
+    ///   found letter, so it stays plain.
+    public static func matchOffsets(
+        query: String,
+        candidate: String,
+        layout: KeyboardLayout = .qwerty
+    ) -> [Int]? {
+        let q = normalize(query)
+        let c = normalize(candidate)
+        guard !q.isEmpty, !c.isEmpty else { return nil }
+
+        // The whole-query reading — the single-token path, and the in-order reading
+        // of a multi-word query — mirroring `score`'s `whole`.
+        let whole = wholeAlignment(q, c, layout: layout)
+
+        let tokens = q.split(whereSeparator: \.isWhitespace).map(String.init)
+        guard tokens.count > 1 else { return whole?.offsets }
+
+        // Token-order-independent reading: each token aligns on its own and the
+        // union bolds. Taken only when it out-scores the whole reading, exactly the
+        // `max` `score` takes — so what bolds agrees with what ranked (ties keep the
+        // in-order whole reading).
+        let byToken = tokenAlignment(tokens, c, layout: layout)
+        switch (whole, byToken) {
+        case let (w?, t?): return (t.score > w.score ? t : w).offsets
+        case let (w?, nil): return w.offsets
+        case let (nil, t?): return t.offsets
+        case (nil, nil): return nil
+        }
+    }
+
+    /// One token (or a whole single-word query) aligned against the candidate,
+    /// paired with the score that fixes its tier so the multi-word reading can be
+    /// compared to the whole one exactly as `score` compares them. A clean
+    /// subsequence if it is one, otherwise the forgiving edit-distance alignment.
+    private static func wholeAlignment(
+        _ q: String,
+        _ c: String,
+        layout: KeyboardLayout
+    ) -> (score: Double, offsets: [Int])? {
+        if isSubsequence(q, of: c) {
+            return (subsequenceScore(q, c), subsequenceOffsets(q, c))
+        }
+        guard let score = fuzzyScore(q, c, layout: layout) else { return nil }
+        return (score, fuzzyMatchOffsets(q, c))
+    }
+
+    /// The multi-word reading's alignment: every token must align (a query is only
+    /// satisfied when all its words are present), and the bolded set is the union of
+    /// the per-token alignments. The mean of the per-token scores mirrors
+    /// `tokenOrderScore` so the reading is chosen consistently with ranking.
+    private static func tokenAlignment(
+        _ tokens: [String],
+        _ c: String,
+        layout: KeyboardLayout
+    ) -> (score: Double, offsets: [Int])? {
+        var total = 0.0
+        var offsets = Set<Int>()
+        for token in tokens {
+            guard let a = wholeAlignment(token, c, layout: layout) else { return nil }
+            total += a.score
+            offsets.formUnion(a.offsets)
+        }
+        return (total / Double(tokens.count), offsets.sorted())
+    }
+
+    /// The offsets to bold for a query that is a subsequence of the candidate: the
+    /// leftmost contiguous run when one exists (mirroring the prefix/substring tier
+    /// preference), else the greedy leftmost subsequence embedding.
+    private static func subsequenceOffsets(_ q: String, _ c: String) -> [Int] {
+        let qa = Array(q)
+        let ca = Array(c)
+        if let start = leftmostContiguousStart(qa, in: ca) {
+            return Array(start ..< start + qa.count)
+        }
+        // Greedy leftmost embedding: `isSubsequence` guarantees every query char is
+        // consumed, so this always covers the whole query.
+        var offsets: [Int] = []
+        var qi = 0
+        for (j, ch) in ca.enumerated() where qi < qa.count {
+            if ch == qa[qi] {
+                offsets.append(j)
+                qi += 1
+            }
+        }
+        return offsets
+    }
+
+    /// The leftmost index where `query` begins as a contiguous run of `candidate`,
+    /// or `nil` when it never occurs contiguously.
+    private static func leftmostContiguousStart(_ query: [Character], in candidate: [Character]) -> Int? {
+        guard !query.isEmpty, candidate.count >= query.count else { return nil }
+        for start in 0...(candidate.count - query.count) {
+            var matched = true
+            for k in 0..<query.count where candidate[start + k] != query[k] {
+                matched = false
+                break
+            }
+            if matched { return start }
+        }
+        return nil
+    }
+
+    /// The candidate offsets of the *exactly-aligned* characters of the best
+    /// edit-distance alignment — the letters a typo query still landed on. Backtracks
+    /// the same Damerau-Levenshtein table `bestEditCost` walks (unit substitution
+    /// cost, the gate's model), recording an offset only where a query character
+    /// truly matched: a deletion, insertion, substitution, or transposition is an
+    /// edit, not a found letter, so it contributes none (`gthub` → `G·tHub`, `githib`
+    /// → `Gith·b`). Empty when every position was edited.
+    private static func fuzzyMatchOffsets(_ q: String, _ c: String) -> [Int] {
+        let a = Array(q)
+        let b = Array(c)
+        guard !a.isEmpty, !b.isEmpty else { return [] }
+        let n = a.count, m = b.count
+
+        // The same recurrence as `bestEditCost` with unit substitution cost, kept as
+        // a full table so the optimal path can be backtracked.
+        var d = Array(repeating: Array(repeating: 0.0, count: m + 1), count: n + 1)
+        for i in 0...n { d[i][0] = Double(i) }
+        for j in 0...m { d[0][j] = 0.0 }
+        for i in 1...n {
+            for j in 1...m {
+                let match = a[i - 1] == b[j - 1]
+                let subCost = match ? 0.0 : 1.0
+                var best = min(
+                    d[i - 1][j] + 1.0,
+                    d[i][j - 1] + 1.0,
+                    d[i - 1][j - 1] + subCost
+                )
+                if i > 1, j > 1, a[i - 1] == b[j - 2], a[i - 2] == b[j - 1] {
+                    best = min(best, d[i - 2][j - 2] + 1.0)
+                }
+                d[i][j] = best
+            }
+        }
+
+        // The alignment ends at the cheapest column of the last row (free trailing
+        // skip); ties take the leftmost, mirroring `bestEditCost`'s `min()`.
+        var endCol = 0
+        if m >= 1 {
+            for j in 1...m where d[n][j] < d[n][endCol] { endCol = j }
+        }
+
+        // Backtrack from (n, endCol) to a zero row, preferring a true match on the
+        // diagonal (a zero-cost, always-optimal step) so every letter that found its
+        // place is recorded.
+        var offsets: [Int] = []
+        var i = n, j = endCol
+        while i > 0 {
+            if j > 0, a[i - 1] == b[j - 1], d[i][j] == d[i - 1][j - 1] {
+                offsets.append(j - 1)   // an exact match — bold it
+                i -= 1; j -= 1
+                continue
+            }
+            if i > 1, j > 1, a[i - 1] == b[j - 2], a[i - 2] == b[j - 1], d[i][j] == d[i - 2][j - 2] + 1 {
+                i -= 2; j -= 2          // transposition: an edit, not bolded
+                continue
+            }
+            if j > 0, d[i][j] == d[i - 1][j - 1] + 1 {
+                i -= 1; j -= 1          // substitution: an edit, not bolded
+                continue
+            }
+            if d[i][j] == d[i - 1][j] + 1 {
+                i -= 1                  // deletion from the query
+                continue
+            }
+            j -= 1                      // free skip of a candidate character
+        }
+        return offsets.reversed()
+    }
+
     // MARK: - Trigram prefilter
 
     /// A cheap necessary-condition gate run before the expensive edit-distance

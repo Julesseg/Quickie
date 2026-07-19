@@ -106,6 +106,22 @@ public struct FileSearchProvider: Provider {
             .map { action(for: $0.entry) }
     }
 
+    /// The Search Files context matches as **rows** — each file Action plus its Match
+    /// highlight (CONTEXT.md → Match highlight; issue #195), so the scoped surface
+    /// bolds a filename hit identically to the inline rows the engine returns. A file
+    /// has no aliases, so its title always wins the match; the browse-all (empty
+    /// query) list carries no highlight, since nothing was matched. Region is
+    /// `.ranked`: a file row is a name-scored survivor, never boosted or a fallback.
+    public func contextRows(for query: String) -> [ResultRow] {
+        let trimmed = query.trimmingCharacters(in: .whitespacesAndNewlines)
+        return contextMatches(for: query).map { action in
+            let match = trimmed.isEmpty
+                ? nil
+                : MatchHighlight.titleMatch(query: trimmed, title: action.title, layout: layout)
+            return ResultRow(action: action, region: .ranked, match: match)
+        }
+    }
+
     /// Builds the file Action for an entry — the one place the provider projects a
     /// `FileEntry` into a row, so the inline and context paths agree on identity.
     private func action(for entry: FileEntry) -> Action {

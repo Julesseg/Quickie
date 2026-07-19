@@ -110,7 +110,10 @@ private struct FileSearchBlur: View {
 /// pinnable catalog entry. The highlighted row (`results[0]`) reads as the default
 /// so Enter opens it.
 struct FileSearchResultList: View {
-    let results: [Action]
+    /// The context's file rows (CONTEXT.md → Search Files context; issue #195): each
+    /// carries its Match highlight so a filename hit bolds identically to the inline
+    /// rows the engine returns.
+    let results: [ResultRow]
     let onRun: (Action) -> Void
 
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
@@ -132,11 +135,12 @@ struct FileSearchResultList: View {
                         // a change in count animates a slot in or out — via the
                         // transition's own animation, never the surrounding layout.
                         ForEach(results.indices.reversed(), id: \.self) { rank in
-                            let action = results[rank]
+                            let row = results[rank]
+                            let action = row.action
                             Button {
                                 onRun(action)
                             } label: {
-                                ActionRow(action: action, isHighlighted: rank == 0)
+                                ActionRow(action: action, isHighlighted: rank == 0, match: row.match)
                             }
                             .buttonStyle(.plain)
                             .accessibilityIdentifier(action.id)
