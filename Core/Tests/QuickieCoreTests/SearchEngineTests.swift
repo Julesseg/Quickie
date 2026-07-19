@@ -191,15 +191,30 @@ struct SearchEngineTests {
         #expect(engine.resolvableHomeIDs().contains("file.f.report.pdf") == false)
     }
 
-    @Test("weak file matches are held back from the inline Result list")
-    func weakFileMatchesHeldBackInline() {
-        // The provider gates on the strong-match threshold, so a buried substring
-        // ("port" in "report.pdf") never surfaces inline — only the command matches.
+    @Test("a substring file match surfaces inline but below a strong name match")
+    func substringFileMatchRanksBelowStrongNameMatch() {
+        // The provider gates on the substring threshold (ADR 0035), so a buried
+        // substring ("port" in "report.pdf") surfaces inline — but it sits below
+        // the engine's strong tier, so the prefix-matched command still wins.
         let engine = engineWithFiles(
             [FileEntry(bookmarkID: "f", relativePath: "report.pdf")],
             command: .quicklink(id: "portal", title: "Portal", url: URL(string: "https://x.example")!)
         )
         let ids = engine.results(for: "port").map(\.id)
-        #expect(ids.contains("file.f.report.pdf") == false)
+        #expect(ids.first == "portal")
+        #expect(ids.contains("file.f.report.pdf"))
+    }
+
+    @Test("scattered and typo file matches are held back from the inline Result list")
+    func weakFileMatchesHeldBackInline() {
+        // Below the substring threshold nothing surfaces inline: a scattered
+        // subsequence ("rport") and a typo ("reprot") of "report.pdf" appear
+        // only in the Search Files context (ADR 0014).
+        let engine = engineWithFiles(
+            [FileEntry(bookmarkID: "f", relativePath: "report.pdf")],
+            command: .quicklink(id: "portal", title: "Portal", url: URL(string: "https://x.example")!)
+        )
+        #expect(engine.results(for: "rport").map(\.id).contains("file.f.report.pdf") == false)
+        #expect(engine.results(for: "reprot").map(\.id).contains("file.f.report.pdf") == false)
     }
 }

@@ -7,13 +7,14 @@ import Foundation
 /// floods the central catalog, Home, or Frecency.
 ///
 /// Its handful of survivors are then scored by the same `Matcher` the rest of the
-/// loop uses and gated two ways so only genuinely strong hits appear inline while
-/// typing a normal query:
-/// - the **strong-match threshold** (`Matcher.strongMatchThreshold`): a buried,
-///   scattered, or fuzzy filename hit is held back (it surfaces only in the
-///   uncapped Search Files context, ADR 0014 — a later slice),
-/// - an **inline cap** (~3 rows): even among strong matches, only the best few
-///   surface while typing.
+/// loop uses and gated two ways so only solid hits appear inline while typing a
+/// normal query:
+/// - the **substring threshold** (`Matcher.substringMatchThreshold`, ADR 0035):
+///   a filename *containing* the query — exact, prefix, or buried substring —
+///   surfaces inline; a scattered or typo hit is held back (it surfaces only in
+///   the uncapped Search Files context, ADR 0014),
+/// - an **inline cap** (~3 rows): even among qualifying matches, only the best
+///   few surface while typing.
 ///
 /// This is *ranked*-dynamic, not the Calculator's *boosted*-dynamic: the
 /// SearchEngine routes these survivors through name-scoring into the ranked region
@@ -37,8 +38,8 @@ public struct FileSearchProvider: Provider {
     /// loop; defaults to QWERTY so the Core stays platform-agnostic and testable.
     private let layout: KeyboardLayout
 
-    /// How many strong file matches may surface inline while typing a normal query
-    /// (~3, ADR 0015). The uncapped Search Files context is a later slice.
+    /// How many qualifying file matches may surface inline while typing a normal
+    /// query (~3, ADR 0015). The Search Files context is uncapped.
     private let inlineCap: Int
 
     /// Builds the provider over `index`, dropping every entry under a
@@ -61,9 +62,10 @@ public struct FileSearchProvider: Provider {
     }
 
     /// The file Actions for `query`: prefilter the snapshot, score the survivors,
-    /// keep only strong matches, order best-first, and cap the inline count. An
-    /// empty/whitespace query declines cleanly — File Search never adds a spurious
-    /// row, and the empty-query Home state is owned by the SearchEngine.
+    /// keep only contiguous (substring-or-better) matches, order best-first, and
+    /// cap the inline count. An empty/whitespace query declines cleanly — File
+    /// Search never adds a spurious row, and the empty-query Home state is owned
+    /// by the SearchEngine.
     public func candidates(for query: String) -> [Action] {
         let trimmed = query.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty else { return [] }
@@ -72,7 +74,7 @@ public struct FileSearchProvider: Provider {
             .prefiltered(for: trimmed)
             .compactMap { entry in
                 guard let score = Matcher.score(query: trimmed, candidate: entry.displayName, layout: layout),
-                      score >= Matcher.strongMatchThreshold else { return nil }
+                      score >= Matcher.substringMatchThreshold else { return nil }
                 return (entry, score)
             }
             .sorted(by: bestFirst)
@@ -83,8 +85,8 @@ public struct FileSearchProvider: Provider {
     /// The file Actions for the **Search Files context** (CONTEXT.md → Search Files
     /// context; ADR 0014): the uncapped, ungated counterpart to `candidates(for:)`.
     /// The scoped file-browsing surface shows *every* filename match, not just the
-    /// strong ones the inline path allows, and never caps the count — so a buried or
-    /// fuzzy hit the root list holds back still appears here. An empty/whitespace
+    /// contiguous ones the inline path allows, and never caps the count — so a
+    /// scattered or typo hit the root list holds back still appears here. An empty/whitespace
     /// query **browses everything**, ordered by name, so entering the context lists
     /// the whole file set before the user has typed a filter.
     public func contextMatches(for query: String) -> [Action] {

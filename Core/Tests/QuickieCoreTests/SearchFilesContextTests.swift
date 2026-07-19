@@ -6,7 +6,7 @@ import Testing
 // scoped, uncapped file-browsing surface entered by *selecting* a "Search Files"
 // command row — never a mode toggle. These tests pin the Core seam: the command
 // Action that enters the context, and the provider's uncapped context filter
-// (distinct from the strong-gated, inline-capped `candidates(for:)`).
+// (distinct from the substring-gated, inline-capped `candidates(for:)`).
 struct SearchFilesContextTests {
 
     @Test("the Search Files command carries the enter-file-search outcome")
@@ -36,11 +36,12 @@ struct SearchFilesContextTests {
 
     @Test("the context surfaces weak matches the inline path holds back")
     func contextSurfacesWeakMatches() {
-        // A buried substring ("port" inside "report.pdf") is below the strong-match
-        // threshold, so it never surfaces inline — but the uncapped context shows it.
+        // A scattered subsequence ("rport" through "report.pdf") is below the
+        // substring threshold (ADR 0035), so it never surfaces inline — but the
+        // uncapped context shows it.
         let p = provider([FileEntry(bookmarkID: "f", relativePath: "report.pdf")])
-        #expect(p.candidates(for: "port").isEmpty)            // inline: held back
-        #expect(p.contextMatches(for: "port").count == 1)     // context: shown
+        #expect(p.candidates(for: "rport").isEmpty)           // inline: held back
+        #expect(p.contextMatches(for: "rport").count == 1)    // context: shown
     }
 
     @Test("the context is uncapped — more than the inline cap can surface")

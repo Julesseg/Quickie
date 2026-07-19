@@ -1,5 +1,8 @@
 # Ranked-dynamic vs boosted-dynamic providers
 
+Status: accepted; the inline gate detail ("existing strong-match threshold") is
+amended by ADR 0035 — the gate is now the looser substring threshold.
+
 ## Context
 
 `SearchEngine` routes **every** Dynamic Provider's candidates into the

@@ -24,11 +24,20 @@ public enum Matcher {
     /// The score at or above which a name match counts as **strong** — an exact or
     /// prefix match, as opposed to a buried, scattered, or fuzzy one. It is the
     /// subsequence tier's prefix base (0.80): exact (1.0) and prefix matches clear
-    /// it; everything weaker falls below. Both the `SearchEngine` (for its
-    /// no-boost-crosses-it top tier) and File Search (which surfaces only strong
-    /// filename hits inline, ADR 0015) gate on this one shared value so the two can
-    /// never drift apart.
+    /// it; everything weaker falls below. The `SearchEngine` gates its
+    /// no-boost-crosses-it top tier on this value, so the engine's tier boundary
+    /// and the matcher's prefix base can never drift apart.
     public static let strongMatchThreshold: Double = 0.80
+
+    /// The score at or above which a name match is at least **contiguous** — the
+    /// query appears whole somewhere in the candidate (exact, prefix, or buried
+    /// substring), as opposed to scattered letters or a typo. It is the
+    /// subsequence tier's buried-substring base (0.60); the scattered tier tops
+    /// out below it (0.40 base + 0.15 capped bonus), so nothing weaker can cross.
+    /// File Search gates its inline rows on this value (ADR 0035): a filename
+    /// *containing* what you typed surfaces while typing, while scattered and
+    /// typo hits stay confined to the Search Files context.
+    public static let substringMatchThreshold: Double = 0.60
 
     /// Returns a score in `(0, 1]` when `query` matches `candidate`, or `nil`
     /// when it does not. Higher is a better match. An empty query never
@@ -97,11 +106,13 @@ public enum Matcher {
         if q == c { return 1.0 }
 
         // Contiguity tier: prefix > buried substring > scattered subsequence.
+        // The prefix and substring bases *are* the public thresholds, so the
+        // tier boundaries and the gates built on them can never drift apart.
         let base: Double
         if c.hasPrefix(q) {
-            base = 0.80
+            base = strongMatchThreshold
         } else if c.contains(q) {
-            base = 0.60
+            base = substringMatchThreshold
         } else {
             base = 0.40
         }

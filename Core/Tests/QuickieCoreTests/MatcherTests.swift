@@ -57,6 +57,17 @@ struct MatcherTests {
         #expect(contiguous > scattered)
     }
 
+    @Test("the substring threshold separates contiguous matches from scattered ones")
+    func substringThresholdSeparatesContiguousFromScattered() {
+        // The gate File Search's inline rows ride on (ADR 0035): any contiguous
+        // match — exact, prefix, or buried substring — clears it; a scattered
+        // subsequence never does, no matter how tight its length bonus.
+        let buried = Matcher.score(query: "ith", candidate: "GitHub")!
+        let scattered = Matcher.score(query: "ghb", candidate: "GitHub")!
+        #expect(buried >= Matcher.substringMatchThreshold)
+        #expect(scattered < Matcher.substringMatchThreshold)
+    }
+
     @Test("diacritics are folded so plain ascii still matches")
     func diacriticInsensitive() {
         #expect(Matcher.score(query: "cafe", candidate: "Café Search") != nil)
