@@ -156,6 +156,14 @@ public enum Matcher {
     }
 
     // MARK: - Match highlight alignment
+    //
+    // These helpers are the deliberate read-back twins of the scoring path above
+    // (`matchOffsets`↔`score`, `wholeAlignment`↔`matchScore`,
+    // `tokenAlignment`↔`tokenOrderScore`, `fuzzyMatchOffsets`↔`bestEditCost`): they
+    // re-derive *which* reading and tier won so the bolding agrees with the ranking,
+    // rather than sharing the hot loop. A change to a tier rule above must be mirrored
+    // here or the two drift — `MatchHighlightTests.alignmentAgreesWithScore` guards the
+    // accept/reject parity, but the per-tier offsets are only as correct as this twin.
 
     /// The candidate character offsets the query "found their place" in — the
     /// **Match highlight** (CONTEXT.md → Match highlight; issue #195). Returns the
@@ -167,9 +175,13 @@ public enum Matcher {
     /// This is the read-back companion to `score`: it re-derives which tier and
     /// reading won and backtracks the alignment, run **only for the handful of rows
     /// actually returned** — the scoring hot loop stays untouched. Offsets index the
-    /// *original* candidate's Characters: normalization folds case and diacritics
-    /// one-grapheme-to-one, so offset *i* of the normalized form is offset *i* of the
-    /// original (matching `cafe` against "Café" bolds the accented letter).
+    /// *original* candidate's Characters, relying on normalization folding one
+    /// grapheme to one: case- and diacritic-folding do (`é` → `e`, `A` → `a`), so
+    /// offset *i* of the normalized form is offset *i* of the original and matching
+    /// `cafe` against "Café" bolds the accented letter. A rare fold that changes the
+    /// grapheme count (e.g. `ß` → `ss`) can nudge the offsets for later characters —
+    /// cosmetic only, never out of range, and outside the case/diacritic matching
+    /// this serves.
     ///
     /// The tiers mirror the scoring rules:
     /// - **Subsequence** — when the query occurs as a contiguous run, bold the
@@ -295,7 +307,9 @@ public enum Matcher {
         let n = a.count, m = b.count
 
         // The same recurrence as `bestEditCost` with unit substitution cost, kept as
-        // a full table so the optimal path can be backtracked.
+        // a full table so the optimal path can be backtracked. Keep this DP in step
+        // with `bestEditCost`: same init, same Damerau transposition, same free
+        // leading/trailing skip — they must agree on which windows match.
         var d = Array(repeating: Array(repeating: 0.0, count: m + 1), count: n + 1)
         for i in 0...n { d[i][0] = Double(i) }
         for j in 0...m { d[0][j] = 0.0 }

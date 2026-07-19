@@ -193,7 +193,9 @@ struct ActionRow: View {
     /// composes with the row's rounded face rather than replacing it; with no match
     /// (a boosted, fallback, or Home row) it falls through to plain `rowText`, so a
     /// Computed row keeps its tabular digits. The offsets index the title's Characters
-    /// one-to-one with the Core alignment, so an accented letter bolds correctly.
+    /// as the Core alignment produced them (case/diacritic folding is one grapheme to
+    /// one, so an accented letter bolds correctly); an out-of-range offset from a rare
+    /// count-changing fold simply doesn't bold, never crashes.
     private func titleText() -> Text {
         guard let bold = match?.titleBold, !bold.isEmpty else {
             return rowText(action.title)
