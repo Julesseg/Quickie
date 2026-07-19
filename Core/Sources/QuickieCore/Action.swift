@@ -628,15 +628,27 @@ extension Action {
     /// Argument** and runs through the breadcrumb (`MultiStepAction`), passing the
     /// collected value as the shortcut's input. Either way the outcome carries only
     /// the name (and input); the app performs the x-callback-url open at the edge.
-    public static func shortcut(name: String, acceptsInput: Bool = false) -> Action {
+    ///
+    /// `alias` is the one optional user-defined name (issue #198), edited inline on
+    /// the Shortcuts page. It rides as the Action's sole alias, so the matcher scores
+    /// it alongside the title and the row wears it as an [[Alias pill]] (`aliasPill`
+    /// returns it for the `.shortcut` kind). A `nil` or blank alias carries no alias,
+    /// so an alias-less shortcut matches by name only and shows no pill.
+    public static func shortcut(name: String, acceptsInput: Bool = false, alias: String? = nil) -> Action {
         // The input Argument is **optional** (issue #46): the user can submit it empty
         // and still run the shortcut, so the breadcrumb never traps someone who has
         // nothing to type.
         let arguments = acceptsInput ? [Argument(label: "Input", contentType: .text, isOptional: true)] : []
+        // A blank alias reads as none via the shared normalizer (issue #198), so an
+        // all-whitespace value never becomes a matchable empty alias or an empty pill
+        // — a public-API guard, since this factory is called directly in tests and
+        // by any caller that hasn't already normalized.
+        let aliases = ShortcutEntry.normalizedAlias(alias).map { [$0] } ?? []
         return Action(
             id: shortcutID(for: name),
             kind: .shortcut,
             title: name,
+            aliases: aliases,
             // A shortcut that accepts input consumes text; one that doesn't is
             // self-contained (matches by name, consumes no typed text).
             inputTypes: acceptsInput ? [.text] : [],

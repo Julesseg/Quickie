@@ -273,10 +273,11 @@ struct RootView: View {
             )
         }
         // Imported Shortcut Actions surface by name like Quicklinks/Snippets
-        // (issue #45); inert this slice (triggering is the next). `acceptsInput`
-        // rides along for that future trigger, changing nothing here.
+        // (issue #45). `acceptsInput` shapes the run; the optional `alias` (issue
+        // #198) rides as the row's sole alias, so the matcher scores it and the row
+        // wears its Alias pill.
         let storedShortcuts = shortcuts.entries.map { entry in
-            Action.shortcut(name: entry.name, acceptsInput: entry.acceptsInput)
+            Action.shortcut(name: entry.name, acceptsInput: entry.acceptsInput, alias: entry.alias)
         }
         // Derive the fallback-eligible set from the Actions already built above, so
         // `makeAction` (which re-parses each URL template via regex) runs once per
@@ -377,7 +378,7 @@ struct RootView: View {
     private var eligibleFallbackActions: [Action] {
         eligibleFallbacks(
             customActionActions: customActions.compactMap { $0.definition.makeAction(id: $0.id) },
-            shortcutActions: shortcuts.entries.map { Action.shortcut(name: $0.name, acceptsInput: $0.acceptsInput) }
+            shortcutActions: shortcuts.entries.map { Action.shortcut(name: $0.name, acceptsInput: $0.acceptsInput, alias: $0.alias) }
         )
     }
 

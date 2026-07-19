@@ -288,6 +288,59 @@ final class ShortcutUITests: XCTestCase {
         )
     }
 
+    /// A shortcut's inline **alias** field (issue #198): each row on the Shortcuts
+    /// page carries an alias text field; typing an alias persists it (via the real
+    /// `setAlias` store path), and back in the launcher the alias both surfaces the
+    /// shortcut by name and rides its result row as an Alias pill. The re-sync
+    /// survival and single-source bolding are covered deterministically by
+    /// QuickieCore's ShortcutImportTests / AliasPillTests; this proves the field
+    /// wiring and the pill actually render on the real row.
+    @MainActor
+    func testInlineAliasFieldMatchesAndPills() throws {
+        let app = launchApp(seed: "Translate")
+
+        let input = app.textFields["search-input"]
+        XCTAssertTrue(input.waitForExistence(timeout: 30))
+        input.tap()
+        input.typeText("shortcuts")
+        let command = app.buttons["builtin.shortcuts-page"]
+        XCTAssertTrue(command.waitForExistence(timeout: 5))
+        command.tap()
+
+        // Every row shows an alias field. Type an alias into Translate's — its
+        // binding writes straight through `setAlias` on each keystroke.
+        let aliasField = app.textFields["shortcut-alias-field.Translate"]
+        XCTAssertTrue(aliasField.waitForExistence(timeout: 10),
+                      "each Shortcuts-page row carries an inline alias field")
+        aliasField.tap()
+        aliasField.typeText("xq")
+
+        // Back to the launcher (the alias is already persisted).
+        let back = app.navigationBars.buttons.firstMatch
+        XCTAssertTrue(back.waitForExistence(timeout: 10))
+        back.tap()
+
+        // Typing the alias — which appears nowhere in the title "Translate" — surfaces
+        // the shortcut, proving the alias is real matching fodder.
+        XCTAssertTrue(input.waitForExistence(timeout: 10))
+        input.tap()
+        input.typeText("xq")
+        let row = app.buttons.matching(
+            NSPredicate(format: "label CONTAINS[c] %@", "Translate")
+        ).firstMatch
+        XCTAssertTrue(row.waitForExistence(timeout: 5),
+                      "typing the alias surfaces the shortcut in results")
+
+        // The row wears its "xq" alias pill. Title "Translate" carries no "xq", so
+        // either the aggregated row label or the identified pill element can only be
+        // the alias pill (the same two-way check the Custom Action pill test uses).
+        let labelCarriesPill = row.label.range(of: "xq") != nil
+        let pillElement = app.staticTexts["alias-pill.shortcut.translate"]
+        let pillIsElement = pillElement.exists || pillElement.waitForExistence(timeout: 2)
+        XCTAssertTrue(labelCarriesPill || pillIsElement,
+                      "the shortcut row wears its 'xq' alias pill (label: \(row.label))")
+    }
+
     /// A Shortcut Action with `acceptsInput` **off** fires immediately (issue #46 AC
     /// #1): tapping it hands off via x-callback-url with no input — it must not start
     /// the input breadcrumb. The hand-off leaves the app (or no-ops in a simulator
