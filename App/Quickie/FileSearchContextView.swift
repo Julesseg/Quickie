@@ -109,9 +109,6 @@ private struct FileSearchBlur: View {
 /// so Enter opens it.
 struct FileSearchResultList: View {
     let results: [Action]
-    /// The live filter query, forwarded to the highlighted row's gold glow so it
-    /// stirs on each keystroke and settles when typing stops (issue #177).
-    var query: String = ""
     let onRun: (Action) -> Void
 
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
@@ -137,7 +134,7 @@ struct FileSearchResultList: View {
                             Button {
                                 onRun(action)
                             } label: {
-                                ActionRow(action: action, isHighlighted: rank == 0, query: query)
+                                ActionRow(action: action, isHighlighted: rank == 0)
                             }
                             .buttonStyle(.plain)
                             .accessibilityIdentifier(action.id)
