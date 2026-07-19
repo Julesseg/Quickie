@@ -81,13 +81,102 @@ struct FallbackTests {
         #expect(ids == ["github", "web-search"])
     }
 
-    @Test("an enabled Fallback appears once, never duplicated as a name-match")
-    func fallbackNotDoubledByNameMatch() {
-        // The web-search Fallback's title contains "search"; it must not show up
-        // both as a name hit and as a fallback row.
-        let ids = engine().results(for: "search").map(\.id)
-        #expect(ids == ["web-search"])
-        #expect(ids.filter { $0 == "web-search" }.count == 1)
+    @Test("an enabled Fallback whose name matches appears twice — a ranked match and a fallback row")
+    func enabledFallbackDoublesAsNameMatch() {
+        // The web-search Fallback's title is "Search the web"; typing "search"
+        // name-matches it, so it surfaces **both** as a ranked name-match (startable
+        // verb-first, breadcrumb empty) and in the bottom fallback region (CONTEXT.md
+        // → Fallback Action; issue #197). The two rows are the same Action but do
+        // different things, distinguished by their region.
+        let rows = engine().rows(for: "search")
+        let web = rows.filter { $0.action.id == "web-search" }
+        #expect(web.count == 2)
+        #expect(web.contains { $0.region == .ranked })
+        #expect(web.contains { $0.region == .fallback })
+    }
+
+    @Test("the ranked duplicate bolds its match; the fallback-region row never bolds")
+    func rankedDuplicateBoldsFallbackRowDoesNot() {
+        let rows = engine().rows(for: "search")
+        let ranked = rows.first { $0.action.id == "web-search" && $0.region == .ranked }!
+        let fallback = rows.first { $0.action.id == "web-search" && $0.region == .fallback }!
+        // The ranked row explains itself: "search" found its place in the title, so
+        // some title offsets bold.
+        #expect(ranked.match != nil)
+        let bold = ranked.match?.titleBold ?? []
+        #expect(bold.isEmpty == false)
+        // The fallback-region row consumes the query rather than being found by name,
+        // so it carries no Match highlight — it never bolds.
+        #expect(fallback.match == nil)
+    }
+
+    @Test("the ranked name-match sits above the bottom fallback region")
+    func rankedDuplicateOrdersAboveFallbackRow() {
+        // Both rows are the same Action; the ranked one rides the name-match region
+        // (nearer the thumb) and the fallback one is pinned to the very bottom.
+        let rows = engine().rows(for: "search")
+        let rankedIndex = rows.firstIndex { $0.action.id == "web-search" && $0.region == .ranked }!
+        let fallbackIndex = rows.firstIndex { $0.action.id == "web-search" && $0.region == .fallback }!
+        #expect(rankedIndex < fallbackIndex)
+        // The fallback region is always last.
+        #expect(fallbackIndex == rows.count - 1)
+    }
+
+    @Test("Enter runs the Highlighted row — the ranked match wins a strong name hit")
+    func highlightedRowIsRankedOnStrongNameMatch() {
+        // "search" is a strong prefix match on "Search the web", so the ranked
+        // duplicate — not the fallback row — is `rows[0]`, the row Enter runs, and it
+        // opens the breadcrumb empty (its `.ranked` region drives seed-and-commit).
+        let top = engine().highlightedRow(for: "search")
+        #expect(top?.action.id == "web-search")
+        #expect(top?.region == .ranked)
+    }
+
+    @Test("a ranked duplicate ranks by match quality — no fallback boost")
+    func rankedDuplicateHasNoSpecialBoost() {
+        // A stronger name-match on a *different* action outranks the fallback's ranked
+        // duplicate: the duplicate carries no special lift for being a fallback, it
+        // competes on match quality like any row. Here "web" exact-prefixes "Web tool"
+        // and only substring-matches "Search the web", so the plain action wins the top.
+        let engine = SearchEngine(
+            providers: [
+                IndexedProvider(catalog: [
+                    .quicklink(id: "webtool", title: "Web tool", url: URL(string: "https://web.example")!),
+                    CustomActionDefinition(
+                        name: "Search the web",
+                        template: "https://duckduckgo.com/?q={query}"
+                    ).makeAction(id: "web-search")!,
+                ])
+            ],
+            enabledFallbacks: ["web-search"]
+        )
+        let rows = engine.rows(for: "web")
+        // Top row is the plain prefix match, not the fallback's ranked duplicate.
+        #expect(rows.first?.action.id == "webtool")
+        // The fallback still surfaces both ways.
+        let web = rows.filter { $0.action.id == "web-search" }
+        #expect(web.contains { $0.region == .ranked })
+        #expect(web.contains { $0.region == .fallback })
+    }
+
+    @Test("the Fallbacks master switch off drops both rows — region and ranked")
+    func masterSwitchOffDropsBothRows() {
+        // Disabling the Fallbacks kind is the master switch over the whole region
+        // (issue #67). It drops the enabled fallback entirely — not just its region
+        // row but the ranked duplicate too, like any disabled kind.
+        let engine = SearchEngine(
+            providers: [
+                IndexedProvider(catalog: [
+                    CustomActionDefinition(
+                        name: "Search the web",
+                        template: "https://duckduckgo.com/?q={query}"
+                    ).makeAction(id: "web-search")!,
+                ])
+            ],
+            enabledFallbacks: ["web-search"],
+            enablement: ProviderEnablement(disabled: [.fallbacks])
+        )
+        #expect(engine.rows(for: "search").isEmpty)
     }
 
     @Test("an eligible-but-pooled action is a normal verb-first match, not a fallback row")
