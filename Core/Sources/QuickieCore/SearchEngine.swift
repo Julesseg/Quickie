@@ -172,24 +172,35 @@ public struct SearchEngine {
                     // (Custom Actions + Save for later + New Snippet), and a
                     // disabled kind short-circuits its instances (CONTEXT.md →
                     // Disabled) — even the two permanent captures that ride other
-                    // providers' catalogs. Master off drops the row entirely.
-                    // An eligible action *not* in the enabled list falls through to
-                    // name-matching below: a pooled Custom Action / Shortcut is
-                    // still startable verb-first.
-                    if enablement.isEnabled(.fallbacks) { fallbacks.append(action) }
+                    // providers' catalogs. Master off drops the action entirely —
+                    // *both* rows below — like any disabled kind.
+                    // An eligible action *not* in the enabled list skips this branch
+                    // and name-matches like any Action: a pooled Custom Action /
+                    // Shortcut is still startable verb-first.
+                    guard enablement.isEnabled(.fallbacks) else { continue }
+                    fallbacks.append(action)
+                    // Dual-row rule (CONTEXT.md → Fallback Action; issue #197): an
+                    // enabled fallback whose name/alias matches the query *also*
+                    // ranks as a name match, so it stays startable verb-first (the
+                    // glossary's promise). The two rows are the same Action but do
+                    // different things, told apart by their region — the fallback row
+                    // seeds-and-commits the typed query, the ranked duplicate opens
+                    // the breadcrumb empty. The duplicate competes on match quality
+                    // like any row (`rankedMatch`), with no fallback-special boost.
+                    if let hit = rankedMatch(for: action, weight: weight, query: trimmed) {
+                        ranked.append(hit)
+                    }
                 } else if provider.kind == .dynamic {
                     // Boosted-dynamic results skip name-matching — the Provider
                     // already decided they apply (Provider.swift: "boosted-dynamic
                     // … already query-relevant"). A boosted row never name-matched,
                     // so it carries no Match highlight.
                     boosted.append(ResultRow(action: action, region: .boosted, match: nil))
-                } else if let best = bestMatch(for: action, query: trimmed) {
+                } else if let hit = rankedMatch(for: action, weight: weight, query: trimmed) {
                     // Indexed or ranked-dynamic: name-matched and dropped when the
                     // query misses. A File Search survivor lands here so its match
                     // quality — not its provider — decides where it ranks.
-                    let blended: Double = blend(raw: best.score, weight: weight, id: action.id)
-                    let match = matchHighlight(for: action, winning: best.candidate, query: trimmed)
-                    ranked.append(Ranked(action: action, raw: best.score, blended: blended, match: match))
+                    ranked.append(hit)
                 }
             }
         }
@@ -529,6 +540,20 @@ public struct SearchEngine {
             }
         }
         return lhs.title != rhs.title ? lhs.title < rhs.title : lhs.id < rhs.id
+    }
+
+    /// Scores `action` against `query` and, when it name-matches, packages the
+    /// `Ranked` row the sort orders and `rows(for:)` projects into a `.ranked` region
+    /// row — the blended score, the raw score that fixes its tier, and its Match
+    /// highlight. Returns `nil` when the query hits none of the Action's names, so a
+    /// non-matching candidate is dropped. Shared by the ordinary ranked branch and the
+    /// dual-row fallback branch (issue #197), so an enabled fallback's ranked duplicate
+    /// is scored and highlighted exactly like any other name match — no special boost.
+    private func rankedMatch(for action: Action, weight: Double, query: String) -> Ranked? {
+        guard let best = bestMatch(for: action, query: query) else { return nil }
+        let blended = blend(raw: best.score, weight: weight, id: action.id)
+        let match = matchHighlight(for: action, winning: best.candidate, query: query)
+        return Ranked(action: action, raw: best.score, blended: blended, match: match)
     }
 
     /// The best match across an Action's title and its aliases — a query that hits

@@ -61,17 +61,39 @@ struct RankingTests {
         #expect(engine.results(for: "git").map(\.id).first == "exact")
     }
 
-    @Test("a Fallback stays pinned to the bottom even when favorited")
-    func favoritedFallbackStaysBottom() {
-        // Fallbacks ride the bottom region regardless of signals — they're
-        // reached by always being present, not by rank (issue #9 AC #4).
+    @Test("a Fallback's region row stays pinned to the bottom even when favorited")
+    func favoritedFallbackRegionStaysBottom() {
+        // The bottom fallback region rides below the name-matches regardless of
+        // signals — it's reached by always being present, not by rank (issue #9
+        // AC #4), so the favorite boost never lifts the *region* row out of it.
+        // A query that doesn't name-match the fallback surfaces it only there.
+        let engine = SearchEngine(
+            providers: [IndexedProvider(catalog: [link("match", "Search Repo"), .webSearchFallback()])],
+            favorites: ["builtin.web-search"],
+            enabledFallbacks: [Action.webSearchFallbackID]
+        )
+        let ids = engine.results(for: "repo").map(\.id)
+        #expect(ids.first == "match")
+        #expect(ids.last == "builtin.web-search")
+        // "repo" hits "Search Repo" but not "Search the web", so the fallback rides
+        // the region only — no ranked duplicate.
+        #expect(ids.filter { $0 == "builtin.web-search" }.count == 1)
+    }
+
+    @Test("a favorited Fallback's ranked duplicate ranks by its blended score")
+    func favoritedFallbackRankedDuplicateFloats() {
+        // When the query *does* name-match the fallback, the dual-row rule surfaces a
+        // ranked duplicate too (issue #197), and that row ranks like any name match:
+        // here the favorite boost floats the favorited web-search's duplicate above the
+        // unfavorited "Search Repo". The region row is still pinned to the very bottom.
         let engine = SearchEngine(
             providers: [IndexedProvider(catalog: [link("match", "Search Repo"), .webSearchFallback()])],
             favorites: ["builtin.web-search"],
             enabledFallbacks: [Action.webSearchFallbackID]
         )
         let ids = engine.results(for: "search").map(\.id)
-        #expect(ids.first == "match")
-        #expect(ids.last == "builtin.web-search")
+        #expect(ids.first == "builtin.web-search")  // favorited ranked duplicate
+        #expect(ids.last == "builtin.web-search")   // region row, always bottom
+        #expect(ids.filter { $0 == "builtin.web-search" }.count == 2)
     }
 }
