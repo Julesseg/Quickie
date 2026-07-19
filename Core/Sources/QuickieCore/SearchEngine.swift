@@ -70,9 +70,10 @@ public struct SearchEngine {
     private static let favoriteBoost = 0.5
 
     /// The match score at or above which a name match counts as exact/prefix and
-    /// floats to the top tier (issue #9 AC #4) — the one shared threshold
+    /// floats to the top tier (issue #9 AC #4) — sourced from the Matcher
     /// (`Matcher.strongMatchThreshold`, 0.80) so the engine's tier boundary and
-    /// File Search's inline gate can never drift.
+    /// the matcher's prefix base can never drift. (File Search's inline gate uses
+    /// the looser `Matcher.substringMatchThreshold`, ADR 0035.)
     private static let strongMatchThreshold = Matcher.strongMatchThreshold
 
     /// How much each unit of frecency score adds to a match. Kept modest so the
