@@ -14,9 +14,10 @@ Uses the five canonical triage labels (`needs-triage`, `needs-info`, `ready-for-
 
 ### Auto-dispatch of unblocked issues
 
-When an issue closes as completed, `unblock-dispatch.yml` finds `ready-for-agent`
-issues whose `## Blocked by` list is now fully closed and spawns a Paseo agent
-session for each on the self-hosted Mac runner (capped, guarded by the
+When an issue closes as completed (or on a manual run), `unblock-dispatch.yml`
+finds `ready-for-agent` issues with no open blockers — including never-blocked
+ones — and spawns a Paseo agent session for each on the self-hosted Mac runner
+(max 2 new sessions per run, capped in flight, guarded by the
 `agent-dispatched` label). See `docs/agents/auto-dispatch.md`.
 
 ### Domain docs
