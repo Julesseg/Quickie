@@ -577,7 +577,7 @@ struct RootView: View {
                             onRun: run,
                             isFavorite: { signals.isFavorite($0.id) },
                             canFavorite: { signals.canFavorite($0.id) },
-                            onToggleFavorite: { signals.toggleFavorite($0.id) },
+                            onToggleFavorite: toggleFavorite,
                             onSecondaryAction: performSecondary,
                             onScrollActive: { listScrolling = $0 }
                         )
@@ -588,7 +588,7 @@ struct RootView: View {
                             onRun: run,
                             isFavorite: { signals.isFavorite($0.id) },
                             canFavorite: { signals.canFavorite($0.id) },
-                            onToggleFavorite: { signals.toggleFavorite($0.id) },
+                            onToggleFavorite: toggleFavorite,
                             onSecondaryAction: performSecondary,
                             onScrollActive: { listScrolling = $0 }
                         )
@@ -783,6 +783,13 @@ struct RootView: View {
             // the same non-blocking acknowledgement as a copy-out.
             .onChange(of: capture.confirmation) { _, new in
                 guard let new else { return }
+                // A tactile beat the moment a capture validates (issue #37), paired
+                // with the confirmation toast: the success/error notification the
+                // feedback budget declares (ADR 0034), fired through the same
+                // `Haptics` call site as every other moment so the policy stays the
+                // single source of truth (issue #180) rather than a second
+                // `.sensoryFeedback` mapping the outcome itself.
+                Haptics.play(new.isError ? .captureFailed : .captureSucceeded)
                 // A successful add carries a deep link: show a tappable, longer-
                 // lived toast with a trailing open glyph; a failure is a plain,
                 // brief acknowledgement.
@@ -791,15 +798,6 @@ struct RootView: View {
                     systemImage: new.openURL == nil ? nil : "arrow.up.right",
                     openURL: new.openURL
                 )
-            }
-            // A tactile beat the moment a capture validates (issue #37), paired with
-            // the confirmation toast: a success notification when the record lands,
-            // an error buzz when the write failed. Driven by the same `confirmation`
-            // value, whose fresh id makes back-to-back captures each register as a
-            // distinct trigger.
-            .sensoryFeedback(trigger: capture.confirmation) { _, confirmation in
-                guard let confirmation else { return nil }
-                return confirmation.isError ? .error : .success
             }
             // Re-arm focus off the popped page's `onDisappear` — it fires when the
             // pop animation completes, the moment the launcher is back and its
@@ -1247,11 +1245,25 @@ struct RootView: View {
         }
     }
 
+    /// Pins or unpins a Favorite (issue #9), with the firmer pin beat (ADR 0034) —
+    /// the single toggle path both the Home grid and the Result list route through,
+    /// so the deliberate commitment is felt wherever it's made.
+    private func toggleFavorite(_ action: Action) {
+        Haptics.play(.pinToggle)
+        signals.toggleFavorite(action.id)
+    }
+
     /// Runs a row's main action. A multi-step capture (New Reminder) begins its
     /// breadcrumb instead of performing an outcome straight away; everything else
     /// performs its `ActionOutcome` at the platform edge. Selecting an Action
     /// records a frecency event (issue #9 AC #2).
     private func run(_ action: Action) {
+        // The light run beat (ADR 0034) on the single path every run funnels
+        // through — a result-row tap, a Favorite tap, or Enter on the Highlighted
+        // result — so the tap is felt whether it fires an outcome or opens a
+        // breadcrumb. Later beats (a step's tick, a capture's confirmation) are the
+        // policy's other moments, fired at their own sites.
+        Haptics.play(.runAction)
         signals.record(action.id)
         // Selected from the bottom fallback region, a capture seeds-and-commits the
         // typed query as its first step — the free-text Title (issue #145 follow-up) —

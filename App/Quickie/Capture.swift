@@ -338,6 +338,12 @@ final class CaptureModel {
 
         switch step {
         case .collecting:
+            // A pill sealed and the cursor advanced to the next step: the selection
+            // tick the feedback budget declares for mid-capture progress (ADR 0034).
+            // Only the *collecting* commit ticks — a commit that completes the
+            // capture falls to `.completed` below, whose beat is the run's confirmation
+            // success/error, so the final step never ticks and buzzes at once (#180).
+            Haptics.play(.breadcrumbStep)
             resetInputs()
         case .completed(let outcome):
             // Grab the recipe before `cancel` clears the session: the outcome is
