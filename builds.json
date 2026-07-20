@@ -1,0 +1,32 @@
+[
+  {
+    "pr": 208,
+    "title": "feat(ui): a bigger backdrop bloom, joined by a smaller out-of-sync one",
+    "sha": "2217875",
+    "time": "2026-07-20T07:00:28.430Z"
+  },
+  {
+    "pr": 207,
+    "title": "feat(shortcuts): user-defined alias per imported Shortcut",
+    "sha": "947a79d",
+    "time": "2026-07-19T18:07:21.276Z"
+  },
+  {
+    "pr": 205,
+    "title": "feat(core): enabled fallbacks also rank as name matches",
+    "sha": "c0dce7d",
+    "time": "2026-07-19T17:38:36.599Z"
+  },
+  {
+    "pr": 206,
+    "title": "feat(ui): alias pill on result rows",
+    "sha": "917f644",
+    "time": "2026-07-19T17:03:25.396Z"
+  },
+  {
+    "pr": 204,
+    "title": "feat(files): loosen the inline file gate from prefix to substring matches",
+    "sha": "12f2fd1",
+    "time": "2026-07-19T16:31:40.742Z"
+  }
+]

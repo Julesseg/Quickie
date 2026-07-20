@@ -1,0 +1,99 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>feat(ui): a bigger backdrop bloom, joined by a smaller out-of-sync one</title>
+  <style>
+    body { font-family: -apple-system, sans-serif; max-width: 520px; margin: 48px auto; padding: 0 24px; color: #1c1c1e; }
+    h1 { font-size: 1.5rem; margin-bottom: 4px; }
+    .sub { color: #666; margin: 0 0 32px; font-size: 0.95rem; }
+    a.btn { display: inline-block; background: #007AFF; color: #fff; text-decoration: none;
+            padding: 12px 28px; border-radius: 12px; font-size: 1.05rem; font-weight: 600; }
+    ul.builds { list-style: none; padding: 0; margin: 0; }
+    li.build { border: 1px solid #e2e2e6; border-radius: 14px; padding: 16px 18px; margin-bottom: 14px; }
+    li.build.latest { border-color: #007AFF; }
+    .title { font-weight: 600; font-size: 1.05rem; margin-bottom: 2px; }
+    .meta { color: #888; font-size: 0.82rem; margin-bottom: 12px; }
+    .badge { display: inline-block; background: #007AFF; color: #fff; font-size: 0.7rem;
+             font-weight: 600; padding: 2px 8px; border-radius: 999px; margin-left: 8px; vertical-align: middle; }
+    .hint { color: #999; font-size: 0.8rem; margin-top: 32px; text-align: center; }
+    a.back { display: inline-block; color: #007AFF; text-decoration: none; font-size: 0.95rem;
+             font-weight: 600; margin-bottom: 24px; }
+    a.back:hover { text-decoration: underline; }
+    a.pr-link { color: #007AFF; text-decoration: none; font-size: 0.85rem; font-weight: 600; }
+    a.pr-link:hover { text-decoration: underline; }
+    .slot-pr { margin-top: 18px; }
+    .build .pr-link { margin-left: 14px; }
+    .new-badge { display: none; background: #FF3B30; color: #fff; font-size: 0.7rem; font-weight: 700;
+                 padding: 2px 8px; border-radius: 999px; margin-left: 8px; vertical-align: middle; cursor: pointer; }
+    .seen-tag { display: none; color: #34C759; font-size: 0.78rem; font-weight: 600; margin-left: 8px; cursor: pointer; }
+    .time-pill { display: inline-block; background: #5856D6; color: #fff; font-size: 0.7rem; font-weight: 700;
+                 padding: 2px 8px; border-radius: 999px; margin-left: 8px; vertical-align: middle; }
+    .time-pill:empty { display: none; }
+    [data-build-id].unseen .new-badge { display: inline-block; }
+    [data-build-id].seen .seen-tag { display: inline-block; }
+    li.build.seen { opacity: 0.5; }
+    @media (prefers-color-scheme: dark) {
+      body { color: #f2f2f7; background: #000; }
+      li.build { border-color: #2c2c2e; }
+      .sub, .meta { color: #98989f; }
+    }
+  </style>
+</head>
+<body>
+  <a class="back" href="https://julesseg.github.io/Quickie/">← All builds</a>
+  <main data-build-id="208-2217875">
+    <h1>feat(ui): a bigger backdrop bloom, joined by a smaller out-of-sync one<span class="badge">latest</span><span class="new-badge">NEW</span><span class="time-pill" data-time="2026-07-20T07:00:28.430Z"></span><span class="seen-tag">✓ installed</span></h1>
+    <p class="sub">PR #208 · 2217875 · 2026-07-20 07:00 UTC</p>
+    <a class="btn" href="itms-services://?action=download-manifest&amp;url=https://julesseg.github.io/Quickie/builds/pr-208/manifest.plist">Install</a>
+    <p class="slot-pr"><a class="pr-link" href="https://github.com/julesseg/Quickie/pull/208">View PR #208 on GitHub →</a></p>
+    <p class="hint">Open this page in Safari on your iPhone, then tap Install.</p>
+  </main>
+<script>
+(function () {
+  var KEY = "quickie-seen-builds";
+  var load = function () {
+    try { return new Set(JSON.parse(localStorage.getItem(KEY) || "[]")); }
+    catch (e) { return new Set(); }
+  };
+  var save = function (set) {
+    try { localStorage.setItem(KEY, JSON.stringify(Array.from(set))); } catch (e) {}
+  };
+  var seen = load();
+  var apply = function (el) {
+    var id = el.getAttribute("data-build-id");
+    var isSeen = seen.has(id);
+    el.classList.toggle("seen", isSeen);
+    el.classList.toggle("unseen", !isSeen);
+  };
+  document.querySelectorAll("[data-build-id]").forEach(function (el) {
+    apply(el);
+    var id = el.getAttribute("data-build-id");
+    var btn = el.querySelector("a.btn");
+    if (btn) btn.addEventListener("click", function () { seen.add(id); save(seen); apply(el); });
+    el.querySelectorAll(".new-badge, .seen-tag").forEach(function (t) {
+      t.addEventListener("click", function (e) {
+        e.preventDefault();
+        if (seen.has(id)) seen.delete(id); else seen.add(id);
+        save(seen); apply(el);
+      });
+    });
+  });
+  var ago = function (iso) {
+    var s = Math.round((Date.now() - new Date(iso).getTime()) / 1000);
+    if (s < 10) return "just now";
+    if (s < 60) return s + "s ago";
+    var m = Math.round(s / 60);
+    if (m < 60) return m + "m ago";
+    var h = Math.round(m / 60);
+    if (h < 24) return h + "h ago";
+    return Math.round(h / 24) + "d ago";
+  };
+  document.querySelectorAll("[data-time]").forEach(function (el) {
+    el.textContent = ago(el.getAttribute("data-time"));
+  });
+})();
+</script>
+</body>
+</html>
