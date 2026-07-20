@@ -2081,8 +2081,9 @@ private enum ActiveSheet: Identifiable {
 }
 
 /// The Living backdrop the Liquid Glass chrome floats over (ADR 0010, 0034): a
-/// still, subtle purple mesh field with one compact bloom ball sweeping slowly
-/// up and down it on [[Home]], frozen the instant a query exists — alive at
+/// still, subtle purple mesh field with two bloom balls — one large, one about
+/// half its size — sweeping slowly up and down it on [[Home]] along the same path
+/// but a third of a period apart, frozen the instant a query exists — alive at
 /// rest, calm in use. The accent glow (here) and the gold hero glow
 /// (`ResultListView`) sit over it unchanged, since a glow is backdrop content
 /// the glass refracts, never overlaid blur.
@@ -2171,14 +2172,30 @@ private struct LivingBackdrop: View {
             TimelineView(.animation) { context in
                 bloomBall(
                     yPhase: Self.phase(at: context.date, period: driftPeriod),
-                    xPhase: Self.phase(at: context.date, period: driftPeriod * Self.sidewaysPeriodRatio)
+                    xPhase: Self.phase(at: context.date, period: driftPeriod * Self.sidewaysPeriodRatio),
+                    radius: Self.bloomRadius
+                )
+                // The companion: the same sweep, read off the same two clocks, but
+                // shifted along them — so it traces the same path shape without ever
+                // sitting where the big ball is.
+                bloomBall(
+                    yPhase: Self.phase(at: context.date, period: driftPeriod, offset: driftPeriod * Self.companionPhaseShift),
+                    xPhase: Self.phase(
+                        at: context.date,
+                        period: driftPeriod * Self.sidewaysPeriodRatio,
+                        offset: driftPeriod * Self.sidewaysPeriodRatio * Self.companionPhaseShift
+                    ),
+                    radius: Self.companionBloomRadius
                 )
             }
         } else {
-            // At rest the ball sits centered on the screen's vertical axis
-            // (xPhase 0.5 is the sideways oscillation's midpoint), near the top
-            // of its vertical travel.
-            bloomBall(yPhase: 0, xPhase: 0.5)
+            // At rest the main ball sits centered on the screen's vertical axis
+            // (xPhase 0.5 is the sideways oscillation's midpoint), near the top of
+            // its vertical travel. The companion holds the pose a third of a period
+            // later on both clocks — the same separation it keeps while drifting, so
+            // freezing the backdrop doesn't rearrange it.
+            bloomBall(yPhase: 0, xPhase: 0.5, radius: Self.bloomRadius)
+            bloomBall(yPhase: 0.75, xPhase: 0.93, radius: Self.companionBloomRadius)
         }
     }
 
@@ -2186,8 +2203,10 @@ private struct LivingBackdrop: View {
     /// of the fade in the first half, so it reads as a localized pool of color, not
     /// a wash. `yPhase` (0…1) sweeps it from near the top down past center — a
     /// travel of ~0.6 of the screen height; `xPhase` (0…1) wanders it a modest
-    /// ~0.15-screen-width to either side of center.
-    private func bloomBall(yPhase: Float, xPhase: Float) -> some View {
+    /// ~0.15-screen-width to either side of center. `radius` is the falloff, which
+    /// is the only thing that separates the two balls: same color, same fade, same
+    /// path — one just smaller than the other.
+    private func bloomBall(yPhase: Float, xPhase: Float, radius: CGFloat) -> some View {
         GeometryReader { geo in
             RadialGradient(
                 stops: [
@@ -2197,13 +2216,13 @@ private struct LivingBackdrop: View {
                 ],
                 center: .center,
                 startRadius: 0,
-                endRadius: Self.bloomRadius
+                endRadius: radius
             )
             // Size the frame to the falloff's diameter and position by center, so
             // the gradient reaches `.clear` exactly at its own edge and can sit
             // anywhere on screen without showing one (the same seam rule as the
             // accent glow below).
-            .frame(width: Self.bloomRadius * 2, height: Self.bloomRadius * 2)
+            .frame(width: radius * 2, height: radius * 2)
             .position(
                 x: (0.5 + Self.sidewaysAmplitude * (2 * CGFloat(xPhase) - 1)) * geo.size.width,
                 y: (0.15 + 0.65 * CGFloat(yPhase)) * geo.size.height
@@ -2215,8 +2234,11 @@ private struct LivingBackdrop: View {
     /// A smooth 0…1 oscillation over `period` seconds: a sine so the sweep eases at
     /// both turns with no seam where it reverses. One full rest→drift→rest cycle is
     /// `period`. Driven off the timeline's own clock, so it needs no stored phase.
-    static func phase(at date: Date, period: Double) -> Float {
-        let t = date.timeIntervalSinceReferenceDate
+    ///
+    /// `offset` slides the clock forward in seconds, which is how the companion ball
+    /// rides the very same oscillation while never arriving at the same time.
+    static func phase(at date: Date, period: Double, offset: Double = 0) -> Float {
+        let t = date.timeIntervalSinceReferenceDate + offset
         return Float((sin(2 * .pi * t / period) + 1) / 2)
     }
 
@@ -2234,7 +2256,18 @@ private struct LivingBackdrop: View {
     /// change — but with real presence: 130 read as a dot lost on the field and
     /// 200 still too slight, so the ball's bright core spans most of the screen's
     /// width while the quick fade keeps its edge well inside the field.
-    private static let bloomRadius: CGFloat = 280
+    private static let bloomRadius: CGFloat = 380
+
+    /// The companion ball's falloff radius. Deliberately a little over half the main
+    /// one: close enough that the two read as the same kind of object, far enough
+    /// apart that neither is mistaken for a duplicate of the other.
+    private static let companionBloomRadius: CGFloat = 210
+
+    /// How far the companion's clock runs ahead of the main ball's, as a fraction of
+    /// each period. Not a half (0.5) — at a half turn the two sit at exact opposite
+    /// ends of every sweep and pass through center in lockstep, which reads as a
+    /// mechanism. A third leaves them permanently, unevenly apart.
+    private static let companionPhaseShift: Double = 1.0 / 3
 
     /// The sideways oscillation's period, as a multiple of the vertical one: the
     /// golden ratio, the most irrational of ratios — the two sines can never fall
