@@ -2260,12 +2260,12 @@ private struct LivingBackdrop: View {
     /// bloom is felt as a broad lift in the field rather than seen as an object with
     /// an edge — which is why the travel band below is short to match. A big ball on
     /// a long sweep would read as a searchlight panning the screen.
-    private static let bloomRadius: CGFloat = 520
+    private static let bloomRadius: CGFloat = 400
 
-    /// The companion ball's falloff radius. Close to the main one now that both are
-    /// this large — the size difference has to stay legible against two overlapping
-    /// falloffs, and a ball half this size simply vanishes underneath the other.
-    private static let companionBloomRadius: CGFloat = 440
+    /// The companion ball's falloff radius, held at ~0.85 of the main one. The size
+    /// difference has to stay legible against two overlapping falloffs this wide; a
+    /// ball at half the main radius simply vanishes underneath it.
+    private static let companionBloomRadius: CGFloat = 340
 
     /// How far the companion's clock runs ahead of the main ball's, as a fraction of
     /// each period. Not a half (0.5) — at a half turn the two sit at exact opposite
