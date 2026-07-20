@@ -2199,13 +2199,13 @@ private struct LivingBackdrop: View {
         }
     }
 
-    /// A compact ball of brand violet fading to clear within its own radius — most
-    /// of the fade in the first half, so it reads as a localized pool of color, not
-    /// a wash. `yPhase` (0…1) sweeps it from near the top down past center — a
-    /// travel of ~0.6 of the screen height; `xPhase` (0…1) wanders it a modest
-    /// ~0.15-screen-width to either side of center. `radius` is the falloff, which
-    /// is the only thing that separates the two balls: same color, same fade, same
-    /// path — one just smaller than the other.
+    /// A ball of brand violet fading to clear within its own radius — most of the
+    /// fade in the first half, so it keeps a discernible center rather than reading
+    /// as a flat wash. `yPhase` (0…1) sweeps it down the short band between
+    /// `verticalTravelTop` and `verticalTravelBottom`; `xPhase` (0…1) wanders it a
+    /// modest ~0.15-screen-width to either side of center. `radius` is the falloff,
+    /// which is the only thing that separates the two balls: same color, same fade,
+    /// same path — one just smaller than the other.
     private func bloomBall(yPhase: Float, xPhase: Float, radius: CGFloat) -> some View {
         GeometryReader { geo in
             RadialGradient(
@@ -2225,7 +2225,9 @@ private struct LivingBackdrop: View {
             .frame(width: radius * 2, height: radius * 2)
             .position(
                 x: (0.5 + Self.sidewaysAmplitude * (2 * CGFloat(xPhase) - 1)) * geo.size.width,
-                y: (0.15 + 0.65 * CGFloat(yPhase)) * geo.size.height
+                y: (Self.verticalTravelTop
+                    + (Self.verticalTravelBottom - Self.verticalTravelTop) * CGFloat(yPhase))
+                    * geo.size.height
             )
         }
         .allowsHitTesting(false)
@@ -2253,21 +2255,31 @@ private struct LivingBackdrop: View {
 
     /// The travelling bloom's falloff radius — also half its frame, the seam rule
     /// above. Sized to read as an object crossing the screen, not a lighting
-    /// change — but with real presence: 130 read as a dot lost on the field and
-    /// 200 still too slight, so the ball's bright core spans most of the screen's
-    /// width while the quick fade keeps its edge well inside the field.
-    private static let bloomRadius: CGFloat = 380
+    /// change — but with real presence: 130 read as a dot lost on the field and 200
+    /// still too slight. At this size the falloff is wider than the screen, so the
+    /// bloom is felt as a broad lift in the field rather than seen as an object with
+    /// an edge — which is why the travel band below is short to match. A big ball on
+    /// a long sweep would read as a searchlight panning the screen.
+    private static let bloomRadius: CGFloat = 520
 
-    /// The companion ball's falloff radius. Deliberately a little over half the main
-    /// one: close enough that the two read as the same kind of object, far enough
-    /// apart that neither is mistaken for a duplicate of the other.
-    private static let companionBloomRadius: CGFloat = 210
+    /// The companion ball's falloff radius. Close to the main one now that both are
+    /// this large — the size difference has to stay legible against two overlapping
+    /// falloffs, and a ball half this size simply vanishes underneath the other.
+    private static let companionBloomRadius: CGFloat = 440
 
     /// How far the companion's clock runs ahead of the main ball's, as a fraction of
     /// each period. Not a half (0.5) — at a half turn the two sit at exact opposite
     /// ends of every sweep and pass through center in lockstep, which reads as a
     /// mechanism. A third leaves them permanently, unevenly apart.
     private static let companionPhaseShift: Double = 1.0 / 3
+
+    /// The top and bottom of the vertical sweep, as fractions of screen height — a
+    /// band around the middle third rather than most of the screen. Two balls this
+    /// wide already fill the field wherever they sit, so a long sweep only makes
+    /// them slide past the edges; a short one keeps the motion reading as the field
+    /// breathing in place, which is the "alive at rest" the backdrop is after.
+    private static let verticalTravelTop: CGFloat = 0.32
+    private static let verticalTravelBottom: CGFloat = 0.62
 
     /// The sideways oscillation's period, as a multiple of the vertical one: the
     /// golden ratio, the most irrational of ratios — the two sines can never fall
