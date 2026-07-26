@@ -82,6 +82,12 @@ public struct ComputedProvider: Provider {
         let trimmed = query.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty else { return [] }
 
+        // The device language — read off the injected calendar's locale —
+        // picks the accepted keyword tables (ADR 0036; issue #211): English,
+        // the dual-accept floor, plus the device language's table when we ship
+        // one. The same tables feed the date grammar and the Units connectors.
+        let tables = DateKeywordTable.tables(for: calendar.locale ?? Locale(identifier: "en_US"))
+
         var rows: [Action] = []
 
         // Detected results lead so a phone number's **Message** row lands as the
@@ -113,7 +119,7 @@ public struct ComputedProvider: Provider {
         if math, isCalculation(trimmed), let value = Calculator.evaluate(trimmed) {
             let answer = NumberFormat.string(value, maxFractionDigits: 10)
             rows.append(calculatorRow(id: "calc.math", title: answer, subtitle: trimmed, copying: answer))
-        } else if unitConversion, let conversion = Units.convert(trimmed) {
+        } else if unitConversion, let conversion = Units.convert(trimmed, tables: tables) {
             rows.append(calculatorRow(id: "calc.conversion", title: conversion.formatted, subtitle: trimmed, copying: conversion.formatted))
         }
 
@@ -124,7 +130,7 @@ public struct ComputedProvider: Provider {
         // branch: a query readable as a date question *and* anything above fires
         // every applicable row.
         if dateTime {
-            for answer in DateGrammar.answers(for: trimmed, calendar: calendar, now: now()) {
+            for answer in DateGrammar.answers(for: trimmed, tables: tables, calendar: calendar, now: now()) {
                 switch answer {
                 case .date(let date):
                     let formatted = DateGrammar.formatted(date, calendar: calendar)

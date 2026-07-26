@@ -24,8 +24,22 @@ public enum DateUnit: Sendable, Equatable {
 /// connector/unit/anchor keywords of that language, plus the locale whose
 /// **system calendar symbols** supply its weekday and month names — those are
 /// never hand-written into a table. The parser skeleton is language-independent;
-/// adding a language is a new table plus tests, no parser change.
+/// adding a language is a new table plus tests, no parser change. Launch tables:
+/// English (always accepted), French, Spanish, German (issue #211) — the device
+/// language's table layers on English via `tables(for:)`, never all at once.
 public struct DateKeywordTable: Sendable, Equatable {
+    /// A fixed yearless month-day a named-day anchor resolves to — the
+    /// December 25 behind "christmas"/"noël"/"navidad"/"weihnachten".
+    public struct MonthDay: Sendable, Equatable {
+        public let month: Int
+        public let day: Int
+
+        public init(month: Int, day: Int) {
+            self.month = month
+            self.day = day
+        }
+    }
+
     /// The locale whose localized calendar symbols provide this language's
     /// weekday and month names (e.g. `"en_US"` → "friday", "december").
     public let localeIdentifier: String
@@ -38,13 +52,24 @@ public struct DateKeywordTable: Sendable, Equatable {
     /// Words meaning the day before today ("yesterday").
     public let yesterday: Set<String>
     /// Forward connectors: `<n> <unit> <forward> <anchor>` ("from", "after").
+    /// A keyword may be a multi-word phrase ("à partir de") — the parser merges
+    /// phrase runs into single tokens before matching, for every keyword set.
     public let forward: Set<String>
     /// Postfix backward markers: `<n> <unit> <ago>` ("ago").
     public let ago: Set<String>
+    /// Prefix backward markers: `<agoPrefix> <n> <unit>` — the shape FR/ES/DE
+    /// say "ago" in ("il y a 2 jours", "hace 2 días", "vor 2 tagen").
+    public let agoPrefix: Set<String>
     /// Count-forward connectors: `<unit> <until> <date>` ("until", "till").
     public let until: Set<String>
     /// Count-backward connectors: `<unit> <since> <date>` ("since").
     public let since: Set<String>
+    /// Named-day anchors with a fixed month-day ("christmas" → December 25),
+    /// resolved to the nearest occurrence like any yearless month-day.
+    public let namedDays: [String: MonthDay]
+    /// The unit converter's connector words ("5 m *to* ft" / "5 m *en* pieds")
+    /// — the same table localizes the Units connectors (ADR 0036).
+    public let unitConnectors: Set<String>
 
     public init(
         localeIdentifier: String,
@@ -55,7 +80,10 @@ public struct DateKeywordTable: Sendable, Equatable {
         forward: Set<String>,
         ago: Set<String>,
         until: Set<String>,
-        since: Set<String>
+        since: Set<String>,
+        agoPrefix: Set<String> = [],
+        namedDays: [String: MonthDay] = [:],
+        unitConnectors: Set<String> = []
     ) {
         self.localeIdentifier = localeIdentifier
         self.units = units
@@ -64,8 +92,11 @@ public struct DateKeywordTable: Sendable, Equatable {
         self.yesterday = yesterday
         self.forward = forward
         self.ago = ago
+        self.agoPrefix = agoPrefix
         self.until = until
         self.since = since
+        self.namedDays = namedDays
+        self.unitConnectors = unitConnectors
     }
 
     /// The English table — the **dual-accept floor** (ADR 0036): it is always in
@@ -86,8 +117,99 @@ public struct DateKeywordTable: Sendable, Equatable {
         forward: ["from", "after"],
         ago: ["ago"],
         until: ["until", "till", "til"],
-        since: ["since"]
+        since: ["since"],
+        namedDays: ["christmas": MonthDay(month: 12, day: 25), "xmas": MonthDay(month: 12, day: 25)],
+        unitConnectors: ["to", "in", "as"]
     )
+
+    /// The French launch table (issue #211). Keyword matching folds diacritics
+    /// and straightens curly apostrophes, so "a partir de", "jusqu'a", and
+    /// "jusqua noel" all land on these entries; the apostrophe-free spellings
+    /// are listed because folding never invents an apostrophe.
+    public static let french = DateKeywordTable(
+        localeIdentifier: "fr_FR",
+        units: [
+            "jour": .day, "jours": .day,
+            "semaine": .week, "semaines": .week,
+            "mois": .month,
+            "an": .year, "ans": .year, "année": .year, "années": .year,
+        ],
+        today: ["aujourd'hui", "aujourdhui", "maintenant"],
+        tomorrow: ["demain"],
+        yesterday: ["hier"],
+        forward: ["à partir de", "à partir du", "après"],
+        ago: [],
+        until: ["jusqu'à", "jusqu'au", "jusqua", "jusquau", "avant"],
+        since: ["depuis"],
+        agoPrefix: ["il y a"],
+        namedDays: ["noël": MonthDay(month: 12, day: 25)],
+        unitConnectors: ["en"]
+    )
+
+    /// The Spanish launch table (issue #211). The article contractions ride in
+    /// the connectors ("a partir del viernes", "hasta el 25 dic") so anchors
+    /// stay bare words for the shared skeleton.
+    public static let spanish = DateKeywordTable(
+        localeIdentifier: "es_ES",
+        units: [
+            "día": .day, "días": .day,
+            "semana": .week, "semanas": .week,
+            "mes": .month, "meses": .month,
+            "año": .year, "años": .year,
+        ],
+        today: ["hoy", "ahora"],
+        tomorrow: ["mañana"],
+        yesterday: ["ayer"],
+        forward: ["a partir de", "a partir del", "después de", "después del", "tras"],
+        ago: [],
+        until: ["hasta", "hasta el"],
+        since: ["desde", "desde el"],
+        agoPrefix: ["hace"],
+        namedDays: ["navidad": MonthDay(month: 12, day: 25)],
+        unitConnectors: ["en", "a"]
+    )
+
+    /// The German launch table (issue #211). Unit words carry the dative
+    /// plurals the prefix-past shape produces ("vor 2 Tagen").
+    public static let german = DateKeywordTable(
+        localeIdentifier: "de_DE",
+        units: [
+            "tag": .day, "tage": .day, "tagen": .day,
+            "woche": .week, "wochen": .week,
+            "monat": .month, "monate": .month, "monaten": .month,
+            "jahr": .year, "jahre": .year, "jahren": .year,
+        ],
+        today: ["heute", "jetzt"],
+        tomorrow: ["morgen"],
+        yesterday: ["gestern"],
+        forward: ["ab", "nach"],
+        ago: [],
+        until: ["bis", "bis zum"],
+        since: ["seit"],
+        agoPrefix: ["vor"],
+        namedDays: ["weihnachten": MonthDay(month: 12, day: 25)],
+        unitConnectors: ["in", "als"]
+    )
+
+    /// The accepted tables for a device language: English — the dual-accept
+    /// floor (ADR 0036) — plus the device language's table when we ship one.
+    /// Only that one layers on; the other launch languages stay dormant, so a
+    /// Spanish device never parses French.
+    public static func tables(for locale: Locale) -> [DateKeywordTable] {
+        // The language is the identifier's leading subtag ("fr_CA" → "fr"),
+        // read directly so the lookup works on every platform Core builds on.
+        let language = locale.identifier
+            .lowercased()
+            .split(whereSeparator: { $0 == "_" || $0 == "-" })
+            .first
+            .map(String.init) ?? ""
+        switch language {
+        case "fr": return [.english, .french]
+        case "es": return [.english, .spanish]
+        case "de": return [.english, .german]
+        default: return [.english]
+        }
+    }
 }
 
 /// A parsed date query's answer, in one of the two kinds the Stage rule keys on
@@ -105,8 +227,9 @@ public enum DateAnswer: Sendable, Equatable {
 /// This slice ships two grammar families:
 ///
 /// - **Relative arithmetic** → a date: "3 weeks from friday", "tomorrow + 2
-///   weeks", "2 days ago". A bare weekday anchor means the nearest *future*
-///   occurrence, today included.
+///   weeks", "2 days ago" — and the prefix-past shape the localized tables use
+///   ("il y a 2 jours", "hace 2 días", "vor 2 tagen"). A bare weekday anchor
+///   means the nearest *future* occurrence, today included.
 /// - **Until/since counts** → a number: "days until dec 25", "weeks since
 ///   jan 1". A yearless month-day resolves to the nearest occurrence in the
 ///   connector's direction (until → future, since → past), today included. A
@@ -140,7 +263,10 @@ public enum DateGrammar {
         var answers: [DateAnswer] = []
         for table in tables {
             let context = Context(table: table, calendar: calendar, today: calendar.startOfDay(for: now))
-            if let answer = parse(tokens, context: context), !answers.contains(answer) {
+            // Multi-word keywords ("à partir de", "il y a") merge into single
+            // tokens per table, so the shapes below stay positional.
+            let merged = merge(tokens, phrases: context.phrases)
+            if let answer = parse(merged, context: context), !answers.contains(answer) {
                 answers.append(answer)
             }
         }
@@ -163,18 +289,63 @@ public enum DateGrammar {
 
     // MARK: - Parsing
 
-    /// Everything one table's parse needs: the table's keywords, the *device*
-    /// calendar all arithmetic runs through, today's start-of-day, and the
-    /// weekday/month symbol maps derived from the table's locale.
+    /// One table's keyword sets, normalized exactly like query tokens (folded,
+    /// lowercased), so a table author writes "à partir de" and "noël" naturally
+    /// while "a partir de" and "noel" still match.
+    private struct Keywords {
+        let units: [String: DateUnit]
+        let today: Set<String>
+        let tomorrow: Set<String>
+        let yesterday: Set<String>
+        let forward: Set<String>
+        let ago: Set<String>
+        let agoPrefix: Set<String>
+        let until: Set<String>
+        let since: Set<String>
+        let namedDays: [String: DateKeywordTable.MonthDay]
+
+        init(table: DateKeywordTable) {
+            let fold = Context.normalize
+            units = Dictionary(table.units.map { (fold($0.key), $0.value) }, uniquingKeysWith: { a, _ in a })
+            today = Set(table.today.map(fold))
+            tomorrow = Set(table.tomorrow.map(fold))
+            yesterday = Set(table.yesterday.map(fold))
+            forward = Set(table.forward.map(fold))
+            ago = Set(table.ago.map(fold))
+            agoPrefix = Set(table.agoPrefix.map(fold))
+            until = Set(table.until.map(fold))
+            since = Set(table.since.map(fold))
+            namedDays = Dictionary(table.namedDays.map { (fold($0.key), $0.value) }, uniquingKeysWith: { a, _ in a })
+        }
+
+        /// Every keyword spanning more than one word, as token runs, longest
+        /// first — the phrases `merge` joins back into single tokens.
+        var phrases: [[String]] {
+            let all = Array(forward) + Array(ago) + Array(agoPrefix) + Array(until)
+                + Array(since) + Array(today) + Array(tomorrow) + Array(yesterday)
+                + Array(units.keys) + Array(namedDays.keys)
+            return all
+                .map { $0.split(separator: " ").map(String.init) }
+                .filter { $0.count > 1 }
+                .sorted { $0.count > $1.count }
+        }
+    }
+
+    /// Everything one table's parse needs: the table's normalized keywords, the
+    /// *device* calendar all arithmetic runs through, today's start-of-day, and
+    /// the weekday/month symbol maps derived from the table's locale.
     private struct Context {
-        let table: DateKeywordTable
+        let keywords: Keywords
+        let phrases: [[String]]
         let calendar: Calendar
         let today: Date
         let weekdays: [String: Int]
         let months: [String: Int]
 
         init(table: DateKeywordTable, calendar: Calendar, today: Date) {
-            self.table = table
+            let keywords = Keywords(table: table)
+            self.keywords = keywords
+            self.phrases = keywords.phrases
             self.calendar = calendar
             self.today = today
 
@@ -202,11 +373,41 @@ public enum DateGrammar {
             self.months = months
         }
 
+        /// The shared token/keyword/symbol normalization: lowercased, curly
+        /// apostrophes straightened (iOS smart punctuation types U+2019),
+        /// diacritics folded ("noël" ↔ "noel", "días" ↔ "dias" — accent-free
+        /// typing is normal on many keyboards), trailing period stripped (so
+        /// "déc." matches a typed "dec"). Applied to *both* sides of every
+        /// match, so tables and calendar symbols stay naturally spelled.
         static func normalize(_ symbol: String) -> String {
             var name = symbol.lowercased()
+                .replacingOccurrences(of: "\u{2019}", with: "'")
+                .folding(options: .diacriticInsensitive, locale: Locale(identifier: "en_US"))
             if name.hasSuffix(".") { name.removeLast() }
             return name
         }
+    }
+
+    /// Joins each run of tokens matching a multi-word keyword back into the
+    /// single space-joined token the keyword sets hold, longest phrase first —
+    /// how "à partir de" and "il y a" fit a positional token grammar without
+    /// the parser knowing any language.
+    private static func merge(_ tokens: [String], phrases: [[String]]) -> [String] {
+        guard !phrases.isEmpty else { return tokens }
+        var merged: [String] = []
+        var index = 0
+        scan: while index < tokens.count {
+            for phrase in phrases where index + phrase.count <= tokens.count {
+                if Array(tokens[index..<(index + phrase.count)]) == phrase {
+                    merged.append(phrase.joined(separator: " "))
+                    index += phrase.count
+                    continue scan
+                }
+            }
+            merged.append(tokens[index])
+            index += 1
+        }
+        return merged
     }
 
     /// Lowercases and splits the query, padding `+`/`-` into standalone operator
@@ -229,8 +430,8 @@ public enum DateGrammar {
         // <n> <unit> <forward> <anchor…> — "3 weeks from friday"
         if tokens.count >= 4,
            let n = number(tokens[0]),
-           let unit = context.table.units[tokens[1]],
-           context.table.forward.contains(tokens[2]),
+           let unit = context.keywords.units[tokens[1]],
+           context.keywords.forward.contains(tokens[2]),
            let anchor = resolveDate(Array(tokens[3...]), direction: .future, context: context),
            let result = context.calendar.date(byAdding: unit.component, value: n, to: anchor) {
             return .date(result)
@@ -239,8 +440,18 @@ public enum DateGrammar {
         // <n> <unit> <ago> — "2 days ago"
         if tokens.count == 3,
            let n = number(tokens[0]),
-           let unit = context.table.units[tokens[1]],
-           context.table.ago.contains(tokens[2]),
+           let unit = context.keywords.units[tokens[1]],
+           context.keywords.ago.contains(tokens[2]),
+           let result = context.calendar.date(byAdding: unit.component, value: -n, to: context.today) {
+            return .date(result)
+        }
+
+        // <ago-prefix> <n> <unit> — "il y a 2 jours", "hace 2 días", "vor 2
+        // tagen": the launch languages put their "ago" *before* the number.
+        if tokens.count == 3,
+           context.keywords.agoPrefix.contains(tokens[0]),
+           let n = number(tokens[1]),
+           let unit = context.keywords.units[tokens[2]],
            let result = context.calendar.date(byAdding: unit.component, value: -n, to: context.today) {
             return .date(result)
         }
@@ -250,7 +461,7 @@ public enum DateGrammar {
             let op = tokens[tokens.count - 3]
             if op == "+" || op == "-",
                let n = number(tokens[tokens.count - 2]),
-               let unit = context.table.units[tokens[tokens.count - 1]],
+               let unit = context.keywords.units[tokens[tokens.count - 1]],
                let anchor = resolveDate(Array(tokens[..<(tokens.count - 3)]), direction: .future, context: context),
                let result = context.calendar.date(byAdding: unit.component, value: op == "+" ? n : -n, to: anchor) {
                 return .date(result)
@@ -258,14 +469,14 @@ public enum DateGrammar {
         }
 
         // <unit> <until|since> <date…> — "days until dec 25", "weeks since jan 1"
-        if tokens.count >= 3, let unit = context.table.units[tokens[0]] {
+        if tokens.count >= 3, let unit = context.keywords.units[tokens[0]] {
             let rest = Array(tokens[2...])
-            if context.table.until.contains(tokens[1]),
+            if context.keywords.until.contains(tokens[1]),
                let target = resolveDate(rest, direction: .future, context: context),
                let count = count(from: context.today, to: target, unit: unit, calendar: context.calendar) {
                 return .count(count)
             }
-            if context.table.since.contains(tokens[1]),
+            if context.keywords.since.contains(tokens[1]),
                let target = resolveDate(rest, direction: .past, context: context),
                let count = count(from: target, to: context.today, unit: unit, calendar: context.calendar) {
                 return .count(count)
@@ -286,18 +497,22 @@ public enum DateGrammar {
     }
 
     /// Resolves an anchor/date expression to a start-of-day date: an anchor
-    /// word (today/tomorrow/yesterday), a weekday name, a month-day in either
-    /// order ("dec 25", "25 dec"), or a month-day with an explicit year.
+    /// word (today/tomorrow/yesterday), a named day ("christmas", "noël"), a
+    /// weekday name, a month-day in either order ("dec 25", "25 dec"), or a
+    /// month-day with an explicit year.
     private static func resolveDate(_ tokens: [String], direction: Direction, context: Context) -> Date? {
         switch tokens.count {
         case 1:
             let word = tokens[0]
-            if context.table.today.contains(word) { return context.today }
-            if context.table.tomorrow.contains(word) {
+            if context.keywords.today.contains(word) { return context.today }
+            if context.keywords.tomorrow.contains(word) {
                 return context.calendar.date(byAdding: .day, value: 1, to: context.today)
             }
-            if context.table.yesterday.contains(word) {
+            if context.keywords.yesterday.contains(word) {
                 return context.calendar.date(byAdding: .day, value: -1, to: context.today)
+            }
+            if let named = context.keywords.namedDays[word] {
+                return nearestMonthDay(month: named.month, day: named.day, direction: direction, context: context)
             }
             if let weekday = context.weekdays[word] {
                 return nearestWeekday(weekday, direction: direction, context: context)

@@ -2,15 +2,16 @@ import Foundation
 import Testing
 @testable import QuickieCore
 
-// The Date & time grammar core (issue #210; ADR 0036; CONTEXT.md → Date & time):
-// a language-independent parser skeleton — number + unit word + connector +
-// anchor word — fed by per-language keyword tables, English only in this slice.
-// These tests pin the two launch families (relative arithmetic → a date,
-// until/since → a count), the anchor semantics (a bare weekday is the nearest
-// future occurrence, today included), the dual-accept floor (English parses
-// regardless of device locale), and the data-only extension path (a toy table
-// parses with zero parser changes). Everything runs against an injected
-// calendar and clock, so "today" is a fixed Wednesday.
+// The Date & time grammar core (issues #210/#211; ADR 0036; CONTEXT.md → Date
+// & time): a language-independent parser skeleton — number + unit word +
+// connector + anchor word — fed by per-language keyword tables: English plus
+// the French, Spanish, and German launch tables. These tests pin the two
+// launch families (relative arithmetic → a date, until/since → a count), the
+// anchor semantics (a bare weekday is the nearest future occurrence, today
+// included), the dual-accept floor (English parses regardless of device
+// locale), the data-only extension path (a toy table parses with zero parser
+// changes), and the launch tables' coverage and selection. Everything runs
+// against an injected calendar and clock, so "today" is a fixed Wednesday.
 struct DateGrammarTests {
 
     /// A fixed device calendar: Gregorian, en_US, UTC — every expectation below
@@ -205,6 +206,22 @@ struct DateGrammarTests {
         #expect(answers("zorp jusqua déc 25", tables: [toyTable]) == [.count(163)])
     }
 
+    @Test("a phrase valid in two accepted grammars fires each interpretation")
+    func distinctAnswersAcrossTablesBothFire() {
+        // A crafted second table reads "days" as *weeks*, so "2 days from
+        // today" is valid in both grammars with different answers. Both fire,
+        // in table order — non-arbitrating, per the standing Computed rule
+        // (ADR 0036): the user picks, the grammar never does.
+        let contrarian = DateKeywordTable(
+            localeIdentifier: "en_US",
+            units: ["days": .week],
+            today: ["today"], tomorrow: [], yesterday: [],
+            forward: ["from"], ago: [], until: [], since: []
+        )
+        #expect(answers("2 days from today", tables: [.english, contrarian])
+            == [.date(date(2026, 7, 17)), .date(date(2026, 7, 29))])
+    }
+
     @Test("two tables yielding the same answer collapse to one row's worth")
     func identicalAnswersAcrossTablesDedupe() {
         // Both tables resolve "2 days ago"-shaped queries; identical answers dedupe
@@ -216,6 +233,81 @@ struct DateGrammarTests {
             forward: [], ago: ["ago"], until: [], since: []
         )
         #expect(answers("2 days ago", tables: [.english, englishy]) == [.date(date(2026, 7, 13))])
+    }
+
+    // MARK: - Launch tables (issue #211, ADR 0036)
+
+    @Test("French: 'à partir de' connects forward arithmetic, weekday names from fr symbols")
+    func frenchForwardArithmetic() {
+        // The issue's worked example: nearest future Friday is July 17, three
+        // weeks on is August 7 — same answer as "3 weeks from friday".
+        #expect(answers("3 semaines à partir de vendredi", tables: [.english, .french]) == [.date(date(2026, 8, 7))])
+    }
+
+    @Test("French: 'jours jusqu'à noël' counts to the named day")
+    func frenchDaysUntilChristmas() {
+        #expect(answers("jours jusqu'à noël", tables: [.english, .french]) == [.count(163)])
+        // The apostrophe-and-article contraction and a month-day target too.
+        #expect(answers("jours jusqu'au 25 déc", tables: [.english, .french]) == [.count(163)])
+    }
+
+    @Test("French phrases parse without accents, apostrophes, or with iOS curly quotes")
+    func frenchTypingVariants() {
+        // Diacritic-free and apostrophe-free typing is normal on many keyboards;
+        // iOS smart punctuation types U+2019 — all fold to the same keywords.
+        #expect(answers("3 semaines a partir de vendredi", tables: [.english, .french]) == [.date(date(2026, 8, 7))])
+        #expect(answers("jours jusqua noel", tables: [.english, .french]) == [.count(163)])
+        #expect(answers("jours jusqu\u{2019}à noël", tables: [.english, .french]) == [.count(163)])
+    }
+
+    @Test("French: 'il y a' leads a relative-past phrase and 'demain' anchors")
+    func frenchPastAndAnchors() {
+        #expect(answers("il y a 2 jours", tables: [.english, .french]) == [.date(date(2026, 7, 13))])
+        #expect(answers("demain + 2 semaines", tables: [.english, .french]) == [.date(date(2026, 7, 30))])
+    }
+
+    @Test("Spanish: forward arithmetic, until counts, and 'hace' relative past")
+    func spanishCoverage() {
+        #expect(answers("3 semanas a partir del viernes", tables: [.english, .spanish]) == [.date(date(2026, 8, 7))])
+        #expect(answers("días hasta navidad", tables: [.english, .spanish]) == [.count(163)])
+        #expect(answers("semanas desde el 1 ene", tables: [.english, .spanish]) == [.count(27)])
+        #expect(answers("hace 2 días", tables: [.english, .spanish]) == [.date(date(2026, 7, 13))])
+    }
+
+    @Test("German: forward arithmetic, until counts, and 'vor' relative past")
+    func germanCoverage() {
+        #expect(answers("3 wochen ab freitag", tables: [.english, .german]) == [.date(date(2026, 8, 7))])
+        #expect(answers("tage bis weihnachten", tables: [.english, .german]) == [.count(163)])
+        #expect(answers("tage bis zum 25 dez", tables: [.english, .german]) == [.count(163)])
+        #expect(answers("vor 2 tagen", tables: [.english, .german]) == [.date(date(2026, 7, 13))])
+    }
+
+    @Test("English gains the same named-day anchor: 'days until christmas'")
+    func englishNamedDay() {
+        #expect(answers("days until christmas") == [.count(163)])
+        #expect(answers("days until xmas") == [.count(163)])
+    }
+
+    @Test("dual accept: English parses unchanged with a language table layered on")
+    func englishParsesWithLayeredTable() {
+        // The floor (ADR 0036): every English phrase keeps its single answer —
+        // the layered table never doubles or shifts it.
+        #expect(answers("3 weeks from friday", tables: [.english, .french]) == [.date(date(2026, 8, 7))])
+        #expect(answers("days until dec 25", tables: [.english, .german]) == [.count(163)])
+    }
+
+    @Test("only the device language's table layers on English, never all four")
+    func tableSelectionFollowsDeviceLanguage() {
+        #expect(DateKeywordTable.tables(for: Locale(identifier: "fr_CA")) == [.english, .french])
+        #expect(DateKeywordTable.tables(for: Locale(identifier: "es_MX")) == [.english, .spanish])
+        #expect(DateKeywordTable.tables(for: Locale(identifier: "de_AT")) == [.english, .german])
+        #expect(DateKeywordTable.tables(for: Locale(identifier: "en_US")) == [.english])
+        #expect(DateKeywordTable.tables(for: Locale(identifier: "it_IT")) == [.english])
+    }
+
+    @Test("a French phrase does not parse on a Spanish device — layers don't stack")
+    func foreignLanguagePhraseDeclinesOnOtherDevice() {
+        #expect(answers("jours jusqu'à noël", tables: DateKeywordTable.tables(for: Locale(identifier: "es_ES"))) == [])
     }
 
     // MARK: - Output formatting
