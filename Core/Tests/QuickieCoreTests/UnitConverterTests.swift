@@ -52,6 +52,41 @@ struct UnitConverterTests {
         #expect(Units.convert("1 mi to km")?.formatted == "1.6093 km")
     }
 
+    @Test("French connector and unit names convert: '5 m en pieds'")
+    func frenchConnector() {
+        // The Units connectors localize through the same keyword tables as the
+        // date grammar (ADR 0036; issue #211).
+        let result = Units.convert("5 m en pieds", tables: [.english, .french])
+        #expect(result?.unit == "ft")
+        #expect(abs((result?.value ?? 0) - 16.4042) < 0.001)
+        // Accented full unit names fold onto the registry's spellings.
+        #expect(Units.convert("5 mètres en pieds", tables: [.english, .french])?.unit == "ft")
+    }
+
+    @Test("Spanish and German connectors convert their languages' phrasings")
+    func spanishAndGermanConnectors() {
+        #expect(Units.convert("5 m a pies", tables: [.english, .spanish])?.unit == "ft")
+        let miles = Units.convert("2 kilómetros en millas", tables: [.english, .spanish])
+        #expect(miles?.unit == "mi")
+        #expect(abs((miles?.value ?? 0) - 1.2427) < 0.001)
+        #expect(Units.convert("5 m in fuß", tables: [.english, .german])?.unit == "ft")
+        #expect(Units.convert("5 meter als fuß", tables: [.english, .german])?.unit == "ft")
+    }
+
+    @Test("English connectors keep working with a language table layered on")
+    func englishConnectorsAreTheFloor() {
+        // Dual accept (ADR 0036): localization work never breaks an English query.
+        let result = Units.convert("5 m to ft", tables: [.english, .french])
+        #expect(result?.unit == "ft")
+        #expect(abs((result?.value ?? 0) - 16.4042) < 0.001)
+    }
+
+    @Test("a localized connector is gated by its table — English-only declines it")
+    func localizedConnectorNeedsItsTable() {
+        // "en" is only a connector once the French (or Spanish) table is active.
+        #expect(Units.convert("5 m en pieds") == nil)
+    }
+
     @Test("cross-family conversions decline")
     func crossFamilyDeclines() {
         // Miles measure length, kilograms mass — not convertible.

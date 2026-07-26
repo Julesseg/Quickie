@@ -34,8 +34,13 @@ public enum Units {
     /// Parses and evaluates `query` as a unit conversion, or returns `nil` when
     /// it is not one. Both units must belong to the same family (length, mass,
     /// temperature, volume) — a cross-family request declines.
-    public static func convert(_ query: String) -> Conversion? {
-        guard let parsed = parse(query) else { return nil }
+    ///
+    /// The connector words come from the accepted date keyword tables (ADR
+    /// 0036; issue #211) — the same tables that localize the date grammar — so
+    /// "5 m en pieds" converts on a French device while "5 m to ft" converts
+    /// everywhere. Defaults to English alone, the dual-accept floor.
+    public static func convert(_ query: String, tables: [DateKeywordTable] = [.english]) -> Conversion? {
+        guard let parsed = parse(query, tables: tables) else { return nil }
         guard let from = registry[parsed.from], let to = registry[parsed.to] else { return nil }
         // Cross-family conversions (miles → kilograms) are not meaningful; the
         // shared family is what makes the `Measurement` conversion valid.
@@ -58,23 +63,36 @@ public enum Units {
         let to: String
     }
 
-    /// Matches `<number> <from-unit> (to|in|as) <to-unit>`. The connector word
-    /// is `to`, `in`, or `as`; unit tokens may carry the degree/quote symbols
-    /// that stand in for temperature and feet/inches.
+    /// Matches `<number> <from-unit> <connector> <to-unit>`. The connector word
+    /// is validated against the accepted tables *after* the match — the shape
+    /// is language-independent, the words are table data (ADR 0036). Unit
+    /// tokens accept any letters (accented names like "mètres" and "fuß"
+    /// included) plus the degree/quote symbols that stand in for temperature
+    /// and feet/inches.
     private static let pattern = try! NSRegularExpression(
-        pattern: #"^\s*(-?\d+(?:\.\d+)?)\s*([a-z°"'µ]+)\s+(?:to|in|as)\s+([a-z°"'µ]+)\s*$"#,
+        pattern: #"^\s*(-?\d+(?:\.\d+)?)\s*([\p{L}°"'µ]+)\s+([\p{L}°"'µ]+)\s+([\p{L}°"'µ]+)\s*$"#,
         options: [.caseInsensitive]
     )
 
-    private static func parse(_ query: String) -> Parsed? {
+    private static func parse(_ query: String, tables: [DateKeywordTable]) -> Parsed? {
         let lowered = query.lowercased()
         let range = NSRange(lowered.startIndex..., in: lowered)
         guard let match = pattern.firstMatch(in: lowered, range: range),
               let amountRange = Range(match.range(at: 1), in: lowered),
               let fromRange = Range(match.range(at: 2), in: lowered),
-              let toRange = Range(match.range(at: 3), in: lowered),
+              let connectorRange = Range(match.range(at: 3), in: lowered),
+              let toRange = Range(match.range(at: 4), in: lowered),
               let amount = Double(lowered[amountRange]) else { return nil }
-        return Parsed(amount: amount, from: String(lowered[fromRange]), to: String(lowered[toRange]))
+        let connectors = Set(tables.flatMap { $0.unitConnectors.map(normalize) })
+        guard connectors.contains(normalize(String(lowered[connectorRange]))) else { return nil }
+        return Parsed(amount: amount, from: normalize(String(lowered[fromRange])), to: normalize(String(lowered[toRange])))
+    }
+
+    /// The registry/connector normalization: lowercased with diacritics folded,
+    /// mirroring the date grammar's token normalization — "mètres" lands on the
+    /// registered "metres", "kilómetros" on "kilometros".
+    private static func normalize(_ token: String) -> String {
+        token.lowercased().folding(options: .diacriticInsensitive, locale: Locale(identifier: "en_US"))
     }
 
     // MARK: - Unit registry
@@ -97,22 +115,29 @@ public enum Units {
             for alias in aliases { map[alias] = UnitDef(unit: unit, family: family, symbol: symbol) }
         }
 
+        // Aliases are stored diacritic-folded — lookup folds the query token the
+        // same way, so "mètres" lands on "metres" and "kilómetros" on
+        // "kilometros". The FR/ES/DE names (issue #211) sit beside the English
+        // ones: the registry is global, the *connector* is what each language's
+        // table gates. German "Pfund" is deliberately absent — it means 500 g,
+        // not a pound, and a wrong conversion is worse than a decline.
+
         // Length
-        add(["mm", "millimeter", "millimeters", "millimetre", "millimetres"], UnitLength.millimeters, "length", "mm")
-        add(["cm", "centimeter", "centimeters", "centimetre", "centimetres"], UnitLength.centimeters, "length", "cm")
-        add(["m", "meter", "meters", "metre", "metres"], UnitLength.meters, "length", "m")
-        add(["km", "kilometer", "kilometers", "kilometre", "kilometres"], UnitLength.kilometers, "length", "km")
-        add(["in", "inch", "inches", "\""], UnitLength.inches, "length", "in")
-        add(["ft", "foot", "feet", "'"], UnitLength.feet, "length", "ft")
+        add(["mm", "millimeter", "millimeters", "millimetre", "millimetres", "milimetro", "milimetros"], UnitLength.millimeters, "length", "mm")
+        add(["cm", "centimeter", "centimeters", "centimetre", "centimetres", "centimetro", "centimetros", "zentimeter"], UnitLength.centimeters, "length", "cm")
+        add(["m", "meter", "meters", "metre", "metres", "metro", "metros"], UnitLength.meters, "length", "m")
+        add(["km", "kilometer", "kilometers", "kilometre", "kilometres", "kilometro", "kilometros"], UnitLength.kilometers, "length", "km")
+        add(["in", "inch", "inches", "\"", "pouce", "pouces", "pulgada", "pulgadas", "zoll"], UnitLength.inches, "length", "in")
+        add(["ft", "foot", "feet", "'", "pied", "pieds", "pie", "pies", "fuß", "fuss"], UnitLength.feet, "length", "ft")
         add(["yd", "yard", "yards"], UnitLength.yards, "length", "yd")
-        add(["mi", "mile", "miles"], UnitLength.miles, "length", "mi")
+        add(["mi", "mile", "miles", "milla", "millas", "meile", "meilen"], UnitLength.miles, "length", "mi")
 
         // Mass
         add(["mg", "milligram", "milligrams"], UnitMass.milligrams, "mass", "mg")
-        add(["g", "gram", "grams"], UnitMass.grams, "mass", "g")
-        add(["kg", "kilogram", "kilograms"], UnitMass.kilograms, "mass", "kg")
-        add(["oz", "ounce", "ounces"], UnitMass.ounces, "mass", "oz")
-        add(["lb", "lbs", "pound", "pounds"], UnitMass.pounds, "mass", "lb")
+        add(["g", "gram", "grams", "gramme", "grammes", "gramo", "gramos", "gramm"], UnitMass.grams, "mass", "g")
+        add(["kg", "kilogram", "kilograms", "kilogramme", "kilogrammes", "kilogramo", "kilogramos", "kilogramm"], UnitMass.kilograms, "mass", "kg")
+        add(["oz", "ounce", "ounces", "onza", "onzas", "unze", "unzen"], UnitMass.ounces, "mass", "oz")
+        add(["lb", "lbs", "pound", "pounds", "livre", "livres", "libra", "libras"], UnitMass.pounds, "mass", "lb")
         add(["st", "stone", "stones"], UnitMass.stones, "mass", "st")
         add(["t", "tonne", "tonnes", "metricton", "metrictons"], UnitMass.metricTons, "mass", "t")
 
@@ -122,9 +147,9 @@ public enum Units {
         add(["k", "kelvin"], UnitTemperature.kelvin, "temperature", "K")
 
         // Volume
-        add(["ml", "milliliter", "milliliters", "millilitre", "millilitres"], UnitVolume.milliliters, "volume", "mL")
-        add(["l", "liter", "liters", "litre", "litres"], UnitVolume.liters, "volume", "L")
-        add(["gal", "gallon", "gallons"], UnitVolume.gallons, "volume", "gal")
+        add(["ml", "milliliter", "milliliters", "millilitre", "millilitres", "mililitro", "mililitros"], UnitVolume.milliliters, "volume", "mL")
+        add(["l", "liter", "liters", "litre", "litres", "litro", "litros"], UnitVolume.liters, "volume", "L")
+        add(["gal", "gallon", "gallons", "galon", "galones"], UnitVolume.gallons, "volume", "gal")
         add(["qt", "quart", "quarts"], UnitVolume.quarts, "volume", "qt")
         add(["pt", "pint", "pints"], UnitVolume.pints, "volume", "pt")
         add(["cup", "cups"], UnitVolume.cups, "volume", "cup")
