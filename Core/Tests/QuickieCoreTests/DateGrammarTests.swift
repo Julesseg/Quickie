@@ -7,12 +7,12 @@ import Testing
 // connector + anchor word — fed by per-language keyword tables: English plus
 // the French, Spanish, and German launch tables. These tests pin the three
 // families (relative arithmetic → a date, until/since → a count, timezone
-// conversion → a time), the
-// anchor semantics (a bare weekday is the nearest future occurrence, today
-// included), the dual-accept floor (English parses regardless of device
-// locale), the data-only extension path (a toy table parses with zero parser
-// changes), and the launch tables' coverage and selection. Everything runs
-// against an injected calendar and clock, so "today" is a fixed Wednesday.
+// conversion → a time), the anchor semantics (a bare weekday is the nearest
+// future occurrence, today included), the dual-accept floor (English parses
+// regardless of device locale), the data-only extension path (a toy table
+// parses with zero parser changes), and the launch tables' coverage and
+// selection. Everything runs against an injected calendar and clock, so
+// "today" is a fixed Wednesday.
 struct DateGrammarTests {
 
     /// A fixed device calendar: Gregorian, en_US, UTC — every expectation below
