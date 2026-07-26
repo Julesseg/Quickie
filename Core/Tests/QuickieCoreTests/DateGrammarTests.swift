@@ -2,16 +2,17 @@ import Foundation
 import Testing
 @testable import QuickieCore
 
-// The Date & time grammar core (issues #210/#211; ADR 0036; CONTEXT.md → Date
-// & time): a language-independent parser skeleton — number + unit word +
+// The Date & time grammar core (issues #210/#211/#212; ADR 0036; CONTEXT.md →
+// Date & time): a language-independent parser skeleton — number + unit word +
 // connector + anchor word — fed by per-language keyword tables: English plus
-// the French, Spanish, and German launch tables. These tests pin the two
-// launch families (relative arithmetic → a date, until/since → a count), the
-// anchor semantics (a bare weekday is the nearest future occurrence, today
-// included), the dual-accept floor (English parses regardless of device
-// locale), the data-only extension path (a toy table parses with zero parser
-// changes), and the launch tables' coverage and selection. Everything runs
-// against an injected calendar and clock, so "today" is a fixed Wednesday.
+// the French, Spanish, and German launch tables. These tests pin the three
+// families (relative arithmetic → a date, until/since → a count, timezone
+// conversion → a time), the anchor semantics (a bare weekday is the nearest
+// future occurrence, today included), the dual-accept floor (English parses
+// regardless of device locale), the data-only extension path (a toy table
+// parses with zero parser changes), and the launch tables' coverage and
+// selection. Everything runs against an injected calendar and clock, so
+// "today" is a fixed Wednesday.
 struct DateGrammarTests {
 
     /// A fixed device calendar: Gregorian, en_US, UTC — every expectation below
@@ -308,6 +309,113 @@ struct DateGrammarTests {
     @Test("a French phrase does not parse on a Spanish device — layers don't stack")
     func foreignLanguagePhraseDeclinesOnOtherDevice() {
         #expect(answers("jours jusqu'à noël", tables: DateKeywordTable.tables(for: Locale(identifier: "es_ES"))) == [])
+    }
+
+    // MARK: - Timezone conversion (issue #212)
+
+    private func zone(_ identifier: String) -> TimeZone { TimeZone(identifier: identifier)! }
+
+    @Test("'9am pst in tokyo' converts a sourced wall-clock time to the target zone")
+    func timeWithSourceZone() {
+        // 9am Los Angeles (PDT, UTC−7) on July 15 is 16:00 UTC — 1am July 16 in
+        // Tokyo, so the answer carries the crossed-midnight day offset.
+        #expect(answers("9am pst in tokyo")
+            == [.time(date(2026, 7, 15, hour: 16), zone: zone("Asia/Tokyo"), dayOffset: 1)])
+    }
+
+    @Test("a sourceless time reads in the device zone: '3pm in paris'")
+    func timeWithoutSourceZone() {
+        // The device calendar is UTC, so 3pm is 15:00 UTC — 5pm the same day in
+        // Paris (CEST, UTC+2).
+        #expect(answers("3pm in paris")
+            == [.time(date(2026, 7, 15, hour: 15), zone: zone("Europe/Paris"), dayOffset: 0)])
+    }
+
+    @Test("a 24-hour clock parses: '15:30 cet in new york'")
+    func twentyFourHourClock() {
+        // 15:30 Paris (CEST, UTC+2) is 13:30 UTC — 9:30am the same day in New
+        // York (EDT, UTC−4).
+        #expect(answers("15:30 cet in new york")
+            == [.time(date(2026, 7, 15, hour: 13, minute: 30), zone: zone("America/New_York"), dayOffset: 0)])
+    }
+
+    @Test("a conversion crossing midnight backward carries a −1 day offset")
+    func backwardDayCrossing() {
+        // 1am Tokyo on (Tokyo's) July 15 is 16:00 UTC July 14 — 9am July 14 in
+        // Los Angeles, the day before.
+        #expect(answers("1am jst in la")
+            == [.time(date(2026, 7, 14, hour: 16), zone: zone("America/Los_Angeles"), dayOffset: -1)])
+    }
+
+    @Test("multi-word zone names work on both sides: '9am new york in hong kong'")
+    func multiWordZones() {
+        // 9am New York (EDT, UTC−4) is 13:00 UTC — 9pm the same day in Hong Kong.
+        #expect(answers("9am new york in hong kong")
+            == [.time(date(2026, 7, 15, hour: 13), zone: zone("Asia/Hong_Kong"), dayOffset: 0)])
+    }
+
+    @Test("the meridiem may be its own token, and minutes ride with it")
+    func detachedMeridiem() {
+        #expect(answers("9 am pst in tokyo") == answers("9am pst in tokyo"))
+        #expect(answers("9:30 pm in london")
+            == [.time(date(2026, 7, 15, hour: 21, minute: 30), zone: zone("Europe/London"), dayOffset: 0)])
+    }
+
+    @Test("12am is midnight and 12pm is noon")
+    func meridiemTwelves() {
+        #expect(answers("12am in tokyo")
+            == [.time(date(2026, 7, 15, hour: 0), zone: zone("Asia/Tokyo"), dayOffset: 0)])
+        #expect(answers("12pm in tokyo")
+            == [.time(date(2026, 7, 15, hour: 12), zone: zone("Asia/Tokyo"), dayOffset: 0)])
+    }
+
+    @Test("non-time and non-zone queries decline the timezone family", arguments: [
+        "9 in tokyo",        // a bare digit run is not a time (the bare-number principle)
+        "13pm in tokyo",     // an impossible 12-hour hour
+        "25:00 in tokyo",    // an impossible 24-hour hour
+        "9:75 in tokyo",     // an impossible minute
+        "9am in gotham",     // an unregistered target
+        "9am atlantis in tokyo", // an unregistered source
+        "9am pst in",        // a connector with no target
+    ])
+    func timezoneDeclines(_ query: String) {
+        #expect(answers(query) == [])
+    }
+
+    @Test("the connector is table data: French 'à' converts, folded or not")
+    func frenchTimeZoneConnector() {
+        let expected: [DateAnswer] = [.time(date(2026, 7, 15, hour: 15, minute: 30), zone: zone("Asia/Tokyo"), dayOffset: 1)]
+        #expect(answers("15:30 à tokyo", tables: [.english, .french]) == expected)
+        #expect(answers("15:30 a tokyo", tables: [.english, .french]) == expected)
+        // And it is *only* table data — no French table, no French connector.
+        #expect(answers("15:30 à tokyo") == [])
+    }
+
+    @Test("two tables sharing a connector still yield one answer")
+    func timeZoneAnswersDedupeAcrossTables() {
+        // English and German both connect with "in"; identical answers collapse.
+        #expect(answers("9am pst in tokyo", tables: [.english, .german])
+            == [.time(date(2026, 7, 15, hour: 16), zone: zone("Asia/Tokyo"), dayOffset: 1)])
+    }
+
+    @Test("a converted time formats per the device locale, in the target zone, with a day marker")
+    func formattedTimeFollowsDeviceLocale() {
+        // "9am PST in tokyo" renders as Tokyo's 1:00 AM under en_US — and the
+        // crossed midnight is flagged with the language-neutral " +1".
+        let instant = date(2026, 7, 15, hour: 16)
+        let english = DateGrammar.formattedTime(instant, in: zone("Asia/Tokyo"), dayOffset: 1, calendar: calendar)
+        #expect(english.contains("1:00"))
+        #expect(english.hasSuffix(" +1"))
+
+        var frenchCalendar = calendar
+        frenchCalendar.locale = Locale(identifier: "fr_FR")
+        let french = DateGrammar.formattedTime(instant, in: zone("Asia/Tokyo"), dayOffset: 1, calendar: frenchCalendar)
+        #expect(french != english)
+
+        // No crossing, no marker.
+        let plain = DateGrammar.formattedTime(date(2026, 7, 15, hour: 13), in: zone("Asia/Hong_Kong"), dayOffset: 0, calendar: calendar)
+        #expect(plain.contains("9:00"))
+        #expect(!plain.contains("+"))
     }
 
     // MARK: - Output formatting

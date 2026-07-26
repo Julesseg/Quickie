@@ -167,7 +167,7 @@ public enum SettingsKey {
     /// keys keep the `calculator.` prefix because the persisted provider identity
     /// stays `.calculator` — renaming would re-key stored state. Math and Unit
     /// conversion gate the Calculator rows; Date & time gates the date-grammar rows
-    /// (issue #210); URLs, Phone numbers, and Email addresses gate the Detected
+    /// (issues #210/#212); URLs, Phone numbers, and Email addresses gate the Detected
     /// result rows.
     public static let calculatorMath = "calculator.math"
     public static let calculatorUnitConversion = "calculator.unitConversion"
@@ -290,7 +290,7 @@ public extension ProviderID {
                 SettingOption(
                     key: SettingsKey.calculatorDateTime,
                     title: "Date & time",
-                    footer: "On answers date questions (e.g. \"3 weeks from friday\", \"days until dec 25\"). Off suppresses those rows.",
+                    footer: "On answers date and time questions (e.g. \"3 weeks from friday\", \"days until dec 25\", \"9am PST in tokyo\"). Off suppresses those rows.",
                     kind: .toggle(default: true)
                 ),
                 SettingOption(

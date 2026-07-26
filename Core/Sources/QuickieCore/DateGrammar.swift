@@ -70,6 +70,10 @@ public struct DateKeywordTable: Sendable, Equatable {
     /// The unit converter's connector words ("5 m *to* ft" / "5 m *en* pieds")
     /// — the same table localizes the Units connectors (ADR 0036).
     public let unitConnectors: Set<String>
+    /// The timezone converter's connector words — the "in" of "9am PST *in*
+    /// tokyo" (issue #212). Only the connector is per-language; the city and
+    /// abbreviation names live in the one shared `TimeZones` registry.
+    public let timeZoneConnectors: Set<String>
 
     public init(
         localeIdentifier: String,
@@ -83,7 +87,8 @@ public struct DateKeywordTable: Sendable, Equatable {
         since: Set<String>,
         agoPrefix: Set<String> = [],
         namedDays: [String: MonthDay] = [:],
-        unitConnectors: Set<String> = []
+        unitConnectors: Set<String> = [],
+        timeZoneConnectors: Set<String> = []
     ) {
         self.localeIdentifier = localeIdentifier
         self.units = units
@@ -97,6 +102,7 @@ public struct DateKeywordTable: Sendable, Equatable {
         self.since = since
         self.namedDays = namedDays
         self.unitConnectors = unitConnectors
+        self.timeZoneConnectors = timeZoneConnectors
     }
 
     /// The English table — the **dual-accept floor** (ADR 0036): it is always in
@@ -119,7 +125,8 @@ public struct DateKeywordTable: Sendable, Equatable {
         until: ["until", "till", "til"],
         since: ["since"],
         namedDays: ["christmas": MonthDay(month: 12, day: 25), "xmas": MonthDay(month: 12, day: 25)],
-        unitConnectors: ["to", "in", "as"]
+        unitConnectors: ["to", "in", "as"],
+        timeZoneConnectors: ["in"]
     )
 
     /// The French launch table (issue #211). Keyword matching folds diacritics
@@ -143,7 +150,8 @@ public struct DateKeywordTable: Sendable, Equatable {
         since: ["depuis"],
         agoPrefix: ["il y a"],
         namedDays: ["noël": MonthDay(month: 12, day: 25)],
-        unitConnectors: ["en"]
+        unitConnectors: ["en"],
+        timeZoneConnectors: ["à"]
     )
 
     /// The Spanish launch table (issue #211). The article contractions ride in
@@ -166,7 +174,8 @@ public struct DateKeywordTable: Sendable, Equatable {
         since: ["desde", "desde el"],
         agoPrefix: ["hace"],
         namedDays: ["navidad": MonthDay(month: 12, day: 25)],
-        unitConnectors: ["en", "a"]
+        unitConnectors: ["en", "a"],
+        timeZoneConnectors: ["en"]
     )
 
     /// The German launch table (issue #211). Unit words carry the dative
@@ -188,7 +197,8 @@ public struct DateKeywordTable: Sendable, Equatable {
         since: ["seit"],
         agoPrefix: ["vor"],
         namedDays: ["weihnachten": MonthDay(month: 12, day: 25)],
-        unitConnectors: ["in", "als"]
+        unitConnectors: ["in", "als"],
+        timeZoneConnectors: ["in"]
     )
 
     /// The accepted tables for a device language: English — the dual-accept
@@ -212,19 +222,23 @@ public struct DateKeywordTable: Sendable, Equatable {
     }
 }
 
-/// A parsed date query's answer, in one of the two kinds the Stage rule keys on
-/// (CONTEXT.md → Stage): a **date** (terminal — its row is copy-only) or a
-/// **count** (a number — its row gets full Calculator manners). The provider
-/// maps the kind to the row shape; the grammar only answers.
+/// A parsed date query's answer, in the kinds the Stage rule keys on
+/// (CONTEXT.md → Stage): a **date** or a **time** (terminal — their rows are
+/// copy-only) or a **count** (a number — its row gets full Calculator manners).
+/// The provider maps the kind to the row shape; the grammar only answers.
 public enum DateAnswer: Sendable, Equatable {
     case date(Date)
     case count(Int)
+    /// A timezone-converted instant (issue #212), carrying the **target** zone
+    /// it must render in and the day offset the conversion crossed (−1, 0, +1
+    /// — "9am PST" is already tomorrow in Tokyo), so display can say so.
+    case time(Date, zone: TimeZone, dayOffset: Int)
 }
 
-/// The **Date & time grammar core** (issue #210; ADR 0036; CONTEXT.md → Date &
-/// time): a hand-rolled, language-independent parser skeleton — number + unit
-/// word + connector + anchor word — fed by per-language `DateKeywordTable`s.
-/// This slice ships two grammar families:
+/// The **Date & time grammar core** (issues #210/#212; ADR 0036; CONTEXT.md →
+/// Date & time): a hand-rolled, language-independent parser skeleton — number +
+/// unit word + connector + anchor word — fed by per-language
+/// `DateKeywordTable`s. Three grammar families so far:
 ///
 /// - **Relative arithmetic** → a date: "3 weeks from friday", "tomorrow + 2
 ///   weeks", "2 days ago" — and the prefix-past shape the localized tables use
@@ -237,6 +251,12 @@ public enum DateAnswer: Sendable, Equatable {
 ///   yesterday", an explicit past year) still answers — negatively: once the
 ///   answer is a number it *is* arithmetic (CONTEXT.md → Stage), and honest
 ///   arithmetic is never refused.
+/// - **Timezone conversion** → a time (issue #212): "9am PST in tokyo", "3pm
+///   in paris", "15:30 CET in new york". The wall-clock time reads on the
+///   source zone's current date (the device zone when no source is named); the
+///   city/abbreviation names come from the one shared `TimeZones` registry,
+///   only the connector word is per-language table data, and the system
+///   supplies the offset math.
 ///
 /// Hand-rolled because `NSDataDetector` is excluded from Core (the suite runs
 /// under `swift test` on Linux) and third-party parsers are out (ADR 0004).
@@ -262,7 +282,7 @@ public enum DateGrammar {
 
         var answers: [DateAnswer] = []
         for table in tables {
-            let context = Context(table: table, calendar: calendar, today: calendar.startOfDay(for: now))
+            let context = Context(table: table, calendar: calendar, today: calendar.startOfDay(for: now), now: now)
             // Multi-word keywords ("à partir de", "il y a") merge into single
             // tokens per table, so the shapes below stay positional.
             let merged = merge(tokens, phrases: context.phrases)
@@ -287,6 +307,26 @@ public enum DateGrammar {
         return formatter.string(from: date)
     }
 
+    /// Formats a timezone-converted time for display and copying: the device
+    /// locale's short time style, rendered in the **target** zone — the "1:00
+    /// AM" Tokyo shows for "9am PST in tokyo" — with a language-neutral day
+    /// marker (" +1" / " -1") when the conversion crossed midnight. Like
+    /// `formatted(_:calendar:)`, the grammar is dual-accept but the answer is
+    /// not (ADR 0036): output always follows the device.
+    public static func formattedTime(_ date: Date, in zone: TimeZone, dayOffset: Int, calendar: Calendar) -> String {
+        let formatter = DateFormatter()
+        formatter.calendar = calendar
+        formatter.locale = calendar.locale
+        formatter.timeZone = zone
+        formatter.dateStyle = .none
+        formatter.timeStyle = .short
+        var text = formatter.string(from: date)
+        if dayOffset != 0 {
+            text += dayOffset > 0 ? " +\(dayOffset)" : " \(dayOffset)"
+        }
+        return text
+    }
+
     // MARK: - Parsing
 
     /// One table's keyword sets, normalized exactly like query tokens (folded,
@@ -303,6 +343,7 @@ public enum DateGrammar {
         let until: Set<String>
         let since: Set<String>
         let namedDays: [String: DateKeywordTable.MonthDay]
+        let timeZoneConnectors: Set<String>
 
         init(table: DateKeywordTable) {
             let fold = Context.normalize
@@ -316,6 +357,7 @@ public enum DateGrammar {
             until = Set(table.until.map(fold))
             since = Set(table.since.map(fold))
             namedDays = Dictionary(table.namedDays.map { (fold($0.key), $0.value) }, uniquingKeysWith: { a, _ in a })
+            timeZoneConnectors = Set(table.timeZoneConnectors.map(fold))
         }
 
         /// Every keyword spanning more than one word, as token runs, longest
@@ -323,7 +365,7 @@ public enum DateGrammar {
         var phrases: [[String]] {
             let all = Array(forward) + Array(ago) + Array(agoPrefix) + Array(until)
                 + Array(since) + Array(today) + Array(tomorrow) + Array(yesterday)
-                + Array(units.keys) + Array(namedDays.keys)
+                + Array(units.keys) + Array(namedDays.keys) + Array(timeZoneConnectors)
             return all
                 .map { $0.split(separator: " ").map(String.init) }
                 .filter { $0.count > 1 }
@@ -332,22 +374,26 @@ public enum DateGrammar {
     }
 
     /// Everything one table's parse needs: the table's normalized keywords, the
-    /// *device* calendar all arithmetic runs through, today's start-of-day, and
-    /// the weekday/month symbol maps derived from the table's locale.
+    /// *device* calendar all arithmetic runs through, today's start-of-day, the
+    /// raw injected instant (a timezone conversion needs "today" *in the source
+    /// zone*, which start-of-day has already flattened), and the weekday/month
+    /// symbol maps derived from the table's locale.
     private struct Context {
         let keywords: Keywords
         let phrases: [[String]]
         let calendar: Calendar
         let today: Date
+        let now: Date
         let weekdays: [String: Int]
         let months: [String: Int]
 
-        init(table: DateKeywordTable, calendar: Calendar, today: Date) {
+        init(table: DateKeywordTable, calendar: Calendar, today: Date, now: Date) {
             let keywords = Keywords(table: table)
             self.keywords = keywords
             self.phrases = keywords.phrases
             self.calendar = calendar
             self.today = today
+            self.now = now
 
             // The table's language borrows its weekday/month names from the
             // system calendar's localized symbols (ADR 0036) — full and short
@@ -483,7 +529,108 @@ public enum DateGrammar {
             }
         }
 
+        // <time> [<zone>] <connector> <zone…> — "9am pst in tokyo", "3pm in
+        // paris", "15:30 cet in new york" (issue #212): a wall-clock time, an
+        // optional source zone (the device zone when absent), a table connector,
+        // and a target zone — both zones from the shared `TimeZones` registry.
+        if let answer = timeConversion(tokens, context: context) {
+            return answer
+        }
+
         return nil
+    }
+
+    // MARK: - Timezone conversion
+
+    /// Parses and evaluates the timezone family: scans for a connector token,
+    /// requires everything after it to name a target zone, and reads what
+    /// precedes it as a wall-clock time plus an optional source zone. Zone
+    /// names may span words ("new york", "hong kong") — the surrounding tokens
+    /// are simply rejoined for the registry lookup.
+    private static func timeConversion(_ tokens: [String], context: Context) -> DateAnswer? {
+        guard tokens.count >= 3 else { return nil }
+        for index in 1..<(tokens.count - 1) where context.keywords.timeZoneConnectors.contains(tokens[index]) {
+            guard let target = TimeZones.timeZone(for: tokens[(index + 1)...].joined(separator: " ")) else { continue }
+            let lead = Array(tokens[..<index])
+            guard let time = clockTime(lead) else { continue }
+            let source: TimeZone
+            if time.consumed == lead.count {
+                source = context.calendar.timeZone
+            } else if let zone = TimeZones.timeZone(for: lead[time.consumed...].joined(separator: " ")) {
+                source = zone
+            } else {
+                continue
+            }
+            return convert(hour: time.hour, minute: time.minute, from: source, to: target, context: context)
+        }
+        return nil
+    }
+
+    /// Reads a leading wall-clock time from the tokens: "9am" / "9:30pm" /
+    /// "15:30" as one token, or the meridiem as its own token ("9 am",
+    /// "9:30 pm"). A bare digit run is **not** a time — the hour needs a
+    /// meridiem or an explicit minute, which is what keeps "9 in tokyo" inert
+    /// (the bare-number principle, worn by clocks too).
+    private static func clockTime(_ tokens: [String]) -> (hour: Int, minute: Int, consumed: Int)? {
+        guard var text = tokens.first else { return nil }
+        var meridiem: String?
+        var consumed = 1
+        if text.hasSuffix("am") || text.hasSuffix("pm") {
+            meridiem = String(text.suffix(2))
+            text = String(text.dropLast(2))
+        } else if tokens.count >= 2, tokens[1] == "am" || tokens[1] == "pm" {
+            meridiem = tokens[1]
+            consumed = 2
+        }
+
+        let parts = text.split(separator: ":", omittingEmptySubsequences: false)
+        guard (1...2).contains(parts.count),
+              (1...2).contains(parts[0].count), parts[0].allSatisfy(\.isNumber),
+              let hour = Int(parts[0]) else { return nil }
+        var minute = 0
+        if parts.count == 2 {
+            guard parts[1].count == 2, parts[1].allSatisfy(\.isNumber),
+                  let value = Int(parts[1]), (0...59).contains(value) else { return nil }
+            minute = value
+        }
+
+        if let meridiem {
+            // 12-hour: 1–12, with 12am as midnight and 12pm as noon.
+            guard (1...12).contains(hour) else { return nil }
+            return (hour % 12 + (meridiem == "pm" ? 12 : 0), minute, consumed)
+        }
+        // 24-hour needs the explicit minute — a bare hour is a bare number.
+        guard parts.count == 2, (0...23).contains(hour) else { return nil }
+        return (hour, minute, consumed)
+    }
+
+    /// Evaluates the conversion: the wall-clock time on the source zone's
+    /// *current* date (today as the source zone sees it — the system's own
+    /// offset math, DST included) is one instant, rendered in the target zone.
+    /// The day offset says how many calendar days the rendering crossed, so
+    /// display can flag a converted time that is already tomorrow (+1) or
+    /// still yesterday (−1).
+    private static func convert(hour: Int, minute: Int, from source: TimeZone, to target: TimeZone, context: Context) -> DateAnswer? {
+        var sourceCalendar = context.calendar
+        sourceCalendar.timeZone = source
+        var components = sourceCalendar.dateComponents([.year, .month, .day], from: context.now)
+        components.hour = hour
+        components.minute = minute
+        guard let instant = sourceCalendar.date(from: components) else { return nil }
+
+        var targetCalendar = context.calendar
+        targetCalendar.timeZone = target
+        let sourceDay = sourceCalendar.dateComponents([.year, .month, .day], from: instant)
+        let targetDay = targetCalendar.dateComponents([.year, .month, .day], from: instant)
+
+        // The two (year, month, day) readings replayed in one neutral zone give
+        // the whole-day distance the conversion crossed.
+        var neutral = Calendar(identifier: context.calendar.identifier)
+        neutral.timeZone = TimeZone(identifier: "UTC")!
+        guard let a = neutral.date(from: sourceDay), let b = neutral.date(from: targetDay),
+              let offset = neutral.dateComponents([.day], from: a, to: b).day else { return nil }
+
+        return .time(instant, zone: target, dayOffset: offset)
     }
 
     // MARK: - Date expressions
