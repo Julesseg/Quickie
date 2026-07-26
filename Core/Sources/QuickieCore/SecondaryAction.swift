@@ -15,6 +15,11 @@ public enum ResultContent: Equatable, Hashable, Sendable {
     case text
     case url
     case number
+    /// A bare calendar-date *value* — a Date & time answer ("3 weeks from
+    /// friday" → a locale-formatted date; issue #210). Terminal under the Stage
+    /// rule (CONTEXT.md → Stage): its row is copy-only, and like every bare
+    /// value it earns exactly the universal copy/share — never Edit.
+    case date
     /// A saved Snippet, keyed by its Action id so the edge can resolve the
     /// stored record (CONTEXT.md → Snippet). Distinct from a bare `.text` value
     /// precisely because a Snippet is a *stored, titled* record the user can
@@ -131,7 +136,7 @@ public func secondaryActions(for content: ResultContent, includeDeeplink: Bool =
         // its slots are filled — so each earns only Edit: a Shortcut deeplinks into
         // the Shortcuts app's editor, a Custom Action opens its live-mirroring editor.
         contentVerbs = [.edit]
-    case .text, .url, .number, .pileEntry:
+    case .text, .url, .number, .date, .pileEntry:
         contentVerbs = [.copy, .share]
     }
     // Every runnable row is addressable by its id, so Copy action deeplink rides on it —

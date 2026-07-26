@@ -75,18 +75,20 @@ struct SettingOptionTests {
         #expect(CaptureStepPlan.pool(enabled: event) == [.start, .location, .notes])
     }
 
-    @Test("the Computed schema ships the Enabled toggle plus five per-type toggles, all default-on")
-    func computedSchemaShipsFivePerTypeToggles() {
-        // The Computed provider's options section (ADR 0032): the provider-level
-        // Enabled toggle first, then Math, Unit conversion, URLs, Phone numbers, and
-        // Email addresses — every one a schema-declared toggle defaulting on, so all
-        // detection off restores the pre-detection Calculator exactly.
+    @Test("the Computed schema ships the Enabled toggle plus six per-type toggles, all default-on")
+    func computedSchemaShipsSixPerTypeToggles() {
+        // The Computed provider's options section (ADR 0032; issue #210): the
+        // provider-level Enabled toggle first, then Math, Unit conversion, Date &
+        // time, URLs, Phone numbers, and Email addresses — every one a
+        // schema-declared toggle defaulting on, so all detection off restores the
+        // pre-detection Calculator exactly.
         let schema = ProviderID.calculator.settingsSchema
         #expect(schema.first?.kind == .enabled)
 
         let perType = [
             SettingsKey.calculatorMath,
             SettingsKey.calculatorUnitConversion,
+            SettingsKey.calculatorDateTime,
             SettingsKey.calculatorURL,
             SettingsKey.calculatorPhone,
             SettingsKey.calculatorEmail,
