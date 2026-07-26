@@ -206,6 +206,22 @@ struct DateGrammarTests {
         #expect(answers("zorp jusqua déc 25", tables: [toyTable]) == [.count(163)])
     }
 
+    @Test("a phrase valid in two accepted grammars fires each interpretation")
+    func distinctAnswersAcrossTablesBothFire() {
+        // A crafted second table reads "days" as *weeks*, so "2 days from
+        // today" is valid in both grammars with different answers. Both fire,
+        // in table order — non-arbitrating, per the standing Computed rule
+        // (ADR 0036): the user picks, the grammar never does.
+        let contrarian = DateKeywordTable(
+            localeIdentifier: "en_US",
+            units: ["days": .week],
+            today: ["today"], tomorrow: [], yesterday: [],
+            forward: ["from"], ago: [], until: [], since: []
+        )
+        #expect(answers("2 days from today", tables: [.english, contrarian])
+            == [.date(date(2026, 7, 17)), .date(date(2026, 7, 29))])
+    }
+
     @Test("two tables yielding the same answer collapse to one row's worth")
     func identicalAnswersAcrossTablesDedupe() {
         // Both tables resolve "2 days ago"-shaped queries; identical answers dedupe

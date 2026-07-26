@@ -88,9 +88,10 @@ public enum Units {
         return Parsed(amount: amount, from: normalize(String(lowered[fromRange])), to: normalize(String(lowered[toRange])))
     }
 
-    /// The registry/connector normalization: lowercased with diacritics folded,
-    /// mirroring the date grammar's token normalization — "mètres" lands on the
-    /// registered "metres", "kilómetros" on "kilometros".
+    /// The registry/connector normalization: lowercased with diacritics folded
+    /// — "mètres" lands on the registered "metres", "kilómetros" on
+    /// "kilometros". (The date grammar's fuller normalization also straightens
+    /// apostrophes and strips trailing periods; unit tokens carry neither.)
     private static func normalize(_ token: String) -> String {
         token.lowercased().folding(options: .diacriticInsensitive, locale: Locale(identifier: "en_US"))
     }
