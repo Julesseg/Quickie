@@ -163,13 +163,15 @@ public enum SettingsKey {
     public static let reminderSteps = "reminder.steps"
     /// The New Reminder default-list choice: the target when the List step is off.
     public static let reminderList = "reminder.list"
-    /// The Computed provider's five per-type toggles (ADR 0032), all default-on. The
+    /// The Computed provider's six per-type toggles (ADR 0032), all default-on. The
     /// keys keep the `calculator.` prefix because the persisted provider identity
     /// stays `.calculator` — renaming would re-key stored state. Math and Unit
-    /// conversion gate the Calculator rows; URLs, Phone numbers, and Email addresses
-    /// gate the Detected result rows.
+    /// conversion gate the Calculator rows; Date & time gates the date-grammar rows
+    /// (issue #210); URLs, Phone numbers, and Email addresses gate the Detected
+    /// result rows.
     public static let calculatorMath = "calculator.math"
     public static let calculatorUnitConversion = "calculator.unitConversion"
+    public static let calculatorDateTime = "calculator.dateTime"
     public static let calculatorURL = "calculator.url"
     public static let calculatorPhone = "calculator.phone"
     public static let calculatorEmail = "calculator.email"
@@ -268,9 +270,10 @@ public extension ProviderID {
                 ),
             ]
         case .calculator:
-            // The Computed provider's five per-type toggles (ADR 0032), all default-on,
-            // beneath the provider-level Enabled switch. Each suppresses exactly its
-            // rows; the three detection toggles off restore the pre-detection Calculator.
+            // The Computed provider's six per-type toggles (ADR 0032; issue #210), all
+            // default-on, beneath the provider-level Enabled switch. Each suppresses
+            // exactly its rows; the three detection toggles off restore the
+            // pre-detection Calculator.
             return [
                 SettingOption(
                     key: SettingsKey.calculatorMath,
@@ -282,6 +285,12 @@ public extension ProviderID {
                     key: SettingsKey.calculatorUnitConversion,
                     title: "Unit conversion",
                     footer: "On also answers offline unit conversions (e.g. \"10 km in mi\"). Off keeps Computed to arithmetic only.",
+                    kind: .toggle(default: true)
+                ),
+                SettingOption(
+                    key: SettingsKey.calculatorDateTime,
+                    title: "Date & time",
+                    footer: "On answers date questions (e.g. \"3 weeks from friday\", \"days until dec 25\"). Off suppresses those rows.",
                     kind: .toggle(default: true)
                 ),
                 SettingOption(

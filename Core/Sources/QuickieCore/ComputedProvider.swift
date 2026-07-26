@@ -7,6 +7,13 @@ import Foundation
 /// - **Calculator** (issue #8) — a math expression or an offline unit conversion,
 ///   whose row **copies-and-stages** the answer so the user keeps calculating
 ///   (`2+2` → `4` → `4 * 3`).
+/// - **Date & time** (issue #210; ADR 0036) — a relative-arithmetic phrase
+///   ("3 weeks from friday") or an until/since question ("days until dec 25"),
+///   parsed by the table-driven `DateGrammar` against the injected clock and
+///   calendar. Staging follows the answer's kind (CONTEXT.md → Stage): a date
+///   answer is terminal, so its row is copy-only with `.date` content, formatted
+///   per device locale; a count answer is a number, so its row is a full
+///   Calculator row — copy-and-stage, `.number` content.
 /// - **Detected result** (ADR 0032) — the *whole trimmed query* recognized as a
 ///   URL, phone number, or email address, surfacing rows that act on it directly:
 ///   **Open** for a URL, **Message** + **Call** for a phone number, **Email** for
@@ -15,12 +22,12 @@ import Foundation
 ///
 /// The provider the user sees is **Computed**, but its persisted `ProviderID` raw
 /// value stays `.calculator` (renaming the stored identity would re-key kind-level
-/// state — ADR 0032). Five per-type toggles gate its output — Math, Unit
-/// conversion, URLs, Phone numbers, Email addresses, all default-on — so turning
-/// the three detection toggles off restores the pre-detection Calculator exactly.
-/// Every branch is independent and non-arbitrating: an ambiguous query
-/// (`555-1212` reads as a phone number *and* as math) fires rows from every
-/// applicable interpretation at once.
+/// state — ADR 0032). Six per-type toggles gate its output — Math, Unit
+/// conversion, Date & time, URLs, Phone numbers, Email addresses, all default-on —
+/// so turning the three detection toggles off restores the pre-detection
+/// Calculator exactly. Every branch is independent and non-arbitrating: an
+/// ambiguous query (`555-1212` reads as a phone number *and* as math) fires rows
+/// from every applicable interpretation at once.
 ///
 /// The SearchEngine floats a Dynamic Provider's results to the top region
 /// unscored (boosted rank), so they read as top hits even though they are not name
@@ -36,26 +43,39 @@ public struct ComputedProvider: Provider {
 
     private let math: Bool
     private let unitConversion: Bool
+    private let dateTime: Bool
     private let url: Bool
     private let phone: Bool
     private let email: Bool
+    private let calendar: Calendar
+    private let now: @Sendable () -> Date
 
     /// Each flag mirrors one schema toggle (ADR 0020; ADR 0032) and suppresses
     /// exactly its rows. All default on so the Core stays fully functional and the
     /// App merely reflects the user's stored preferences; the three detection flags
     /// off (`url`/`phone`/`email`) reproduce the pre-detection Calculator exactly.
+    ///
+    /// The `calendar` and `now` clock feed the Date & time grammar (issue #210) —
+    /// injected so "today" is testable; the defaults read the device, live, on
+    /// every query.
     public init(
         math: Bool = true,
         unitConversion: Bool = true,
+        dateTime: Bool = true,
         url: Bool = true,
         phone: Bool = true,
-        email: Bool = true
+        email: Bool = true,
+        calendar: Calendar = .autoupdatingCurrent,
+        now: @escaping @Sendable () -> Date = { Date() }
     ) {
         self.math = math
         self.unitConversion = unitConversion
+        self.dateTime = dateTime
         self.url = url
         self.phone = phone
         self.email = email
+        self.calendar = calendar
+        self.now = now
     }
 
     public func candidates(for query: String) -> [Action] {
@@ -97,6 +117,25 @@ public struct ComputedProvider: Provider {
             rows.append(calculatorRow(id: "calc.conversion", title: conversion.formatted, subtitle: trimmed, copying: conversion.formatted))
         }
 
+        // Date & time (issue #210): relative arithmetic answers a *date* — a
+        // terminal value, so its row is copy-only — while an until/since count
+        // answers a *number*, whose row gets full Calculator manners (staging
+        // follows the answer's kind, CONTEXT.md → Stage). Another independent
+        // branch: a query readable as a date question *and* anything above fires
+        // every applicable row.
+        if dateTime {
+            for answer in DateGrammar.answers(for: trimmed, calendar: calendar, now: now()) {
+                switch answer {
+                case .date(let date):
+                    let formatted = DateGrammar.formatted(date, calendar: calendar)
+                    rows.append(dateRow(id: "date.relative", title: formatted, subtitle: trimmed))
+                case .count(let count):
+                    let text = NumberFormat.string(Double(count), maxFractionDigits: 0)
+                    rows.append(calculatorRow(id: "date.count", title: text, subtitle: trimmed, copying: text))
+                }
+            }
+        }
+
         return rows
     }
 
@@ -130,6 +169,23 @@ public struct ComputedProvider: Provider {
             outputType: .number,
             content: .number
         ) { _ in .copyAndStage(text: copy) }
+    }
+
+    /// Builds a **Date & time** date-answer row (issue #210): title the
+    /// locale-formatted date, subtitle the phrase that asked for it, main action
+    /// **copy-only** — a date is terminal under the Stage rule, so nothing is
+    /// staged back into the input. Declares `.date` content: the universal
+    /// copy/share long-press, no Edit, exactly a bare value's manners.
+    private func dateRow(id: String, title: String, subtitle: String) -> Action {
+        Action(
+            id: id,
+            kind: .calculator,
+            title: title,
+            subtitle: subtitle,
+            inputTypes: [],
+            outputType: .date,
+            content: .date
+        ) { _ in .copyText(title) }
     }
 
     /// The **Open** row for a detected URL: its main action opens the URL, and it

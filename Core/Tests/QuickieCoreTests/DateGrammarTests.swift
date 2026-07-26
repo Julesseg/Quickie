@@ -1,0 +1,237 @@
+import Foundation
+import Testing
+@testable import QuickieCore
+
+// The Date & time grammar core (issue #210; ADR 0036; CONTEXT.md → Date & time):
+// a language-independent parser skeleton — number + unit word + connector +
+// anchor word — fed by per-language keyword tables, English only in this slice.
+// These tests pin the two launch families (relative arithmetic → a date,
+// until/since → a count), the anchor semantics (a bare weekday is the nearest
+// future occurrence, today included), the dual-accept floor (English parses
+// regardless of device locale), and the data-only extension path (a toy table
+// parses with zero parser changes). Everything runs against an injected
+// calendar and clock, so "today" is a fixed Wednesday.
+struct DateGrammarTests {
+
+    /// A fixed device calendar: Gregorian, en_US, UTC — every expectation below
+    /// is computed against it, never against the machine's real locale.
+    private let calendar: Calendar = {
+        var calendar = Calendar(identifier: .gregorian)
+        calendar.locale = Locale(identifier: "en_US")
+        calendar.timeZone = TimeZone(identifier: "UTC")!
+        return calendar
+    }()
+
+    /// "Now" is mid-morning on **Wednesday, July 15, 2026** — a weekday chosen so
+    /// nearest-future and nearest-past weekday resolution are both non-trivial.
+    private var now: Date { date(2026, 7, 15, hour: 9, minute: 30) }
+
+    private func date(_ year: Int, _ month: Int, _ day: Int, hour: Int = 0, minute: Int = 0) -> Date {
+        calendar.date(from: DateComponents(year: year, month: month, day: day, hour: hour, minute: minute))!
+    }
+
+    private func answers(_ query: String, tables: [DateKeywordTable] = [.english], calendar: Calendar? = nil) -> [DateAnswer] {
+        DateGrammar.answers(for: query, tables: tables, calendar: calendar ?? self.calendar, now: now)
+    }
+
+    // MARK: - Relative arithmetic → a date
+
+    @Test("'3 weeks from friday' lands three weeks after the nearest future friday")
+    func weeksFromWeekday() {
+        // Friday nearest Wednesday July 15 (future, today included) is July 17;
+        // three weeks on is August 7.
+        #expect(answers("3 weeks from friday") == [.date(date(2026, 8, 7))])
+    }
+
+    @Test("'tomorrow + 2 weeks' adds onto the tomorrow anchor")
+    func anchorPlusOffset() {
+        #expect(answers("tomorrow + 2 weeks") == [.date(date(2026, 7, 30))])
+    }
+
+    @Test("'2 days ago' counts back from today")
+    func daysAgo() {
+        #expect(answers("2 days ago") == [.date(date(2026, 7, 13))])
+    }
+
+    @Test("a minus operator subtracts from the anchor")
+    func anchorMinusOffset() {
+        #expect(answers("today - 3 days") == [.date(date(2026, 7, 12))])
+    }
+
+    @Test("a bare weekday anchor means the nearest future occurrence, today included")
+    func bareWeekdayAnchorIncludesToday() {
+        // "wednesday" on a Wednesday is *today*, not next week (issue #210 AC #1).
+        #expect(answers("1 week from wednesday") == [.date(date(2026, 7, 22))])
+    }
+
+    @Test("'after' works as a forward connector and month-day works as an anchor")
+    func afterConnectorAndMonthDayAnchor() {
+        #expect(answers("2 days after dec 25") == [.date(date(2026, 12, 27))])
+    }
+
+    @Test("a date answer is normalized to the start of its day")
+    func dateAnswersAreStartOfDay() {
+        // "now" carries 09:30; the answer must not.
+        guard case .date(let result)? = answers("2 days ago").first else {
+            Issue.record("expected a date answer")
+            return
+        }
+        #expect(result == calendar.startOfDay(for: result))
+    }
+
+    // MARK: - Until/since → a count
+
+    @Test("'days until dec 25' counts forward to the nearest future occurrence")
+    func daysUntil() {
+        // July 15 → December 25, 2026 is 163 days.
+        #expect(answers("days until dec 25") == [.count(163)])
+    }
+
+    @Test("'weeks since jan 1' counts whole weeks back to the nearest past occurrence")
+    func weeksSince() {
+        // January 1 → July 15, 2026 is 195 days: 27 whole weeks.
+        #expect(answers("weeks since jan 1") == [.count(27)])
+    }
+
+    @Test("'days until friday' counts to the nearest future weekday")
+    func daysUntilWeekday() {
+        #expect(answers("days until friday") == [.count(2)])
+    }
+
+    @Test("'days since monday' counts from the nearest past weekday")
+    func daysSinceWeekday() {
+        #expect(answers("days since monday") == [.count(2)])
+    }
+
+    @Test("an explicit year pins the target instead of resolving to the nearest occurrence")
+    func untilWithExplicitYear() {
+        // 163 days to December 25, 2026, plus the 365 days of non-leap 2027.
+        #expect(answers("days until dec 25 2027") == [.count(528)])
+    }
+
+    @Test("a yearless month-day already past resolves forward across the year boundary")
+    func untilCrossesYearBoundary() {
+        // January 1 has passed in 2026, so "until" means January 1, 2027.
+        #expect(answers("days until jan 1") == [.count(170)])
+    }
+
+    @Test("day-month order parses like month-day, and long month names work")
+    func dayMonthOrderAndLongNames() {
+        #expect(answers("days until 25 dec") == [.count(163)])
+        #expect(answers("days until december 25") == [.count(163)])
+    }
+
+    @Test("a target on the connector's wrong side answers a negative count, honestly")
+    func wrongSideTargetsCountNegative() {
+        // "until" something already past is answered, not declined: once the
+        // answer is a number it *is* arithmetic (CONTEXT.md → Stage), and the
+        // Calculator never refuses honest arithmetic. Direction only steers
+        // *yearless* resolution — an absolute target says what it says.
+        #expect(answers("days until yesterday") == [.count(-1)])
+        #expect(answers("days since tomorrow") == [.count(-1)])
+        #expect(answers("days until dec 25 2025") == [.count(-202)])
+    }
+
+    @Test("months count in whole calendar months")
+    func monthsUntil() {
+        // July 15 → December 25 is five whole months and change.
+        #expect(answers("months until dec 25") == [.count(5)])
+    }
+
+    @Test("the grammar is case-insensitive")
+    func caseInsensitive() {
+        #expect(answers("Days Until Dec 25") == [.count(163)])
+        #expect(answers("3 Weeks From Friday") == [.date(date(2026, 8, 7))])
+    }
+
+    // MARK: - Declining
+
+    @Test("non-date queries decline cleanly", arguments: [
+        "42",              // a bare number stays inert
+        "friday",          // a bare weekday alone is prose, not a question
+        "2 days",          // an offset with no connector or anchor
+        "days until",      // a question with no target
+        "days until feb 30", // an impossible date never resolves by rollover
+        "days until 32 dec", // an impossible day number
+        "until dec 25",    // no unit word — nothing to count
+        "3 parsecs from friday", // an unknown unit word
+        "",
+    ])
+    func declines(_ query: String) {
+        #expect(answers(query) == [])
+    }
+
+    // MARK: - Dual accept (ADR 0036)
+
+    @Test("English parses regardless of the device locale")
+    func englishParsesUnderForeignLocale() {
+        // The device calendar speaks French; the English table still supplies the
+        // English keywords and weekday symbols (the dual-accept floor, ADR 0036).
+        var french = calendar
+        french.locale = Locale(identifier: "fr_FR")
+        #expect(answers("3 weeks from friday", calendar: french) == [.date(date(2026, 8, 7))])
+        #expect(answers("days until dec 25", calendar: french) == [.count(163)])
+    }
+
+    // MARK: - Table architecture (data-only extension)
+
+    /// A toy language whose ~15 keywords are invented, riding on real French
+    /// calendar symbols — proof a new language is a table, not a parser change.
+    private var toyTable: DateKeywordTable {
+        DateKeywordTable(
+            localeIdentifier: "fr_FR",
+            units: ["zorp": .day, "blib": .week],
+            today: ["nunc"],
+            tomorrow: ["cras"],
+            yesterday: ["heri"],
+            forward: ["vers"],
+            ago: ["retro"],
+            until: ["jusqua"],
+            since: ["depuis"]
+        )
+    }
+
+    @Test("a toy keyword table parses with zero parser changes")
+    func toyTableParses() {
+        #expect(answers("3 zorp vers cras", tables: [toyTable]) == [.date(date(2026, 7, 19))])
+        #expect(answers("2 zorp retro", tables: [toyTable]) == [.date(date(2026, 7, 13))])
+    }
+
+    @Test("a table's weekday and month names come from the system calendar's localized symbols")
+    func toyTableUsesLocalizedCalendarSymbols() {
+        // "vendredi" (Friday) and "déc" (December) are never written in the table —
+        // they come from the fr_FR calendar symbols the table's locale names.
+        #expect(answers("1 blib vers vendredi", tables: [toyTable]) == [.date(date(2026, 7, 24))])
+        #expect(answers("zorp jusqua déc 25", tables: [toyTable]) == [.count(163)])
+    }
+
+    @Test("two tables yielding the same answer collapse to one row's worth")
+    func identicalAnswersAcrossTablesDedupe() {
+        // Both tables resolve "2 days ago"-shaped queries; identical answers dedupe
+        // so a future second language never doubles an unambiguous row.
+        let englishy = DateKeywordTable(
+            localeIdentifier: "en_US",
+            units: ["days": .day],
+            today: [], tomorrow: [], yesterday: [],
+            forward: [], ago: ["ago"], until: [], since: []
+        )
+        #expect(answers("2 days ago", tables: [.english, englishy]) == [.date(date(2026, 7, 13))])
+    }
+
+    // MARK: - Output formatting
+
+    @Test("a date answer formats per the device locale and calendar")
+    func formattedFollowsDeviceLocale() {
+        // The grammar is dual-accept; the *answer* is not (ADR 0036): the same
+        // date renders as English prose under en_US and French under fr_FR.
+        let target = date(2026, 8, 7)
+        var frenchCalendar = calendar
+        frenchCalendar.locale = Locale(identifier: "fr_FR")
+
+        let english = DateGrammar.formatted(target, calendar: calendar)
+        let french = DateGrammar.formatted(target, calendar: frenchCalendar)
+        #expect(english.contains("August") && english.contains("2026"))
+        #expect(french.contains("août"))
+        #expect(english != french)
+    }
+}

@@ -68,13 +68,15 @@ struct RootView: View {
     @AppStorage(SettingsKey.eventCalendar) private var eventCalendar = ""
     @AppStorage(SettingsKey.eventEditor) private var eventUseEditor = false
 
-    /// The Computed provider's five per-type toggles (ADR 0020, 0032) and the File
-    /// Search inline-result cap, read here so flipping one on its provider page
-    /// rebuilds the engine with the new provider config. Math and Unit conversion
-    /// gate the Calculator rows; URLs, Phone numbers, and Email addresses gate the
-    /// Detected result rows — all default-on.
+    /// The Computed provider's six per-type toggles (ADR 0020, 0032; issue #210)
+    /// and the File Search inline-result cap, read here so flipping one on its
+    /// provider page rebuilds the engine with the new provider config. Math and
+    /// Unit conversion gate the Calculator rows; Date & time gates the date-grammar
+    /// rows; URLs, Phone numbers, and Email addresses gate the Detected result
+    /// rows — all default-on.
     @AppStorage(SettingsKey.calculatorMath) private var calculatorMath = true
     @AppStorage(SettingsKey.calculatorUnitConversion) private var calculatorUnitConversion = true
+    @AppStorage(SettingsKey.calculatorDateTime) private var calculatorDateTime = true
     @AppStorage(SettingsKey.calculatorURL) private var calculatorURL = true
     @AppStorage(SettingsKey.calculatorPhone) private var calculatorPhone = true
     @AppStorage(SettingsKey.calculatorEmail) private var calculatorEmail = true
@@ -288,12 +290,15 @@ struct RootView: View {
         return SearchEngine(
             providers: [
                 // The Computed provider (ADR 0032): the Calculator (math + unit
-                // conversion) plus Detected result rows (URL / phone / email). Each
-                // of its five schema toggles suppresses exactly its rows; the three
-                // detection toggles off restore the pre-detection Calculator.
+                // conversion), the Date & time grammar (issue #210), plus Detected
+                // result rows (URL / phone / email). Each of its six schema toggles
+                // suppresses exactly its rows; the three detection toggles off
+                // restore the pre-detection Calculator. The default clock/calendar
+                // read the device live, so "today" is always current.
                 ComputedProvider(
                     math: calculatorMath,
                     unitConversion: calculatorUnitConversion,
+                    dateTime: calculatorDateTime,
                     url: calculatorURL,
                     phone: calculatorPhone,
                     email: calculatorEmail
@@ -1601,11 +1606,12 @@ struct RootView: View {
     /// when a reference no longer resolves.
     private func copyableText(for action: Action) -> String? {
         switch action.content {
-        case .text, .number, .snippet:
+        case .text, .number, .date, .snippet:
             // Resolve against the current query so an input-consuming row (a
             // Fallback query) copies the URL it would actually open; self-contained
-            // rows (Snippet, Calculator) ignore the input. A Calculator's main
-            // action copies *and* stages, so its text rides `copyAndStage`.
+            // rows (Snippet, Calculator, a Date & time answer) ignore the input. A
+            // Calculator's main action copies *and* stages, so its text rides
+            // `copyAndStage`; a date answer is copy-only, so it rides `copyText`.
             switch action.run(input: query) {
             case .copyText(let text), .copyAndStage(let text): return text
             default: return nil
@@ -1649,7 +1655,7 @@ struct RootView: View {
     /// access open until the sheet dismisses (`shareRequest.fileAccess`).
     private func presentShare(for action: Action) {
         switch action.content {
-        case .text, .number, .snippet:
+        case .text, .number, .date, .snippet:
             switch action.run(input: query) {
             case .copyText(let text), .copyAndStage(let text): shareRequest = ShareRequest(items: [text])
             default: break
