@@ -2,12 +2,13 @@ import Foundation
 import Testing
 @testable import QuickieCore
 
-// The Computed provider's **Date & time** rows (issue #210; CONTEXT.md → Date &
-// time): a relative-arithmetic query surfaces a boosted *date* row, an
-// until/since query a boosted *count* row. The row shapes follow the Stage rule
-// (CONTEXT.md → Stage) — staging follows the answer's kind: the date answer is
-// terminal, so its row is copy-only with `.date` content, locale-formatted;
-// the count answer is a number, so its row has full Calculator manners
+// The Computed provider's **Date & time** rows (issues #210/#212; CONTEXT.md →
+// Date & time): a relative-arithmetic query surfaces a boosted *date* row, an
+// until/since query a boosted *count* row, a timezone conversion a boosted
+// *time* row. The row shapes follow the Stage rule (CONTEXT.md → Stage) —
+// staging follows the answer's kind: the date and time answers are terminal,
+// so their rows are copy-only with `.date` content, locale-formatted; the
+// count answer is a number, so its row has full Calculator manners
 // (copy-and-stage, `.number`), indistinguishable from a math result. The
 // provider takes an injected clock and calendar, so "today" here is a fixed
 // Wednesday. Grammar coverage lives in DateGrammarTests; these tests pin the
@@ -74,17 +75,43 @@ struct ComputedDateTimeTests {
         #expect(provider.candidates(for: "days until dec 25").first?.isFallbackEligible == false)
     }
 
-    @Test("the row ids name the two families for the UI layer")
+    @Test("a timezone conversion yields one boosted copy-only time row")
+    func timeAnswerRowIsCopyOnly() {
+        let rows = provider.candidates(for: "9am pst in tokyo")
+        #expect(rows.count == 1)
+
+        // The title (and copied text) is the converted time, locale-formatted in
+        // the target zone with the crossed-midnight marker — 1:00 AM +1 in Tokyo
+        // — and, a time being terminal like a date (CONTEXT.md → Stage), the
+        // main action *only* copies.
+        let formatted = DateGrammar.formattedTime(
+            Self.calendar.date(from: DateComponents(year: 2026, month: 7, day: 15, hour: 16))!,
+            in: TimeZone(identifier: "Asia/Tokyo")!,
+            dayOffset: 1,
+            calendar: Self.calendar
+        )
+        #expect(rows.first?.id == "date.timezone")
+        #expect(rows.first?.title == formatted)
+        #expect(rows.first?.subtitle == "9am pst in tokyo")
+        #expect(rows.first?.run() == .copyText(formatted))
+        #expect(rows.first?.content == .date)
+        #expect(rows.first?.outputType == .date)
+    }
+
+    @Test("the row ids name the three families for the UI layer")
     func rowIDsNameTheFamilies() {
         #expect(provider.candidates(for: "tomorrow + 2 weeks").first?.id == "date.relative")
         #expect(provider.candidates(for: "weeks since jan 1").first?.id == "date.count")
+        #expect(provider.candidates(for: "3pm in paris").first?.id == "date.timezone")
     }
 
-    @Test("the Date & time toggle off suppresses both families and nothing else")
+    @Test("the Date & time toggle off suppresses all three families and nothing else")
     func toggleSuppressesExactlyItsRows() {
         let off = ComputedProvider(dateTime: false, calendar: Self.calendar, now: { Self.now })
         #expect(off.candidates(for: "3 weeks from friday").isEmpty)
         #expect(off.candidates(for: "days until dec 25").isEmpty)
+        // The timezone family rides the same toggle — no setting of its own.
+        #expect(off.candidates(for: "9am pst in tokyo").isEmpty)
         // Math is untouched — the toggle gates only the date grammar.
         #expect(off.candidates(for: "2+2").first?.id == "calc.math")
     }

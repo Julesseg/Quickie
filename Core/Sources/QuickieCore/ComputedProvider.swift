@@ -7,13 +7,14 @@ import Foundation
 /// - **Calculator** (issue #8) — a math expression or an offline unit conversion,
 ///   whose row **copies-and-stages** the answer so the user keeps calculating
 ///   (`2+2` → `4` → `4 * 3`).
-/// - **Date & time** (issue #210; ADR 0036) — a relative-arithmetic phrase
-///   ("3 weeks from friday") or an until/since question ("days until dec 25"),
-///   parsed by the table-driven `DateGrammar` against the injected clock and
-///   calendar. Staging follows the answer's kind (CONTEXT.md → Stage): a date
-///   answer is terminal, so its row is copy-only with `.date` content, formatted
-///   per device locale; a count answer is a number, so its row is a full
-///   Calculator row — copy-and-stage, `.number` content.
+/// - **Date & time** (issues #210/#212; ADR 0036) — a relative-arithmetic phrase
+///   ("3 weeks from friday"), an until/since question ("days until dec 25"), or
+///   a timezone conversion ("9am PST in tokyo"), parsed by the table-driven
+///   `DateGrammar` against the injected clock and calendar. Staging follows the
+///   answer's kind (CONTEXT.md → Stage): a date or time answer is terminal, so
+///   its row is copy-only with `.date` content, formatted per device locale; a
+///   count answer is a number, so its row is a full Calculator row —
+///   copy-and-stage, `.number` content.
 /// - **Detected result** (ADR 0032) — the *whole trimmed query* recognized as a
 ///   URL, phone number, or email address, surfacing rows that act on it directly:
 ///   **Open** for a URL, **Message** + **Call** for a phone number, **Email** for
@@ -123,12 +124,12 @@ public struct ComputedProvider: Provider {
             rows.append(calculatorRow(id: "calc.conversion", title: conversion.formatted, subtitle: trimmed, copying: conversion.formatted))
         }
 
-        // Date & time (issue #210): relative arithmetic answers a *date* — a
-        // terminal value, so its row is copy-only — while an until/since count
-        // answers a *number*, whose row gets full Calculator manners (staging
-        // follows the answer's kind, CONTEXT.md → Stage). Another independent
-        // branch: a query readable as a date question *and* anything above fires
-        // every applicable row.
+        // Date & time (issues #210/#212): relative arithmetic answers a *date*
+        // and a timezone conversion a *time* — terminal values, so their rows
+        // are copy-only — while an until/since count answers a *number*, whose
+        // row gets full Calculator manners (staging follows the answer's kind,
+        // CONTEXT.md → Stage). Another independent branch: a query readable as
+        // a date question *and* anything above fires every applicable row.
         if dateTime {
             for answer in DateGrammar.answers(for: trimmed, tables: tables, calendar: calendar, now: now()) {
                 switch answer {
@@ -138,6 +139,9 @@ public struct ComputedProvider: Provider {
                 case .count(let count):
                     let text = NumberFormat.string(Double(count), maxFractionDigits: 0)
                     rows.append(calculatorRow(id: "date.count", title: text, subtitle: trimmed, copying: text))
+                case .time(let instant, let zone, let dayOffset):
+                    let formatted = DateGrammar.formattedTime(instant, in: zone, dayOffset: dayOffset, calendar: calendar)
+                    rows.append(dateRow(id: "date.timezone", title: formatted, subtitle: trimmed))
                 }
             }
         }
