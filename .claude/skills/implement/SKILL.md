@@ -14,4 +14,8 @@ Run typechecking regularly, single test files regularly, and the full test suite
 
 Once done, use /code-review to review the work.
 
-Commit your work to the current branch.
+Always finish by committing your work to the current branch, pushing the branch,
+and opening a pull request (`gh pr create`) — every time, without asking. The
+PR title must follow Conventional Commits, and the body should list the
+acceptance criteria and how they were verified. This is the default close-out
+for every `/implement` run; do not stop at a local commit.
