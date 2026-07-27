@@ -1,16 +1,17 @@
 import XCTest
 
-/// The Computed provider's **Date & time** surfaces (issues #210/#212;
+/// The Computed provider's **Date & time** surfaces (issues #210/#212/#213;
 /// CONTEXT.md → Date & time; ADR 0036), verifiable only by driving the real
 /// app: typing a relative date phrase surfaces the boosted copy-only date row,
 /// an until/since question surfaces the count row with full Calculator
-/// manners, a timezone conversion surfaces the copy-only time row, and the
-/// Date & time toggle on the Computed page suppresses exactly those rows
-/// through the rebuilt engine. The grammar itself — anchors, tables, zones,
-/// the injected clock — is covered deterministically by QuickieCore's
-/// DateGrammarTests / ComputedDateTimeTests; these verify the wiring from a
-/// typed query through the loop to the rendered rows, and from a rendered
-/// toggle through `@AppStorage` back to the loop.
+/// manners, a timezone conversion surfaces the copy-only time row, a timestamp
+/// decode surfaces the copy-only timestamp row, and the Date & time toggle on
+/// the Computed page suppresses exactly those rows through the rebuilt engine.
+/// The grammar itself — anchors, tables, zones, the trigger word, the injected
+/// clock — is covered deterministically by QuickieCore's DateGrammarTests /
+/// ComputedDateTimeTests; these verify the wiring from a typed query through
+/// the loop to the rendered rows, and from a rendered toggle through
+/// `@AppStorage` back to the loop.
 ///
 /// Every launch passes `-uitest-reset-signals` for a clean, all-enabled slate,
 /// as the other provider-page suites do.
@@ -75,11 +76,12 @@ final class DateTimeUITests: XCTestCase {
         XCTAssertEqual(toggle.value as? String, on ? "1" : "0", "the tap flipped \(identifier) \(on ? "on" : "off")")
     }
 
-    /// A relative date phrase, an until/since question, and a timezone
-    /// conversion each surface their boosted row — the date answer as
-    /// `date.relative`, the count answer as `date.count` (issue #210 AC #1,
-    /// #2), the converted time as `date.timezone` (issue #212 AC #1). The
-    /// toggle defaults on, so this is the out-of-the-box behavior.
+    /// A relative date phrase, an until/since question, a timezone conversion,
+    /// and a timestamp decode each surface their boosted row — the date answer
+    /// as `date.relative`, the count answer as `date.count` (issue #210 AC #1,
+    /// #2), the converted time as `date.timezone` (issue #212 AC #1), the
+    /// decoded timestamp as `date.timestamp` (issue #213 AC #1). The toggle
+    /// defaults on, so this is the out-of-the-box behavior.
     @MainActor
     func testDateRowsSurfaceByDefault() throws {
         let app = launchApp()
@@ -98,6 +100,20 @@ final class DateTimeUITests: XCTestCase {
         type("9am pst in tokyo", into: app, clearing: 17)
         XCTAssertTrue(app.buttons["date.timezone"].waitForExistence(timeout: 5),
                       "a timezone conversion surfaces the converted-time row")
+
+        // A timestamp decode → a boosted copy-only timestamp row, behind the
+        // explicit "unix" trigger word.
+        type("unix 1735689600", into: app, clearing: 16)
+        XCTAssertTrue(app.buttons["date.timestamp"].waitForExistence(timeout: 5),
+                      "a triggered timestamp surfaces the decoded-timestamp row")
+
+        // The bare digit run alone stays inert — no date family row (issue #213
+        // AC #2): the trigger word is the whole point.
+        type("1735689600", into: app, clearing: 15)
+        XCTAssertTrue(app.buttons["builtin.save-for-later"].waitForExistence(timeout: 5),
+                      "the result list renders before asserting the absence")
+        XCTAssertFalse(app.buttons["date.timestamp"].exists,
+                       "a bare digit run fires no timestamp row — the trigger word is required")
     }
 
     /// A date answer's long-press menu offers the universal Copy / Share and —
@@ -123,11 +139,11 @@ final class DateTimeUITests: XCTestCase {
     }
 
     /// The Computed page's Options section renders the Date & time toggle, and
-    /// flipping it off suppresses all three grammar families — the date answer,
-    /// the count answer, *and* the converted time (issue #212 rides the same
-    /// toggle, no setting of its own) — while arithmetic still answers: the
-    /// toggle takes effect on the rebuilt loop, not just in the UI (issue #210
-    /// AC #6, issue #212 AC #5).
+    /// flipping it off suppresses all four grammar families — the date answer,
+    /// the count answer, the converted time, *and* the decoded timestamp (issues
+    /// #212/#213 ride the same toggle, no setting of their own) — while
+    /// arithmetic still answers: the toggle takes effect on the rebuilt loop, not
+    /// just in the UI (issue #210 AC #6, issue #212 AC #5, issue #213 AC #6).
     @MainActor
     func testDateTimeToggleSuppressesBothFamiliesAndRestores() throws {
         let app = launchApp()
@@ -163,7 +179,13 @@ final class DateTimeUITests: XCTestCase {
         XCTAssertFalse(app.buttons["date.timezone"].exists,
                        "with Date & time off, the converted-time row must be gone")
 
-        type("5+5", into: app, clearing: 16)
+        type("unix 1735689600", into: app, clearing: 16)
+        XCTAssertTrue(app.buttons["builtin.save-for-later"].waitForExistence(timeout: 5),
+                      "the result list renders before asserting the absence")
+        XCTAssertFalse(app.buttons["date.timestamp"].exists,
+                       "with Date & time off, the decoded-timestamp row must be gone")
+
+        type("5+5", into: app, clearing: 15)
         XCTAssertTrue(app.buttons["calc.math"].waitForExistence(timeout: 5),
                       "arithmetic is untouched by the Date & time toggle")
 
