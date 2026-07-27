@@ -49,6 +49,17 @@ public enum Units {
         let measurement = Measurement(value: parsed.amount, unit: from.unit)
         let converted = measurement.converted(to: to.unit)
         let rounded = round(converted.value)
+
+        // A length conversion *to feet* answers compound — "180 cm to ft" → "5 ft
+        // 10.9 in" — because nobody thinks in decimal feet (issue #215). The
+        // compound string re-parses as compound input, so the row round-trips.
+        // Every other target, `to in` included, stays plain decimal. A negative
+        // length is nonsensical as a height, so it declines the compound form and
+        // stays plain decimal — which the standard parser round-trips.
+        if to.symbol == "ft", converted.value >= 0 {
+            return Conversion(value: rounded, unit: to.symbol, formatted: feetInches(converted.value))
+        }
+
         let text = NumberFormat.string(rounded, maxFractionDigits: 4)
         return Conversion(value: rounded, unit: to.symbol, formatted: "\(text) \(to.symbol)")
     }
@@ -74,8 +85,34 @@ public enum Units {
         options: [.caseInsensitive]
     )
 
+    /// Matches a compound imperial length written the way people say heights —
+    /// `5'11"` or `5'11` (the closing double-quote optional) — followed by the
+    /// connector and target: feet, `'`, inches, optional `"`, connector, target.
+    /// Feet+inches only; stone+pounds and pounds+ounces were deliberately skipped
+    /// (issue #215). No leading sign — a negative height is nonsensical, so a
+    /// negative compound simply declines rather than parsing inconsistently.
+    private static let quotePattern = try! NSRegularExpression(
+        pattern: #"^\s*(\d+)\s*'\s*(\d+(?:\.\d+)?)\s*"?\s+([\p{L}°"'µ]+)\s+([\p{L}°"'µ]+)\s*$"#,
+        options: [.caseInsensitive]
+    )
+
+    /// Matches the worded compound form — `5 ft 11 in to cm` — as feet-number,
+    /// feet-unit, inches-number, inches-unit, connector, target. The two unit
+    /// tokens are captured generically and validated against the registry (they
+    /// must resolve to feet and inches), so localized spellings ("5 pieds 11
+    /// pouces …") fall out for free. This is also the shape the staged `to ft`
+    /// answer ("5 ft 10.9 in") takes, which is what makes the row round-trip.
+    private static let wordedPattern = try! NSRegularExpression(
+        pattern: #"^\s*(\d+)\s*([\p{L}'µ]+)\s+(\d+(?:\.\d+)?)\s*([\p{L}"'µ]+)\s+([\p{L}°"'µ]+)\s+([\p{L}°"'µ]+)\s*$"#,
+        options: [.caseInsensitive]
+    )
+
     private static func parse(_ query: String, tables: [DateKeywordTable]) -> Parsed? {
         let lowered = query.lowercased()
+        // Compound imperial input (`5'11" to cm`, `5 ft 11 in to cm`) is a shape
+        // the plain `<number> <from> <connector> <to>` pattern can't hold; it is
+        // disjoint from that pattern, so trying it first changes nothing else.
+        if let compound = parseCompound(lowered, tables: tables) { return compound }
         let range = NSRange(lowered.startIndex..., in: lowered)
         guard let match = pattern.firstMatch(in: lowered, range: range),
               let amountRange = Range(match.range(at: 1), in: lowered),
@@ -83,9 +120,53 @@ public enum Units {
               let connectorRange = Range(match.range(at: 3), in: lowered),
               let toRange = Range(match.range(at: 4), in: lowered),
               let amount = Double(lowered[amountRange]) else { return nil }
-        let connectors = Set(tables.flatMap { $0.unitConnectors.map(normalize) })
-        guard connectors.contains(normalize(String(lowered[connectorRange]))) else { return nil }
+        guard connectorSet(tables).contains(normalize(String(lowered[connectorRange]))) else { return nil }
         return Parsed(amount: amount, from: normalize(String(lowered[fromRange])), to: normalize(String(lowered[toRange])))
+    }
+
+    /// The set of accepted connector words across the active tables, folded the
+    /// same way tokens are so a query connector matches regardless of case or
+    /// accents (ADR 0036). Both the plain and compound parsers gate on this.
+    private static func connectorSet(_ tables: [DateKeywordTable]) -> Set<String> {
+        Set(tables.flatMap { $0.unitConnectors.map(normalize) })
+    }
+
+    /// Parses a compound feet+inches source (`5'11"`, `5'11`, `5 ft 11 in`) into a
+    /// `Parsed` whose amount is the total in feet and whose `from` is the
+    /// registered `ft`. Returns `nil` when the text is not a compound length.
+    /// The connector is validated against the active tables exactly like the
+    /// plain parser (ADR 0036); the worded form's unit tokens must resolve to
+    /// feet and inches in the registry.
+    private static func parseCompound(_ lowered: String, tables: [DateKeywordTable]) -> Parsed? {
+        let connectors = connectorSet(tables)
+        let range = NSRange(lowered.startIndex..., in: lowered)
+
+        func token(_ match: NSTextCheckingResult, _ index: Int) -> String? {
+            guard let r = Range(match.range(at: index), in: lowered) else { return nil }
+            return String(lowered[r])
+        }
+
+        // Quote form: 5'11" / 5'11 — the leading `'` fixes feet, the bare number inches.
+        if let match = quotePattern.firstMatch(in: lowered, range: range),
+           let feetText = token(match, 1), let feet = Double(feetText),
+           let inchText = token(match, 2), let inches = Double(inchText),
+           let connector = token(match, 3), connectors.contains(normalize(connector)),
+           let toText = token(match, 4) {
+            return Parsed(amount: feet + inches / 12, from: "ft", to: normalize(toText))
+        }
+
+        // Worded form: 5 ft 11 in — both unit words must resolve to feet and inches.
+        if let match = wordedPattern.firstMatch(in: lowered, range: range),
+           let feetText = token(match, 1), let feet = Double(feetText),
+           let feetUnit = token(match, 2), registry[normalize(feetUnit)]?.symbol == "ft",
+           let inchText = token(match, 3), let inches = Double(inchText),
+           let inchUnit = token(match, 4), registry[normalize(inchUnit)]?.symbol == "in",
+           let connector = token(match, 5), connectors.contains(normalize(connector)),
+           let toText = token(match, 6) {
+            return Parsed(amount: feet + inches / 12, from: "ft", to: normalize(toText))
+        }
+
+        return nil
     }
 
     /// The registry/connector normalization: lowercased with diacritics folded
@@ -168,5 +249,22 @@ public enum Units {
     /// shared with the Calculator via `NumberFormat`.
     private static func round(_ value: Double) -> Double {
         (value * 10_000).rounded() / 10_000
+    }
+
+    /// Renders a non-negative decimal-feet value as compound "`<feet> ft <inches>
+    /// in`", inches to one decimal (issue #215). Inches rounded to a full 12 carry
+    /// into the feet, so 5.9999 ft reads "6 ft 0 in", never "5 ft 12 in". Whole
+    /// feet keep the "`… 0 in`" tail so the string still re-parses as compound
+    /// input. The caller only reaches here for a non-negative value.
+    private static func feetInches(_ feet: Double) -> String {
+        var wholeFeet = feet.rounded(.down)
+        var inches = ((feet - wholeFeet) * 12 * 10).rounded() / 10
+        if inches >= 12 {
+            inches -= 12
+            wholeFeet += 1
+        }
+        let feetText = NumberFormat.string(wholeFeet, maxFractionDigits: 0)
+        let inchesText = NumberFormat.string(inches, maxFractionDigits: 1)
+        return "\(feetText) ft \(inchesText) in"
     }
 }

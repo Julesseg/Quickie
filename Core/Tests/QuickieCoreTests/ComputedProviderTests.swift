@@ -34,6 +34,17 @@ struct ComputedProviderTests {
         #expect(results.first?.run() == .copyAndStage(text: title ?? ""))
     }
 
+    @Test("a compound to-feet conversion keeps Calculator manners — stages the compound answer")
+    func compoundFeetConversionCopiesAndStages() {
+        // "180 cm to ft" answers compound (issue #215); the row still copies and
+        // stages exactly what it shows, with `.number` content, so the staged
+        // "5 ft 10.9 in" round-trips into the next conversion.
+        let result = provider.candidates(for: "180 cm to ft").first
+        #expect(result?.title == "5 ft 10.9 in")
+        #expect(result?.content == .number)
+        #expect(result?.run() == .copyAndStage(text: "5 ft 10.9 in"))
+    }
+
     @Test("the injected result declares number content, not the text it copies")
     func resultDeclaresNumberContent() {
         // The Calculator copies *text* but its content reads as `.number` (ADR

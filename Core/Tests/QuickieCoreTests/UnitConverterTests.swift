@@ -87,6 +87,71 @@ struct UnitConverterTests {
         #expect(Units.convert("5 m en pieds") == nil)
     }
 
+    @Test("quote-form compound imperial input parses: 5'11\" and 5'11")
+    func quoteFormCompoundInput() {
+        // Heights the way people write them: 5'11" is 5 feet 11 inches = 180.34 cm.
+        let closed = Units.convert("5'11\" to cm")
+        #expect(closed?.unit == "cm")
+        #expect(abs((closed?.value ?? 0) - 180.34) < 0.01)
+        // The closing double-quote is optional — "5'11" reads the same.
+        let open = Units.convert("5'11 to cm")
+        #expect(open?.unit == "cm")
+        #expect(abs((open?.value ?? 0) - 180.34) < 0.01)
+    }
+
+    @Test("worded-form compound imperial input parses: 5 ft 11 in to cm")
+    func wordedFormCompoundInput() {
+        let result = Units.convert("5 ft 11 in to cm")
+        #expect(result?.unit == "cm")
+        #expect(abs((result?.value ?? 0) - 180.34) < 0.01)
+        // Spelled-out unit names work too.
+        #expect(Units.convert("5 feet 11 inches to cm")?.unit == "cm")
+    }
+
+    @Test("a length conversion to feet answers compound — 180 cm to ft")
+    func toFeetAnswersCompound() {
+        // The issue's worked example: nobody thinks in decimal feet.
+        #expect(Units.convert("180 cm to ft")?.formatted == "5 ft 10.9 in")
+        // Whole feet still carry the compound shape (round-trippable).
+        #expect(Units.convert("60.96 cm to ft")?.formatted == "2 ft 0 in")
+    }
+
+    @Test("every other target, including to in, stays plain decimal")
+    func otherTargetsStayDecimal() {
+        // Inches is the sibling target that must NOT go compound.
+        #expect(Units.convert("180 cm to in")?.formatted == "70.8661 in")
+        #expect(Units.convert("2 m to cm")?.formatted == "200 cm")
+    }
+
+    @Test("the staged compound answer re-parses as compound input — round-trip holds")
+    func compoundRoundTrips() {
+        // "5 ft 10.9 in" is what a `to ft` conversion stages back; feeding it to
+        // another length target must parse as 5 feet 10.9 inches.
+        let staged = Units.convert("180 cm to ft")?.formatted
+        #expect(staged == "5 ft 10.9 in")
+        let reparsed = Units.convert("5 ft 10.9 in to cm")
+        #expect(reparsed?.unit == "cm")
+        #expect(abs((reparsed?.value ?? 0) - 180) < 0.5)
+        // And back to feet reproduces the same compound answer.
+        #expect(Units.convert("5 ft 10.9 in to ft")?.formatted == "5 ft 10.9 in")
+    }
+
+    @Test("compound imperial input converts to any length target")
+    func compoundInputToAnyTarget() {
+        #expect(Units.convert("6'0\" to m")?.unit == "m")
+        #expect(Units.convert("5'6\" to in")?.formatted == "66 in")
+    }
+
+    @Test("a negative length declines the compound form and stays plain decimal")
+    func negativeToFeetStaysDecimal() {
+        // A negative height is nonsensical, so `to ft` skips compound and renders
+        // plain decimal — which the standard parser round-trips, unlike a
+        // half-signed compound would.
+        #expect(Units.convert("-180 cm to ft")?.formatted == "-5.9055 ft")
+        // And a negative compound *input* simply declines rather than mis-parsing.
+        #expect(Units.convert("-5'11 to cm") == nil)
+    }
+
     @Test("cross-family conversions decline")
     func crossFamilyDeclines() {
         // Miles measure length, kilograms mass — not convertible.

@@ -50,7 +50,7 @@ struct ComputedLocalizationTests {
     func frenchDeviceConvertsUnits() {
         let rows = provider(languageRegion: "fr_FR").candidates(for: "5 m en pieds")
         #expect(rows.map(\.id) == ["calc.conversion"])
-        #expect(rows.first?.title == "16.4042 ft")
+        #expect(rows.first?.title == "16 ft 4.9 in")
     }
 
     @Test("English keeps working on every localized device — the dual-accept floor")
@@ -58,7 +58,7 @@ struct ComputedLocalizationTests {
         for language in ["fr_FR", "es_ES", "de_DE"] {
             let provider = provider(languageRegion: language)
             #expect(provider.candidates(for: "days until dec 25").first?.run() == .copyAndStage(text: "163"))
-            #expect(provider.candidates(for: "5 m to ft").first?.title == "16.4042 ft")
+            #expect(provider.candidates(for: "5 m to ft").first?.title == "16 ft 4.9 in")
         }
     }
 
@@ -75,6 +75,6 @@ struct ComputedLocalizationTests {
         #expect(provider.candidates(for: "jours jusqu'à noël").isEmpty)
         // …while the Spanish equivalents parse.
         #expect(provider.candidates(for: "días hasta navidad").first?.run() == .copyAndStage(text: "163"))
-        #expect(provider.candidates(for: "5 m en pies").first?.title == "16.4042 ft")
+        #expect(provider.candidates(for: "5 m en pies").first?.title == "16 ft 4.9 in")
     }
 }
