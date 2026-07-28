@@ -74,6 +74,12 @@ public struct DateKeywordTable: Sendable, Equatable {
     /// tokyo" (issue #212). Only the connector is per-language; the city and
     /// abbreviation names live in the one shared `TimeZones` registry.
     public let timeZoneConnectors: Set<String>
+    /// The timestamp-decode trigger words — the "unix" of "unix 1735689600"
+    /// (issue #213). The trigger is the whole point: a bare digit run stays
+    /// inert (the bare-number principle), so a Unix epoch value decodes *only*
+    /// behind an explicit word. Localizable like any connector, so a French
+    /// device can type "horodatage 1735689600" too.
+    public let timestampTriggers: Set<String>
 
     public init(
         localeIdentifier: String,
@@ -88,7 +94,8 @@ public struct DateKeywordTable: Sendable, Equatable {
         agoPrefix: Set<String> = [],
         namedDays: [String: MonthDay] = [:],
         unitConnectors: Set<String> = [],
-        timeZoneConnectors: Set<String> = []
+        timeZoneConnectors: Set<String> = [],
+        timestampTriggers: Set<String> = []
     ) {
         self.localeIdentifier = localeIdentifier
         self.units = units
@@ -103,6 +110,7 @@ public struct DateKeywordTable: Sendable, Equatable {
         self.namedDays = namedDays
         self.unitConnectors = unitConnectors
         self.timeZoneConnectors = timeZoneConnectors
+        self.timestampTriggers = timestampTriggers
     }
 
     /// The English table — the **dual-accept floor** (ADR 0036): it is always in
@@ -126,7 +134,8 @@ public struct DateKeywordTable: Sendable, Equatable {
         since: ["since"],
         namedDays: ["christmas": MonthDay(month: 12, day: 25), "xmas": MonthDay(month: 12, day: 25)],
         unitConnectors: ["to", "in", "as"],
-        timeZoneConnectors: ["in"]
+        timeZoneConnectors: ["in"],
+        timestampTriggers: ["unix", "epoch", "timestamp"]
     )
 
     /// The French launch table (issue #211). Keyword matching folds diacritics
@@ -151,7 +160,8 @@ public struct DateKeywordTable: Sendable, Equatable {
         agoPrefix: ["il y a"],
         namedDays: ["noël": MonthDay(month: 12, day: 25)],
         unitConnectors: ["en"],
-        timeZoneConnectors: ["à"]
+        timeZoneConnectors: ["à"],
+        timestampTriggers: ["unix", "epoch", "timestamp", "horodatage"]
     )
 
     /// The Spanish launch table (issue #211). The article contractions ride in
@@ -175,7 +185,8 @@ public struct DateKeywordTable: Sendable, Equatable {
         agoPrefix: ["hace"],
         namedDays: ["navidad": MonthDay(month: 12, day: 25)],
         unitConnectors: ["en", "a"],
-        timeZoneConnectors: ["en"]
+        timeZoneConnectors: ["en"],
+        timestampTriggers: ["unix", "epoch", "timestamp"]
     )
 
     /// The German launch table (issue #211). Unit words carry the dative
@@ -198,7 +209,8 @@ public struct DateKeywordTable: Sendable, Equatable {
         agoPrefix: ["vor"],
         namedDays: ["weihnachten": MonthDay(month: 12, day: 25)],
         unitConnectors: ["in", "als"],
-        timeZoneConnectors: ["in"]
+        timeZoneConnectors: ["in"],
+        timestampTriggers: ["unix", "epoch", "timestamp", "zeitstempel"]
     )
 
     /// The accepted tables for a device language: English — the dual-accept
@@ -233,12 +245,17 @@ public enum DateAnswer: Sendable, Equatable {
     /// it must render in and the day offset the conversion crossed (−1, 0, +1
     /// — "9am PST" is already tomorrow in Tokyo), so display can say so.
     case time(Date, zone: TimeZone, dayOffset: Int)
+    /// A decoded Unix timestamp (issue #213): the absolute instant behind
+    /// "unix 1735689600". Terminal like a date, but carries a time-of-day too
+    /// (a timestamp pins a moment, not a day), so it renders date *and* time in
+    /// the device zone — a distinct case from `.date`, which is day-only.
+    case timestamp(Date)
 }
 
 /// The **Date & time grammar core** (issues #210/#212; ADR 0036; CONTEXT.md →
 /// Date & time): a hand-rolled, language-independent parser skeleton — number +
 /// unit word + connector + anchor word — fed by per-language
-/// `DateKeywordTable`s. Three grammar families so far:
+/// `DateKeywordTable`s. Four grammar families so far:
 ///
 /// - **Relative arithmetic** → a date: "3 weeks from friday", "tomorrow + 2
 ///   weeks", "2 days ago" — and the prefix-past shape the localized tables use
@@ -257,6 +274,10 @@ public enum DateAnswer: Sendable, Equatable {
 ///   city/abbreviation names come from the one shared `TimeZones` registry,
 ///   only the connector word is per-language table data, and the system
 ///   supplies the offset math.
+/// - **Timestamp decode** → a timestamp (issue #213): "unix 1735689600" decodes
+///   a Unix epoch value to its absolute instant, strictly behind an explicit
+///   trigger word so a bare digit run stays inert. Seconds and milliseconds are
+///   told apart by magnitude; the trigger word is per-language table data.
 ///
 /// Hand-rolled because `NSDataDetector` is excluded from Core (the suite runs
 /// under `swift test` on Linux) and third-party parsers are out (ADR 0004).
@@ -278,7 +299,9 @@ public enum DateGrammar {
         now: Date
     ) -> [DateAnswer] {
         let tokens = tokenize(query)
-        guard tokens.count >= 3 else { return [] }
+        // Two tokens is the shortest real query — the timestamp decode's
+        // "<trigger> <digits>". Every longer family checks its own minimum.
+        guard tokens.count >= 2 else { return [] }
 
         var answers: [DateAnswer] = []
         for table in tables {
@@ -298,13 +321,8 @@ public enum DateGrammar {
     /// arithmetic), no time. The grammar is dual-accept; the answer is not
     /// (ADR 0036) — output always follows the device.
     public static func formatted(_ date: Date, calendar: Calendar) -> String {
-        let formatter = DateFormatter()
-        formatter.calendar = calendar
-        formatter.locale = calendar.locale
-        formatter.timeZone = calendar.timeZone
-        formatter.dateStyle = .full
-        formatter.timeStyle = .none
-        return formatter.string(from: date)
+        formatter(calendar: calendar, timeZone: calendar.timeZone, dateStyle: .full, timeStyle: .none)
+            .string(from: date)
     }
 
     /// Formats a timezone-converted time for display and copying: the device
@@ -314,17 +332,41 @@ public enum DateGrammar {
     /// `formatted(_:calendar:)`, the grammar is dual-accept but the answer is
     /// not (ADR 0036): output always follows the device.
     public static func formattedTime(_ date: Date, in zone: TimeZone, dayOffset: Int, calendar: Calendar) -> String {
-        let formatter = DateFormatter()
-        formatter.calendar = calendar
-        formatter.locale = calendar.locale
-        formatter.timeZone = zone
-        formatter.dateStyle = .none
-        formatter.timeStyle = .short
-        var text = formatter.string(from: date)
+        var text = formatter(calendar: calendar, timeZone: zone, dateStyle: .none, timeStyle: .short)
+            .string(from: date)
         if dayOffset != 0 {
             text += dayOffset > 0 ? " +\(dayOffset)" : " \(dayOffset)"
         }
         return text
+    }
+
+    /// Formats a decoded Unix timestamp for display and copying: the device
+    /// locale's **full** date *and* short time, in the device zone — a
+    /// timestamp pins a moment, so unlike `formatted(_:calendar:)` the
+    /// time-of-day shows. Like the other formatters the grammar is dual-accept
+    /// but the answer is not (ADR 0036): output always follows the device.
+    public static func formattedTimestamp(_ date: Date, calendar: Calendar) -> String {
+        formatter(calendar: calendar, timeZone: calendar.timeZone, dateStyle: .full, timeStyle: .short)
+            .string(from: date)
+    }
+
+    /// A `DateFormatter` configured for one of the answer formatters above: the
+    /// device calendar and its locale, the given zone, and the given date/time
+    /// styles. The zone varies (a converted time renders in its *target* zone,
+    /// the others in the device zone) so it is a parameter, not `calendar`'s.
+    private static func formatter(
+        calendar: Calendar,
+        timeZone: TimeZone,
+        dateStyle: DateFormatter.Style,
+        timeStyle: DateFormatter.Style
+    ) -> DateFormatter {
+        let formatter = DateFormatter()
+        formatter.calendar = calendar
+        formatter.locale = calendar.locale
+        formatter.timeZone = timeZone
+        formatter.dateStyle = dateStyle
+        formatter.timeStyle = timeStyle
+        return formatter
     }
 
     // MARK: - Parsing
@@ -344,6 +386,7 @@ public enum DateGrammar {
         let since: Set<String>
         let namedDays: [String: DateKeywordTable.MonthDay]
         let timeZoneConnectors: Set<String>
+        let timestampTriggers: Set<String>
 
         init(table: DateKeywordTable) {
             let fold = Context.normalize
@@ -358,6 +401,7 @@ public enum DateGrammar {
             since = Set(table.since.map(fold))
             namedDays = Dictionary(table.namedDays.map { (fold($0.key), $0.value) }, uniquingKeysWith: { a, _ in a })
             timeZoneConnectors = Set(table.timeZoneConnectors.map(fold))
+            timestampTriggers = Set(table.timestampTriggers.map(fold))
         }
 
         /// Every keyword spanning more than one word, as token runs, longest
@@ -537,7 +581,59 @@ public enum DateGrammar {
             return answer
         }
 
+        // <trigger> <digits> — "unix 1735689600" (issue #213): a Unix epoch
+        // value decoded behind an explicit trigger word, so a bare digit run
+        // stays inert. The order is free ("1735689600 unix" too).
+        if let answer = timestampDecode(tokens, context: context) {
+            return answer
+        }
+
         return nil
+    }
+
+    // MARK: - Timestamp decode
+
+    /// Parses the timestamp family: a two-token query where one token is a
+    /// trigger word ("unix") and the other a digit run decodes as a Unix epoch
+    /// instant. The trigger word is required — a bare digit run never decodes,
+    /// which is what keeps "1735689600" inert (the bare-number principle) and
+    /// clear of the phone detector's 7–15-digit range.
+    private static func timestampDecode(_ tokens: [String], context: Context) -> DateAnswer? {
+        guard tokens.count == 2 else { return nil }
+        let triggers = context.keywords.timestampTriggers
+        let digits: String
+        if triggers.contains(tokens[0]) {
+            digits = tokens[1]
+        } else if triggers.contains(tokens[1]) {
+            digits = tokens[0]
+        } else {
+            return nil
+        }
+        guard let instant = epochInstant(digits) else { return nil }
+        return .timestamp(instant)
+    }
+
+    /// Reads a digit run as a Unix epoch instant, disambiguating seconds from
+    /// milliseconds **by magnitude**: a modern seconds timestamp is ~10 digits
+    /// (1.7×10⁹), the same instant in milliseconds ~13 digits (1.7×10¹²), so a
+    /// value below 10¹¹ reads as seconds and a value from 10¹¹ up as
+    /// milliseconds — the two windows never overlap, so the reading is never a
+    /// guess. A value at or past the millisecond window (≥ 10¹⁴, ≈ year 5138 in
+    /// ms) has no sane reading and is declined; a token too long to be an `Int`
+    /// declines at the guard, so no overflow reaches the arithmetic.
+    private static func epochInstant(_ token: String) -> Date? {
+        guard !token.isEmpty, token.allSatisfy(\.isNumber), let value = Int(token) else { return nil }
+        let secondsCeiling = 100_000_000_000        // 10¹¹ — at or above this a value reads as milliseconds
+        let millisecondsCeiling = 100_000_000_000_000 // 10¹⁴ — at or above this, no sane reading
+        let seconds: Double
+        if value < secondsCeiling {
+            seconds = Double(value)
+        } else if value < millisecondsCeiling {
+            seconds = Double(value) / 1000
+        } else {
+            return nil
+        }
+        return Date(timeIntervalSince1970: seconds)
     }
 
     // MARK: - Timezone conversion

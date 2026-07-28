@@ -2,17 +2,18 @@ import Foundation
 import Testing
 @testable import QuickieCore
 
-// The Computed provider's **Date & time** rows (issues #210/#212; CONTEXT.md →
-// Date & time): a relative-arithmetic query surfaces a boosted *date* row, an
-// until/since query a boosted *count* row, a timezone conversion a boosted
-// *time* row. The row shapes follow the Stage rule (CONTEXT.md → Stage) —
-// staging follows the answer's kind: the date and time answers are terminal,
-// so their rows are copy-only with `.date` content, locale-formatted; the
-// count answer is a number, so its row has full Calculator manners
-// (copy-and-stage, `.number`), indistinguishable from a math result. The
-// provider takes an injected clock and calendar, so "today" here is a fixed
-// Wednesday. Grammar coverage lives in DateGrammarTests; these tests pin the
-// row shapes, the toggle, and non-arbitration.
+// The Computed provider's **Date & time** rows (issues #210/#212/#213;
+// CONTEXT.md → Date & time): a relative-arithmetic query surfaces a boosted
+// *date* row, an until/since query a boosted *count* row, a timezone conversion
+// a boosted *time* row, and a timestamp decode a boosted *timestamp* row. The
+// row shapes follow the Stage rule (CONTEXT.md → Stage) — staging follows the
+// answer's kind: the date, time, and timestamp answers are terminal, so their
+// rows are copy-only with `.date` content, locale-formatted; the count answer
+// is a number, so its row has full Calculator manners (copy-and-stage,
+// `.number`), indistinguishable from a math result. The provider takes an
+// injected clock and calendar, so "today" here is a fixed Wednesday. Grammar
+// coverage lives in DateGrammarTests; these tests pin the row shapes, the
+// toggle, and non-arbitration.
 struct ComputedDateTimeTests {
 
     private static let calendar: Calendar = {
@@ -98,20 +99,52 @@ struct ComputedDateTimeTests {
         #expect(rows.first?.outputType == .date)
     }
 
-    @Test("the row ids name the three families for the UI layer")
+    @Test("a timestamp decode yields one boosted copy-only timestamp row")
+    func timestampAnswerRowIsCopyOnly() {
+        let rows = provider.candidates(for: "unix 1735689600")
+        #expect(rows.count == 1)
+
+        // The title (and copied text) is the locale-formatted instant — date
+        // *and* time — and, a timestamp being terminal like a date (CONTEXT.md →
+        // Stage), the main action *only* copies.
+        let formatted = DateGrammar.formattedTimestamp(
+            Date(timeIntervalSince1970: 1_735_689_600),
+            calendar: Self.calendar
+        )
+        #expect(rows.first?.id == "date.timestamp")
+        #expect(rows.first?.title == formatted)
+        #expect(rows.first?.subtitle == "unix 1735689600")
+        #expect(rows.first?.run() == .copyText(formatted))
+        #expect(rows.first?.content == .date)
+        #expect(rows.first?.outputType == .date)
+    }
+
+    @Test("a bare digit run fires no date row — the trigger word is required")
+    func bareDigitsFireNoTimestampRow() {
+        // "1735689600" alone stays inert for the Date & time family (issue #213
+        // AC #2): the bare-number principle, clear of the phone detector's range.
+        // The phone toggle is a separate branch; Date & time contributes nothing.
+        let rows = provider.candidates(for: "1735689600")
+        #expect(rows.allSatisfy { !$0.id.hasPrefix("date.") })
+    }
+
+    @Test("the row ids name the four families for the UI layer")
     func rowIDsNameTheFamilies() {
         #expect(provider.candidates(for: "tomorrow + 2 weeks").first?.id == "date.relative")
         #expect(provider.candidates(for: "weeks since jan 1").first?.id == "date.count")
         #expect(provider.candidates(for: "3pm in paris").first?.id == "date.timezone")
+        #expect(provider.candidates(for: "unix 1735689600").first?.id == "date.timestamp")
     }
 
-    @Test("the Date & time toggle off suppresses all three families and nothing else")
+    @Test("the Date & time toggle off suppresses all four families and nothing else")
     func toggleSuppressesExactlyItsRows() {
         let off = ComputedProvider(dateTime: false, calendar: Self.calendar, now: { Self.now })
         #expect(off.candidates(for: "3 weeks from friday").isEmpty)
         #expect(off.candidates(for: "days until dec 25").isEmpty)
-        // The timezone family rides the same toggle — no setting of its own.
+        // The timezone and timestamp families ride the same toggle — no setting
+        // of their own.
         #expect(off.candidates(for: "9am pst in tokyo").isEmpty)
+        #expect(off.candidates(for: "unix 1735689600").isEmpty)
         // Math is untouched — the toggle gates only the date grammar.
         #expect(off.candidates(for: "2+2").first?.id == "calc.math")
     }
