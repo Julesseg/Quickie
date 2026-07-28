@@ -109,4 +109,47 @@ struct CalculatorTests {
         // "inf"; declining keeps a nonsense row out of the list.
         #expect(Calculator.evaluate("9^9^9") == nil)
     }
+
+    // MARK: - Base literals (issue #216)
+
+    @Test("base literals are primary tokens and answer in decimal")
+    func baseLiteralsInArithmetic() {
+        // The issue's worked examples: a `0x`/`0b` literal is just another way
+        // to write a number, so it participates in ordinary arithmetic and the
+        // answer comes back decimal.
+        #expect(Calculator.evaluate("0xff + 1") == 256)
+        #expect(Calculator.evaluate("0b1010 * 2") == 20)
+        #expect(Calculator.evaluate("0o10 + 1") == 9)
+    }
+
+    @Test("a base literal evaluates on its own and obeys the surrounding grammar")
+    func baseLiteralsInGrammar() {
+        #expect(Calculator.evaluate("0xff") == 255)
+        #expect(Calculator.evaluate("-0x10") == -16)
+        #expect(Calculator.evaluate("(0x10 + 0b10) * 2") == 36)
+        #expect(Calculator.evaluate("0XFF+1") == 256)
+    }
+
+    @Test("a malformed base literal declines rather than half-parsing")
+    func declinesMalformedBaseLiteral() {
+        #expect(Calculator.evaluate("0x") == nil)
+        #expect(Calculator.evaluate("0xzz") == nil)
+        // A digit outside the literal's base is a decline, never a silent
+        // truncation to the valid prefix.
+        #expect(Calculator.evaluate("0b1012") == nil)
+        #expect(Calculator.evaluate("0o378") == nil)
+    }
+
+    @Test("there are no bitwise operators and `^` stays power")
+    func noBitwiseOperators() {
+        // Decided explicitly (CONTEXT.md → Computed): `^` is exponentiation, so
+        // shift/and/or/xor are simply not part of the grammar and decline.
+        #expect(Calculator.evaluate("2^10") == 1024)
+        #expect(Calculator.evaluate("1 << 2") == nil)
+        #expect(Calculator.evaluate("8 >> 2") == nil)
+        #expect(Calculator.evaluate("6 & 3") == nil)
+        #expect(Calculator.evaluate("6 | 3") == nil)
+        #expect(Calculator.evaluate("6 xor 3") == nil)
+        #expect(Calculator.evaluate("~5") == nil)
+    }
 }

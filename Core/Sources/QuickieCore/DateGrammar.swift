@@ -213,6 +213,26 @@ public struct DateKeywordTable: Sendable, Equatable {
         timestampTriggers: ["unix", "epoch", "timestamp", "zeitstempel"]
     )
 
+    /// Lowercased with diacritics folded, so a typed "mètres" lands on a
+    /// registered "metres" and "hexadécimal" on "hexadecimal" — accent-free
+    /// typing is normal on many keyboards. The lighter sibling of the date
+    /// grammar's own `normalize`, which additionally straightens curly
+    /// apostrophes and strips trailing periods; connector, unit, and base-name
+    /// tokens carry neither.
+    static func folded(_ token: String) -> String {
+        token.lowercased().folding(options: .diacriticInsensitive, locale: Locale(identifier: "en_US"))
+    }
+
+    /// True when `word` is an accepted unit connector in any of `tables` — the
+    /// "to"/"in"/"as" of "20 mi to km" *and* of "255 to hex", the "en" a French
+    /// device adds (ADR 0036). The one reader of that table data, shared by the
+    /// unit converter and the base grammar so a new language's connectors reach
+    /// both at once.
+    static func accepts(connector word: String, in tables: [DateKeywordTable]) -> Bool {
+        let target = folded(word)
+        return tables.contains { table in table.unitConnectors.contains { folded($0) == target } }
+    }
+
     /// The accepted tables for a device language: English — the dual-accept
     /// floor (ADR 0036) — plus the device language's table when we ship one.
     /// Only that one layers on; the other launch languages stay dormant, so a
