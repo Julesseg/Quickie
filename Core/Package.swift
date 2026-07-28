@@ -8,6 +8,10 @@ import PackageDescription
 // `swift test` on any platform — no Xcode or simulator required.
 let package = Package(
     name: "QuickieCore",
+    // Foundation's `UnitInformationStorage` (the data-storage family, issue #214)
+    // needs macOS 10.15 / iOS 13; every other dimension we use predates it. The
+    // App target ships far above this floor, so it merely pins the pure library.
+    platforms: [.macOS(.v10_15), .iOS(.v13)],
     products: [
         .library(name: "QuickieCore", targets: ["QuickieCore"]),
     ],

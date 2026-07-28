@@ -87,6 +87,104 @@ struct UnitConverterTests {
         #expect(Units.convert("5 m en pieds") == nil)
     }
 
+    // MARK: - Six new families (issue #214)
+
+    @Test("converts areas, including the acre example and the superscript spelling")
+    func areaConversions() {
+        // The issue's worked example: 2 acres → m². 1 acre = 4046.8564 m².
+        let acres = Units.convert("2 acres to m2")
+        #expect(acres?.unit == "m²")
+        #expect(abs((acres?.value ?? 0) - 8093.7128) < 0.01)
+        // The superscript spelling folds onto the "2" spelling.
+        #expect(Units.convert("2 acres to m²")?.unit == "m²")
+        // ft²/km²/mi²/hectares all resolve within the family.
+        #expect(Units.convert("1 km² to hectares")?.unit == "ha")
+        #expect(abs((Units.convert("1 km² to hectares")?.value ?? 0) - 100) < 0.001)
+        #expect(Units.convert("10 ft2 to in2")?.unit == "in²")
+        #expect(Units.convert("1 mi² to acres")?.unit == "acre")
+    }
+
+    @Test("converts speeds: km/h, mph, m/s, knots")
+    func speedConversions() {
+        // The issue's worked example: 100 km/h → mph ≈ 62.1371.
+        let mph = Units.convert("100 km/h to mph")
+        #expect(mph?.unit == "mph")
+        #expect(abs((mph?.value ?? 0) - 62.1371) < 0.001)
+        #expect(Units.convert("10 m/s to km/h")?.unit == "km/h")
+        #expect(abs((Units.convert("10 m/s to km/h")?.value ?? 0) - 36) < 0.001)
+        let knots = Units.convert("50 knots to km/h")
+        #expect(knots?.unit == "km/h")
+        #expect(abs((knots?.value ?? 0) - 92.6) < 0.001)
+    }
+
+    @Test("data storage is decimal by default: 1 gb to mb answers 1000")
+    func dataStorageDecimalDefault() {
+        let dec = Units.convert("1 gb to mb")
+        #expect(dec?.unit == "MB")
+        #expect(dec?.value == 1000)
+    }
+
+    @Test("binary data storage is reachable only by the explicit -ib spelling")
+    func dataStorageBinaryExplicit() {
+        // "gib"/"mib" are distinct registry rows with distinct symbols; the
+        // -ib spelling answers 1024, the decimal spelling never does.
+        let bin = Units.convert("1 gib to mib")
+        #expect(bin?.unit == "MiB")
+        #expect(bin?.value == 1024)
+        // Decimal and binary coexist without collapsing into one another.
+        #expect(Units.convert("1 gb to mb")?.value == 1000)
+    }
+
+    @Test("converts energy: J/kJ/cal/kcal/Wh/kWh")
+    func energyConversions() {
+        #expect(Units.convert("1 kj to j")?.value == 1000)
+        #expect(abs((Units.convert("1 kcal to cal")?.value ?? 0) - 1000) < 0.001)
+        // 1 kWh = 1000 Wh — Wh is a custom unit Foundation omits.
+        #expect(Units.convert("1 kwh to wh")?.unit == "Wh")
+        #expect(abs((Units.convert("1 kwh to wh")?.value ?? 0) - 1000) < 0.001)
+    }
+
+    @Test("converts pressure: bar/psi/atm/kPa/mmHg")
+    func pressureConversions() {
+        // 1 bar = 100 kPa.
+        #expect(abs((Units.convert("1 bar to kpa")?.value ?? 0) - 100) < 0.001)
+        // 1 atm ≈ 14.6959 psi — atm is a custom unit Foundation omits.
+        let psi = Units.convert("1 atm to psi")
+        #expect(psi?.unit == "psi")
+        #expect(abs((psi?.value ?? 0) - 14.6959) < 0.001)
+        // 1 atm ≈ 760 mmHg.
+        #expect(abs((Units.convert("1 atm to mmHg")?.value ?? 0) - 760) < 0.5)
+    }
+
+    @Test("converts durations: seconds through weeks (a magnitude conversion, not Date & time)")
+    func durationConversions() {
+        // The issue's worked example: 3 h → min.
+        let min = Units.convert("3 h to min")
+        #expect(min?.unit == "min")
+        #expect(min?.value == 180)
+        #expect(Units.convert("120 s to min")?.value == 2)
+        // Days and weeks are custom units Foundation's UnitDuration omits.
+        #expect(Units.convert("2 weeks to days")?.unit == "d")
+        #expect(Units.convert("2 weeks to days")?.value == 14)
+        #expect(Units.convert("1 day to h")?.value == 24)
+    }
+
+    @Test("no fuel-economy units are recognized")
+    func noFuelEconomy() {
+        #expect(Units.convert("50 mpg to l/100km") == nil)
+        #expect(Units.convert("8 l/100km to mpg") == nil)
+    }
+
+    @Test("the new families still decline cross-family requests")
+    func newFamiliesGuardCrossFamily() {
+        // Each new family is gated by the shared-family guard exactly as the
+        // originals are: an area is not a speed, a byte is not a second.
+        #expect(Units.convert("1 m2 to km/h") == nil)
+        #expect(Units.convert("1 gb to h") == nil)
+        #expect(Units.convert("1 bar to j") == nil)
+        #expect(Units.convert("1 h to kg") == nil)
+    }
+
     @Test("cross-family conversions decline")
     func crossFamilyDeclines() {
         // Miles measure length, kilograms mass — not convertible.

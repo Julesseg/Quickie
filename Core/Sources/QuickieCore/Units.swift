@@ -68,9 +68,12 @@ public enum Units {
     /// is language-independent, the words are table data (ADR 0036). Unit
     /// tokens accept any letters (accented names like "mètres" and "fuß"
     /// included) plus the degree/quote symbols that stand in for temperature
-    /// and feet/inches.
+    /// and feet/inches, and — for the compound families (issue #214) — digits
+    /// and the superscript squares/cubes ("m2", "km²"), plus the slash of a rate
+    /// symbol ("km/h", "m/s"). The amount is captured first and greedily, so a
+    /// leading digit run always reads as the number, not as part of the unit.
     private static let pattern = try! NSRegularExpression(
-        pattern: #"^\s*(-?\d+(?:\.\d+)?)\s*([\p{L}°"'µ]+)\s+([\p{L}°"'µ]+)\s+([\p{L}°"'µ]+)\s*$"#,
+        pattern: #"^\s*(-?\d+(?:\.\d+)?)\s*([\p{L}0-9°"'µ²³/]+)\s+([\p{L}0-9°"'µ²³/]+)\s+([\p{L}0-9°"'µ²³/]+)\s*$"#,
         options: [.caseInsensitive]
     )
 
@@ -88,12 +91,17 @@ public enum Units {
         return Parsed(amount: amount, from: normalize(String(lowered[fromRange])), to: normalize(String(lowered[toRange])))
     }
 
-    /// The registry/connector normalization: lowercased with diacritics folded
-    /// — "mètres" lands on the registered "metres", "kilómetros" on
-    /// "kilometros". (The date grammar's fuller normalization also straightens
-    /// apostrophes and strips trailing periods; unit tokens carry neither.)
+    /// The registry/connector normalization: lowercased with the superscript
+    /// square/cube folded to a plain digit ("m²" → "m2") and diacritics folded —
+    /// "mètres" lands on the registered "metres", "kilómetros" on "kilometros".
+    /// So the area registry needs only the "m2" spelling and both reach it. (The
+    /// date grammar's fuller normalization also straightens apostrophes and
+    /// strips trailing periods; unit tokens carry neither.)
     private static func normalize(_ token: String) -> String {
-        token.lowercased().folding(options: .diacriticInsensitive, locale: Locale(identifier: "en_US"))
+        token.lowercased()
+            .replacingOccurrences(of: "²", with: "2")
+            .replacingOccurrences(of: "³", with: "3")
+            .folding(options: .diacriticInsensitive, locale: Locale(identifier: "en_US"))
     }
 
     // MARK: - Unit registry
@@ -105,6 +113,16 @@ public enum Units {
         let family: String
         let symbol: String
     }
+
+    /// The handful of units Foundation's dimensions omit (issue #214), defined as
+    /// linear converters on the *same base unit* as the family's built-ins so
+    /// `Measurement` converts them alongside the standard rows. `coefficient` is
+    /// the base-unit count per one of this unit: `atm` in pascals, `day`/`week`
+    /// in seconds, `Wh` in joules.
+    private static let atmospheres = UnitPressure(symbol: "atm", converter: UnitConverterLinear(coefficient: 101_325))
+    private static let days = UnitDuration(symbol: "d", converter: UnitConverterLinear(coefficient: 86_400))
+    private static let weeks = UnitDuration(symbol: "wk", converter: UnitConverterLinear(coefficient: 604_800))
+    private static let wattHours = UnitEnergy(symbol: "Wh", converter: UnitConverterLinear(coefficient: 3_600))
 
     /// All units the converter recognises, keyed by every accepted spelling
     /// (lowercased). Grouped by family so a conversion only succeeds within a
@@ -157,6 +175,71 @@ public enum Units {
         add(["floz", "fluidounce", "fluidounces"], UnitVolume.fluidOunces, "volume", "fl oz")
         add(["tbsp", "tablespoon", "tablespoons"], UnitVolume.tablespoons, "volume", "tbsp")
         add(["tsp", "teaspoon", "teaspoons"], UnitVolume.teaspoons, "volume", "tsp")
+
+        // The six new families (issue #214) — pure registry growth, no parser
+        // change beyond the compound-symbol tokens the pattern now accepts.
+        // Superscript spellings ("m²") fold to their digit form ("m2") in
+        // `normalize`, so each area row needs only the digit spelling.
+
+        // Area
+        add(["mm2", "sqmm"], UnitArea.squareMillimeters, "area", "mm²")
+        add(["cm2", "sqcm"], UnitArea.squareCentimeters, "area", "cm²")
+        add(["m2", "sqm", "squaremeter", "squaremeters", "squaremetre", "squaremetres"], UnitArea.squareMeters, "area", "m²")
+        add(["km2", "sqkm", "squarekilometer", "squarekilometers"], UnitArea.squareKilometers, "area", "km²")
+        add(["in2", "sqin", "squareinch", "squareinches"], UnitArea.squareInches, "area", "in²")
+        add(["ft2", "sqft", "squarefoot", "squarefeet"], UnitArea.squareFeet, "area", "ft²")
+        add(["yd2", "sqyd", "squareyard", "squareyards"], UnitArea.squareYards, "area", "yd²")
+        add(["mi2", "sqmi", "squaremile", "squaremiles"], UnitArea.squareMiles, "area", "mi²")
+        add(["acre", "acres"], UnitArea.acres, "area", "acre")
+        add(["ha", "hectare", "hectares"], UnitArea.hectares, "area", "ha")
+
+        // Speed
+        add(["m/s", "mps", "meterspersecond"], UnitSpeed.metersPerSecond, "speed", "m/s")
+        add(["km/h", "kmh", "kph", "kilometersperhour"], UnitSpeed.kilometersPerHour, "speed", "km/h")
+        add(["mph", "mi/h", "milesperhour"], UnitSpeed.milesPerHour, "speed", "mph")
+        add(["kn", "kt", "kts", "knot", "knots"], UnitSpeed.knots, "speed", "kn")
+
+        // Data storage — decimal by default (1 GB = 1000 MB); binary reachable
+        // only by the explicit -ib spelling (1 GiB = 1024 MiB). Both spellings
+        // coexist as distinct rows with distinct symbols.
+        add(["b", "byte", "bytes"], UnitInformationStorage.bytes, "information", "B")
+        add(["bit", "bits"], UnitInformationStorage.bits, "information", "bit")
+        add(["kb", "kilobyte", "kilobytes"], UnitInformationStorage.kilobytes, "information", "KB")
+        add(["mb", "megabyte", "megabytes"], UnitInformationStorage.megabytes, "information", "MB")
+        add(["gb", "gigabyte", "gigabytes"], UnitInformationStorage.gigabytes, "information", "GB")
+        add(["tb", "terabyte", "terabytes"], UnitInformationStorage.terabytes, "information", "TB")
+        add(["kib", "kibibyte", "kibibytes"], UnitInformationStorage.kibibytes, "information", "KiB")
+        add(["mib", "mebibyte", "mebibytes"], UnitInformationStorage.mebibytes, "information", "MiB")
+        add(["gib", "gibibyte", "gibibytes"], UnitInformationStorage.gibibytes, "information", "GiB")
+        add(["tib", "tebibyte", "tebibytes"], UnitInformationStorage.tebibytes, "information", "TiB")
+
+        // Energy — Wh is a custom unit (Foundation's UnitEnergy omits it).
+        add(["j", "joule", "joules"], UnitEnergy.joules, "energy", "J")
+        add(["kj", "kilojoule", "kilojoules"], UnitEnergy.kilojoules, "energy", "kJ")
+        add(["cal", "calorie", "calories"], UnitEnergy.calories, "energy", "cal")
+        add(["kcal", "kilocalorie", "kilocalories"], UnitEnergy.kilocalories, "energy", "kcal")
+        add(["wh", "watthour", "watthours"], wattHours, "energy", "Wh")
+        add(["kwh", "kilowatthour", "kilowatthours"], UnitEnergy.kilowattHours, "energy", "kWh")
+
+        // Pressure — atm is a custom unit (Foundation's UnitPressure omits it).
+        add(["pa", "pascal", "pascals"], UnitPressure.newtonsPerMetersSquared, "pressure", "Pa")
+        add(["hpa", "hectopascal", "hectopascals"], UnitPressure.hectopascals, "pressure", "hPa")
+        add(["kpa", "kilopascal", "kilopascals"], UnitPressure.kilopascals, "pressure", "kPa")
+        add(["bar", "bars"], UnitPressure.bars, "pressure", "bar")
+        add(["mbar", "millibar", "millibars"], UnitPressure.millibars, "pressure", "mbar")
+        add(["psi"], UnitPressure.poundsForcePerSquareInch, "pressure", "psi")
+        add(["atm", "atmosphere", "atmospheres"], atmospheres, "pressure", "atm")
+        add(["mmhg"], UnitPressure.millimetersOfMercury, "pressure", "mmHg")
+        add(["inhg"], UnitPressure.inchesOfMercury, "pressure", "inHg")
+
+        // Duration — a magnitude conversion (deliberately Units, not Date & time).
+        // Days and weeks are custom units (Foundation's UnitDuration omits them).
+        // Minutes take "min" — never "m", which is metres.
+        add(["s", "sec", "secs", "second", "seconds"], UnitDuration.seconds, "duration", "s")
+        add(["min", "mins", "minute", "minutes"], UnitDuration.minutes, "duration", "min")
+        add(["h", "hr", "hrs", "hour", "hours"], UnitDuration.hours, "duration", "h")
+        add(["d", "day", "days"], days, "duration", "d")
+        add(["wk", "wks", "week", "weeks"], weeks, "duration", "wk")
 
         return map
     }()
