@@ -1992,10 +1992,10 @@ private struct QuietBackdrop: View {
         )
         .overlay(alignment: .bottom) {
             RadialGradient(
-                colors: [Color.accentColor.opacity(0.12), .clear],
+                colors: [Color.accentColor.opacity(0.05), .clear],
                 center: .bottom,
                 startRadius: 0,
-                endRadius: 420
+                endRadius: 320
             )
         }
         .ignoresSafeArea()
