@@ -163,18 +163,19 @@ public enum SettingsKey {
     public static let reminderSteps = "reminder.steps"
     /// The New Reminder default-list choice: the target when the List step is off.
     public static let reminderList = "reminder.list"
-    /// The Computed provider's six per-type toggles (ADR 0032), all default-on. The
+    /// The Computed provider's seven per-type toggles (ADR 0032), all default-on. The
     /// keys keep the `calculator.` prefix because the persisted provider identity
     /// stays `.calculator` — renaming would re-key stored state. Math and Unit
     /// conversion gate the Calculator rows; Date & time gates the date-grammar rows
-    /// (issues #210/#212); URLs, Phone numbers, and Email addresses gate the Detected
-    /// result rows.
+    /// (issues #210/#212); URLs, Phone numbers, Email addresses, and Colors gate the
+    /// Detected result rows (issue #217).
     public static let calculatorMath = "calculator.math"
     public static let calculatorUnitConversion = "calculator.unitConversion"
     public static let calculatorDateTime = "calculator.dateTime"
     public static let calculatorURL = "calculator.url"
     public static let calculatorPhone = "calculator.phone"
     public static let calculatorEmail = "calculator.email"
+    public static let calculatorColor = "calculator.color"
     /// The File Search inline-result cap stepper.
     public static let fileSearchInlineCap = "file-search.inlineCap"
     /// The Pile's Pending-query auto-save toggle (issue #152): on saves
@@ -270,9 +271,9 @@ public extension ProviderID {
                 ),
             ]
         case .calculator:
-            // The Computed provider's six per-type toggles (ADR 0032; issue #210), all
-            // default-on, beneath the provider-level Enabled switch. Each suppresses
-            // exactly its rows; the three detection toggles off restore the
+            // The Computed provider's seven per-type toggles (ADR 0032; issues #210,
+            // #217), all default-on, beneath the provider-level Enabled switch. Each
+            // suppresses exactly its rows; the four detection toggles off restore the
             // pre-detection Calculator.
             return [
                 SettingOption(
@@ -309,6 +310,12 @@ public extension ProviderID {
                     key: SettingsKey.calculatorEmail,
                     title: "Email addresses",
                     footer: "On turns a typed email address (e.g. \"me@work.com\") into an Email row. Off suppresses it.",
+                    kind: .toggle(default: true)
+                ),
+                SettingOption(
+                    key: SettingsKey.calculatorColor,
+                    title: "Colors",
+                    footer: "On turns a typed hex color (e.g. \"#ff6600\") into a Copy row wearing the color. The \"#\" is required. Off suppresses it.",
                     kind: .toggle(default: true)
                 ),
             ]

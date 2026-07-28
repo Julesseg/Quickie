@@ -1,13 +1,32 @@
 import Foundation
 
+/// A **hex color** the query was recognized as (CONTEXT.md → Detected result;
+/// issue #217): the text exactly as typed alongside the channels it decodes to, so
+/// the row can show and copy what the user wrote while tinting its glyph from the
+/// parsed value — the App never re-parses the string.
+public struct DetectedColor: Equatable, Sendable {
+    /// The hex notation as typed, trimmed and with a single tolerated trailing
+    /// punctuation mark removed (`#FF6600`). Case is preserved: it is the user's
+    /// text, and it is what the row's subtitle shows and its Copy puts on the
+    /// pasteboard.
+    public let display: String
+    /// The channels `display` decodes to — the swatch the row's leading glyph wears.
+    public let rgba: RGBA
+
+    public init(display: String, rgba: RGBA) {
+        self.display = display
+        self.rgba = rgba
+    }
+}
+
 /// Recognizing the query as a *value* rather than a name (CONTEXT.md → Detected
 /// result; ADR 0032): the pure parser behind the [[Computed]] provider's Open /
-/// Message / Call / Email rows. It answers one question per type — *does the
-/// **whole trimmed query** parse as exactly one URL / phone number / email
-/// address?* — so a boosted row is only ever justified as "you typed a thing,
-/// here's the thing", never fired on a substring of longer prose.
+/// Message / Call / Email / Copy rows. It answers one question per type — *does
+/// the **whole trimmed query** parse as exactly one URL / phone number / email
+/// address / hex color?* — so a boosted row is only ever justified as "you typed a
+/// thing, here's the thing", never fired on a substring of longer prose.
 ///
-/// The three detectors are independent and non-arbitrating (CONTEXT.md → Detected
+/// The four detectors are independent and non-arbitrating (CONTEXT.md → Detected
 /// result): the Computed provider calls each behind its own toggle and emits rows
 /// for every one that matches, so an ambiguous query surfaces every applicable
 /// interpretation at once. Kept UIKit-free and regex-based (no `NSDataDetector`,
@@ -94,6 +113,42 @@ public enum TypedContentDetector {
         let digits = candidate.filter(\.isNumber).count
         guard phoneDigitRange.contains(digits) else { return nil }
         return candidate
+    }
+
+    /// The whole trimmed query as a **hex color**, or `nil` (CONTEXT.md → Detected
+    /// result; issue #217). The leading `#` is **required**: a bare hex run
+    /// (`ff6600`) is a word, a git SHA prefix, or a base-16 literal long before it
+    /// is a color, so firing on it would fail the never-a-guess bar — the `#` is the
+    /// user saying "this is a color". Exactly three notations parse, upper or lower
+    /// case: `#f60` (RGB shorthand), `#ff6600` (RGB), `#ff6600cc` (RGBA). A 4-digit
+    /// shorthand is deliberately absent — CONTEXT.md names these three, and one more
+    /// ambiguous length buys nothing. The usual single trailing punctuation mark is
+    /// tolerated (`#f60,`), and — as everywhere here — the color must be the *whole*
+    /// query, so a CSS line or prose around one never fires.
+    ///
+    /// Returns the typed text alongside its decoded channels so the Computed row
+    /// shows what the user wrote and tints its glyph without re-parsing.
+    public static func color(in query: String) -> DetectedColor? {
+        let candidate = strippingTrailingPunctuation(query.trimmingCharacters(in: .whitespacesAndNewlines))
+        // The alternation is ordered longest-first so `{8}` is tried before `{6}`;
+        // anchored at both ends, an 8-digit run could otherwise never match.
+        let pattern = #"^#(?:[0-9a-f]{8}|[0-9a-f]{6}|[0-9a-f]{3})$"#
+        guard candidate.range(of: pattern, options: [.regularExpression, .caseInsensitive]) != nil else {
+            return nil
+        }
+
+        // A 3-digit shorthand doubles each nibble (`f60` → `ff6600`); the 6- and
+        // 8-digit forms are already byte pairs. Alpha defaults to opaque when the
+        // notation carries none. Every unit is known-hex by the pattern above, so
+        // the radix conversions cannot fail.
+        let digits = Array(candidate.dropFirst())
+        let bytes: [Int] = digits.count == 3
+            ? digits.map { Int(String(repeating: $0, count: 2), radix: 16) ?? 0 }
+            : stride(from: 0, to: digits.count, by: 2).map { Int(String(digits[$0...($0 + 1)]), radix: 16) ?? 0 }
+        return DetectedColor(
+            display: candidate,
+            rgba: RGBA(red8: bytes[0], green8: bytes[1], blue8: bytes[2], alpha8: bytes.count == 4 ? bytes[3] : 255)
+        )
     }
 
     /// The `tel:` dial URL for a detected phone `display` string — digits plus a

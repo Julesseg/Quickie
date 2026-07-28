@@ -54,13 +54,69 @@ struct ComputedDetectionTests {
         #expect(rows.last?.run() == .openURL(URL(string: "tel:+15551234567")!))
     }
 
+    // MARK: Hex color → one copy-only Copy row
+
+    @Test("each hex notation yields one verb-titled Copy row subtitled with the typed value")
+    func colorYieldsOneCopyRow() {
+        for typed in ["#f60", "#ff6600", "#ff6600cc"] {
+            let rows = provider.candidates(for: typed)
+            #expect(rows.count == 1)
+            let copy = rows.first
+            #expect(copy?.id == "detect.color")
+            // Verb-titled like Open / Message / Call / Email.
+            #expect(copy?.title == "Copy")
+            #expect(copy?.subtitle == typed)
+            #expect(copy?.run() == .copyText(typed))
+        }
+    }
+
+    @Test("a single trailing punctuation mark is tolerated on a color query")
+    func colorToleratesTrailingPunctuation() {
+        let row = provider.candidates(for: "#ff6600.").first
+        #expect(row?.id == "detect.color")
+        // The subtitle and the copied value are the notation, sentence mark dropped.
+        #expect(row?.subtitle == "#ff6600")
+        #expect(row?.run() == .copyText("#ff6600"))
+    }
+
+    @Test("a bare hex run without # fires nothing")
+    func bareHexRunFiresNothing() {
+        // It fails the never-a-guess bar: no color row, and nothing else claims it.
+        #expect(provider.candidates(for: "ff6600").isEmpty)
+        #expect(provider.candidates(for: "f60").isEmpty)
+    }
+
+    @Test("the color row is copy-only — a color is terminal under the Stage rule")
+    func colorRowIsCopyOnly() {
+        let row = provider.candidates(for: "#ff6600").first
+        // Copy-only: `.copyText`, never the Calculator's `copyAndStage` — there is
+        // nothing to keep calculating with (CONTEXT.md → Stage).
+        #expect(row?.run() == .copyText("#ff6600"))
+        #expect(row?.mainAction == .copyToClipboard)
+        #expect(row?.returnKeyLabel == .done)
+        // A bare `.text` value: the universal copy/share plus the id-keyed deeplink,
+        // never Edit.
+        #expect(row?.content == .text)
+        #expect(secondaryActions(for: row?.content ?? .none) == [.copy, .share, .copyDeeplink])
+    }
+
+    @Test("the color row carries the parsed swatch so the App needn't re-parse")
+    func colorRowCarriesParsedSwatch() {
+        #expect(provider.candidates(for: "#f60").first?.glyphTint == RGBA(red8: 255, green8: 102, blue8: 0))
+        #expect(provider.candidates(for: "#ff6600cc").first?.glyphTint
+                == RGBA(red8: 255, green8: 102, blue8: 0, alpha8: 204))
+        // Every other row keeps the kind-derived hue.
+        #expect(provider.candidates(for: "apple.com").first?.glyphTint == nil)
+        #expect(provider.candidates(for: "23*7").first?.glyphTint == nil)
+    }
+
     // MARK: Boosted-tier manners
 
     @Test("detected rows are boosted, non-fallback, and carry a bare copy/share value")
     func detectedRowsShareCalculatorManners() {
         // Dynamic (boosted) + non-fallback is what the SearchEngine floats to the top.
         #expect(provider.kind == .dynamic)
-        for query in ["apple.com", "me@work.com", "555-1212"] {
+        for query in ["apple.com", "me@work.com", "555-1212", "#ff6600"] {
             for row in provider.candidates(for: query) {
                 #expect(row.kind == .calculator)
                 #expect(row.isFallbackEligible == false)
@@ -125,19 +181,23 @@ struct ComputedDetectionTests {
     func eachToggleSuppressesItsRows() {
         #expect(ComputedProvider(url: false).candidates(for: "apple.com").isEmpty)
         #expect(ComputedProvider(email: false).candidates(for: "me@work.com").isEmpty)
+        #expect(ComputedProvider(color: false).candidates(for: "#ff6600").isEmpty)
         #expect(ComputedProvider(phone: false).candidates(for: "555-1212").map(\.id) == ["calc.math"])
+        // Colors off leaves every other detection intact.
+        #expect(ComputedProvider(color: false).candidates(for: "apple.com").map(\.id) == ["detect.url"])
         // The math toggle off drops the math row but leaves detection intact.
         let phoneOnly = ComputedProvider(math: false).candidates(for: "555-1212").map(\.id)
         #expect(phoneOnly == ["detect.phone.message", "detect.phone.call"])
     }
 
-    @Test("all three detection toggles off restores the pre-detection Calculator")
+    @Test("all four detection toggles off restores the pre-detection Calculator")
     func detectionOffRestoresPreDetectionCalculator() {
-        // With URLs, Phone numbers, and Email addresses off, only Math and Unit
-        // conversion answer — exactly the pre-detection Calculator (ADR 0032).
-        let calc = ComputedProvider(url: false, phone: false, email: false)
+        // With URLs, Phone numbers, Email addresses, and Colors off, only Math and
+        // Unit conversion answer — exactly the pre-detection Calculator (ADR 0032).
+        let calc = ComputedProvider(url: false, phone: false, email: false, color: false)
         #expect(calc.candidates(for: "apple.com").isEmpty)
         #expect(calc.candidates(for: "me@work.com").isEmpty)
+        #expect(calc.candidates(for: "#ff6600").isEmpty)
         // A phone-shaped math expression still answers math only, as it did before.
         #expect(calc.candidates(for: "555-1212").map(\.id) == ["calc.math"])
         // Math and conversion are untouched.
@@ -150,5 +210,6 @@ struct ComputedDetectionTests {
         #expect(provider.candidates(for: "github").isEmpty)
         #expect(provider.candidates(for: "go to apple.com").isEmpty)
         #expect(provider.candidates(for: "call me at 555-1212").isEmpty)
+        #expect(provider.candidates(for: "color: #ff6600").isEmpty)
     }
 }

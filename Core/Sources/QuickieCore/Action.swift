@@ -237,6 +237,18 @@ public struct Action: Identifiable, Sendable {
     /// derived glyph, never a blank. Only the *leading* glyph is user-set; the
     /// *trailing* main-action glyph stays derived from the outcome (`mainAction`).
     public let glyph: String?
+    /// A row-specific **leading-glyph tint** overriding the kind-derived hue
+    /// (CONTEXT.md → Detected result; issue #217): the parsed swatch a detected hex
+    /// color wears, so the row *is* the color rather than merely naming it. `nil`
+    /// (the default) keeps the kind's own hue, so every other row is unchanged.
+    ///
+    /// Carried as parsed channels rather than left to the App to re-derive from the
+    /// title or subtitle: Core already parsed the notation to decide the row exists
+    /// at all, and re-parsing at the badge edge is exactly the kind of drift a
+    /// declared property prevents. Unlike `glyph` this is *not* user-set — it is
+    /// derived from the value the row carries — which is why the two stay separate
+    /// properties rather than one "appearance" bundle.
+    public let glyphTint: RGBA?
 
     private let effect: @Sendable (String?) -> ActionOutcome
     /// How collected Argument values become an outcome (issue #37) — the
@@ -255,6 +267,7 @@ public struct Action: Identifiable, Sendable {
         arguments: [Argument] = [],
         content: ResultContent? = nil,
         glyph: String? = nil,
+        glyphTint: RGBA? = nil,
         effect: @escaping @Sendable (String?) -> ActionOutcome,
         multiStepEffect: (@Sendable ([ArgumentValue]) -> ActionOutcome)? = nil
     ) {
@@ -267,6 +280,7 @@ public struct Action: Identifiable, Sendable {
         self.outputType = outputType
         self.arguments = arguments
         self.glyph = glyph
+        self.glyphTint = glyphTint
         // Content is a declared property (ADR 0017). Factories that carry a value
         // pass it explicitly; when omitted it defaults to a derive-from-outcome
         // helper so a content-bearing Action never silently reads as `.none` —
