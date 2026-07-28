@@ -418,7 +418,71 @@ struct DateGrammarTests {
         #expect(!plain.contains("+"))
     }
 
+    // MARK: - Timestamp decode (issue #213)
+
+    @Test("'unix 1735689600' decodes a Unix seconds timestamp to its instant")
+    func timestampSeconds() {
+        // 1735689600 seconds is 2025-01-01 00:00:00 UTC.
+        #expect(answers("unix 1735689600")
+            == [.timestamp(Date(timeIntervalSince1970: 1_735_689_600))])
+    }
+
+    @Test("a millisecond timestamp is accepted, told apart by magnitude")
+    func timestampMilliseconds() {
+        // The same instant as seconds: a 13-digit value is unambiguously
+        // milliseconds (as seconds it would be year 56922), so it decodes to
+        // the identical moment as "unix 1735689600".
+        #expect(answers("unix 1735689600000")
+            == [.timestamp(Date(timeIntervalSince1970: 1_735_689_600))])
+    }
+
+    @Test("the trigger word may follow the digits, and 'epoch'/'timestamp' work too")
+    func timestampTriggerVariants() {
+        let expected: [DateAnswer] = [.timestamp(Date(timeIntervalSince1970: 1_735_689_600))]
+        #expect(answers("1735689600 unix") == expected)
+        #expect(answers("epoch 1735689600") == expected)
+        #expect(answers("timestamp 1735689600") == expected)
+    }
+
+    @Test("a bare digit run never decodes — the trigger word is required", arguments: [
+        "1735689600",          // bare digits stay inert (the bare-number principle)
+        "1735689600000",       // even a bare millisecond run
+        "unix",                // the trigger alone, no value
+        "unix abc",            // a non-digit operand
+        "unix 999999999999999", // 15 digits — past the millisecond window
+        "1735689600 friday",   // two tokens, but no trigger word
+    ])
+    func timestampDeclines(_ query: String) {
+        #expect(answers(query) == [])
+    }
+
+    @Test("the trigger word is table data: no table entry, no decode")
+    func timestampTriggerIsTableData() {
+        // The toy table carries no timestamp triggers, so "unix" is just a word
+        // to it — the decode is localizable data, not a hardcoded keyword.
+        #expect(answers("unix 1735689600", tables: [toyTable]) == [])
+        // And a French device gains "horodatage" as a trigger.
+        #expect(answers("horodatage 1735689600", tables: [.english, .french])
+            == [.timestamp(Date(timeIntervalSince1970: 1_735_689_600))])
+    }
+
     // MARK: - Output formatting
+
+    @Test("a decoded timestamp formats with date and time, per the device locale")
+    func formattedTimestampShowsDateAndTime() {
+        // 1735689600 is 2025-01-01 00:00 UTC — a timestamp pins a moment, so
+        // unlike a plain date answer the time-of-day shows (midnight here).
+        let instant = Date(timeIntervalSince1970: 1_735_689_600)
+        let english = DateGrammar.formattedTimestamp(instant, calendar: calendar)
+        #expect(english.contains("January 1, 2025"))
+        #expect(english.contains("12:00"))
+
+        // Dual-accept grammar, device-formatted answer (ADR 0036): French renders
+        // the same instant differently.
+        var frenchCalendar = calendar
+        frenchCalendar.locale = Locale(identifier: "fr_FR")
+        #expect(DateGrammar.formattedTimestamp(instant, calendar: frenchCalendar) != english)
+    }
 
     @Test("a date answer formats per the device locale and calendar")
     func formattedFollowsDeviceLocale() {
