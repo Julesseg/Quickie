@@ -130,8 +130,8 @@ public enum TypedContentDetector {
     /// shows what the user wrote and tints its glyph without re-parsing.
     public static func color(in query: String) -> DetectedColor? {
         let candidate = strippingTrailingPunctuation(query.trimmingCharacters(in: .whitespacesAndNewlines))
-        // The alternation is ordered longest-first so `{8}` is tried before `{6}`;
-        // anchored at both ends, an 8-digit run could otherwise never match.
+        // Anchored at both ends, so the branch order is immaterial — `$` backtracks
+        // into the remaining alternatives — and only these exact lengths parse.
         let pattern = #"^#(?:[0-9a-f]{8}|[0-9a-f]{6}|[0-9a-f]{3})$"#
         guard candidate.range(of: pattern, options: [.regularExpression, .caseInsensitive]) != nil else {
             return nil
@@ -140,7 +140,8 @@ public enum TypedContentDetector {
         // A 3-digit shorthand doubles each nibble (`f60` → `ff6600`); the 6- and
         // 8-digit forms are already byte pairs. Alpha defaults to opaque when the
         // notation carries none. Every unit is known-hex by the pattern above, so
-        // the radix conversions cannot fail.
+        // the `?? 0` fallbacks are unreachable — they are how a total conversion
+        // reads without a force-unwrap, not a real black-on-failure case.
         let digits = Array(candidate.dropFirst())
         let bytes: [Int] = digits.count == 3
             ? digits.map { Int(String(repeating: $0, count: 2), radix: 16) ?? 0 }

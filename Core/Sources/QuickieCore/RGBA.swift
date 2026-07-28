@@ -7,7 +7,7 @@
 /// same defer-to-the-edge split as `ActionKind.symbol` (meaning in Core, drawing in
 /// the App). Channels are `0...1` in **extended sRGB terms**, the range every
 /// platform color initializer takes directly.
-public struct RGBA: Equatable, Hashable, Sendable {
+public struct RGBA: Equatable, Sendable {
     public let red: Double
     public let green: Double
     public let blue: Double

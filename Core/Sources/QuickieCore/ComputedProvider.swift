@@ -219,15 +219,6 @@ public struct ComputedProvider: Provider {
         detectedRow(id: "detect.url", title: "Open", value: url.absoluteString, url: url)
     }
 
-    /// A **Detected result** row (Open / Message / Call / Email): a boosted row that
-    /// resolves the query by opening `url` when run, showing the acted-on `value` as
-    /// its subtitle and carrying a bare `.url` value so the long-press menu offers
-    /// the universal copy/share (no Edit — it is a value, not a stored record). The
-    /// value the menu copies is the bare thing the user typed: the Open row's own URL,
-    /// and — for a `tel:`/`sms:`/`mailto:` row — the phone number or email behind the
-    /// scheme, reduced by `TypedContentDetector.bareValue(forDetectedURL:)` at the
-    /// copy/share edge. Wears the Computed provider's badge (`kind: .calculator`),
-    /// like every row the provider contributes.
     /// The **Copy** row for a detected hex color (CONTEXT.md → Detected result; issue
     /// #217): verb-titled like its Open / Message / Call / Email siblings, subtitled
     /// with the notation the user typed, and **copy-only** — a color is terminal
@@ -235,9 +226,11 @@ public struct ComputedProvider: Provider {
     /// Calculator answer. Declares bare `.text` content: the universal copy/share
     /// long-press, no Edit, exactly a value row's manners.
     ///
-    /// The one thing that sets it apart visually is `glyphTint` — the parsed swatch,
-    /// carried from Core so the App tints the leading glyph without re-parsing the
-    /// notation.
+    /// Its own factory rather than a `detectedRow` case: every other Detected row
+    /// *opens* a URL and carries `.url` content, while this one carries a text value
+    /// and opens nothing — the two share a look, not a shape. The one thing that sets
+    /// it apart visually is `glyphTint`, the parsed swatch carried from Core so the
+    /// App tints the leading glyph without re-parsing the notation.
     private func colorRow(_ detected: DetectedColor) -> Action {
         Action(
             id: "detect.color",
@@ -251,6 +244,15 @@ public struct ComputedProvider: Provider {
         ) { _ in .copyText(detected.display) }
     }
 
+    /// A **Detected result** row (Open / Message / Call / Email): a boosted row that
+    /// resolves the query by opening `url` when run, showing the acted-on `value` as
+    /// its subtitle and carrying a bare `.url` value so the long-press menu offers
+    /// the universal copy/share (no Edit — it is a value, not a stored record). The
+    /// value the menu copies is the bare thing the user typed: the Open row's own URL,
+    /// and — for a `tel:`/`sms:`/`mailto:` row — the phone number or email behind the
+    /// scheme, reduced by `TypedContentDetector.bareValue(forDetectedURL:)` at the
+    /// copy/share edge. Wears the Computed provider's badge (`kind: .calculator`),
+    /// like every row the provider contributes.
     private func detectedRow(id: String, title: String, value: String, url: URL) -> Action {
         Action(
             id: id,

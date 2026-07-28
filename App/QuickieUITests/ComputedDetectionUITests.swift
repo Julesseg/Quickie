@@ -65,13 +65,22 @@ final class ComputedDetectionUITests: XCTestCase {
         // section has rendered and it is safe to start scrolling toward the target.
         XCTAssertTrue(app.switches["setting-calculator.math"].waitForExistence(timeout: 10),
                       "the Computed page renders its options section")
+        // Scroll the Form's own container, not the whole app: an app-level swipe
+        // starts mid-screen and can land on a switch row, which swallows the drag
+        // and leaves the list exactly where it was.
+        let scroller: XCUIElement = [app.collectionViews, app.tables, app.scrollViews]
+            .map(\.firstMatch).first { $0.exists } ?? app
         let toggle = app.switches[identifier]
         var swipes = 0
-        while !(toggle.exists && toggle.isHittable) && swipes < 4 {
-            app.swipeUp()
+        while !(toggle.exists && toggle.isHittable) && swipes < 6 {
+            scroller.swipeUp()
             swipes += 1
         }
+        // Both halves, matching the loop's exit condition: a toggle that exists but
+        // sits below the fold would take the taps below at a stale coordinate and
+        // silently no-op, turning a real failure into a confusing one further down.
         XCTAssertTrue(toggle.exists, "the \(identifier) toggle renders from the schema")
+        XCTAssertTrue(toggle.isHittable, "the \(identifier) toggle scrolled into reach")
 
         let landed = NSPredicate(format: "value == %@", on ? "1" : "0")
         let inner = toggle.switches.firstMatch
