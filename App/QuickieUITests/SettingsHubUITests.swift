@@ -148,4 +148,36 @@ final class SettingsHubUITests: XCTestCase {
             "the hub's Custom Actions row must push the same provider page as the typed command"
         )
     }
+
+    /// The build stamp closes the Settings page (CONTEXT.md → Build stamp): the
+    /// installed version, and the commit it was built from when the build had a
+    /// git checkout to read. The commit itself is deliberately not asserted —
+    /// it varies per build and a source-drop build legitimately has none — so
+    /// this pins the row's presence and its version prefix only.
+    @MainActor
+    func testSettingsShowsTheBuildStamp() throws {
+        let app = launchApp()
+
+        let input = app.textFields["search-input"]
+        XCTAssertTrue(input.waitForExistence(timeout: 10))
+        input.tap()
+        input.typeText("settings")
+
+        let command = app.buttons["builtin.settings"]
+        XCTAssertTrue(command.waitForExistence(timeout: 5))
+        command.tap()
+
+        // It sits below the Providers list, so scroll to the bottom of the Form.
+        let stamp = app.descendants(matching: .any)["settings-build-stamp"].firstMatch
+        var swipes = 0
+        while !stamp.exists && swipes < 6 {
+            app.swipeUp()
+            swipes += 1
+        }
+        XCTAssertTrue(stamp.exists, "Settings ends with the build stamp")
+        XCTAssertTrue(
+            stamp.label.hasPrefix("Quickie "),
+            "the stamp names the app and its version, got \(stamp.label)"
+        )
+    }
 }
