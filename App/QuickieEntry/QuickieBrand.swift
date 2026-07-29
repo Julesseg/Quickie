@@ -179,18 +179,18 @@ enum QuickieBrand {
     /// bloom (`backdropBloom`), a separate ball `LivingBackdrop` sweeps over this
     /// mesh, so no stop here needs to carry the motion.
     private static let backdropMeshDark: [(CGFloat, CGFloat, CGFloat)] = [
-        (11, 8, 28), (13, 8, 33), (15, 9, 37),
-        (13, 9, 35), (31, 19, 68), (17, 10, 44),
-        (16, 10, 42), (27, 16, 60), (13, 8, 33),
+        (14, 9, 34), (15, 9, 37), (16, 10, 39),
+        (15, 10, 38), (26, 16, 58), (17, 10, 43),
+        (17, 10, 42), (23, 14, 53), (15, 9, 37),
     ]
 
     /// The light-appearance mesh, row-major: a pale lavender wash, quiet for the
     /// same reason as the dark field — the travelling bloom ball carries the
     /// motion, so the wash only has to stay legible under black text.
     private static let backdropMeshLight: [(CGFloat, CGFloat, CGFloat)] = [
-        (227, 222, 248), (219, 212, 246), (212, 203, 244),
-        (217, 209, 246), (201, 188, 240), (214, 205, 245),
-        (210, 200, 243), (204, 192, 241), (223, 217, 247),
+        (222, 215, 247), (217, 209, 245), (213, 204, 244),
+        (216, 208, 245), (206, 195, 242), (214, 205, 245),
+        (212, 202, 244), (208, 197, 242), (219, 212, 246),
     ]
 
     /// The travelling bloom's color — the compact ball of violet `LivingBackdrop`

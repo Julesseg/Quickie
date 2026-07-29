@@ -2125,8 +2125,8 @@ private struct LivingBackdrop: View {
                 // wash over the lower screen.
                 RadialGradient(
                     stops: [
-                        .init(color: Color.accentColor.opacity(0.14), location: 0),
-                        .init(color: Color.accentColor.opacity(0.04), location: 0.5),
+                        .init(color: Color.accentColor.opacity(0.035), location: 0),
+                        .init(color: Color.accentColor.opacity(0.01), location: 0.5),
                         .init(color: .clear, location: 1),
                     ],
                     center: .center,
@@ -2216,8 +2216,8 @@ private struct LivingBackdrop: View {
         GeometryReader { geo in
             RadialGradient(
                 stops: [
-                    .init(color: QuickieBrand.backdropBloom.opacity(0.85), location: 0),
-                    .init(color: QuickieBrand.backdropBloom.opacity(0.25), location: 0.5),
+                    .init(color: QuickieBrand.backdropBloom.opacity(0.22), location: 0),
+                    .init(color: QuickieBrand.backdropBloom.opacity(0.055), location: 0.5),
                     .init(color: .clear, location: 1),
                 ],
                 center: .center,
