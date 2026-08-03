@@ -125,15 +125,33 @@ final class CaptureDateStepUITests: XCTestCase {
             "the pitch measurement must find the calendar's day cells — a 0 here means the cell query broke, not that the layout is fine"
         )
 
-        // An ABSOLUTE floor, not just re-entry equality: the phantom safe-area
-        // inset (#115) compressed the grid identically on the forward path and
-        // on re-entry, so fresh == reentered held while both were squished.
-        // The healthy grid inside the pinned 350pt box measures ~50pt of row
-        // pitch; the inset-poisoned one measured ~44pt. The floor sits between
-        // them, device-independent because the box height is a hard constant.
-        XCTAssertGreaterThan(
-            freshPitch, 47,
-            "the calendar's rows are compacted on first display — pitch \(freshPitch)pt against the pinned 350pt box (phantom safe-area inset regression, #115)"
+        // An absolute check, not just re-entry equality: the phantom safe-area
+        // inset (#115) displaced the grid identically on the forward path and
+        // on re-entry, so fresh == reentered held while both were wrong.
+        //
+        // What it checks is the BLANK BAND, not the row pitch. Row pitch used
+        // to carry this (a ~50pt healthy grid against a ~44pt poisoned one),
+        // but it no longer discriminates: the inline calendar now lays its rows
+        // out at a fixed natural height instead of stretching them to fill the
+        // pinned box, so a correct grid measures ~42pt on every device — 42.0
+        // on a 375pt-wide iPhone SE and 42.2 on a 440pt-wide 17 Pro Max, while
+        // the column pitch over the same two runs moved 43.5pt → 53.4pt. An
+        // absolute pitch floor now only measures the OS's cell metrics.
+        //
+        // The band is the regression's real signature and is immune to both:
+        // the phantom inset pushed the whole grid DOWN inside its box, leaving
+        // empty space above the month header. Healthy, that header sits ~33pt
+        // below the top of the picker (its own internal padding, measured at
+        // 32.7pt and 35pt on the two devices above); poisoned, it carries the
+        // 41–46pt inset on top of that. The threshold sits well clear of both.
+        let band = headerInset(in: calendar)
+        XCTAssertGreaterThanOrEqual(
+            band, 0,
+            "the band measurement must find the calendar's month header — a negative here means the header query broke, not that the layout is fine"
+        )
+        XCTAssertLessThan(
+            band, 55,
+            "a blank band sits above the calendar's month header — it starts \(band)pt below the top of the pinned box, against ~33pt healthy (phantom safe-area inset regression, #115)"
         )
 
         // Move the selection off today so the re-entered step seeds a genuinely
@@ -253,6 +271,27 @@ final class CaptureDateStepUITests: XCTestCase {
     /// calendar, measured from the day-number cells two weeks apart (present in
     /// every month layout) so a single missing edge day can't skew it. Returns
     /// half the 8→22 distance; 0 if the cells can't be found.
+    @MainActor
+    /// How far the month header sits below the top of the pinned picker box —
+    /// the size of the blank band above the grid, and the direct signature of
+    /// the phantom safe-area inset (#115). Returns a negative value when the
+    /// header cannot be found, so a broken query fails loudly instead of
+    /// reading as a healthy zero.
+    ///
+    /// The header is matched by the **year**: it is the only label in the
+    /// picker carrying one ("August 2026"), so this cannot collide with a day
+    /// cell or with the compact time row's clock text the way a day-number
+    /// query once did.
+    @MainActor
+    private func headerInset(in calendar: XCUIElement) -> CGFloat {
+        let year = Calendar.current.component(.year, from: Date())
+        let header = calendar.descendants(matching: .any)
+            .matching(NSPredicate(format: "label CONTAINS %@", "\(year)"))
+            .firstMatch
+        guard header.exists else { return -1 }
+        return header.frame.minY - calendar.frame.minY
+    }
+
     @MainActor
     private func rowPitch(in calendar: XCUIElement) -> CGFloat {
         let top = dayCell("8", in: calendar)
