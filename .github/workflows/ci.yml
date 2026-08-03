@@ -152,43 +152,12 @@ jobs:
       - name: Toolchain versions
         run: xcodebuild -version
 
-      # Pick the newest NUMBERED iPhone, never the SE. The suite's layout
-      # assertions carry absolute point constants (CaptureDateStepUITests pins
-      # the calendar's row pitch above 47pt), and those constants are only
-      # meaningful on the device family they were calibrated on: the inline
-      # calendar's rows track the screen's WIDTH, so the same healthy grid
-      # measures ~50pt on a 393pt-wide iPhone and ~42pt on the 375pt-wide SE.
-      #
-      # This used to be `sorted(names)[-1]` — alphabetical, which silently
-      # preferred "iPhone SE (3rd generation)" over "iPhone 17 Pro Max" ('S' >
-      # '1') the moment a runner image shipped an SE. That is exactly how the
-      # calendar test went red on main without a single line of capture code
-      # changing. Sort by model number instead, so the choice is a property of
-      # this file rather than of whatever GitHub last baked into the image.
       - name: Resolve an available iPhone simulator
         id: sim
         run: |
           set -euo pipefail
-          xcrun simctl list devices available --json > /tmp/simulators.json
-          NAME=$(python3 - <<'PY'
-          import json, re
-          d = json.load(open('/tmp/simulators.json'))['devices']
-          names = {x['name'] for rt in d for x in d[rt] if x['name'].startswith('iPhone')}
-          # (model number, variant rank) — plain < Plus < Pro < Pro Max, so the
-          # pick is stable when several trims of the same generation exist.
-          def rank(n):
-              m = re.match(r'iPhone (\d+)', n)
-              if not m:
-                  return None
-              trim = 0
-              if 'Plus' in n: trim = 1
-              if 'Pro' in n: trim = 2
-              if 'Pro Max' in n: trim = 3
-              return (int(m.group(1)), trim, n)
-          numbered = sorted(filter(None, map(rank, names)))
-          print(numbered[-1][2] if numbered else 'iPhone 16')
-          PY
-          )
+          NAME=$(xcrun simctl list devices available --json \
+            | python3 -c "import json,sys; d=json.load(sys.stdin)['devices']; names=[x['name'] for rt in d for x in d[rt] if x['name'].startswith('iPhone')]; print(sorted(names)[-1] if names else 'iPhone 16')")
           echo "Using simulator: $NAME"
           echo "name=$NAME" >> "$GITHUB_OUTPUT"
 
