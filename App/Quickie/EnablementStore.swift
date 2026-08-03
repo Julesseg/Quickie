@@ -29,9 +29,14 @@ final class EnablementStore {
     }
 
     static func launch() -> EnablementStore {
-        // Honors the same UI-test reset flag as SignalsStore (shared constant),
-        // so a test asking for a clean launcher also gets every action enabled.
-        if ProcessInfo.processInfo.arguments.contains(SignalsStore.uitestResetArgument) {
+        // Cleared under UI testing so a test asking for a clean launcher gets
+        // every action enabled. Keyed on `--uitesting` as well as the explicit
+        // reset flag, for the same reason as `ProviderEnablementStore.launch()`:
+        // this set persists in the App Group defaults, outliving the ephemeral
+        // store, so a suite launching with plain `--uitesting` would inherit an
+        // earlier suite's disabled instances.
+        if ProcessInfo.processInfo.arguments.contains("--uitesting")
+            || ProcessInfo.processInfo.arguments.contains(SignalsStore.uitestResetArgument) {
             SignalsStore.sharedDefaults.removeObject(forKey: disabledKey)
         }
         return EnablementStore()

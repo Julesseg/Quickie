@@ -30,11 +30,18 @@ final class ProviderEnablementStore {
     }
 
     static func launch() -> ProviderEnablementStore {
-        // Honors the same UI-test reset flag as SignalsStore (shared constant):
-        // a test asking for a clean launcher also gets every provider enabled,
-        // so one test disabling a kind can't leak a hidden provider into later
-        // runs.
-        if ProcessInfo.processInfo.arguments.contains(SignalsStore.uitestResetArgument) {
+        // Cleared under UI testing so a test disabling a kind can't leak a
+        // hidden provider into later runs. Keyed on `--uitesting` and not only
+        // on the explicit reset flag: the disabled set lives in the *persistent*
+        // App Group defaults, which outlive the ephemeral in-memory store, so a
+        // suite that launches with plain `--uitesting` (PileUITests and the
+        // three file suites do) would otherwise inherit whatever an earlier
+        // suite on the same simulator disabled. That is exactly how PileUITests
+        // began failing when a shard reshuffle first put a disable suite ahead
+        // of it — a real order dependence, invisible until the ordering changed.
+        // Safe to widen: no test drives disabled state across two launches.
+        if ProcessInfo.processInfo.arguments.contains("--uitesting")
+            || ProcessInfo.processInfo.arguments.contains(SignalsStore.uitestResetArgument) {
             SignalsStore.sharedDefaults.removeObject(forKey: disabledKey)
         }
         return ProviderEnablementStore()

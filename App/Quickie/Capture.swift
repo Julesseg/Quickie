@@ -680,6 +680,18 @@ private struct InlineDatePicker: UIViewRepresentable {
 /// subtree's truth zero — correct always, since this control renders inside
 /// the capture's chrome, clear of every screen edge.
 private final class InsetCancellingController: UIViewController {
+    /// Cancel *before* the subtree lays out, not only after. The calendar bakes
+    /// whatever inset it sees at its **first** layout into its grid
+    /// permanently, and that first layout happens during this pass — so
+    /// cancelling only in `viewDidLayoutSubviews` always arrives one pass too
+    /// late, leaving the compacted rows the later passes can no longer undo.
+    /// That ordering is why the row pitch settled at ~42pt against the pinned
+    /// 350pt box instead of the healthy ~50pt (#115).
+    override func viewWillLayoutSubviews() {
+        super.viewWillLayoutSubviews()
+        cancelInheritedSafeArea()
+    }
+
     override func viewDidLayoutSubviews() {
         super.viewDidLayoutSubviews()
         cancelInheritedSafeArea()
