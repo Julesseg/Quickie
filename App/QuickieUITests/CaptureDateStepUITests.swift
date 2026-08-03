@@ -125,15 +125,33 @@ final class CaptureDateStepUITests: XCTestCase {
             "the pitch measurement must find the calendar's day cells — a 0 here means the cell query broke, not that the layout is fine"
         )
 
-        // An ABSOLUTE floor, not just re-entry equality: the phantom safe-area
-        // inset (#115) compressed the grid identically on the forward path and
-        // on re-entry, so fresh == reentered held while both were squished.
-        // The healthy grid inside the pinned 350pt box measures ~50pt of row
-        // pitch; the inset-poisoned one measured ~44pt. The floor sits between
-        // them, device-independent because the box height is a hard constant.
-        XCTAssertGreaterThan(
-            freshPitch, 47,
-            "the calendar's rows are compacted on first display — pitch \(freshPitch)pt against the pinned 350pt box (phantom safe-area inset regression, #115)"
+        // An absolute check, not just re-entry equality: the phantom safe-area
+        // inset (#115) displaced the grid identically on the forward path and
+        // on re-entry, so fresh == reentered held while both were wrong.
+        //
+        // What it checks is the BLANK BAND, not the row pitch. Row pitch used
+        // to carry this (a ~50pt healthy grid against a ~44pt poisoned one),
+        // but it no longer discriminates: the inline calendar now lays its rows
+        // out at a fixed natural height instead of stretching them to fill the
+        // pinned box, so a correct grid measures ~42pt on every device — 42.0
+        // on a 375pt-wide iPhone SE and 42.2 on a 440pt-wide 17 Pro Max, while
+        // the column pitch over the same two runs moved 43.5pt → 53.4pt. An
+        // absolute pitch floor now only measures the OS's cell metrics.
+        //
+        // The band is the regression's real signature and is immune to both:
+        // the phantom inset pushed the whole grid DOWN inside its box, leaving
+        // empty space above the month header. Healthy, that header sits ~33pt
+        // below the top of the picker (its own internal padding, measured at
+        // 32.7pt and 35pt on the two devices above); poisoned, it carries the
+        // 41–46pt inset on top of that. The threshold sits well clear of both.
+        let band = headerInset(in: calendar)
+        XCTAssertGreaterThanOrEqual(
+            band, 0,
+            "the band measurement must find the calendar's month header — a negative here means the header query broke, not that the layout is fine"
+        )
+        XCTAssertLessThan(
+            band, 55,
+            "a blank band sits above the calendar's month header — it starts \(band)pt below the top of the pinned box, against ~33pt healthy (phantom safe-area inset regression, #115)"
         )
 
         // Move the selection off today so the re-entered step seeds a genuinely
@@ -190,18 +208,19 @@ final class CaptureDateStepUITests: XCTestCase {
         let forwardOffset = header.frame.minY - calendar.frame.minY
         let timedPitch = rowPitch(in: calendar)
         NSLog("CAPTURE-CALENDAR-PITCH timed=%.2f", timedPitch)
-        // The `.dateAndTime` grid's natural metrics are TIGHTER than date-only's
-        // by design — the mode compresses the calendar (~0.87×, 44pt of pitch
-        // on the CI simulator) so the total with the time row stays near the
-        // date-only footprint, and it top-aligns at natural size rather than
-        // stretching to fill the box. So the timed floor sits just under that
-        // natural 44, not under date-only's ~50; a phantom-inset regression in
-        // this roomier box shows up as a band above the header (the offset
-        // assertions below), while a drop below 43 means the grid is being
-        // squeezed into less than its natural area again.
-        XCTAssertGreaterThan(
-            timedPitch, 43,
-            "the timed calendar's rows are compacted — pitch \(timedPitch)pt against the .dateAndTime mode's natural 44pt (#115)"
+        // The band above the header, for the same reason the date-only leg
+        // checks it rather than a pitch floor: the OS's row metrics moved (this
+        // mode's pitch reads ~37pt now against the 44pt this floor was written
+        // for), so an absolute pitch floor measures the toolchain rather than
+        // the regression. The band does not move with those metrics.
+        //
+        // The relative forward-vs-re-entry comparison below cannot replace this:
+        // the phantom inset displaced BOTH layouts identically, so equality held
+        // while both were wrong. That is exactly why an absolute leg exists.
+        NSLog("CAPTURE-CALENDAR-BAND timedForward=%.2f", forwardOffset)
+        XCTAssertLessThan(
+            forwardOffset, 55,
+            "a blank band sits above the timed calendar's header — it starts \(forwardOffset)pt into the picker, against ~33pt healthy (#115)"
         )
 
         // Commit the timed date, then backspace on the empty list filter to land
@@ -243,9 +262,13 @@ final class CaptureDateStepUITests: XCTestCase {
             reenteredPitch, timedPitch, accuracy: 3,
             "the re-entered calendar compacted its rows — pitch \(timedPitch)pt forward vs \(reenteredPitch)pt on re-entry"
         )
-        XCTAssertGreaterThan(
-            reenteredPitch, 43,
-            "the re-entered timed calendar's rows are compacted — pitch \(reenteredPitch)pt against the .dateAndTime mode's natural 44pt (#115)"
+        // The absolute band on the re-entry side too — the leg that catches an
+        // inset poisoning both layouts equally, which the accuracy-15 equality
+        // above would wave through.
+        NSLog("CAPTURE-CALENDAR-BAND reentered=%.2f", reenteredOffset)
+        XCTAssertLessThan(
+            reenteredOffset, 55,
+            "a blank band sits above the re-entered timed calendar's header — it starts \(reenteredOffset)pt into the picker, against ~33pt healthy (#115)"
         )
     }
 
@@ -259,6 +282,26 @@ final class CaptureDateStepUITests: XCTestCase {
         let bottom = dayCell("22", in: calendar)
         guard top.exists, bottom.exists else { return 0 }
         return (bottom.frame.minY - top.frame.minY) / 2
+    }
+
+    /// How far the month header sits below the top of the pinned picker box —
+    /// the size of the blank band above the grid, and the direct signature of
+    /// the phantom safe-area inset (#115). Returns a negative value when the
+    /// header cannot be found, so a broken query fails loudly instead of
+    /// reading as a healthy zero.
+    ///
+    /// The header is matched by the **year**: it is the only label in the
+    /// picker carrying one ("August 2026"), so this cannot collide with a day
+    /// cell or with the compact time row's clock text the way a day-number
+    /// query once did.
+    @MainActor
+    private func headerInset(in calendar: XCUIElement) -> CGFloat {
+        let year = Calendar.current.component(.year, from: Date())
+        let header = calendar.descendants(matching: .any)
+            .matching(NSPredicate(format: "label CONTAINS %@", "\(year)"))
+            .firstMatch
+        guard header.exists else { return -1 }
+        return header.frame.minY - calendar.frame.minY
     }
 
     /// A day-number cell of the inline calendar. The OS has exposed these as
