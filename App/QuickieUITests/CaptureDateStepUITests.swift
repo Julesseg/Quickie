@@ -208,18 +208,19 @@ final class CaptureDateStepUITests: XCTestCase {
         let forwardOffset = header.frame.minY - calendar.frame.minY
         let timedPitch = rowPitch(in: calendar)
         NSLog("CAPTURE-CALENDAR-PITCH timed=%.2f", timedPitch)
-        // The `.dateAndTime` grid's natural metrics are TIGHTER than date-only's
-        // by design — the mode compresses the calendar (~0.87×, 44pt of pitch
-        // on the CI simulator) so the total with the time row stays near the
-        // date-only footprint, and it top-aligns at natural size rather than
-        // stretching to fill the box. So the timed floor sits just under that
-        // natural 44, not under date-only's ~50; a phantom-inset regression in
-        // this roomier box shows up as a band above the header (the offset
-        // assertions below), while a drop below 43 means the grid is being
-        // squeezed into less than its natural area again.
-        XCTAssertGreaterThan(
-            timedPitch, 43,
-            "the timed calendar's rows are compacted — pitch \(timedPitch)pt against the .dateAndTime mode's natural 44pt (#115)"
+        // The band above the header, for the same reason the date-only leg
+        // checks it rather than a pitch floor: the OS's row metrics moved (this
+        // mode's pitch reads ~37pt now against the 44pt this floor was written
+        // for), so an absolute pitch floor measures the toolchain rather than
+        // the regression. The band does not move with those metrics.
+        //
+        // The relative forward-vs-re-entry comparison below cannot replace this:
+        // the phantom inset displaced BOTH layouts identically, so equality held
+        // while both were wrong. That is exactly why an absolute leg exists.
+        NSLog("CAPTURE-CALENDAR-BAND timedForward=%.2f", forwardOffset)
+        XCTAssertLessThan(
+            forwardOffset, 55,
+            "a blank band sits above the timed calendar's header — it starts \(forwardOffset)pt into the picker, against ~33pt healthy (#115)"
         )
 
         // Commit the timed date, then backspace on the empty list filter to land
@@ -261,9 +262,13 @@ final class CaptureDateStepUITests: XCTestCase {
             reenteredPitch, timedPitch, accuracy: 3,
             "the re-entered calendar compacted its rows — pitch \(timedPitch)pt forward vs \(reenteredPitch)pt on re-entry"
         )
-        XCTAssertGreaterThan(
-            reenteredPitch, 43,
-            "the re-entered timed calendar's rows are compacted — pitch \(reenteredPitch)pt against the .dateAndTime mode's natural 44pt (#115)"
+        // The absolute band on the re-entry side too — the leg that catches an
+        // inset poisoning both layouts equally, which the accuracy-15 equality
+        // above would wave through.
+        NSLog("CAPTURE-CALENDAR-BAND reentered=%.2f", reenteredOffset)
+        XCTAssertLessThan(
+            reenteredOffset, 55,
+            "a blank band sits above the re-entered timed calendar's header — it starts \(reenteredOffset)pt into the picker, against ~33pt healthy (#115)"
         )
     }
 
