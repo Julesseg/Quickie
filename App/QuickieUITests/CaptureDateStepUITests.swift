@@ -272,6 +272,13 @@ final class CaptureDateStepUITests: XCTestCase {
     /// every month layout) so a single missing edge day can't skew it. Returns
     /// half the 8→22 distance; 0 if the cells can't be found.
     @MainActor
+    private func rowPitch(in calendar: XCUIElement) -> CGFloat {
+        let top = dayCell("8", in: calendar)
+        let bottom = dayCell("22", in: calendar)
+        guard top.exists, bottom.exists else { return 0 }
+        return (bottom.frame.minY - top.frame.minY) / 2
+    }
+
     /// How far the month header sits below the top of the pinned picker box —
     /// the size of the blank band above the grid, and the direct signature of
     /// the phantom safe-area inset (#115). Returns a negative value when the
@@ -290,14 +297,6 @@ final class CaptureDateStepUITests: XCTestCase {
             .firstMatch
         guard header.exists else { return -1 }
         return header.frame.minY - calendar.frame.minY
-    }
-
-    @MainActor
-    private func rowPitch(in calendar: XCUIElement) -> CGFloat {
-        let top = dayCell("8", in: calendar)
-        let bottom = dayCell("22", in: calendar)
-        guard top.exists, bottom.exists else { return 0 }
-        return (bottom.frame.minY - top.frame.minY) / 2
     }
 
     /// A day-number cell of the inline calendar. The OS has exposed these as
