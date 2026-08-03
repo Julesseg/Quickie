@@ -6,7 +6,11 @@ import Foundation
 ///
 /// - **Calculator** (issue #8) — a math expression or an offline unit conversion,
 ///   whose row **copies-and-stages** the answer so the user keeps calculating
-///   (`2+2` → `4` → `4 * 3`).
+///   (`2+2` → `4` → `4 * 3`). Its math half also reads **base notation** (issue
+///   #216): `0x`/`0b` literals inside arithmetic (`0xff + 1` → 256), explicit
+///   conversions answering in the target base (`255 to hex` → `0xFF`), and a
+///   bare prefixed literal alone firing its decimal value — all on the one Math
+///   toggle, no setting of their own.
 /// - **Date & time** (issues #210/#212/#213; ADR 0036) — a relative-arithmetic
 ///   phrase ("3 weeks from friday"), an until/since question ("days until dec
 ///   25"), a timezone conversion ("9am PST in tokyo"), or a timestamp decode
@@ -115,12 +119,27 @@ public struct ComputedProvider: Provider {
         }
 
         // Calculator: math first — a query that evaluates but carries no operator is
-        // just a bare number, not a calculation — otherwise an offline unit
-        // conversion. Math and conversion are mutually exclusive, but either can
-        // co-occur with a detected row (`555-1212` is both a phone and `-657`).
+        // just a bare number, not a calculation — then base notation, otherwise an
+        // offline unit conversion. The three are mutually exclusive, but any of them
+        // can co-occur with a detected row (`555-1212` is both a phone and `-657`).
+        //
+        // Base notation (issue #216) rides the **Math** toggle — it is the same
+        // capability written in another notation, not a setting of its own — and
+        // never arbitrates with the unit converter over the shared `to` connector:
+        // no unit is a base and no base is a unit, so at most one of them matches.
         if math, isCalculation(trimmed), let value = Calculator.evaluate(trimmed) {
             let answer = NumberFormat.string(value, maxFractionDigits: 10)
             rows.append(calculatorRow(id: "calc.math", title: answer, subtitle: trimmed, copying: answer))
+        } else if math, let answer = NumberBases.answer(for: trimmed, tables: tables) {
+            // A conversion answers in the target base, prefixed so the staged text
+            // is unambiguous; a bare prefixed literal answers its decimal value —
+            // an explicit notation act, unlike the inert bare number `42`.
+            let id: String, text: String
+            switch answer {
+            case .literal(let value): (id, text) = ("calc.literal", value)
+            case .conversion(let value): (id, text) = ("calc.base", value)
+            }
+            rows.append(calculatorRow(id: id, title: text, subtitle: trimmed, copying: text))
         } else if unitConversion, let conversion = Units.convert(trimmed, tables: tables) {
             rows.append(calculatorRow(id: "calc.conversion", title: conversion.formatted, subtitle: trimmed, copying: conversion.formatted))
         }

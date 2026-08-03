@@ -20,6 +20,12 @@ public enum Calculator {
     /// a hundredth (`50%` → 0.5), `of` reads as multiplication so `15% of 200`
     /// is 30, and a percent on the right of `+`/`-` is taken *of the left side*
     /// so `200 + 10%` is 220.
+    ///
+    /// Numbers may be written in programmer notation: a `0x`/`0b`/`0o` literal
+    /// is a primary token like any other number, so `0xff + 1` is 256 (issue
+    /// #216). Explicit base *conversions* — "255 to hex" — are `NumberBases`'
+    /// job, not this evaluator's; here a base literal only ever contributes its
+    /// value, and the answer is decimal.
     public static func evaluate(_ expression: String) -> Double? {
         var parser = Parser(expression)
         return parser.parse()
@@ -167,7 +173,9 @@ private enum Token: Equatable {
     /// calculator does not recognise (a stray letter, say) — the lexical decline
     /// that keeps unit-conversion queries like "20 mi to km" out of the math
     /// path. The one word it accepts is `of`, which reads as multiplication so
-    /// "15% of 200" parses.
+    /// "15% of 200" parses. There are deliberately **no bitwise operators**
+    /// (`<<`, `>>`, `&`, `|`, `xor`): they are not in this set, so they decline
+    /// like any other stray character, and `^` stays power.
     static func tokenize(_ source: String) -> [Token]? {
         var tokens: [Token] = []
         let chars = Array(source)
@@ -176,6 +184,20 @@ private enum Token: Equatable {
             let c = chars[i]
             if c.isWhitespace {
                 i += 1
+            } else if c == "0", i + 1 < chars.count, let radix = NumberBases.radix(forPrefix: chars[i + 1]) {
+                // A `0x`/`0b`/`0o` literal is just another way to write a number
+                // (issue #216), so it enters the grammar as a primary token and
+                // the answer comes back decimal. Digits are scanned greedily and
+                // validated against the radix, so a digit outside the base
+                // (`0b1012`) declines rather than half-parsing to `0b101`.
+                var digits = ""
+                i += 2
+                while i < chars.count, chars[i].isHexDigit {
+                    digits.append(chars[i])
+                    i += 1
+                }
+                guard let value = Int(digits, radix: radix) else { return nil }
+                tokens.append(.number(Double(value)))
             } else if c.isNumber || c == "." {
                 var literal = ""
                 while i < chars.count, chars[i].isNumber || chars[i] == "." {

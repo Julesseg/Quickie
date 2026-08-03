@@ -278,7 +278,7 @@ public extension ProviderID {
                 SettingOption(
                     key: SettingsKey.calculatorMath,
                     title: "Math",
-                    footer: "On answers arithmetic (e.g. \"23 * 7\"). Off keeps the row from appearing for a math expression.",
+                    footer: "On answers arithmetic (e.g. \"23 * 7\") and number bases (e.g. \"0xff + 1\", \"255 to hex\"). Off keeps the row from appearing for either.",
                     kind: .toggle(default: true)
                 ),
                 SettingOption(

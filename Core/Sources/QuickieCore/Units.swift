@@ -123,15 +123,8 @@ public enum Units {
               let connectorRange = Range(match.range(at: 3), in: lowered),
               let toRange = Range(match.range(at: 4), in: lowered),
               let amount = Double(lowered[amountRange]) else { return nil }
-        guard connectorSet(tables).contains(normalize(String(lowered[connectorRange]))) else { return nil }
+        guard DateKeywordTable.accepts(connector: String(lowered[connectorRange]), in: tables) else { return nil }
         return Parsed(amount: amount, from: normalize(String(lowered[fromRange])), to: normalize(String(lowered[toRange])))
-    }
-
-    /// The set of accepted connector words across the active tables, folded the
-    /// same way tokens are so a query connector matches regardless of case or
-    /// accents (ADR 0036). Both the plain and compound parsers gate on this.
-    private static func connectorSet(_ tables: [DateKeywordTable]) -> Set<String> {
-        Set(tables.flatMap { $0.unitConnectors.map(normalize) })
     }
 
     /// Parses a compound feet+inches source (`5'11"`, `5'11`, `5 ft 11 in`) into a
@@ -141,7 +134,6 @@ public enum Units {
     /// plain parser (ADR 0036); the worded form's unit tokens must resolve to
     /// feet and inches in the registry.
     private static func parseCompound(_ lowered: String, tables: [DateKeywordTable]) -> Parsed? {
-        let connectors = connectorSet(tables)
         let range = NSRange(lowered.startIndex..., in: lowered)
 
         func token(_ match: NSTextCheckingResult, _ index: Int) -> String? {
@@ -153,7 +145,7 @@ public enum Units {
         if let match = quotePattern.firstMatch(in: lowered, range: range),
            let feetText = token(match, 1), let feet = Double(feetText),
            let inchText = token(match, 2), let inches = Double(inchText),
-           let connector = token(match, 3), connectors.contains(normalize(connector)),
+           let connector = token(match, 3), DateKeywordTable.accepts(connector: connector, in: tables),
            let toText = token(match, 4) {
             return Parsed(amount: feet + inches / 12, from: "ft", to: normalize(toText))
         }
@@ -164,7 +156,7 @@ public enum Units {
            let feetUnit = token(match, 2), registry[normalize(feetUnit)]?.symbol == "ft",
            let inchText = token(match, 3), let inches = Double(inchText),
            let inchUnit = token(match, 4), registry[normalize(inchUnit)]?.symbol == "in",
-           let connector = token(match, 5), connectors.contains(normalize(connector)),
+           let connector = token(match, 5), DateKeywordTable.accepts(connector: connector, in: tables),
            let toText = token(match, 6) {
             return Parsed(amount: feet + inches / 12, from: "ft", to: normalize(toText))
         }
@@ -172,17 +164,19 @@ public enum Units {
         return nil
     }
 
-    /// The registry/connector normalization: lowercased with the superscript
-    /// square/cube folded to a plain digit ("m²" → "m2") and diacritics folded —
-    /// "mètres" lands on the registered "metres", "kilómetros" on "kilometros".
-    /// So the area registry needs only the "m2" spelling and both reach it. (The
-    /// date grammar's fuller normalization also straightens apostrophes and
-    /// strips trailing periods; unit tokens carry neither.)
+    /// The unit-registry normalization: the shared fold (lowercased, diacritics
+    /// folded — "mètres" lands on the registered "metres", "kilómetros" on
+    /// "kilometros") plus the superscript square/cube folded to a plain digit
+    /// ("m²" → "m2"), so the area registry needs only the "m2" spelling and both
+    /// reach it. Connectors and base names need only the shared fold; the date
+    /// grammar's fuller normalization additionally straightens apostrophes and
+    /// strips trailing periods, which no unit token carries.
     private static func normalize(_ token: String) -> String {
-        token.lowercased()
-            .replacingOccurrences(of: "²", with: "2")
-            .replacingOccurrences(of: "³", with: "3")
-            .folding(options: .diacriticInsensitive, locale: Locale(identifier: "en_US"))
+        DateKeywordTable.folded(
+            token
+                .replacingOccurrences(of: "²", with: "2")
+                .replacingOccurrences(of: "³", with: "3")
+        )
     }
 
     // MARK: - Unit registry
