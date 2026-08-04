@@ -216,13 +216,6 @@ struct RootView: View {
     /// menu resigning first responder — hold the inset so nothing reflows.
     @State private var listScrolling = false
 
-    /// Whether a real software keyboard is on screen right now, per the last
-    /// `keyboardWillChangeFrame` end-frame (through the same
-    /// `KeyboardBarLift.showsSoftwareKeyboard` threshold as the bar lift).
-    /// Read by `refocusInput` alone: a keyboard already up must never be
-    /// toggled down just to re-raise it — the return-from-a-page flicker.
-    @State private var keyboardVisible = false
-
     @State private var keyboardLayout = KeyboardLayoutModel()
     @State private var clipboard = ClipboardPrefillModel()
 
@@ -670,7 +663,7 @@ struct RootView: View {
             // already up as the launcher lands (the best case); UIKit can also
             // silently cancel a focus asserted mid-transition, in which case
             // `refocusInput` (off the popped page's `onDisappear`) re-arms it —
-            // and, via its `keyboardVisible` guard, leaves the keyboard alone
+            // and, via its first-responder guard, leaves the keyboard alone
             // when the eager focus already took.
             .safeAreaInset(edge: .bottom, spacing: 0) {
                 // Lift the bar by the *held* keyboard height rather than letting the
@@ -764,10 +757,8 @@ struct RootView: View {
             //    lift ourselves.
             .onReceive(NotificationCenter.default.publisher(for: UIResponder.keyboardWillChangeFrameNotification)) { note in
                 guard let endFrame = note.userInfo?[UIResponder.keyboardFrameEndUserInfoKey] as? CGRect else { return }
-                let overlap = UIScreen.main.bounds.height - endFrame.minY
-                keyboardVisible = KeyboardBarLift.showsSoftwareKeyboard(overlap: overlap)
                 apply(KeyboardBarLift.notified(
-                    overlap: overlap,
+                    overlap: UIScreen.main.bounds.height - endFrame.minY,
                     bottomSafeArea: bottomSafeAreaInset,
                     isListScrolling: listScrolling,
                     usesKeyboardlessControl: capture.usesKeyboardlessControl
@@ -1265,37 +1256,29 @@ struct RootView: View {
     /// the sheet's `onDismiss`), each firing once the close animation is done — so
     /// there is no delay to guess and no transition to race.
     ///
-    /// **A keyboard that is already up is left alone.** On a fast device the
-    /// re-added input's `onAppear` focus can take mid-pop-transition and have the
-    /// keyboard visibly up by the time `onDisappear` fires; blindly toggling focus
-    /// off→on then yanks that keyboard down and slides it back up — the
-    /// return-from-Settings flicker. The `keyboardVisible` guard (the same
-    /// visibility check the pre-event-driven refocus retried on) makes the toggle
-    /// run only when the keyboard genuinely isn't up.
+    /// **A focus that already took is left alone.** On a fast device the
+    /// re-added input's `onAppear` focus can take mid-pop-transition, so the
+    /// keyboard is up (or rising) by the time `onDisappear` fires; blindly
+    /// toggling focus off→on then yanks that keyboard down and slides it back
+    /// up — the return-from-Settings flicker. `FocusState` can't tell that case
+    /// apart from the stale `true` a dismissed sheet leaves behind, and
+    /// notification-tracked visibility lags a pop (the root's subscriptions are
+    /// detached while a page covers it), so ask UIKit directly: a text input
+    /// holding first responder *is* a focus that took — the keyboard is up or
+    /// on its way, and there is nothing to re-arm.
     ///
-    /// When it does run: toggle off→on rather than just assigning `true` — a
-    /// dismissed sheet (or a focus asserted mid-transition, which UIKit silently
-    /// cancels) can leave the `FocusState` stale, and re-assigning an unchanged
-    /// value lifts nothing. Then verify: UIKit can also cancel a focus asserted
-    /// *at* pop completion, so wait out the show animation and retry until the
-    /// keyboard is actually up (bounded, so an unfocusable state can't loop
-    /// forever).
+    /// Otherwise toggle off→on rather than just assigning `true`: whether the
+    /// `FocusState` reads a stale `true` (a dismissed sheet) or `false` (UIKit
+    /// silently cancelled a mid-transition focus), the off makes the on register
+    /// as a real change. The `on` is deferred one runloop tick (not a timed
+    /// wait) so the `off` registers as a distinct change first.
     private func refocusInput() {
         guard path.isEmpty, activeSheet == nil else { return }
+        if UIResponder.currentFirstResponder is UITextInput { return }
+        inputFocused = false
         Task { @MainActor in
-            for _ in 0..<10 {
-                guard path.isEmpty, activeSheet == nil else { return }
-                // Already up — from the pop-transition focus that took, or a
-                // successful earlier pass. Done; never toggle it down.
-                if keyboardVisible { return }
-                inputFocused = false
-                // Let the off register as a distinct change before the on.
-                try? await Task.sleep(for: .milliseconds(60))
-                inputFocused = true
-                // Allow the focus + keyboard-show animation to land before
-                // deciding whether to retry.
-                try? await Task.sleep(for: .milliseconds(500))
-            }
+            guard path.isEmpty, activeSheet == nil else { return }
+            inputFocused = true
         }
     }
 

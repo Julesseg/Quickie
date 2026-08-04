@@ -30,15 +30,6 @@ public enum KeyboardBarLift {
         case hold
     }
 
-    /// Whether a `keyboardWillChangeFrame` end-frame puts a real software
-    /// keyboard on screen. Beyond the bar lift, this is the visibility signal
-    /// the return-trip refocus guards on: a keyboard that is already up must
-    /// never be toggled down just to re-raise it — the return-from-a-page
-    /// flicker (keyboard up during the pop, yanked at completion, slid back up).
-    public static func showsSoftwareKeyboard(overlap: CGFloat) -> Bool {
-        overlap > softwareKeyboardThreshold
-    }
-
     /// Decide from a `keyboardWillChangeFrame` end-frame. `overlap` is the
     /// keyboard's coverage of the screen bottom; the bar already sits in the
     /// bottom safe area, so the lift is the overlap beyond it.
@@ -48,7 +39,7 @@ public enum KeyboardBarLift {
         isListScrolling: Bool,
         usesKeyboardlessControl: Bool
     ) -> Change {
-        if showsSoftwareKeyboard(overlap: overlap) {
+        if overlap > softwareKeyboardThreshold {
             return .animateWithKeyboard(inset: max(0, overlap - bottomSafeArea))
         }
         if isListScrolling || usesKeyboardlessControl {
