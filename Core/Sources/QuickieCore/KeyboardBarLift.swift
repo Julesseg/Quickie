@@ -48,6 +48,16 @@ public enum KeyboardBarLift {
         return .hold
     }
 
+    /// Decide at the moment a capture's current step changes. Entering a
+    /// keyboard-less step (the date picker) removes the text field, so the
+    /// keyboard is structurally gone — release the inset *immediately*,
+    /// unanimated, rather than waiting for the keyboard-hide notification: the
+    /// step's control then lays out in its final position behind the dismissing
+    /// keyboard instead of appearing keyboard-high and sliding down with it.
+    public static func stepChanged(usesKeyboardlessControl: Bool) -> Change {
+        usesKeyboardlessControl ? .track(inset: 0) : .hold
+    }
+
     /// Decide from a live keyboard-frame sample (the App's keyboard layout
     /// guide). Only a sample taken *while a list drag is in flight* is the
     /// interactive swipe-dismiss moving the keyboard under the finger — track it
