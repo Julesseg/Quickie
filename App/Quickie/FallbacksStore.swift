@@ -49,10 +49,20 @@ final class FallbacksStore {
     }
 
     static func launch() -> FallbacksStore {
-        // Honors the same UI-test reset flag as SignalsStore (shared constant), so a
-        // test asking for a clean launcher also gets a clean, unmigrated Fallback
-        // list — the enabled list and the migration flag reset alongside Favorites.
-        if ProcessInfo.processInfo.arguments.contains(SignalsStore.uitestResetArgument) {
+        // Cleared under UI testing so a test asking for a clean launcher gets a
+        // clean, unmigrated Fallback list — the enabled list and the migration flag
+        // reset alongside Favorites. Keyed on `--uitesting` as well as the explicit
+        // reset flag, for the same reason as `ProviderEnablementStore.launch()`:
+        // the enabled list lives in the *persistent* App Group defaults, which
+        // outlive the ephemeral store, so a suite launching with plain `--uitesting`
+        // (PileUITests does) would inherit whatever an earlier suite on the same
+        // simulator left active — and a list missing "Save for later" makes the
+        // always-present capture vanish. That is exactly how PileUITests failed once
+        // a shard reshuffle put a fallback-mutating suite ahead of it, and why
+        // SecondaryActionUITests had to reach for the reset flag by hand. Safe to
+        // widen: no test drives fallback state across two launches.
+        if ProcessInfo.processInfo.arguments.contains("--uitesting")
+            || ProcessInfo.processInfo.arguments.contains(SignalsStore.uitestResetArgument) {
             let defaults = SignalsStore.sharedDefaults
             for key in [enabledKey, migratedKey, legacyOrderKey, legacyDisabledKey] {
                 defaults.removeObject(forKey: key)

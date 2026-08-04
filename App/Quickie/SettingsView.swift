@@ -107,8 +107,50 @@ struct SettingsView: View {
             } footer: {
                 Text("Each provider's settings and content live on its own page. You can also get there by typing its name.")
             }
+
+            // The build identifier, last on the page (CONTEXT.md → Settings):
+            // which build is actually installed, down to the commit. Its own
+            // footer-only section so it reads as a page colophon rather than a
+            // setting — nothing here is adjustable.
+            Section {
+            } footer: {
+                BuildStamp()
+            }
         }
         .navigationTitle("Settings")
+    }
+}
+
+/// The **build stamp**: the version and git commit of the installed build,
+/// centered in the footer at the very bottom of Settings. Tapping it copies the
+/// identifier to the clipboard, so it can be pasted into a bug report instead of
+/// transcribed from the screen.
+private struct BuildStamp: View {
+    @State private var copied = false
+
+    var body: some View {
+        HStack {
+            Spacer()
+            Button {
+                UIPasteboard.general.string = BuildInfo.displayLabel
+                copied = true
+                // The confirmation is transient: the identifier itself is the
+                // point of the row, so it comes back after a beat.
+                Task {
+                    try? await Task.sleep(for: .seconds(2))
+                    copied = false
+                }
+            } label: {
+                Text(copied ? "Copied" : BuildInfo.displayLabel)
+                    .font(.footnote)
+                    .foregroundStyle(Color.secondary)
+                    .monospacedDigit()
+            }
+            .buttonStyle(.plain)
+            .accessibilityIdentifier("settings-build-stamp")
+            .accessibilityHint("Copies the build identifier")
+            Spacer()
+        }
     }
 }
 

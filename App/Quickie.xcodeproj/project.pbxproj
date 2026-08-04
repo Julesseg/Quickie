@@ -247,6 +247,7 @@
 				1A0000000000000000000009 /* Resources */,
 				1A0000000000000000000048 /* Embed Foundation Extensions */,
 				1A0000000000000000000037 /* Embed Frameworks */,
+				1A0000000000000000000090 /* Stamp git commit */,
 			);
 			buildRules = (
 			);
@@ -455,6 +456,24 @@
 		};
 /* End PBXResourcesBuildPhase section */
 
+/* Begin PBXShellScriptBuildPhase section */
+		1A0000000000000000000090 /* Stamp git commit */ = {
+			isa = PBXShellScriptBuildPhase;
+			alwaysOutOfDate = 1;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			inputPaths = (
+			);
+			name = "Stamp git commit";
+			outputPaths = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+			shellPath = /bin/sh;
+			shellScript = "\"${SRCROOT}/Scripts/stamp-git-commit.sh\"\n";
+		};
+/* End PBXShellScriptBuildPhase section */
+
 /* Begin PBXSourcesBuildPhase section */
 		1A0000000000000000000007 /* Sources */ = {
 			isa = PBXSourcesBuildPhase;
@@ -653,6 +672,9 @@
 				CODE_SIGN_STYLE = Automatic;
 				INFOPLIST_FILE = Info.plist;
 				CURRENT_PROJECT_VERSION = 1;
+				/* The "Stamp git commit" phase reads the repo's git metadata and writes
+				   into the built product, neither of which the script sandbox allows. */
+				ENABLE_USER_SCRIPT_SANDBOXING = NO;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_KEY_NSCalendarsFullAccessUsageDescription = "Quickie adds the events you capture to your Calendar.";
@@ -684,6 +706,9 @@
 				CODE_SIGN_STYLE = Automatic;
 				INFOPLIST_FILE = Info.plist;
 				CURRENT_PROJECT_VERSION = 1;
+				/* The "Stamp git commit" phase reads the repo's git metadata and writes
+				   into the built product, neither of which the script sandbox allows. */
+				ENABLE_USER_SCRIPT_SANDBOXING = NO;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_KEY_NSCalendarsFullAccessUsageDescription = "Quickie adds the events you capture to your Calendar.";

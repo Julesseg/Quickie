@@ -34,6 +34,32 @@ titles must match too.** Title PRs `<type>(<scope>)!: <description>` using the
 same types: `feat`, `fix`, `docs`, `style`, `refactor`, `perf`, `test`, `build`,
 `ci`, `chore`, `revert`.
 
+### Every session that changes code ends in a pull request
+
+**If you changed code in a session, that session ends with: commit → push →
+open a PR.** Every time, without being asked, whatever prompted the work — a
+`/implement` run, an issue, or a one-line request in chat. There is no category
+of change that is "too small to PR": work that only exists in a worktree is
+work nobody can review, merge, or find again.
+
+Do not stop at "here's what I changed, want me to commit it?" — opening the PR
+*is* part of delivering the change, not a separate follow-up to offer. Do it
+before you write your closing message, then include the PR link in it.
+
+- **Never commit to `main`.** Branch first, then commit there.
+- The PR title follows Conventional Commits, same as the commit subject.
+- If the branch is stacked on another open PR's branch, base the new PR on
+  that branch (`gh pr create --base <branch>`) so the diff stays reviewable.
+  GitHub retargets it when the parent merges.
+- **Not being able to fully verify the change is not a reason to hold the PR.**
+  Say what you could not run and why, in the PR body, and open it anyway — CI
+  is the gate (see below).
+
+A `Stop` hook (`.claude/hooks/require-pr.py`) enforces this: it blocks the end
+of a turn while work is uncommitted, unpushed, or pushed with no PR. It only
+ever blocks once per turn, so if the user has genuinely told you not to commit,
+say so plainly and stop again.
+
 ### Always implement the UI part of an issue — never ask
 
 **If an issue requires UI work, implement it. Do not ask whether you should,
