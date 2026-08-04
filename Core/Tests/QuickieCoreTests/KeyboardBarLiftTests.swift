@@ -95,4 +95,18 @@ final class KeyboardBarLiftTests: XCTestCase {
             .hold
         )
     }
+
+    /// The visibility signal the return-trip refocus guards on: only an overlap
+    /// past the accessory-bar threshold counts as a software keyboard on screen —
+    /// a hidden keyboard (overlap ≤ 0) and a hardware keyboard's thin bar do not.
+    /// A keyboard reported visible here must never be toggled down just to be
+    /// re-raised (the return-from-Settings flicker).
+    func testShowsSoftwareKeyboardOnlyPastAccessoryBarThreshold() {
+        XCTAssertTrue(KeyboardBarLift.showsSoftwareKeyboard(overlap: 336))
+        XCTAssertFalse(KeyboardBarLift.showsSoftwareKeyboard(overlap: 0))
+        XCTAssertFalse(KeyboardBarLift.showsSoftwareKeyboard(overlap: -20))
+        XCTAssertFalse(
+            KeyboardBarLift.showsSoftwareKeyboard(overlap: KeyboardBarLift.softwareKeyboardThreshold)
+        )
+    }
 }
