@@ -121,6 +121,68 @@ struct TypedContentDetectionTests {
         #expect(TypedContentDetector.telURL(forPhoneDisplay: "+1 555 123 4567")?.absoluteString == "tel:+15551234567")
     }
 
+    // MARK: Hex color
+
+    @Test("the three hex notations parse, decoding to their channels")
+    func hexNotationsParse() {
+        // 3-digit shorthand doubles each nibble: `f60` → `ff6600`, opaque.
+        #expect(TypedContentDetector.color(in: "#f60")?.rgba == RGBA(red8: 255, green8: 102, blue8: 0))
+        // 6-digit is byte pairs, opaque.
+        #expect(TypedContentDetector.color(in: "#ff6600")?.rgba == RGBA(red8: 255, green8: 102, blue8: 0))
+        // 8-digit carries alpha in the last pair.
+        #expect(TypedContentDetector.color(in: "#ff6600cc")?.rgba == RGBA(red8: 255, green8: 102, blue8: 0, alpha8: 204))
+    }
+
+    @Test("the display value is the typed notation, case preserved")
+    func colorDisplayIsTypedText() {
+        #expect(TypedContentDetector.color(in: "#FF6600")?.display == "#FF6600")
+        #expect(TypedContentDetector.color(in: "  #f60  ")?.display == "#f60")
+        // Upper and lower case decode identically.
+        #expect(TypedContentDetector.color(in: "#FF6600")?.rgba == TypedContentDetector.color(in: "#ff6600")?.rgba)
+    }
+
+    @Test("a single trailing punctuation mark is tolerated on a color")
+    func colorToleratesOneTrailingPunctuation() {
+        #expect(TypedContentDetector.color(in: "#f60.")?.display == "#f60")
+        #expect(TypedContentDetector.color(in: "#ff6600,")?.display == "#ff6600")
+    }
+
+    @Test("a bare hex run without # is never a color")
+    func bareHexRunIsNotColor() {
+        // The `#` is the user saying "this is a color"; without it a hex run is a
+        // word, a SHA prefix, or a base-16 literal — it fails the never-a-guess bar.
+        #expect(TypedContentDetector.color(in: "ff6600") == nil)
+        #expect(TypedContentDetector.color(in: "f60") == nil)
+        #expect(TypedContentDetector.color(in: "0xff6600") == nil)
+    }
+
+    @Test("an off-length or non-hex run after # is not a color")
+    func malformedHexIsNotColor() {
+        #expect(TypedContentDetector.color(in: "#ff") == nil)        // 2 digits
+        #expect(TypedContentDetector.color(in: "#f60c") == nil)      // 4 — not one of the three
+        #expect(TypedContentDetector.color(in: "#ff660") == nil)     // 5
+        #expect(TypedContentDetector.color(in: "#ff66000") == nil)   // 7
+        #expect(TypedContentDetector.color(in: "#ff6600ccdd") == nil) // 10
+        #expect(TypedContentDetector.color(in: "#ggg") == nil)       // not hex
+        #expect(TypedContentDetector.color(in: "#") == nil)
+    }
+
+    @Test("prose or CSS around a color never fires")
+    func proseWithColorDeclines() {
+        #expect(TypedContentDetector.color(in: "color: #ff6600") == nil)
+        #expect(TypedContentDetector.color(in: "#ff6600 orange") == nil)
+        #expect(TypedContentDetector.color(in: "#ff6600;") != nil) // one trailing mark is still whole-query
+        #expect(TypedContentDetector.color(in: "#ff6600!!") == nil) // two are not
+    }
+
+    @Test("a hashtag word is not a color")
+    func hashtagIsNotColor() {
+        #expect(TypedContentDetector.color(in: "#todo") == nil)
+        #expect(TypedContentDetector.color(in: "#swift") == nil)
+        // `#faded` is 5 hex-ish characters — off-length, so it declines too.
+        #expect(TypedContentDetector.color(in: "#faded") == nil)
+    }
+
     // MARK: Bare copy/share value
 
     @Test("a tel/sms/mailto URL reduces to its bare recipient for copy/share")
@@ -147,6 +209,7 @@ struct TypedContentDetectionTests {
             #expect(TypedContentDetector.url(in: query) == nil)
             #expect(TypedContentDetector.email(in: query) == nil)
             #expect(TypedContentDetector.phone(in: query) == nil)
+            #expect(TypedContentDetector.color(in: query) == nil)
         }
     }
 }

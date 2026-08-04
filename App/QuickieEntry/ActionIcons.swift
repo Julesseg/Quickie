@@ -70,6 +70,17 @@ extension ActionKind {
     }
 }
 
+extension RGBA {
+    /// The SwiftUI color for Core's parsed channels (CONTEXT.md → Detected result;
+    /// issue #217) — the App-edge half of the split that keeps Core UIKit-free:
+    /// Core parses the notation and carries the numbers, this maps them to something
+    /// drawable. `.sRGB` because a hex notation *is* an sRGB triple, and its opacity
+    /// rides as the color's own alpha so a translucent `#ff6600cc` reads translucent.
+    var color: Color {
+        Color(.sRGB, red: red, green: green, blue: blue, opacity: alpha)
+    }
+}
+
 extension ReturnKeyLabel {
     /// The SwiftUI `SubmitLabel` closest to this Core intent (CONTEXT.md →
     /// Highlighted result): the Return key reads `.search` for a web query, `.go`
@@ -124,6 +135,14 @@ struct ProviderBadge: View {
     /// less native.
     var symbol: String? = nil
 
+    /// An explicit hue overriding the kind's own — the **swatch** a detected hex
+    /// color wears (CONTEXT.md → Detected result; issue #217), so that row *is* the
+    /// color rather than merely naming it. This is the one case where the tint is
+    /// row-specific rather than provider-specific, and it is exactly why the row
+    /// exists, so it earns the exception the user-chosen `symbol` does not get.
+    /// `nil` (every other row) keeps the kind's hue.
+    var tint: Color? = nil
+
     var body: some View {
         RoundedRectangle(cornerRadius: QuickieRadius.badge, style: .continuous)
             // The hue's own subtle top-to-bottom luminosity ramp (issue #178) — the
@@ -131,7 +150,7 @@ struct ProviderBadge: View {
             // hand-rolled shadow under it (ADR 0010: depth is the glass's job, and
             // the badge sits *on* glass; a drop shadow here would be a second, fake
             // light source arguing with the material).
-            .fill(kind.tint.gradient)
+            .fill((tint ?? kind.tint).gradient)
             .frame(width: 30, height: 30)
             .overlay {
                 Image(systemName: symbol ?? kind.symbol)

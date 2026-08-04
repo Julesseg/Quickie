@@ -20,20 +20,22 @@ import Foundation
 ///   copy-only with `.date` content, formatted per device locale; a count
 ///   answer is a number, so its row is a full Calculator row — copy-and-stage,
 ///   `.number` content.
-/// - **Detected result** (ADR 0032) — the *whole trimmed query* recognized as a
-///   URL, phone number, or email address, surfacing rows that act on it directly:
-///   **Open** for a URL, **Message** + **Call** for a phone number, **Email** for
-///   an address. Detection defers to `TypedContentDetector`, which only fires on a
-///   whole-query match (never a substring of prose).
+/// - **Detected result** (ADR 0032; issue #217) — the *whole trimmed query*
+///   recognized as a URL, phone number, email address, or hex color, surfacing rows
+///   that act on it directly: **Open** for a URL, **Message** + **Call** for a phone
+///   number, **Email** for an address, **Copy** for a color (terminal under the
+///   Stage rule, so copy-only, its swatch tinting the row's leading glyph).
+///   Detection defers to `TypedContentDetector`, which only fires on a whole-query
+///   match (never a substring of prose).
 ///
 /// The provider the user sees is **Computed**, but its persisted `ProviderID` raw
 /// value stays `.calculator` (renaming the stored identity would re-key kind-level
-/// state — ADR 0032). Six per-type toggles gate its output — Math, Unit
-/// conversion, Date & time, URLs, Phone numbers, Email addresses, all default-on —
-/// so turning the three detection toggles off restores the pre-detection
-/// Calculator exactly. Every branch is independent and non-arbitrating: an
-/// ambiguous query (`555-1212` reads as a phone number *and* as math) fires rows
-/// from every applicable interpretation at once.
+/// state — ADR 0032). Seven per-type toggles gate its output — Math, Unit
+/// conversion, Date & time, URLs, Phone numbers, Email addresses, Colors, all
+/// default-on — so turning the four detection toggles off restores the
+/// pre-detection Calculator exactly. Every branch is independent and
+/// non-arbitrating: an ambiguous query (`555-1212` reads as a phone number *and* as
+/// math) fires rows from every applicable interpretation at once.
 ///
 /// The SearchEngine floats a Dynamic Provider's results to the top region
 /// unscored (boosted rank), so they read as top hits even though they are not name
@@ -53,13 +55,15 @@ public struct ComputedProvider: Provider {
     private let url: Bool
     private let phone: Bool
     private let email: Bool
+    private let color: Bool
     private let calendar: Calendar
     private let now: @Sendable () -> Date
 
     /// Each flag mirrors one schema toggle (ADR 0020; ADR 0032) and suppresses
     /// exactly its rows. All default on so the Core stays fully functional and the
-    /// App merely reflects the user's stored preferences; the three detection flags
-    /// off (`url`/`phone`/`email`) reproduce the pre-detection Calculator exactly.
+    /// App merely reflects the user's stored preferences; the four detection flags
+    /// off (`url`/`phone`/`email`/`color`) reproduce the pre-detection Calculator
+    /// exactly.
     ///
     /// The `calendar` and `now` clock feed the Date & time grammar (issue #210) —
     /// injected so "today" is testable; the defaults read the device, live, on
@@ -71,6 +75,7 @@ public struct ComputedProvider: Provider {
         url: Bool = true,
         phone: Bool = true,
         email: Bool = true,
+        color: Bool = true,
         calendar: Calendar = .autoupdatingCurrent,
         now: @escaping @Sendable () -> Date = { Date() }
     ) {
@@ -80,6 +85,7 @@ public struct ComputedProvider: Provider {
         self.url = url
         self.phone = phone
         self.email = email
+        self.color = color
         self.calendar = calendar
         self.now = now
     }
@@ -116,6 +122,9 @@ public struct ComputedProvider: Provider {
         if email, let address = TypedContentDetector.email(in: trimmed),
            let mailto = TypedContentDetector.mailtoURL(forEmail: address) {
             rows.append(detectedRow(id: "detect.email", title: "Email", value: address, url: mailto))
+        }
+        if color, let detected = TypedContentDetector.color(in: trimmed) {
+            rows.append(colorRow(detected))
         }
 
         // Calculator: math first — a query that evaluates but carries no operator is
@@ -227,6 +236,31 @@ public struct ComputedProvider: Provider {
     /// Edit (CONTEXT.md → Detected result), exactly a Calculator result's manners.
     private func openRow(url: URL) -> Action {
         detectedRow(id: "detect.url", title: "Open", value: url.absoluteString, url: url)
+    }
+
+    /// The **Copy** row for a detected hex color (CONTEXT.md → Detected result; issue
+    /// #217): verb-titled like its Open / Message / Call / Email siblings, subtitled
+    /// with the notation the user typed, and **copy-only** — a color is terminal
+    /// under the Stage rule, so nothing is staged back into the input, unlike a
+    /// Calculator answer. Declares bare `.text` content: the universal copy/share
+    /// long-press, no Edit, exactly a value row's manners.
+    ///
+    /// Its own factory rather than a `detectedRow` case: every other Detected row
+    /// *opens* a URL and carries `.url` content, while this one carries a text value
+    /// and opens nothing — the two share a look, not a shape. The one thing that sets
+    /// it apart visually is `glyphTint`, the parsed swatch carried from Core so the
+    /// App tints the leading glyph without re-parsing the notation.
+    private func colorRow(_ detected: DetectedColor) -> Action {
+        Action(
+            id: "detect.color",
+            kind: .calculator,
+            title: "Copy",
+            subtitle: detected.display,
+            inputTypes: [],
+            outputType: .text,
+            content: .text,
+            glyphTint: detected.rgba
+        ) { _ in .copyText(detected.display) }
     }
 
     /// A **Detected result** row (Open / Message / Call / Email): a boosted row that
