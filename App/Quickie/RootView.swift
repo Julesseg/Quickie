@@ -197,6 +197,17 @@ struct RootView: View {
     /// page): each is *pushed* from the launcher so it slides in from the right
     /// and supports the system edge-swipe back, rather than rising as a sheet.
     @State private var path: [ManagementPage] = []
+    /// Whether the next input-bar appearance is a **return from a pushed page**
+    /// (set on push, cleared by `refocusInput`). The bar's `onAppear` fires the
+    /// instant `path` empties — mid-pop-transition — and a focus asserted there
+    /// is doomed: UIKit silently cancels it at completion, *after* the keyboard
+    /// has visibly risen on a fast device, so the keyboard flicks away and
+    /// slides back up (the return-from-Settings flicker). Under this flag the
+    /// pop's appearance skips the eager focus and the keyboard rises exactly
+    /// once, at pop completion, via `refocusInput`. Launch and capture-end
+    /// appearances (same-screen swaps, where an eager focus sticks) are
+    /// unaffected.
+    @State private var popRefocusPending = false
     @FocusState private var inputFocused: Bool
     /// The brief, non-blocking confirmation toast (issue #37): a copy-out, or the
     /// tappable "Reminder added" that opens the reminder in the Reminders app.
@@ -657,14 +668,15 @@ struct RootView: View {
             // their `glassEffectID`s in `glassNamespace`) rather than just popping.
             //
             // Shown only while the launcher is on top (`path.isEmpty`): a pushed
-            // page removes it, and popping back *re-adds* it. The fresh
-            // appearance's `onAppear` asserts focus immediately — mid-pop-
-            // transition. On a fast device that focus takes and the keyboard is
-            // already up as the launcher lands (the best case); UIKit can also
-            // silently cancel a focus asserted mid-transition, in which case
-            // `refocusInput` (off the popped page's `onDisappear`) re-arms it —
-            // and, via its first-responder guard, leaves the keyboard alone
-            // when the eager focus already took.
+            // page removes it, and popping back *re-adds* it. That fresh
+            // appearance fires mid-pop-transition, where an eager focus is
+            // doomed — UIKit silently cancels it at completion, after the
+            // keyboard visibly rose on a fast device: the return-trip flicker.
+            // So a pop's appearance (`popRefocusPending`) asserts nothing, and
+            // the keyboard rises exactly once, at pop completion, via
+            // `refocusInput` off the popped page's `onDisappear`. Launch and
+            // capture-end appearances focus immediately — same-screen swaps,
+            // where the focus sticks.
             .safeAreaInset(edge: .bottom, spacing: 0) {
                 // Lift the bar by the *held* keyboard height rather than letting the
                 // system track the live keyboard, so a transient dismissal (a
@@ -716,11 +728,15 @@ struct RootView: View {
                         // Morph the button in/out as the offer changes — degraded to a
                         // snap under Reduce Motion (ADR 0010 motion budget).
                         .animation(reduceMotion ? nil : .smooth, value: clipboardPrefill.isChipOffered)
-                        // Auto-focus on launch (the zero-wall promise, ADR 0012).
-                        // Return-from-a-page focus is re-armed off the popped page's
-                        // `onDisappear` (see the navigationDestination below) — a real
-                        // event at pop completion, not a guessed delay.
-                        .onAppear { inputFocused = true }
+                        // Auto-focus on launch and capture-end (the zero-wall
+                        // promise, ADR 0012). Never on a pop re-appearance: that
+                        // fires mid-transition, where the focus (and the keyboard
+                        // it visibly raised) gets cancelled at completion — the
+                        // return-trip flicker. The popped page's `onDisappear`
+                        // re-arms focus instead (see the navigationDestination
+                        // below) — a real event at pop completion, not a guessed
+                        // delay.
+                        .onAppear { if !popRefocusPending { inputFocused = true } }
                     }
                 }
                 }
@@ -1256,24 +1272,28 @@ struct RootView: View {
     /// the sheet's `onDismiss`), each firing once the close animation is done — so
     /// there is no delay to guess and no transition to race.
     ///
-    /// **A focus that already took is left alone.** On a fast device the
-    /// re-added input's `onAppear` focus can take mid-pop-transition, so the
-    /// keyboard is up (or rising) by the time `onDisappear` fires; blindly
-    /// toggling focus off→on then yanks that keyboard down and slides it back
-    /// up — the return-from-Settings flicker. `FocusState` can't tell that case
-    /// apart from the stale `true` a dismissed sheet leaves behind, and
+    /// For a popped page this is the **only** focus path: the re-added bar's
+    /// `onAppear` deliberately asserts nothing mid-transition (see
+    /// `popRefocusPending`), so the keyboard rises exactly once, here, with no
+    /// mid-transition focus for UIKit to cancel — the cancellation that visibly
+    /// yanked a risen keyboard on fast devices (the return-from-Settings
+    /// flicker).
+    ///
+    /// **A focus that already took is left alone.** `FocusState` can't tell a
+    /// live focus from the stale `true` a dismissed sheet leaves behind, and
     /// notification-tracked visibility lags a pop (the root's subscriptions are
     /// detached while a page covers it), so ask UIKit directly: a text input
-    /// holding first responder *is* a focus that took — the keyboard is up or
-    /// on its way, and there is nothing to re-arm.
+    /// holding first responder is a focus that took — the keyboard is up or on
+    /// its way, and there is nothing to re-arm.
     ///
     /// Otherwise toggle off→on rather than just assigning `true`: whether the
-    /// `FocusState` reads a stale `true` (a dismissed sheet) or `false` (UIKit
-    /// silently cancelled a mid-transition focus), the off makes the on register
-    /// as a real change. The `on` is deferred one runloop tick (not a timed
-    /// wait) so the `off` registers as a distinct change first.
+    /// `FocusState` reads a stale `true` (a dismissed sheet) or `false`, the
+    /// off makes the on register as a real change. The `on` is deferred one
+    /// runloop tick (not a timed wait) so the `off` registers as a distinct
+    /// change first.
     private func refocusInput() {
         guard path.isEmpty, activeSheet == nil else { return }
+        popRefocusPending = false
         if UIResponder.currentFirstResponder is UITextInput { return }
         inputFocused = false
         Task { @MainActor in
@@ -1497,7 +1517,10 @@ struct RootView: View {
         case .openPage(let destination):
             // Push the management page so it slides in from the right with
             // edge-swipe back, and clear the query so popping returns to a clean
-            // launcher rather than a stale result list.
+            // launcher rather than a stale result list. From here on the return
+            // trip owns the refocus (see `popRefocusPending`): the re-added bar
+            // must not grab focus mid-pop-transition.
+            popRefocusPending = true
             path.append(destination)
             query = ""
         case .createReminder, .createEvent, .composeEvent:
