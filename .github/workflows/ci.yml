@@ -49,6 +49,19 @@ jobs:
       - name: Regenerate and compare brand assets
         run: python3 docs/brand/check-brand-assets.py
 
+  # The Settings build stamp is only worth anything if it is always current, and
+  # every condition that keeps it current lives in project.pbxproj — where an
+  # unrelated Xcode edit can drop or reorder the stamping phase without breaking
+  # the build. The failure is invisible: the app still ships a stamp, it is just
+  # the wrong commit. This asserts the wiring instead of trusting it.
+  build-stamp:
+    name: App · build stamp wiring
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - name: Check the stamp phase is wired into the app target
+        run: python3 App/Scripts/check-build-stamp.py
+
   # Partition the XCUITest classes into shards so the (slow) UI suite can run
   # across several macOS runners in parallel. One sim-per-runner sidesteps the
   # contention that made same-runner `-parallel-testing-enabled` *slower* and
