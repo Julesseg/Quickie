@@ -1,0 +1,265 @@
+name: Release (App Store)
+
+# Builds and uploads a TestFlight / App Store build when you push a version tag
+# named `vX.X.X` (or run it manually). Separate from release.yml, which builds
+# ad-hoc installable PR builds for the GitHub Pages install site — that pipeline
+# is for on-device testing; this one signs for the App Store with an App Store
+# Connect API key and uploads the build to App Store Connect, where it lands in
+# TestFlight and can be promoted to a release.
+#
+# Automatic signing here is driven by the API key, not by stored provisioning
+# profiles: xcodebuild creates/downloads the App Store profiles at build time
+# (-allowProvisioningUpdates). That resolves all THREE bundles — the app, the
+# Share Extension, and the Widgets extension — with no `.mobileprovision`
+# secrets to manage (unlike release.yml, which pins three ad-hoc profiles).
+#
+# ── ONE-TIME SETUP ───────────────────────────────────────────────────────────
+# 1. App Store Connect -> Users and Access -> Integrations -> App Store Connect
+#    API -> create a Team key with the "App Manager" role. Download the .p8 ONCE.
+# 2. Add these repository secrets (Settings -> Secrets and variables -> Actions):
+#      APP_STORE_CONNECT_KEY_ID      the key's Key ID (e.g. ABC123XYZ9)
+#      APP_STORE_CONNECT_ISSUER_ID   the Issuer ID shown above the keys list
+#      APP_STORE_CONNECT_KEY_P8      the full contents of the .p8 file
+#    APPLE_CERTIFICATE_P12, APPLE_CERTIFICATE_PASSWORD and APPLE_TEAM_ID are
+#    reused from the ad-hoc release.yml pipeline (same Apple Distribution cert).
+# 3. The app records must already exist in App Store Connect for
+#    com.julesseguin.quickie (App Store Connect resolves the extension bundles —
+#    .share and .widgets — automatically once their App IDs exist; see ci/README.md).
+#
+# Then: `git tag v1.0.0 && git push origin v1.0.0` builds 1.0.0, signs it for the
+# App Store, and uploads it to TestFlight. Build number = CI run number, so every
+# upload is unique and increasing (App Store Connect rejects duplicate builds).
+#
+# Optionally set NTFY_TOPIC (already used by release.yml) for a push notification
+# when the upload finishes or fails.
+
+on:
+  push:
+    tags:
+      - 'v[0-9]+.[0-9]+.[0-9]+'
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Marketing version to release (X.X.X)'
+        required: true
+
+# One release build per ref; a newer push supersedes an older in-flight one.
+concurrency:
+  group: release-appstore-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  release:
+    name: Build & upload to App Store Connect
+    runs-on: macos-15
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      # Fail fast with a clear message if the release secrets aren't set. Unlike
+      # release.yml — which no-ops so PR checks stay green — a tag push here is a
+      # deliberate release, so missing configuration should error, not silently
+      # skip.
+      - name: Check release secrets
+        env:
+          APPLE_CERTIFICATE_P12: ${{ secrets.APPLE_CERTIFICATE_P12 }}
+          APPLE_CERTIFICATE_PASSWORD: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+          ASC_KEY_ID: ${{ secrets.APP_STORE_CONNECT_KEY_ID }}
+          ASC_ISSUER_ID: ${{ secrets.APP_STORE_CONNECT_ISSUER_ID }}
+          ASC_KEY_P8: ${{ secrets.APP_STORE_CONNECT_KEY_P8 }}
+        run: |
+          missing=
+          for v in APPLE_CERTIFICATE_P12 APPLE_CERTIFICATE_PASSWORD APPLE_TEAM_ID \
+                   ASC_KEY_ID ASC_ISSUER_ID ASC_KEY_P8; do
+            if [ -z "${!v}" ]; then missing="$missing $v"; fi
+          done
+          if [ -n "$missing" ]; then
+            echo "::error title=App Store release not configured::Missing secrets:$missing. See ci/README.md, 'App Store / TestFlight releases'."
+            exit 1
+          fi
+
+      # Marketing version from the tag name (v1.2.3 -> 1.2.3) or the
+      # manual-dispatch input; build number from the run number so each upload is
+      # unique and increasing, as App Store Connect requires.
+      - name: Resolve version and build number
+        run: |
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            VERSION="${{ github.event.inputs.version }}"
+          else
+            VERSION="${GITHUB_REF_NAME#v}"
+          fi
+          if ! printf '%s' "$VERSION" | grep -Eq '^[0-9]+\.[0-9]+\.[0-9]+$'; then
+            echo "::error::Version '$VERSION' is not X.X.X — tag the commit v1.2.3 (or pass the version on manual dispatch)."
+            exit 1
+          fi
+          echo "VERSION=$VERSION" >> "$GITHUB_ENV"
+          echo "BUILD_NUMBER=${{ github.run_number }}" >> "$GITHUB_ENV"
+          echo "Releasing $VERSION (build ${{ github.run_number }})"
+
+      - name: Select latest stable Xcode
+        uses: maxim-lobanov/setup-xcode@v1
+        with:
+          xcode-version: latest-stable
+
+      # Write the API key where both xcodebuild and altool look for it:
+      # ~/.appstoreconnect/private_keys/AuthKey_<KEYID>.p8
+      - name: Install App Store Connect API key
+        env:
+          ASC_KEY_ID: ${{ secrets.APP_STORE_CONNECT_KEY_ID }}
+          ASC_KEY_P8: ${{ secrets.APP_STORE_CONNECT_KEY_P8 }}
+        run: |
+          set -euo pipefail
+          KEY_DIR="$HOME/.appstoreconnect/private_keys"
+          mkdir -p "$KEY_DIR"
+          printf '%s' "$ASC_KEY_P8" > "$KEY_DIR/AuthKey_${ASC_KEY_ID}.p8"
+          echo "ASC_KEY_PATH=$KEY_DIR/AuthKey_${ASC_KEY_ID}.p8" >> "$GITHUB_ENV"
+
+      # Import the Apple Distribution cert into a throwaway keychain that lives
+      # only for this run (the hosted runner starts clean every time). Automatic
+      # signing uses this cert; the API key resolves the App Store provisioning
+      # profiles. Same throwaway-keychain approach as release.yml.
+      - name: Import signing certificate
+        env:
+          APPLE_CERTIFICATE_P12: ${{ secrets.APPLE_CERTIFICATE_P12 }}
+          APPLE_CERTIFICATE_PASSWORD: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
+        run: |
+          set -euo pipefail
+          CERT_PATH="$RUNNER_TEMP/cert.p12"
+          KEYCHAIN_PATH="$RUNNER_TEMP/app-signing.keychain-db"
+          KEYCHAIN_PASSWORD="$(openssl rand -base64 24)"
+
+          echo -n "$APPLE_CERTIFICATE_P12" | base64 --decode -o "$CERT_PATH"
+
+          security create-keychain -p "$KEYCHAIN_PASSWORD" "$KEYCHAIN_PATH"
+          security set-keychain-settings -lut 21600 "$KEYCHAIN_PATH"
+          security unlock-keychain -p "$KEYCHAIN_PASSWORD" "$KEYCHAIN_PATH"
+          security import "$CERT_PATH" -P "$APPLE_CERTIFICATE_PASSWORD" \
+            -A -t cert -f pkcs12 -k "$KEYCHAIN_PATH"
+          security set-key-partition-list -S apple-tool:,apple:,codesign: \
+            -k "$KEYCHAIN_PASSWORD" "$KEYCHAIN_PATH" >/dev/null
+          # Make the temp keychain searchable so automatic signing finds the cert.
+          security list-keychain -d user -s "$KEYCHAIN_PATH" login.keychain-db
+
+          echo "KEYCHAIN_PATH=$KEYCHAIN_PATH" >> "$GITHUB_ENV"
+          rm -f "$CERT_PATH"
+
+      # Archive with automatic signing, resolving the App Store profiles for the
+      # app + Share Extension + Widgets via the API key. MARKETING_VERSION /
+      # CURRENT_PROJECT_VERSION are stamped from the tag + run number for every
+      # target. QuickieCore is a local SwiftPM package xcodebuild resolves on its
+      # own — no CocoaPods.
+      - name: Archive
+        env:
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+          ASC_KEY_ID: ${{ secrets.APP_STORE_CONNECT_KEY_ID }}
+          ASC_ISSUER_ID: ${{ secrets.APP_STORE_CONNECT_ISSUER_ID }}
+        run: |
+          set -euo pipefail
+          xcodebuild archive \
+            -project App/Quickie.xcodeproj \
+            -scheme Quickie \
+            -configuration Release \
+            -destination 'generic/platform=iOS' \
+            -archivePath "$RUNNER_TEMP/Quickie.xcarchive" \
+            -allowProvisioningUpdates \
+            -authenticationKeyID "$ASC_KEY_ID" \
+            -authenticationKeyIssuerID "$ASC_ISSUER_ID" \
+            -authenticationKeyPath "$ASC_KEY_PATH" \
+            CODE_SIGN_STYLE=Automatic \
+            DEVELOPMENT_TEAM="$APPLE_TEAM_ID" \
+            OTHER_CODE_SIGN_FLAGS="--keychain $KEYCHAIN_PATH" \
+            MARKETING_VERSION="$VERSION" \
+            CURRENT_PROJECT_VERSION="$BUILD_NUMBER"
+
+      - name: Export .ipa
+        env:
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+          ASC_KEY_ID: ${{ secrets.APP_STORE_CONNECT_KEY_ID }}
+          ASC_ISSUER_ID: ${{ secrets.APP_STORE_CONNECT_ISSUER_ID }}
+        run: |
+          set -euo pipefail
+          # App Store export with automatic signing — the API key (passed below)
+          # lets Xcode resolve the App Store profiles for all three bundles, so no
+          # provisioningProfiles dict is needed. manageAppVersionAndBuildNumber is
+          # false because we stamp the version/build ourselves at archive time.
+          {
+            echo '<?xml version="1.0" encoding="UTF-8"?>'
+            echo '<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">'
+            echo '<plist version="1.0"><dict>'
+            echo '<key>method</key><string>app-store-connect</string>'
+            echo '<key>destination</key><string>export</string>'
+            echo '<key>signingStyle</key><string>automatic</string>'
+            echo "<key>teamID</key><string>${APPLE_TEAM_ID}</string>"
+            echo '<key>compileBitcode</key><false/>'
+            echo '<key>uploadSymbols</key><true/>'
+            echo '<key>manageAppVersionAndBuildNumber</key><false/>'
+            echo '</dict></plist>'
+          } > "$RUNNER_TEMP/ExportOptions-appstore.plist"
+
+          xcodebuild -exportArchive \
+            -archivePath "$RUNNER_TEMP/Quickie.xcarchive" \
+            -exportOptionsPlist "$RUNNER_TEMP/ExportOptions-appstore.plist" \
+            -exportPath "$RUNNER_TEMP/ipa" \
+            -allowProvisioningUpdates \
+            -authenticationKeyID "$ASC_KEY_ID" \
+            -authenticationKeyIssuerID "$ASC_ISSUER_ID" \
+            -authenticationKeyPath "$ASC_KEY_PATH"
+
+          mv "$RUNNER_TEMP/ipa/"*.ipa "$RUNNER_TEMP/ipa/quickie.ipa"
+
+      - name: Upload to App Store Connect (TestFlight)
+        env:
+          ASC_KEY_ID: ${{ secrets.APP_STORE_CONNECT_KEY_ID }}
+          ASC_ISSUER_ID: ${{ secrets.APP_STORE_CONNECT_ISSUER_ID }}
+        run: |
+          set -euo pipefail
+          xcrun altool --upload-app \
+            --type ios \
+            --file "$RUNNER_TEMP/ipa/quickie.ipa" \
+            --apiKey "$ASC_KEY_ID" \
+            --apiIssuer "$ASC_ISSUER_ID"
+
+      - name: Upload .ipa artifact
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: quickie-${{ env.VERSION }}-${{ env.BUILD_NUMBER }}
+          path: ${{ runner.temp }}/ipa/quickie.ipa
+          if-no-files-found: warn
+          retention-days: 7
+
+      # The keychain lives in RUNNER_TEMP and the runner is ephemeral, but delete
+      # it explicitly so a leaked log line can't outlive the run.
+      - name: Clean up keychain
+        if: always()
+        run: security delete-keychain "$KEYCHAIN_PATH" || true
+
+      # Push notification on success/failure, mirroring release.yml. No-op unless
+      # the NTFY_TOPIC secret is set.
+      - name: Send ntfy notification
+        if: always()
+        env:
+          NTFY_TOPIC: ${{ secrets.NTFY_TOPIC }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: |
+          if [ -z "$NTFY_TOPIC" ]; then
+            echo "NTFY_TOPIC secret not set — skipping notification."
+            exit 0
+          fi
+          if [ "${{ job.status }}" = "success" ]; then
+            curl -fsS \
+              -H "Title: Quickie TestFlight upload ready" \
+              -H "Tags: white_check_mark" \
+              -H "Click: https://appstoreconnect.apple.com/apps" \
+              -d "Quickie ${VERSION} (build ${BUILD_NUMBER}) uploaded — processing in TestFlight" \
+              "https://ntfy.sh/${NTFY_TOPIC}"
+          else
+            curl -fsS \
+              -H "Title: Quickie TestFlight upload failed" \
+              -H "Tags: x" \
+              -H "Priority: high" \
+              -H "Click: ${RUN_URL}" \
+              -d "Quickie ${VERSION:-?} release — tap for logs" \
+              "https://ntfy.sh/${NTFY_TOPIC}"
+          fi

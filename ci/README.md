@@ -96,6 +96,60 @@ The `build-history` branch is created automatically on the first successful
 publish — it's a derived store (force-pushed each run so old `.ipa` blobs don't
 pile up in history), not something you commit to by hand.
 
+## App Store / TestFlight releases
+
+[`.github/workflows/release-appstore.yml`](../.github/workflows/release-appstore.yml)
+is a **separate** pipeline from the PR builds above. Those are ad-hoc builds for
+on-device testing; this one signs for the **App Store** and uploads to App Store
+Connect, so the build lands in **TestFlight** and can be promoted to a release.
+
+```
+push tag vX.X.X  (or manual dispatch)
+   └─ release (macos-15)  stamp version -> archive (automatic signing via ASC API key)
+                          -> export app-store .ipa -> altool upload -> optional ntfy
+```
+
+Signing uses an **App Store Connect API key** with **automatic signing**:
+`xcodebuild` resolves the App Store provisioning profiles for all three bundles
+(app + Share Extension + Widgets) at build time, so — unlike the ad-hoc pipeline
+— there are **no `.mobileprovision` secrets** to manage. It reuses the same
+Apple Distribution certificate, so `APPLE_CERTIFICATE_P12`,
+`APPLE_CERTIFICATE_PASSWORD`, and `APPLE_TEAM_ID` are already set.
+
+### One-time setup
+
+1. **App record** — the App IDs `com.julesseguin.quickie`, `.share`, and
+   `.widgets` from the ad-hoc setup above already exist; make sure an **app
+   record** exists in [App Store Connect](https://appstoreconnect.apple.com)
+   (*Apps → +*) for `com.julesseguin.quickie`.
+2. **API key** — *Users and Access → Integrations → App Store Connect API → +*,
+   role **App Manager**. Download the `.p8` **once** and note its **Key ID** and
+   the **Issuer ID**.
+3. **Three more secrets** (the cert/team secrets are shared with `release.yml`):
+
+   | Secret | What | How |
+   | --- | --- | --- |
+   | `APP_STORE_CONNECT_KEY_ID` | the key's Key ID | from step 2 |
+   | `APP_STORE_CONNECT_ISSUER_ID` | the key's Issuer ID | from step 2 |
+   | `APP_STORE_CONNECT_KEY_P8` | the `.p8` file contents | `pbcopy < AuthKey_XXXX.p8` |
+
+   Until all six required secrets are present, a tagged run **fails fast** with a
+   clear message (a deliberate release shouldn't silently no-op like the PR
+   pipeline does).
+
+### Cutting a release
+
+```bash
+git tag v1.0.0 && git push origin v1.0.0
+```
+
+`MARKETING_VERSION` comes from the tag (`v1.0.0` → `1.0.0`) and
+`CURRENT_PROJECT_VERSION` from the CI run number, so every upload is unique and
+increasing (App Store Connect rejects duplicate build numbers). Or trigger it
+from *Actions → Release (App Store) → Run workflow* with an explicit version.
+TestFlight processing takes a few minutes after the run goes green; set
+`NTFY_TOPIC` to get pinged when it finishes.
+
 ## Files
 
 - `assemble-build-history.mjs` — upserts the current PR's slot into `builds.json`,
