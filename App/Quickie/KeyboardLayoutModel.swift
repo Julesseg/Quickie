@@ -50,11 +50,13 @@ final class KeyboardLayoutModel {
 }
 
 @MainActor
-private extension UIResponder {
+extension UIResponder {
     private static weak var found: UIResponder?
 
     /// The app's current first responder, found via the standard nil-targeted
     /// action trick (UIKit routes a nil-target action to the first responder).
+    /// Shared with `RootView.refocusInput`, whose flicker guard asks UIKit
+    /// directly whether a text input already holds focus.
     static var currentFirstResponder: UIResponder? {
         found = nil
         UIApplication.shared.sendAction(#selector(captureFirstResponder), to: nil, from: nil, for: nil)
