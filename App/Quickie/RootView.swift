@@ -581,6 +581,18 @@ struct RootView: View {
                     glowLift: path.isEmpty ? lockedKeyboardInset : 0,
                     driftPeriod: backdropDriftPeriod
                 )
+                // Entering a keyboard-less step (the date picker) releases the
+                // held inset *at the step change itself*, unanimated — not on the
+                // keyboard-hide notification, whose keyboard-spring release made
+                // the picker appear keyboard-high and slide down with the
+                // dismissing keyboard. Dropped instantly, the picker lays out in
+                // its final position and the keyboard simply slides away over it.
+                // The notified release stays as the backstop (it lands on an
+                // already-zero inset). Attached here, off the main modifier chain,
+                // which is at the type-checker's expression-complexity limit.
+                .onChange(of: capture.usesKeyboardlessControl) { _, keyboardless in
+                    apply(KeyboardBarLift.stepChanged(usesKeyboardlessControl: keyboardless))
+                }
 
                 Group {
                     if capture.isCapturing {
