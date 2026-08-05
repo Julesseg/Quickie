@@ -346,7 +346,12 @@ final class CaptureModel {
             // capture falls to `.completed` below, whose beat is the run's confirmation
             // success/error, so the final step never ticks and buzzes at once (#180).
             Haptics.play(.breadcrumbStep)
-            resetInputs()
+            // The cursor advances one step, never jumping over filled pills — so
+            // after a re-edit the next step may already hold a value: seed the
+            // controls with it (Enter then walks pill-by-pill toward the first
+            // unfilled step without clearing anything). An unfilled step seeds
+            // `nil`, which resets the controls as a forward commit always did.
+            seedInput(from: session.currentValue)
         case .completed(let outcome):
             // Grab the recipe before `cancel` clears the session: the outcome is
             // performed by the capture that produced it, even though the UI has
