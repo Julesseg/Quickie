@@ -57,18 +57,19 @@ public struct MultiStepAction {
     /// `.collecting` while Arguments remain, or `.completed` with the Action's
     /// outcome once the final Argument is filled — the auto-create, no confirm step.
     ///
-    /// On a forward step the value is appended and the cursor advances; when
-    /// re-editing an earlier pill (cursor sitting on a filled step) the value
-    /// replaces that pill in place and the cursor resumes at the first unfilled
-    /// step, leaving the later pills intact.
+    /// On a forward step the value is appended; when re-editing an earlier pill
+    /// (cursor sitting on a filled step) the value replaces that pill in place,
+    /// leaving the later pills intact. Either way the cursor advances **one**
+    /// step — never jumping over filled pills — so from a re-edit, repeated
+    /// commits walk forward through the later steps (each seeded with its kept
+    /// value via `currentValue`) until the first unfilled one.
     public mutating func commit(_ value: ArgumentValue) -> CaptureStep {
         if index < pills.count {
             pills[index] = value
-            index = pills.count
         } else {
             pills.append(value)
-            index += 1
         }
+        index += 1
         guard current != nil else {
             return .completed(action.run(arguments: pills))
         }

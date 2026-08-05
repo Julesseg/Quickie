@@ -92,7 +92,15 @@ struct MultiStepActionTests {
 
         #expect(step == .collecting)
         #expect(session.pills == [.text("A"), .text("b")])
-        // Resumed at the first unfilled step, the later pill untouched.
+        // Advanced one step — onto the next *filled* pill, not over it: the
+        // cursor lands on the second step with its kept value exposed for
+        // seeding, so Enter walks pill-by-pill instead of skipping ahead.
+        #expect(session.current == action.arguments[1])
+        #expect(session.currentValue == .text("b"))
+
+        // Re-committing the kept value walks on to the first unfilled step.
+        #expect(session.commit(.text("b")) == .collecting)
+        #expect(session.pills == [.text("A"), .text("b")])
         #expect(session.current == action.arguments[2])
     }
 
@@ -112,8 +120,8 @@ struct MultiStepActionTests {
         #expect(session.current == action.arguments[1])
         #expect(session.currentValue == .text("b"))
 
-        // Re-committing replaces it in place and resumes at the first unfilled step,
-        // the later pills untouched — the same as editing a pill.
+        // Re-committing replaces it in place and advances one step — here onto
+        // the first unfilled step, the later pills untouched.
         #expect(session.commit(.text("B")) == .collecting)
         #expect(session.pills == [.text("a"), .text("B")])
         #expect(session.current == action.arguments[2])
