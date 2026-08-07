@@ -40,7 +40,8 @@ final class InputWrapUITests: XCTestCase {
         let singleLineHeight = input.frame.height
 
         // Enough words to spill well past one line at the field's width. Spaces let
-        // it wrap by word; autocorrect is disabled so nothing rewrites the text.
+        // it wrap by word; every word is correctly spelled so autocorrect (which is
+        // enabled on this field) has nothing to rewrite.
         input.tap()
         input.typeText("the quick brown fox jumps over the lazy dog and then keeps on running well past one line")
 
