@@ -190,7 +190,27 @@ public struct ComputedProvider: Provider {
     /// than re-triggering the Calculator on itself. `of` is matched on word
     /// boundaries so it triggers on "15% of 200" but not on words that merely
     /// contain the letters (`profile`, `off`).
+    /// True when the trimmed query is answerable by the Calculator family —
+    /// a math expression, a base-notation query, or an offline unit
+    /// conversion. This is the "ephemeral computation" test the [[Pending
+    /// query]] auto-save uses to decline: the answer is the value of typing
+    /// it, so there is nothing worth committing to the Pile later. Deliberately
+    /// unconditional on the per-type toggles — a toggled-off `2+2` is still a
+    /// throwaway computation, not a thought to keep.
+    public static func isCalculatorFamily(_ query: String, locale: Locale = .autoupdatingCurrent) -> Bool {
+        let trimmed = query.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else { return false }
+        let tables = DateKeywordTable.tables(for: locale)
+        if isCalculation(trimmed), Calculator.evaluate(trimmed) != nil { return true }
+        if NumberBases.answer(for: trimmed, tables: tables) != nil { return true }
+        return Units.convert(trimmed, tables: tables) != nil
+    }
+
     private func isCalculation(_ query: String) -> Bool {
+        Self.isCalculation(query)
+    }
+
+    private static func isCalculation(_ query: String) -> Bool {
         for (offset, char) in query.enumerated() {
             if "*/^%()".contains(char) { return true }
             if offset > 0 && "+-".contains(char) { return true }

@@ -48,7 +48,13 @@ public struct PendingQuery: Equatable, Codable, Sendable {
     ) -> PendingQuery? {
         guard autoSaveEnabled else { return nil }
         let trimmed = query.trimmingCharacters(in: .whitespacesAndNewlines)
+        // A Calculator-family query (math expression, base notation, unit
+        // conversion) never carries text: its answer *was* the point of typing
+        // it, so committing "2+2" or "5km to mi" to the Pile later would be
+        // noise, not a kept thought. The window still resets it like any other
+        // scoped state.
         let qualifies = !trimmed.isEmpty && !isCapturing && !inFileSearch
+            && !ComputedProvider.isCalculatorFamily(trimmed)
         return PendingQuery(text: qualifies ? query : nil, backgroundedAt: date)
     }
 

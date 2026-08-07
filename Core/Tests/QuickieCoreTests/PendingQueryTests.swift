@@ -49,6 +49,28 @@ struct PendingQueryTests {
         #expect(filtering?.text == nil)
     }
 
+    @Test("a Calculator-family query snapshots without text — the answer was the point of typing it, so nothing is worth keeping")
+    func calculatorFamilySnapshotsWithoutText() {
+        for query in ["2+2", "15% of 200", "0xff + 1", "255 to hex", "5km to mi", "  3 * 4  "] {
+            let pending = PendingQuery.snapshot(
+                query: query, isCapturing: false, inFileSearch: false,
+                autoSaveEnabled: true, at: .now
+            )
+            #expect(pending?.text == nil, "\(query) should not qualify")
+        }
+    }
+
+    @Test("a bare number or prose that merely evaluates keeps qualifying — only actual computations are excluded")
+    func nonComputationsStillQualify() {
+        for query in ["42", "-5", "call dad at 5", "profile of the team"] {
+            let pending = PendingQuery.snapshot(
+                query: query, isCapturing: false, inFileSearch: false,
+                autoSaveEnabled: true, at: .now
+            )
+            #expect(pending?.text == query, "\(query) should still qualify")
+        }
+    }
+
     @Test("toggle off snapshots nothing at all — today's behavior exactly: state preserved indefinitely")
     func disabledSnapshotsNothing() {
         let pending = PendingQuery.snapshot(
