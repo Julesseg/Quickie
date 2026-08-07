@@ -76,7 +76,10 @@ struct InputBar: View {
             .submitLabel(returnKey.submitLabel)
             .onSubmit(onSubmit)
             .accessibilityIdentifier("search-input")
-            .autocorrectionDisabled()
+            // Autocorrect stays on: the field doubles as a thought-capture surface
+            // ("Buy milk"), where system autocorrect helps more than it hurts, and
+            // matching is forgiving enough that a corrected query still finds its
+            // target.
             // Sentence-case autocapitalization: the keyboard opens shifted so a
             // captured thought ("Buy milk") starts capitalized without a reach for
             // the shift key. Matching is case-insensitive throughout, so a
