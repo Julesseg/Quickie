@@ -1,0 +1,32 @@
+[
+  {
+    "pr": 245,
+    "title": "chore(agents): drop the require-pr Stop hook, exempt prototypes from the PR rule",
+    "sha": "a410509",
+    "time": "2026-08-08T13:29:14.086Z"
+  },
+  {
+    "pr": 239,
+    "title": "chore(prototype): iPad layout explorations behind -ipad-prototype",
+    "sha": "66d890b",
+    "time": "2026-08-08T13:12:22.617Z"
+  },
+  {
+    "pr": 238,
+    "title": "fix(widgets): flat opaque brand mark for the Control Center controls",
+    "sha": "4204199",
+    "time": "2026-08-08T07:37:44.574Z"
+  },
+  {
+    "pr": 237,
+    "title": "fix(pile): stop auto-saving calculator-family queries to the Pile",
+    "sha": "7691b3c",
+    "time": "2026-08-07T11:38:37.566Z"
+  },
+  {
+    "pr": 236,
+    "title": "feat(input): enable autocorrect in the main input field",
+    "sha": "7ec7ccf",
+    "time": "2026-08-07T10:09:43.637Z"
+  }
+]
