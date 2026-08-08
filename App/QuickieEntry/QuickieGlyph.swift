@@ -38,10 +38,22 @@ import SwiftUI
 /// rendering forgives a bare hand-rolled template, but Control Center's
 /// out-of-process renderer draws an unannotated symbol as empty.
 enum QuickieGlyph {
-    /// The custom symbol's asset-catalog name (`QuickieMark.symbolset`). Control
-    /// Center labels must reference it by name via `Label(_:image:)` — a custom
-    /// symbol nested as a plain `Image` view silently renders nothing there.
+    /// The custom symbol's asset-catalog name (`QuickieMark.symbolset`). Not
+    /// for Control Center labels — the controls take `flatName` (see there).
     static let name = "QuickieMark"
+
+    /// The **flat** variant's asset-catalog name (`QuickieMarkFlat.symbolset`):
+    /// the same orbital Q as one fully opaque layer, with the longer flat-era
+    /// arrow. This is the mark the two Control Center controls
+    /// (`QuickCaptureControl`, `ActionControl`) reference via `Label(_:image:)`
+    /// — a custom symbol nested as a plain `Image` view silently renders
+    /// nothing there, and the *faded* mark fares no better: Control Center's
+    /// out-of-process renderer washes its mostly-translucent layers (the ring's
+    /// floor is 0.3) into an invisible glyph, where in-process rendering shows
+    /// the fade as designed. Both symbolsets are emitted by the same generator
+    /// (`docs/brand/make-quickie-mark.py`) from the same geometry, so the marks
+    /// cannot drift.
+    static let flatName = "QuickieMarkFlat"
 
     /// The mark as a SwiftUI image, for the app's Home mark and for widget and
     /// Live Activity views. Custom symbols load through `Image(_:)`, not

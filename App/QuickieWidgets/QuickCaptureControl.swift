@@ -33,8 +33,10 @@ struct QuickCaptureControl: ControlWidget {
                 // `Label(_:image:)`, not an `icon:` closure wrapping an `Image`:
                 // Control Center archives the label out-of-process and resolves
                 // only symbol *references* — a custom symbol nested as a plain
-                // `Image` view silently renders nothing there.
-                Label(String(localized: QuickCaptureIntent.title), image: QuickieGlyph.name)
+                // `Image` view silently renders nothing there. The *flat* mark,
+                // not the faded one: the same renderer washes the faded mark's
+                // translucent layers into invisibility (see `QuickieGlyph.flatName`).
+                Label(String(localized: QuickCaptureIntent.title), image: QuickieGlyph.flatName)
             }
         }
         .displayName(QuickCaptureIntent.title)

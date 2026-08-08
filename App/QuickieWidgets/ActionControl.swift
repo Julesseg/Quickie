@@ -54,11 +54,13 @@ private struct ActionControlLabel: View {
         // fallback wears the brand mark. Both through `Label` initializers —
         // never an `icon:` closure wrapping an `Image`: Control Center archives
         // the label out-of-process and resolves only symbol *references*, so a
-        // nested `Image` view silently renders nothing there.
+        // nested `Image` view silently renders nothing there. The brand mark is
+        // the *flat* variant: the same renderer washes the faded mark's
+        // translucent layers into invisibility (see `QuickieGlyph.flatName`).
         if let action {
             Label(action.title, systemImage: action.glyph)
         } else {
-            Label("Quickie", image: QuickieGlyph.name)
+            Label("Quickie", image: QuickieGlyph.flatName)
         }
     }
 }

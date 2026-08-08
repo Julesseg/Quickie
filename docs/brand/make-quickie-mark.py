@@ -40,6 +40,14 @@ had to be extended past the orbit's silhouette or it vanished into the ring;
 the baked fade retired that departure — the arrow leaves across the trail's
 faintest stretch, 0.3 against opaque, and reads on its own.)
 
+A second symbolset, **QuickieMarkFlat**, is emitted from the same geometry as a
+single fully-opaque layer — the pre-fade mark, with the longer arrow the flat
+silhouette needs. It exists for the two Control Center controls: their
+out-of-process, tint-it-yourself renderer flattens the faded mark's mostly-
+translucent layers into near-invisibility (the ring's floor is 0.3), where
+in-process rendering (widgets, Live Activity, Home) shows the fade as designed.
+One generator emits both from one geometry, so the two marks cannot drift.
+
 Pure stdlib; deterministic. Run from the repo root:
 
     python3 docs/brand/make-quickie-mark.py
@@ -51,6 +59,7 @@ from pathlib import Path
 
 REPO = Path(__file__).resolve().parents[2]
 OUT = REPO / "App/QuickieEntry/Brand.xcassets/QuickieMark.symbolset/quickie-mark.svg"
+OUT_FLAT = REPO / "App/QuickieEntry/Brand.xcassets/QuickieMarkFlat.symbolset/quickie-mark-flat.svg"
 
 # ---------------------------------------------------------------------------
 # Geometry, in the app icon's 100x100 frame (docs/brand/app-icon.svg), in the
@@ -88,6 +97,13 @@ SHAFT_P0 = (50.0, 62.0)
 SHAFT_P1 = (77.0, 62.0)
 HEAD_TIP = (82.0, 62.0)
 HEAD_BACK_DX, HEAD_BACK_DY = 7.0, 4.5
+
+# The flat (single-layer) mark's arrow — the geometry the mark shipped with
+# before the fade (#161..#169): against a fully opaque ring the arrow must be
+# extended past the orbit's silhouette or it vanishes into the ring.
+FLAT_SHAFT_P0 = (46.0, 62.0)
+FLAT_SHAFT_P1 = (85.0, 62.0)
+FLAT_HEAD_TIP = (90.0, 62.0)
 
 # ---------------------------------------------------------------------------
 # Template metrics (canonical SF Symbols template, 3300x2200 canvas).
@@ -187,18 +203,18 @@ def arc_ops(center, r, deg0, deg1):
     return ops
 
 
-def shaft_ops():
-    """The arrow shaft: a round-capped capsule from SHAFT_P0 to SHAFT_P1, CW."""
-    (x0, y), (x1, _) = SHAFT_P0, SHAFT_P1
+def shaft_ops(p0=SHAFT_P0, p1=SHAFT_P1):
+    """The arrow shaft: a round-capped capsule from p0 to p1, CW."""
+    (x0, y), (x1, _) = p0, p1
     r = ARROW_R
     ops = [("M", (x0, y - r)), ("L", (x1, y - r))]
-    ops += arc_ops(SHAFT_P1, r, -90.0, 90.0)     # right cap, through the tip
+    ops += arc_ops(p1, r, -90.0, 90.0)           # right cap, through the tip
     ops += [("L", (x0, y + r))]
-    ops += arc_ops(SHAFT_P0, r, 90.0, 270.0)     # left cap, back to the start
+    ops += arc_ops(p0, r, 90.0, 270.0)           # left cap, back to the start
     return ops
 
 
-def head_ops():
+def head_ops(tip=HEAD_TIP):
     """The arrowhead: the icon's round-capped, round-joined chevron, outlined.
 
     Legs run from the back points (tip - (HEAD_BACK_DX, +/-HEAD_BACK_DY)) to
@@ -207,7 +223,6 @@ def head_ops():
     which the shaft's round cap overlaps anyway, exactly like the icon.
     """
     r = ARROW_R
-    tip = HEAD_TIP
     lower = (tip[0] - HEAD_BACK_DX, tip[1] + HEAD_BACK_DY)
     upper = (tip[0] - HEAD_BACK_DX, tip[1] - HEAD_BACK_DY)
     length = math.hypot(HEAD_BACK_DX, HEAD_BACK_DY)
@@ -232,8 +247,13 @@ def head_ops():
     return ops
 
 
-def glyph_layers():
+def glyph_layers(flat=False):
     """The mark as symbol layers, back to front: (opacity, subpaths) pairs.
+
+    `flat` is the Control Center variant (QuickieMarkFlat): the whole mark as
+    ONE fully opaque layer — ring, dot, and the longer flat-era arrow — because
+    the controls' out-of-process renderer flattens translucent layers into
+    near-invisibility, where in-process rendering shows the fade as designed.
 
     The seamless base ring at the fade's floor, then the ring sectors carrying
     the ramp's increment above it, then the dot and the glide arrow as one
@@ -246,6 +266,12 @@ def glyph_layers():
     opacity precision, and sectors rounding below 0.01 are omitted — the base
     ring already renders them, seamlessly.
     """
+    if flat:
+        return [(1.0, [ellipse_ops(OUTER_RX, OUTER_RY),
+                       ellipse_ops(INNER_RX, INNER_RY, ccw=True),
+                       ellipse_ops(DOT_R, DOT_R),
+                       shaft_ops(FLAT_SHAFT_P0, FLAT_SHAFT_P1),
+                       head_ops(FLAT_HEAD_TIP)])]
     floor, peak = TRAIL_ALPHA
     assert peak == 1.0, "increment math assumes the ramp peaks fully opaque"
     layers = [(floor, [ellipse_ops(OUTER_RX, OUTER_RY),
@@ -259,7 +285,7 @@ def glyph_layers():
     return layers
 
 
-def glyph_bbox():
+def glyph_bbox(flat=False):
     """Rotated-frame bounding box of the whole mark, from dense curve samples.
 
     Rotation is linear, so cubics can be sampled in icon coords and the samples
@@ -273,7 +299,7 @@ def glyph_bbox():
         xs.append(rp[0])
         ys.append(rp[1])
 
-    for _, subpaths in glyph_layers():
+    for _, subpaths in glyph_layers(flat):
         for ops in subpaths:
             pos = None
             for op in ops:
@@ -355,9 +381,7 @@ def paths_block(d_by_layer):
 # template-version marker, Guides with H-references and per-variant margins —
 # with only the glyph paths, margins, and provenance text as ours.
 SKELETON = """<?xml version="1.0" encoding="UTF-8"?>
-<!--Quickie mark - orbital Q (glide). Generated by docs/brand/make-quickie-mark.py
-    from the geometry of docs/brand/app-icon.svg, arrow included verbatim; the
-    icon trail's fade is baked in as per-layer opacities along the orbit.-->
+<!--{PROVENANCE}-->
 <!DOCTYPE svg
 PUBLIC "-//W3C//DTD SVG 1.1//EN"
        "http://www.w3.org/Graphics/SVG/1.1/DTD/svg11.dtd">
@@ -455,17 +479,27 @@ H_REFERENCE = (
 )
 
 
-def build():
-    """The finished template, as a string — main() writes it to OUT, and
-    docs/brand/check-brand-assets.py byte-compares it against the checked-in
-    file to catch a stale or hand-edited symbolset."""
-    xmin, ymin, xmax, ymax = glyph_bbox()
+PROVENANCE = ("Quickie mark - orbital Q (glide). Generated by docs/brand/make-quickie-mark.py\n"
+              "    from the geometry of docs/brand/app-icon.svg, arrow included verbatim; the\n"
+              "    icon trail's fade is baked in as per-layer opacities along the orbit.")
+PROVENANCE_FLAT = ("Quickie mark - orbital Q (glide), FLAT variant for Control Center controls.\n"
+                   "    Generated by docs/brand/make-quickie-mark.py from the same geometry as the\n"
+                   "    faded QuickieMark: one fully opaque layer, longer flat-era arrow, no fade -\n"
+                   "    the controls' out-of-process renderer washes translucent layers out.")
+
+
+def build(flat=False):
+    """The finished template, as a string — main() writes it to OUT (and the
+    flat variant to OUT_FLAT), and docs/brand/check-brand-assets.py
+    byte-compares both against the checked-in files to catch a stale or
+    hand-edited symbolset."""
+    xmin, ymin, xmax, ymax = glyph_bbox(flat)
     scale_s = GLYPH_HEIGHT_S / (ymax - ymin)
     ymid = (ymin + ymax) / 2
     width_s = (xmax - xmin) * scale_s
     width_m = width_s * M_SCALE
 
-    layers = glyph_layers()
+    layers = glyph_layers(flat)
     d_s = [path_d(subpaths, scale_s, xmin, ymid) for _, subpaths in layers]
     d_m = [path_d(subpaths, scale_s * M_SCALE, xmin, ymid) for _, subpaths in layers]
 
@@ -481,6 +515,7 @@ def build():
     }
 
     svg = SKELETON
+    svg = svg.replace("{PROVENANCE}", PROVENANCE_FLAT if flat else PROVENANCE)
     svg = svg.replace("{H_REFERENCE}", H_REFERENCE)
     svg = svg.replace("{LAYER_STYLES}", layer_styles([a for a, _ in layers]))
     svg = svg.replace("{PATHS_S}", paths_block(d_s))
@@ -501,6 +536,13 @@ def main():
           f"(cap height {CAP_HEIGHT}), M glyph: {width_s * M_SCALE:.2f} wide, "
           f"{sectors + 2} layers (base ring + {sectors}/{TRAIL_SEGMENTS} "
           f"fading sectors + 1 opaque)")
+    OUT_FLAT.parent.mkdir(parents=True, exist_ok=True)
+    OUT_FLAT.write_text(build(flat=True))
+    xmin, ymin, xmax, ymax = glyph_bbox(flat=True)
+    width_s = (xmax - xmin) * GLYPH_HEIGHT_S / (ymax - ymin)
+    print(f"wrote {OUT_FLAT.relative_to(REPO)}")
+    print(f"  S glyph: {width_s:.2f} x {GLYPH_HEIGHT_S}, 1 opaque layer "
+          "(Control Center variant)")
 
 
 if __name__ == "__main__":

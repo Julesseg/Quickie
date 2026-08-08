@@ -310,11 +310,12 @@ def main():
         failures.append(f"{icon.SVG_OUT.relative_to(REPO)} is stale or hand-edited "
                         "— rerun docs/brand/make-app-icon.py")
 
-    emitted = mark.build()
-    xml.dom.minidom.parseString(emitted)
-    if mark.OUT.read_text() != emitted:
-        failures.append(f"{mark.OUT.relative_to(REPO)} is stale or hand-edited "
-                        "— rerun docs/brand/make-quickie-mark.py")
+    for out, flat in ((mark.OUT, False), (mark.OUT_FLAT, True)):
+        emitted = mark.build(flat=flat)
+        xml.dom.minidom.parseString(emitted)
+        if not out.exists() or out.read_text() != emitted:
+            failures.append(f"{out.relative_to(REPO)} is stale or hand-edited "
+                            "— rerun docs/brand/make-quickie-mark.py")
 
     # QuickieBrand's literals, matched by *name* rather than by position: the
     # module is free to grow constants the icon has no opinion about (the
