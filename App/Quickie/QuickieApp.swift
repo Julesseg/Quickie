@@ -103,8 +103,15 @@ struct QuickieApp: App {
             // purple. Setting it once here is what makes the accent unforgettable
             // — a control that names no color inherits it rather than each Toggle
             // having to remember `.tint`.
-            RootView()
-                .tint(.accentColor)
+            // PROTOTYPE seam (throwaway): `-ipad-prototype` swaps in the iPad
+            // layout explorations instead of the real launcher. Mock data only;
+            // unreachable without the launch argument.
+            if ProcessInfo.processInfo.arguments.contains("-ipad-prototype") {
+                IPadLayoutPrototypeView()
+            } else {
+                RootView()
+                    .tint(.accentColor)
+            }
         }
         .modelContainer(container)
     }
