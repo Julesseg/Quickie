@@ -55,10 +55,11 @@ before you write your closing message, then include the PR link in it.
   Say what you could not run and why, in the PR body, and open it anyway — CI
   is the gate (see below).
 
-A `Stop` hook (`.claude/hooks/require-pr.py`) enforces this: it blocks the end
-of a turn while work is uncommitted, unpushed, or pushed with no PR. It only
-ever blocks once per turn, so if the user has genuinely told you not to commit,
-say so plainly and stop again.
+**Exception — prototype sessions.** Throwaway code from a `/prototype` run (or
+any exploration explicitly framed as disposable) does not go through the PR
+flow: commit it to a clearly named `prototype/…` branch and push, so the
+primary source is kept, but do not open a PR — prototypes are not for review
+or merge. Only the validated decision, reimplemented properly, gets a PR.
 
 ### Always implement the UI part of an issue — never ask
 
