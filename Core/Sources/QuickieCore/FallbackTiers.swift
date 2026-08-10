@@ -2,7 +2,7 @@ import Foundation
 
 /// Which rung of the Fallback list's promotion ladder an Action sits on
 /// (CONTEXT.md → Fallback list, Shelf; issue #241).
-public enum FallbackTier: String, Sendable, CaseIterable {
+public enum FallbackTier: Sendable {
     /// Eligible but not activated — the derived waiting room, never stored.
     case pool
     /// The user-ordered Active section: rides the Result list's bottom fallback region.
@@ -88,25 +88,25 @@ public struct FallbackTiers: Equatable, Sendable {
     /// The Shelf resolved through the live fallback-eligible catalog — ids that don't
     /// currently resolve are hidden without being forgotten, exactly as for Active.
     public func resolvedShelf(for liveEligibleIDs: [String]) -> [String] {
-        FallbackActivation.reconciledEnabledIDs(enabled: shelf, liveEligibleIDs: Set(liveEligibleIDs))
+        FallbackActivation.reconciled(list: shelf, liveEligibleIDs: Set(liveEligibleIDs))
     }
 
     /// The Active list resolved through the live fallback-eligible catalog — the
     /// engine's `enabledFallbacks` and the page's Active section.
     public func resolvedEnabled(for liveEligibleIDs: [String]) -> [String] {
-        FallbackActivation.reconciledEnabledIDs(enabled: enabled, liveEligibleIDs: Set(liveEligibleIDs))
+        FallbackActivation.reconciled(list: enabled, liveEligibleIDs: Set(liveEligibleIDs))
     }
 
     /// Applies a drag-reorder of the **visible** Shelf rows, keeping any member that
     /// hasn't resolved yet in its slot (the launch race; issue #114).
     public mutating func reorderShelf(visibleOrder: [String]) {
-        shelf = FallbackActivation.reorderedEnabled(enabled: shelf, visibleOrder: visibleOrder)
+        shelf = FallbackActivation.reordered(list: shelf, visibleOrder: visibleOrder)
     }
 
     /// Applies a drag-reorder of the **visible** Active rows, with the same
     /// not-yet-loaded care as `reorderShelf`.
     public mutating func reorderEnabled(visibleOrder: [String]) {
-        enabled = FallbackActivation.reorderedEnabled(enabled: enabled, visibleOrder: visibleOrder)
+        enabled = FallbackActivation.reordered(list: enabled, visibleOrder: visibleOrder)
     }
 
     /// Demotes every id in `ids` to the pool — the coupling behind the per-action
@@ -126,10 +126,10 @@ public struct FallbackTiers: Equatable, Sendable {
     /// .prunedForgettingLost` for the rule and its one accepted limit.
     public mutating func pruneForgettingLost(liveEligible: Set<String>, everEligible: Set<String>) {
         shelf = FallbackActivation.prunedForgettingLost(
-            enabled: shelf, liveEligible: liveEligible, everEligible: everEligible
+            list: shelf, liveEligible: liveEligible, everEligible: everEligible
         )
         enabled = FallbackActivation.prunedForgettingLost(
-            enabled: enabled, liveEligible: liveEligible, everEligible: everEligible
+            list: enabled, liveEligible: liveEligible, everEligible: everEligible
         )
     }
 

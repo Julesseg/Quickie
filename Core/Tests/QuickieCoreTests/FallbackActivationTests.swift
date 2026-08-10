@@ -67,8 +67,8 @@ struct FallbackActivationTests {
 
     @Test("reconcile hides ids absent from the live catalog, keeping survivors' order")
     func reconcileHidesAbsent() {
-        let reconciled = FallbackActivation.reconciledEnabledIDs(
-            enabled: [web, "fb.shortcut", save],
+        let reconciled = FallbackActivation.reconciled(
+            list: [web, "fb.shortcut", save],
             liveEligibleIDs: [web, save]      // fb.shortcut turned accepts-input off
         )
         #expect(reconciled == [web, save])
@@ -77,7 +77,7 @@ struct FallbackActivationTests {
     @Test("reconcile is idempotent and order-preserving when nothing changed")
     func reconcileIdempotent() {
         let ids = [web, save, new]
-        #expect(FallbackActivation.reconciledEnabledIDs(enabled: ids, liveEligibleIDs: Set(ids)) == ids)
+        #expect(FallbackActivation.reconciled(list: ids, liveEligibleIDs: Set(ids)) == ids)
     }
 
     @Test("forgetting-prune drops an id only after it was seen eligible then lost")
@@ -85,7 +85,7 @@ struct FallbackActivationTests {
         // fb.shortcut was eligible earlier this session, now isn't → a real loss, drop
         // it with no rank memory.
         let pruned = FallbackActivation.prunedForgettingLost(
-            enabled: [web, "fb.shortcut", save],
+            list: [web, "fb.shortcut", save],
             liveEligible: [web, save],
             everEligible: [web, "fb.shortcut", save]
         )
@@ -98,7 +98,7 @@ struct FallbackActivationTests {
         // isn't live *and* was never seen eligible — it must be kept, not mistaken for a
         // loss (the launch race the pre-enable depends on).
         let pruned = FallbackActivation.prunedForgettingLost(
-            enabled: [web, save, new],
+            list: [web, save, new],
             liveEligible: [save, new],
             everEligible: [save, new]
         )
@@ -110,8 +110,8 @@ struct FallbackActivationTests {
         // The page shows only [web, save] (both resolved); "fb.pending" is enabled but
         // hasn't loaded yet, so it isn't visible. Dragging save above web must reorder
         // the visible pair without erasing the not-yet-loaded id from its slot.
-        let reordered = FallbackActivation.reorderedEnabled(
-            enabled: [web, "fb.pending", save],
+        let reordered = FallbackActivation.reordered(
+            list: [web, "fb.pending", save],
             visibleOrder: [save, web]
         )
         #expect(reordered == [save, "fb.pending", web])
@@ -119,8 +119,8 @@ struct FallbackActivationTests {
 
     @Test("reorder is a straight permutation when everything is visible")
     func reorderPermutesWhenAllVisible() {
-        let reordered = FallbackActivation.reorderedEnabled(
-            enabled: [web, save, new],
+        let reordered = FallbackActivation.reordered(
+            list: [web, save, new],
             visibleOrder: [new, web, save]
         )
         #expect(reordered == [new, web, save])
@@ -130,8 +130,8 @@ struct FallbackActivationTests {
     func reorderNeverDropsUnresolved() {
         // Only the pending id is enabled-but-unresolved; the visible list is a no-op
         // permutation. The pending id survives regardless.
-        let reordered = FallbackActivation.reorderedEnabled(
-            enabled: ["fb.pending", web],
+        let reordered = FallbackActivation.reordered(
+            list: ["fb.pending", web],
             visibleOrder: [web]
         )
         #expect(reordered == ["fb.pending", web])
