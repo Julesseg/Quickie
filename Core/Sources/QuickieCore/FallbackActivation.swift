@@ -1,14 +1,14 @@
 import Foundation
 
-/// The pure rules that seed and migrate the single **enabled Fallback list**
-/// (CONTEXT.md → Fallback list) — the only persisted fallback fact. Kept in Core,
-/// EventKit- and UserDefaults-free, so the migration and first-run defaults are
+/// The pure rules that seed, migrate, and maintain the user's **ordered fallback
+/// tiers** (CONTEXT.md → Fallback list) — the only persisted fallback facts. Kept in
+/// Core, EventKit- and UserDefaults-free, so the migration and first-run defaults are
 /// exercised by `swift test` and the App's `FallbacksStore` is a thin edge wrapper
 /// over them (the same pure-model / edge-store split as `ProviderEnablement`).
 ///
 /// There is no stored fallback flag anymore: eligibility is `Action.isFallbackEligible`
-/// (derived from shape) and *activation* is membership in the ordered enabled list.
-/// The disabled pool is everything eligible but not enabled, so it is never stored.
+/// (derived from shape) and *activation* is membership in an ordered tier list. The
+/// disabled pool is everything eligible that no tier claims, so it is never stored.
 ///
 /// The list-shaped rules below — reconcile, forgetting-prune, reorder — are the
 /// **per-tier primitives**: `FallbackTiers` applies each of them to the Shelf as well,

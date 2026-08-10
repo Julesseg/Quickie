@@ -217,4 +217,21 @@ struct FallbackTiersTests {
         // Only the two ids the Shelf claimed left; the user's order is otherwise intact.
         #expect(tiers.enabled == [maps, web, "fb.custom"])
     }
+
+    @Test("the seeded Shelf claims all four ids even when the user's enabled list lacks them")
+    func migrationSeedsShelfIDsAbsentFromEnabled() {
+        // The deliberate reading of "the Shelf ships as New Reminder, New Event, Save
+        // for later, New Snippet" (issue #241): the seed is the *whole* list, not the
+        // subset that happens to be active. New Reminder and New Event were never in
+        // `firstRunEnabledIDs`, so for **every** existing user they are absent from
+        // `enabled` — gating the seed on presence there would mean they never reach the
+        // Shelf at all. The cost is the mirror case, pinned here too: a user who had
+        // demoted Save for later to the pool pre-#241 gets it back, on the Shelf.
+        let tiers = FallbackTiers(
+            shelf: FallbackTiers.firstRunShelfIDs,
+            enabled: [web, maps, snippet]          // no save (demoted), no reminder/event
+        )
+        #expect(tiers.shelf == [reminder, event, save, snippet])
+        #expect(tiers.enabled == [web, maps])
+    }
 }
