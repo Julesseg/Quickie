@@ -390,10 +390,11 @@ struct RootView: View {
     }
 
     /// Every fallback-eligible Action in the live catalog — the Fallbacks page splits
-    /// these into the enabled section and the derived pool, and `fallbackSeed` /
-    /// `onChange` read them off the hot path. Rebuilds the Actions (cold: only on
-    /// navigation, selection, or a catalog change), so it doesn't share the engine's
-    /// per-keystroke locals.
+    /// these into the Shelf, the Active section, and the derived pool. Rebuilds the
+    /// Actions rather than sharing the engine's per-keystroke locals, so `body` reads it
+    /// into **one** local (`eligibleFallbackList`) that the Shelf row and the
+    /// eligibility-loss `onChange` both use: two readers, one pass over `makeAction`.
+    /// The pushed page reads it directly — a cold, navigation-only path.
     private var eligibleFallbackActions: [Action] {
         eligibleFallbacks(
             customActionActions: customActions.compactMap { $0.definition.makeAction(id: $0.id) },
@@ -404,6 +405,28 @@ struct RootView: View {
     /// The ids of `eligibleFallbackActions`, in a stable order — what the enabled
     /// list reconciles against and the page's pool is derived from.
     private var eligibleFallbackIDs: [String] { eligibleFallbackActions.map(\.id) }
+
+    /// The **Shelf**'s members, most-important-first (CONTEXT.md → Shelf; issue #242) —
+    /// the glass button row above the input. The Shelf tier resolved to live Actions,
+    /// then filtered exactly as the bottom fallback region is filtered, so the two
+    /// surfaces of one Fallback list can never disagree about what an action's state
+    /// means:
+    ///
+    /// - the Fallbacks page's own **Enabled** switch governs the whole list, Shelf
+    ///   included — it is the kind-level master over the fallback surface, not over the
+    ///   bottom region alone;
+    /// - an **instance-disabled** action is hidden everywhere, including for the frame
+    ///   before `demoteDisabled` prunes it off the tier.
+    ///
+    /// Takes the already-built eligible catalog rather than rebuilding it, so putting
+    /// the row in the view hierarchy costs no extra pass over `makeAction`.
+    private func shelfMembers(from eligible: [Action]) -> [Action] {
+        guard providerEnablement.enablement.isEffectivelyEnabled(.fallbacks) else { return [] }
+        let byID = Dictionary(eligible.map { ($0.id, $0) }, uniquingKeysWith: { first, _ in first })
+        return fallbacks.resolvedShelf(for: eligible.map(\.id))
+            .compactMap { byID[$0] }
+            .filter { !instanceEnablement.isDisabled($0.id) }
+    }
 
 
     /// The Pile entries that are safe to read this instant. A just-consumed
@@ -543,6 +566,11 @@ struct RootView: View {
 
     var body: some View {
         let engine = self.engine
+        // The fallback-eligible catalog, built once and shared by the Shelf row and the
+        // eligibility-loss `onChange` below — each used to rebuild it on its own, so
+        // reading it here is what keeps the row off the per-keystroke `makeAction` bill.
+        let eligibleFallbackList = eligibleFallbackActions
+        let shelf = shelfMembers(from: eligibleFallbackList)
         // In the Search Files context the filename index alone answers each
         // keystroke — uncapped, and browsing everything before a filter is typed
         // (ADR 0014) — so its results and highlight come from the provider's
@@ -704,51 +732,76 @@ struct RootView: View {
                             CaptureBar(model: capture)
                         }
                     } else {
-                        GlassEffectContainer(spacing: 8) {
-                            // Bottom-align so the paste chip stays pinned to the
-                            // input's bottom edge as the field grows upward (issue #63).
-                            HStack(alignment: .bottom, spacing: 8) {
-                                InputBar(
-                                    query: $query,
-                                    focused: $inputFocused,
-                                    placeholder: inFileSearch ? "Search files…" : "Type to search…",
-                                    returnKey: highlighted?.returnKeyLabel ?? ReturnKeyLabel.none,
-                                    onSubmit: { if let highlightedRow { run(highlightedRow) } },
-                                    glassNamespace: glassNamespace
-                                )
-                                // The clipboard paste chip belongs to Home, not the
-                                // scoped file filter — hide it in the context.
-                                if !inFileSearch && clipboardPrefill.isChipOffered {
-                                    ClipboardPasteButton(glassNamespace: glassNamespace) { text in
-                                        // The hand-off decision (QuickieCore): `hasStrings` metadata
-                                        // can offer the chip over an empty/expired clipboard, so the
-                                        // tapped content decides. A real paste seeds and retires the
-                                        // offer; a dud withdraws the chip without burning it, so a
-                                        // later real copy can re-offer.
-                                        if let seeded = ClipboardPrefill.seededQuery(fromPasted: text) {
-                                            query = seeded
-                                            clipboard.markUsed()
-                                        } else {
-                                            clipboard.noteEmptyPaste()
+                        // Spacing 0: the input's own 10pt top padding is the gap, so the
+                        // Shelf sits the same distance off the bar as the bar's contents
+                        // sit off its glass.
+                        VStack(spacing: 0) {
+                            // The Shelf rides directly above the input (CONTEXT.md →
+                            // Shelf; issue #242): the shelved fallbacks as circular
+                            // glass buttons, each seeding-and-committing the typed
+                            // query. Shown only while there *is* a query to seed — it
+                            // means "ways to use *this* query", so it is hidden on
+                            // Home — and not inside the Search Files context, which the
+                            // bottom fallback region vacates too (the filename index
+                            // alone answers there, ADR 0014).
+                            //
+                            // Deliberately un-animated, like the Home↔Results swap it
+                            // rides with: the first keystroke already re-lays the whole
+                            // list, and a row sliding in on top of that reads as jitter.
+                            if !inFileSearch, !shelf.isEmpty, FallbackShelf.isVisible(for: query) {
+                                FallbackShelfRow(members: shelf) { action in
+                                    // The same run path a tapped fallback row takes,
+                                    // region and all — so a Shelf tap *is* a fallback
+                                    // selection, not a lookalike of one.
+                                    run(action, region: .fallback)
+                                }
+                            }
+                            GlassEffectContainer(spacing: 8) {
+                                // Bottom-align so the paste chip stays pinned to the
+                                // input's bottom edge as the field grows upward (issue #63).
+                                HStack(alignment: .bottom, spacing: 8) {
+                                    InputBar(
+                                        query: $query,
+                                        focused: $inputFocused,
+                                        placeholder: inFileSearch ? "Search files…" : "Type to search…",
+                                        returnKey: highlighted?.returnKeyLabel ?? ReturnKeyLabel.none,
+                                        onSubmit: { if let highlightedRow { run(highlightedRow) } },
+                                        glassNamespace: glassNamespace
+                                    )
+                                    // The clipboard paste chip belongs to Home, not the
+                                    // scoped file filter — hide it in the context.
+                                    if !inFileSearch && clipboardPrefill.isChipOffered {
+                                        ClipboardPasteButton(glassNamespace: glassNamespace) { text in
+                                            // The hand-off decision (QuickieCore): `hasStrings` metadata
+                                            // can offer the chip over an empty/expired clipboard, so the
+                                            // tapped content decides. A real paste seeds and retires the
+                                            // offer; a dud withdraws the chip without burning it, so a
+                                            // later real copy can re-offer.
+                                            if let seeded = ClipboardPrefill.seededQuery(fromPasted: text) {
+                                                query = seeded
+                                                clipboard.markUsed()
+                                            } else {
+                                                clipboard.noteEmptyPaste()
+                                            }
                                         }
                                     }
                                 }
+                                .padding(.horizontal, 12)
+                                .padding(.vertical, 10)
                             }
-                            .padding(.horizontal, 12)
-                            .padding(.vertical, 10)
+                            // Morph the button in/out as the offer changes — degraded to a
+                            // snap under Reduce Motion (ADR 0010 motion budget).
+                            .animation(reduceMotion ? nil : .smooth, value: clipboardPrefill.isChipOffered)
+                            // Auto-focus on launch and capture-end (the zero-wall
+                            // promise, ADR 0012). Never on a pop re-appearance: that
+                            // fires mid-transition, where the focus (and the keyboard
+                            // it visibly raised) gets cancelled at completion — the
+                            // return-trip flicker. The popped page's `onDisappear`
+                            // re-arms focus instead (see the navigationDestination
+                            // below) — a real event at pop completion, not a guessed
+                            // delay.
+                            .onAppear { if !popRefocusPending { inputFocused = true } }
                         }
-                        // Morph the button in/out as the offer changes — degraded to a
-                        // snap under Reduce Motion (ADR 0010 motion budget).
-                        .animation(reduceMotion ? nil : .smooth, value: clipboardPrefill.isChipOffered)
-                        // Auto-focus on launch and capture-end (the zero-wall
-                        // promise, ADR 0012). Never on a pop re-appearance: that
-                        // fires mid-transition, where the focus (and the keyboard
-                        // it visibly raised) gets cancelled at completion — the
-                        // return-trip flicker. The popped page's `onDisappear`
-                        // re-arms focus instead (see the navigationDestination
-                        // below) — a real event at pop completion, not a guessed
-                        // delay.
-                        .onAppear { if !popRefocusPending { inputFocused = true } }
                     }
                 }
                 }
@@ -1049,7 +1102,7 @@ struct RootView: View {
             // session-accumulated `everEligibleFallbacks` set is what tells a real
             // loss from a value not-yet-loaded at launch, so the pre-enabled default
             // is never mistaken for a loss and dropped. No-op before migration.
-            .onChange(of: eligibleFallbackIDs) { _, ids in
+            .onChange(of: eligibleFallbackList.map(\.id)) { _, ids in
                 everEligibleFallbacks.formUnion(ids)
                 fallbacks.pruneToEligible(liveEligible: ids, everEligible: everEligibleFallbacks)
             }
@@ -1470,13 +1523,16 @@ struct RootView: View {
     /// fallback membership from the Action: a row is `.fallback` exactly when it is an
     /// enabled fallback riding the bottom region, so a pooled verb-first selection
     /// (a `.ranked` row) and a Home tap (no region) both open empty. The trim guard is
-    /// belt-and-braces — the Result list only produces rows for a non-empty query, so
-    /// a `.fallback` region already implies typed text.
+    /// belt-and-braces here — the Result list only produces rows for a non-empty query,
+    /// so a `.fallback` region already implies typed text — but it is load-bearing on
+    /// the Shelf, the region's other surface, which is why the rule itself lives in
+    /// Core (issue #242) rather than being spelled out twice.
     private func fallbackSeed(for region: ResultRegion?) -> String? {
-        guard region == .fallback,
-              !query.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
-        else { return nil }
-        return query
+        guard region == .fallback else { return nil }
+        // Core's rule, shared with the Shelf (issue #242): the Shelf renders exactly
+        // when this returns a seed, so a button can never offer a tap that would open
+        // an empty breadcrumb instead of committing the query.
+        return FallbackShelf.seed(from: query)
     }
 
     /// Performs a single-step Action's outcome at the platform edge.

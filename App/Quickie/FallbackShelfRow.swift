@@ -1,0 +1,179 @@
+import SwiftUI
+import QuickieCore
+
+/// The **Shelf** (CONTEXT.md → Shelf; ADR 0037; issue #242): the horizontal, scrollable
+/// row of circular, icon-only Liquid Glass buttons directly above the input, one per
+/// shelved [[Fallback Action]], most-important-first from the leading edge. A tap
+/// **seeds-and-commits** the typed query exactly like a fallback-region row — the host
+/// runs the action with the `.fallback` region, so the two surfaces share one code path
+/// and can never disagree about what a tap does.
+///
+/// The row is built on two pure rules from Core's `FallbackShelf`, so neither is
+/// eyeballed here: it renders only while there is a query to seed (the host gates on
+/// `isVisible`), and its buttons are sized so that when members run past the trailing
+/// edge the next one is left visibly **cut** by it — the sizing cue that says "this
+/// scrolls", replacing the member cap and overflow menu the share sheet's app row
+/// doesn't have either.
+///
+/// Because the buttons are icon-only, a **long press reveals the action's title** — the
+/// agreed disambiguation affordance for a glyph with no label (a design prototype
+/// settled icon-only circles over icon+label pills: labels don't fit four across at
+/// readable sizes). The title floats *over* the content above rather than pushing the
+/// row down, so revealing it never reflows the input or the result list.
+struct FallbackShelfRow: View {
+    /// The launcher's Shelf metrics. The preferred diameter is the input bar's own
+    /// height — the same circle the paste chip is — so the Shelf reads as part of the
+    /// bottom glass body rather than a foreign strip above it, and the spacing matches
+    /// the gap the bar's own surfaces sit apart.
+    static let layout = FallbackShelf.Layout(
+        preferredDiameter: InputBar.barHeight,
+        // The HIG's comfortable tap target: below this a shrunk button stops being
+        // reliably hittable, so the row scrolls further instead.
+        minimumDiameter: 44,
+        spacing: 8,
+        contentInset: 12,
+        peek: 0.5
+    )
+
+    /// The shelved Actions, most-important-first — already resolved to the live
+    /// catalog and filtered of disabled instances by the host.
+    let members: [Action]
+    /// Seeds-and-commits the typed query as this action's first Argument. The host
+    /// routes it through the same run path a `.fallback` result row takes.
+    let onRun: (Action) -> Void
+
+    /// The row's own width, measured — the input to the peek sizing. Zero until the
+    /// first layout pass, which Core reads as "unmeasured" and answers with the
+    /// preferred diameter.
+    @State private var rowWidth: CGFloat = 0
+    /// The member whose title a long press is currently revealing, if any.
+    @State private var revealedID: String?
+
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+
+    private var diameter: CGFloat {
+        Self.layout.diameter(availableWidth: rowWidth, memberCount: members.count)
+    }
+
+    /// The revealed title, resolved from the live members so a shelf edit (or a member
+    /// losing eligibility) can't leave a stale label floating.
+    private var revealedTitle: String? {
+        members.first { $0.id == revealedID }?.title
+    }
+
+    var body: some View {
+        // Spacing 0: the buttons sit close enough that a blending container would fuse
+        // them into one glass blob. They are separate controls and must read as such —
+        // the container is here only so they share one glass rendering pass.
+        GlassEffectContainer(spacing: 0) {
+            ScrollView(.horizontal) {
+                HStack(spacing: Self.layout.spacing) {
+                    ForEach(members) { member in
+                        button(for: member)
+                    }
+                }
+                .padding(.horizontal, Self.layout.contentInset)
+            }
+            // No scroll bar under the thumb: the peeking button is the affordance.
+            .scrollIndicators(.hidden)
+            // The row's own width, not its content's — the viewport the peek is sized
+            // against, and stable regardless of how many members there are.
+            .onGeometryChange(for: CGFloat.self) { $0.size.width } action: { rowWidth = $0 }
+        }
+        .frame(height: diameter)
+        .overlay(alignment: .top) { revealedTitleLabel }
+        // The reveal fades rather than popping; instant under Reduce Motion and under
+        // UI test, like every other motion in the app (issue #79).
+        .animation(animatesReveal ? .snappy : nil, value: revealedID)
+        // Hold the reveal long enough to read a title, then let it go on its own —
+        // there is nothing to dismiss and no menu to escape from.
+        .task(id: revealedID) {
+            guard revealedID != nil else { return }
+            try? await Task.sleep(for: .seconds(2.5))
+            guard !Task.isCancelled else { return }
+            revealedID = nil
+        }
+    }
+
+    private var animatesReveal: Bool { !reduceMotion && !MotionStyle.isInstantForUITesting }
+
+    /// One Shelf member: its glyph on a circle of glass tinted by the action's kind.
+    ///
+    /// The tint is the **provider-kind-derived** one for now — the same hue the
+    /// action's leading badge wears everywhere else, so a shelved action is
+    /// recognisable as itself; per-action tinting arrives with the [[Action color]]
+    /// ticket, at which point only this line changes. A Custom Action's chosen glyph
+    /// (issue #163) overrides the kind's symbol, exactly as it does in a result row.
+    private func button(for action: Action) -> some View {
+        Image(systemName: action.glyph ?? action.kind.symbol)
+            // Scaled from the diameter rather than a text style: the button itself is
+            // sized by the peek rule, so a fixed glyph would swim in a wide row and
+            // crowd a shrunk one.
+            .font(.system(size: diameter * 0.4, weight: .semibold))
+            .foregroundStyle(.white)
+            .frame(width: diameter, height: diameter)
+            .glassEffect(.regular.tint(action.kind.tint).interactive(), in: Circle())
+            .contentShape(Circle())
+            // **Exclusive**, not simultaneous, and not a `Button` carrying a long press
+            // beside it: a SwiftUI button fires on touch-up however long the touch was
+            // held, so a reveal would run the action the moment the finger lifted — the
+            // exact outcome the affordance exists to prevent, since the whole point of
+            // reading the title is to discover this *isn't* the button you wanted.
+            // `ExclusiveGesture` makes the long press win once it recognizes, and a
+            // short press fails it so the tap runs as normal.
+            .gesture(
+                ExclusiveGesture(
+                    LongPressGesture(minimumDuration: 0.4)
+                        .onEnded { _ in revealedID = action.id },
+                    TapGesture().onEnded { run(action) }
+                )
+            )
+            // Hand-rolled tap handling means hand-rolled semantics: without these the
+            // row would be a picture, unreachable to VoiceOver and to `app.buttons` in
+            // the UI suite.
+            .accessibilityElement()
+            .accessibilityAddTraits(.isButton)
+            .accessibilityLabel(action.title)
+            .accessibilityAction { run(action) }
+            // The action's own id, **prefixed**: a shelved action has vacated the bottom
+            // fallback region, so a test asserting it is gone from there must not be
+            // answered by its Shelf button wearing the same identifier.
+            .accessibilityIdentifier("shelf.\(action.id)")
+    }
+
+    /// Seeds-and-commits the query as `action`'s first Argument, resolving any revealed
+    /// title along the way — whatever the long press was disambiguating has been decided.
+    private func run(_ action: Action) {
+        revealedID = nil
+        onRun(action)
+    }
+
+    /// The long-press disclosure: the action's title on a small glass capsule floating
+    /// above the row. An `overlay` with a top alignment guide, so it takes no layout
+    /// space — revealing a title must not shove the input (and the whole result list)
+    /// down by a line.
+    ///
+    /// It is centred over the row rather than pinned under the pressed button: only one
+    /// title is ever revealed, the pressed button is visibly pressed, and anchoring to a
+    /// button inside a scroll view would put the label at the mercy of the scroll offset
+    /// and the row's own clipping.
+    @ViewBuilder
+    private var revealedTitleLabel: some View {
+        if let revealedTitle {
+            Text(revealedTitle)
+                .font(.footnote.weight(.medium))
+                .fontDesign(.rounded)
+                .lineLimit(1)
+                .padding(.horizontal, 12)
+                .padding(.vertical, 6)
+                .glassEffect(.regular, in: Capsule())
+                .accessibilityIdentifier("shelf-title")
+                // A label, not a control: it must never absorb a tap meant for the
+                // button underneath it or the result row behind it.
+                .allowsHitTesting(false)
+                .transition(.opacity)
+                // Sit the capsule's *bottom* a little above the row's top edge.
+                .alignmentGuide(.top) { $0[.bottom] + 8 }
+        }
+    }
+}
