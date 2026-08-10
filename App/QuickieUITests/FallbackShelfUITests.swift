@@ -42,17 +42,36 @@ final class FallbackShelfUITests: XCTestCase {
     /// The Fallbacks-page row (cell) whose title contains `title`, resolved by
     /// containment — the reliable way to reach a row's inline controls where a
     /// top-level id query over a lazy List row is flaky. On a short screen (CI runs on
-    /// iPhone SE) a row can land below the fold, and the page is a section taller now
+    /// iPhone SE) a row can land outside the fold, and the page is a section taller now
     /// that the Shelf leads it, so nudge it into the render tree first.
+    ///
+    /// Searches **both** directions, unlike the older suites' scroll-down-only helper:
+    /// a row promoted up the ladder moves *toward the top of the page* (pool → Active →
+    /// Shelf), so after a tap the row this returns is often above the current viewport,
+    /// not below it. Rewind to the top first, then walk down.
     @MainActor
     private func cell(_ app: XCUIApplication, titled title: String) -> XCUIElement {
         let cell = app.cells.containing(NSPredicate(format: "label CONTAINS[c] %@", title)).firstMatch
-        var swipes = 0
-        while !cell.exists && swipes < 4 {
-            app.swipeUp()
-            swipes += 1
-        }
+        for _ in 0..<4 where !cell.exists { app.swipeDown() }
+        for _ in 0..<5 where !cell.exists { app.swipeUp() }
         return cell
+    }
+
+    /// Scrolls the page back to the top so two rows expected to be adjacent are in the
+    /// same snapshot — frames from different scroll positions aren't comparable.
+    @MainActor
+    private func scrollToTop(_ app: XCUIApplication) {
+        for _ in 0..<4 { app.swipeDown() }
+    }
+
+    /// Empties the launcher input. `openFallbacksPage` types a fresh query, so a test
+    /// that has already typed something must clear it first — otherwise the two run
+    /// together ("dentist" + "fallbacks") and no command row matches.
+    @MainActor
+    private func clearInput(_ app: XCUIApplication, count: Int) {
+        let input = app.textFields["search-input"]
+        input.tap()
+        input.typeText(String(repeating: XCUIKeyboardKey.delete.rawValue, count: count))
     }
 
     @MainActor
@@ -77,6 +96,7 @@ final class FallbackShelfUITests: XCTestCase {
         XCTAssertTrue(app.buttons["builtin.save-for-later"].waitForExistence(timeout: 5),
                       "an active capture is offered in the bottom fallback region")
 
+        clearInput(app, count: "dentist".count)
         openFallbacksPage(app)
         let active = cell(app, titled: "Save for later")
         XCTAssertTrue(active.waitForExistence(timeout: 10), "Save for later is on the page")
@@ -108,13 +128,11 @@ final class FallbackShelfUITests: XCTestCase {
         let app = launchApp()
         openFallbacksPage(app)
 
-        // Save for later starts *below* the seeded web search in Active.
-        let webSearch = cell(app, titled: "Search the web")
-        XCTAssertTrue(webSearch.waitForExistence(timeout: 10), "the seeded web-search fallback is listed")
+        // Save for later ships in Active, below the five search seeds — far enough down
+        // that it and the first Active row are never in one snapshot, so the ordering
+        // assertion below waits until the two are adjacent.
         let saveCell = cell(app, titled: "Save for later")
         XCTAssertTrue(saveCell.waitForExistence(timeout: 10), "Save for later is on the page")
-        XCTAssertGreaterThan(saveCell.frame.minY, webSearch.frame.minY,
-                             "the two captures ship below the search seeds in Active")
 
         // Shelve it, then bring it back down.
         saveCell.buttons["Move to the shelf"].tap()
@@ -123,12 +141,20 @@ final class FallbackShelfUITests: XCTestCase {
         XCTAssertTrue(unshelve.waitForExistence(timeout: 5), "the shelved row offers its demote minus")
         unshelve.tap()
 
-        // It comes back at the top of Active — above the seeded web search it used to
-        // sit under — and is demotable to the pool again like any Active row.
+        // It comes back as an ordinary Active row…
         let restored = cell(app, titled: "Save for later")
         XCTAssertTrue(restored.buttons["Remove from active fallbacks"].waitForExistence(timeout: 5),
                       "a demoted Shelf member is an ordinary Active row again")
-        XCTAssertLessThan(restored.frame.minY, cell(app, titled: "Search the web").frame.minY,
+
+        // …at the *top* of Active rather than the bottom: it now sits directly above
+        // the seeded web search that used to lead the section. Both are Active's first
+        // two rows, so one rewind puts them in the same snapshot and their frames are
+        // comparable (the exact placement rule is pinned in Core's FallbackTiersTests —
+        // this is the wiring check).
+        scrollToTop(app)
+        let webSearch = cell(app, titled: "Search the web")
+        XCTAssertTrue(webSearch.waitForExistence(timeout: 5), "the seeded web-search fallback is listed")
+        XCTAssertLessThan(cell(app, titled: "Save for later").frame.minY, webSearch.frame.minY,
                           "demoting from the Shelf inserts at the top of Active, not the bottom")
     }
 
