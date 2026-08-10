@@ -35,11 +35,6 @@ struct FallbacksView: View {
     /// sections partition by the store's tiers and the disabled set.
     let eligible: [Action]
 
-    /// The eligible Actions keyed by id, so a shelved/enabled/pooled id resolves to its row.
-    private var byID: [String: Action] {
-        Dictionary(eligible.map { ($0.id, $0) }, uniquingKeysWith: { first, _ in first })
-    }
-
     /// The Shelf section, most-important-first (leading edge of the button row): the
     /// Shelf resolved to live Actions, minus any that are instance-disabled — a
     /// disabled action always sits in the pool, even for the frame before
@@ -68,9 +63,11 @@ struct FallbacksView: View {
             }
     }
 
-    /// Resolves an ordered id list to Actions, dropping the instance-disabled ones.
+    /// Resolves an ordered id list to Actions, dropping the instance-disabled ones —
+    /// Core's rule, shared with the Shelf row above the input (`RootView
+    /// .shelfMembers`), so a rung means the same thing on the page and in the launcher.
     private func liveActions(_ ids: [String]) -> [Action] {
-        ids.compactMap { byID[$0] }.filter { !enablement.isDisabled($0.id) }
+        FallbackTiers.liveMembers(of: ids, in: eligible, hiding: enablement.disabled)
     }
 
     // Pushed onto the launcher's navigation stack — no own stack or Done button.

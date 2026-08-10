@@ -234,4 +234,33 @@ struct FallbackTiersTests {
         #expect(tiers.shelf == [reminder, event, save, snippet])
         #expect(tiers.enabled == [web, maps])
     }
+
+    // MARK: - Rendering a rung
+
+    @Test("liveMembers resolves an ordered rung against the catalog, keeping its order")
+    func liveMembersKeepsListOrder() {
+        let catalog = [Action.saveForLater(), Action.newSnippet(), Action.newReminder()]
+        let members = FallbackTiers.liveMembers(of: [snippet, save], in: catalog, hiding: [])
+        #expect(members.map(\.id) == [snippet, save])
+    }
+
+    @Test("an id the live catalog doesn't hold is skipped, not substituted")
+    func liveMembersSkipsUnresolvedIDs() {
+        // The launch race and a deleted Custom Action look the same here: hidden for
+        // this render, still on the rung (pruning is `pruneForgettingLost`'s job).
+        let members = FallbackTiers.liveMembers(
+            of: [save, "custom.deleted"], in: [Action.saveForLater()], hiding: []
+        )
+        #expect(members.map(\.id) == [save])
+    }
+
+    @Test("an instance-disabled action is hidden on every rung it could render on")
+    func liveMembersHidesDisabled() {
+        // Both surfaces of the list draw through here, so the disabled filter lands
+        // once: the Shelf above the input can't keep showing a button for the frame
+        // before `demoteToPool` catches up with it.
+        let catalog = [Action.saveForLater(), Action.newSnippet()]
+        let members = FallbackTiers.liveMembers(of: [save, snippet], in: catalog, hiding: [save])
+        #expect(members.map(\.id) == [snippet])
+    }
 }

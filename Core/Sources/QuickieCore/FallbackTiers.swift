@@ -143,4 +143,23 @@ public struct FallbackTiers: Equatable, Sendable {
     public static let firstRunShelfIDs = [
         Action.newReminderID, Action.newEventID, Action.saveForLaterID, Action.newSnippetID,
     ]
+
+    /// An ordered id list as the Actions to actually **render**: resolved against the
+    /// live eligible catalog, in the list's order, minus the instance-disabled ones.
+    ///
+    /// The last step every rung is drawn through — the Shelf above the input and all
+    /// three sections of the Fallbacks page — so "shown" means one thing on both
+    /// surfaces. In particular the disabled filter belongs *here* rather than at each
+    /// call site: a disabled action always sits in the pool, and dropping it only in
+    /// some of the places it renders would surface it on one surface for the frame
+    /// before `demoteToPool` prunes it off the tier.
+    ///
+    /// Ids the catalog doesn't hold are skipped without being forgotten — the same
+    /// hidden-not-lost treatment `resolvedShelf`/`resolvedEnabled` give them.
+    public static func liveMembers(
+        of ids: [String], in catalog: [Action], hiding disabledIDs: Set<String>
+    ) -> [Action] {
+        let byID = Dictionary(catalog.map { ($0.id, $0) }, uniquingKeysWith: { first, _ in first })
+        return ids.compactMap { byID[$0] }.filter { !disabledIDs.contains($0.id) }
+    }
 }
