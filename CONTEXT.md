@@ -96,6 +96,10 @@ _Avoid_: Parameter, field, input (ambiguous)
 The input control the single bottom field morphs into for the current Argument, chosen by that Argument's **content type**: the keyboard for `text`, the keyboard in a **numeric variant** (the system number pad) for a `number`, an in-place graphical picker for a `date`, and a fuzzy-find over a fixed option set (reusing the matcher and the reversed result list) for a choice. The number pad is a *variant* of the keyboard method — still the keyboard, only laid out for digits — not a separate method, and like every input method it is derived from the content type, never set by hand. The mechanism that lets one input region serve every Argument type without modes — the user never types a value the system could pick.
 _Avoid_: Input mode, control, widget
 
+**Clear button**:
+The trailing `✕` inside the single bottom input's Liquid Glass capsule, shown only while the query is non-empty. One tap empties the query and **keeps the keyboard up** — clearing is "start over", not "done", so the next keystroke lands straight in the field. It is furniture of the input itself, not a surface of its own: it rides *inside* the input's glass (unlike the [[Clipboard prefill]] chip, which has its own glass precisely so it can morph in and out of the capsule), and it never resolves anything — it is the manual counterpart of the automatic clear a [[Main action]] performs when it resolves a query. In the [[Search Files context]] it clears the scoped filter text and leaves the context standing; leaving a context is the breadcrumb's job, never this button's.
+_Avoid_: Cancel button, dismiss, reset
+
 **Snippet**:
 A piece of saved, reusable text whose primary action is **Copy** — canned replies, an address, a template the user pastes repeatedly. Stored in Quickie (SwiftData + CloudKit), searchable as Actions, addable via the Share Extension. Quickie deliberately has no automatic clipboard history (iOS forbids ambient clipboard access).
 _Avoid_: Clipboard history, clip, stash

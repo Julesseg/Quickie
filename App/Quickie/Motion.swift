@@ -60,6 +60,22 @@ extension MotionStyle {
         }
     }
 
+    /// The transition for a small control that comes and goes **in place** — the
+    /// input's clear button, which has no edge to arrive from: it belongs where it
+    /// already is, so it scales up out of nothing while fading rather than sliding
+    /// in from somewhere it never was. Reduce Motion degrades it to the bare
+    /// crossfade (scale is movement), and under UI test it is `.identity`, like
+    /// every other transition here.
+    var inPlaceTransition: AnyTransition {
+        if Self.isInstantForUITesting { return .identity }
+        switch self {
+        case .spring:
+            return .scale.combined(with: .opacity)
+        case .fade, .drift:
+            return .opacity
+        }
+    }
+
     /// The transition that pairs with this style for a result row: it slides in
     /// from the bottom edge (toward the input/thumb) while fading. It carries its
     /// **own** animation so only the appearing/disappearing row is ever in motion
