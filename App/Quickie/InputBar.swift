@@ -12,6 +12,10 @@ import QuickieCore
 /// (`.search` for a web query, `.go` for a link) and pressing Return runs exactly
 /// that row's main action. On Home (empty query) there is no highlight and submit
 /// is a no-op.
+///
+/// A trailing [[Clear button]] rides *inside* the same glass capsule — one
+/// surface, not a second one beside it (the paste chip is the only bottom
+/// surface that gets its own glass, because it morphs in and out of this one).
 struct InputBar: View {
     /// Stable identity for the input's Liquid Glass within the bottom
     /// `GlassEffectContainer`. Pairing it with the paste button's id in a shared
@@ -42,6 +46,8 @@ struct InputBar: View {
     /// changes.
     @State private var isExpanded = false
 
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+
     /// The grow-and-wrap policy (issue #63): whether the surface is a Capsule or the
     /// squared-off box, and the box's corner radius. Pure and unit-tested in Core.
     private let growth = InputBarGrowth(barHeight: InputBar.barHeight)
@@ -59,7 +65,71 @@ struct InputBar: View {
             : AnyShape(Capsule())
     }
 
+    /// Whether the trailing clear button is offered — only when there is something
+    /// to clear. Derived, never stored: the query *is* the state, so the button
+    /// can't drift out of step with the text beside it.
+    private var showsClear: Bool { !query.isEmpty }
+
+    /// The clear button's come-and-go, from Core's budget (ADR 0010). It borrows
+    /// `.inputFocus` — the snappiest moment, the one closest to a keystroke —
+    /// because that is exactly what this is: the input's own furniture reacting to
+    /// the first and last character typed, so it must never lag the typing.
+    private var clearMotion: MotionStyle {
+        MotionPolicy(reduceMotion: reduceMotion).style(for: .inputFocus)
+    }
+
     var body: some View {
+        // Bottom-aligned so a wrapped field keeps the clear button on the *last*
+        // line, beside the insertion point, rather than floating up with the box.
+        HStack(alignment: .bottom, spacing: 4) {
+            field
+            if showsClear { clearButton }
+        }
+        .padding(.leading, 20)
+        // Tuck the button nearer the capsule's trailing edge than the text sits
+        // from the leading one — an icon reads centred in the round end where a
+        // glyph-width of extra inset would just look like a gap.
+        .padding(.trailing, showsClear ? 10 : 20)
+        // Keep the one-line vertical centring identical to the old fixed-height
+        // capsule, and give each wrapped line the same breathing room.
+        .padding(.vertical, max(0, (Self.barHeight - lineHeight) / 2))
+        // `minHeight` (not a fixed height) so the box can grow upward past the
+        // one-line capsule as lines are added.
+        .frame(minHeight: Self.barHeight)
+        // Scoped to the offer flipping, so the button's arrival/exit and the width
+        // the field gives up for it are one gesture — and every other change here
+        // (a keystroke, a wrap) still applies instantly.
+        .animation(clearMotion.animation, value: showsClear)
+        .glassEffect(.regular.interactive(), in: glassShape)
+        .glassEffectID(Self.glassID, in: glassNamespace)
+    }
+
+    /// The trailing clear affordance: one tap empties the query and leaves the
+    /// keyboard up. It lives inside the input's own glass — no second surface, no
+    /// `glassEffect` of its own — so the row still reads as a single body.
+    private var clearButton: some View {
+        Button(action: clear) {
+            Image(systemName: "xmark.circle.fill")
+                // The field's own text style, so the glyph scales with Dynamic Type
+                // exactly as `lineHeight` (its layout box, below) does.
+                .font(.system(.title3, design: .rounded))
+                .symbolRenderingMode(.hierarchical)
+                .foregroundStyle(.secondary)
+                // Bounded to one line-height: the button must never be the tallest
+                // thing in the row, or it would inflate the bar past `barHeight`
+                // and break the paste chip's matching circle.
+                .frame(width: 28, height: lineHeight)
+                .contentShape(Rectangle())
+        }
+        // Plain, so nothing tints or platters the glyph over the glass.
+        .buttonStyle(.plain)
+        .accessibilityIdentifier("clear-input")
+        .accessibilityLabel("Clear text")
+        .transition(clearMotion.inPlaceTransition)
+    }
+
+    /// The search field itself.
+    private var field: some View {
         // `axis: .vertical` is what lets the field wrap and grow instead of scrolling
         // sideways; `lineLimit(1...maxLines)` caps the growth and then scrolls
         // internally. Because the bar is anchored in the bottom safe-area inset, the
@@ -106,15 +176,15 @@ struct InputBar: View {
                         .onChange(of: proxy.size.height) { _, height in updateHeight(height) }
                 }
             }
-            .padding(.horizontal, 20)
-            // Keep the one-line vertical centring identical to the old fixed-height
-            // capsule, and give each wrapped line the same breathing room.
-            .padding(.vertical, max(0, (Self.barHeight - lineHeight) / 2))
-            // `minHeight` (not a fixed height) so the box can grow upward past the
-            // one-line capsule as lines are added.
-            .frame(minHeight: Self.barHeight)
-            .glassEffect(.regular.interactive(), in: glassShape)
-            .glassEffectID(Self.glassID, in: glassNamespace)
+    }
+
+    /// Empties the query and keeps the keyboard up: clearing is "start over", not
+    /// "done", so the very next keystroke lands in the field the user just emptied.
+    /// (Asserting focus is belt-and-braces — the button is inside the same glass as
+    /// the field, so a tap here should never have resigned it in the first place.)
+    private func clear() {
+        query = ""
+        focused.wrappedValue = true
     }
 
     /// Records a fresh content-height measurement and re-derives the glass shape
