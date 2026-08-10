@@ -757,6 +757,13 @@ struct RootView: View {
                                     // selection, not a lookalike of one.
                                     run(action, region: .fallback)
                                 }
+                                // Clear the last result row: the inset's top edge is
+                                // where the list stops, so without this the buttons
+                                // sit flush against the nearest fallback and read as
+                                // part of it. The bar's own vertical padding, so the
+                                // Shelf is spaced off the list exactly as it is off
+                                // the input below it.
+                                .padding(.top, 10)
                             }
                             GlassEffectContainer(spacing: 8) {
                                 // Bottom-align so the paste chip stays pinned to the
