@@ -191,11 +191,12 @@ struct FallbacksView: View {
     }
 }
 
-/// One Fallbacks-page row. In the **Shelf** it is a red minus (drop to the top of
-/// Active) + title, with the system drag grip trailing (edit mode). In **Active** it is
-/// a red minus (demote to the pool) + title + a shelf button, also with the grip. In
-/// the **pool** it is a green plus (promote to Active) + title + a shelf button + the
-/// action's instance enable/disable toggle. No delete affordance in any of them.
+/// One Fallbacks-page row. Both activation verbs sit together on the **leading** edge,
+/// ahead of the title: In the **Shelf** it is a red minus (drop to the top of Active) +
+/// title, with the system drag grip trailing (edit mode). In **Active** it is a red
+/// minus (demote to the pool) + a shelf button + title, also with the grip. In the
+/// **pool** it is a green plus (promote to Active) + a shelf button + title, with the
+/// action's instance enable/disable toggle trailing. No delete affordance in any of them.
 private struct FallbackRow: View {
     /// Which section the row is rendering in — and, for the pool, the instance
     /// Disabled state and switch that only *it* carries, so the two ordered tiers
@@ -235,18 +236,6 @@ private struct FallbackRow: View {
             .accessibilityLabel(primaryLabel)
             .accessibilityIdentifier("\(style.isPool ? "fallback-promote" : "fallback-demote").\(action.id)")
 
-            VStack(alignment: .leading, spacing: 2) {
-                Text(action.title)
-                    .font(.body)
-                    .foregroundStyle(style.isDisabled ? .secondary : .primary)
-                if let caption = kindCaption {
-                    Text(caption)
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                }
-            }
-            Spacer(minLength: 8)
-
             // The shelf button — one rung up, from Active *or* straight from the pool
             // (no forced two-step climb). Absent on Shelf rows, which are already there.
             if let onShelve {
@@ -258,6 +247,18 @@ private struct FallbackRow: View {
                 .accessibilityLabel("Move to the shelf")
                 .accessibilityIdentifier("fallback-shelve.\(action.id)")
             }
+
+            VStack(alignment: .leading, spacing: 2) {
+                Text(action.title)
+                    .font(.body)
+                    .foregroundStyle(style.isDisabled ? .secondary : .primary)
+                if let caption = kindCaption {
+                    Text(caption)
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
+            }
+            Spacer(minLength: 8)
 
             // The instance enable/disable toggle lives only on the pool rows —
             // disabling hides the action everywhere; a shelved or active fallback is
