@@ -94,10 +94,41 @@ matrix instead of getting a filter that matches nothing. Same outcome, one
 fewer no-op.
 
 The suite's ~48 min of test execution is untouched — this ADR only stops
-wasting it. At 5 shards the floor is now per-shard fixed cost (~3 min) plus
-~10 min of tests, so the next real win is in the tests themselves: ~40s per
-test average, with a 123s, a 102s, and a `Thread.sleep(forTimeInterval: 9)` in
+wasting it. At 5 shards the floor is per-shard fixed cost plus ~12 min of
+tests, so the next real win is in the tests themselves: ~28s per test average,
+with a 123s, a 102s, and a `Thread.sleep(forTimeInterval: 9)` in
 `HomeBrandUITests` all sitting on the critical path.
+
+## Measured
+
+First run under this plan ([31406392287][run], 104 tests — CI tests the merge
+with `main`, which had gained three since, and the planner assigned all three
+unprompted, each to exactly one shard).
+
+Both targets moved as modelled:
+
+- **Test execution per shard** 702/554/534/602/584s against a prediction of
+  697/520/512/575/574s — the slowest shard within 0.7%. Spread between busiest
+  and quietest shard: 168s, down from 478s.
+- **Waiting on the simulator** 19–49s, down from 105–521s. The cold-boot tail
+  the pre-boot targets is gone.
+
+Two things the model did not predict, neither of which the plan controls:
+
+- **Runners queued 2m10s–17m54s.** Only one or two macOS runners were free, so
+  the five shards ran in waves and the run took 38m22s end to end. This is the
+  cost the `SHARD_COUNT` comment warns about, arriving on the first run.
+- **The build phase ran ~3× slower** (302–412s against 91–129s across six
+  baseline samples), cancelling the test-execution win: slowest *job* 20m10s
+  against the baseline's 21m12s. Unresolved between two causes — the
+  pre-booting simulator stealing CPU from the compile on a 3-core runner (the
+  ADR 0026 starvation lesson again), or the same degraded capacity window that
+  produced the queueing and a 143s package-graph resolution. If a clean run
+  does not put compile back near 110s, drop the `simctl boot` call and keep the
+  device-`id` pinning: the pre-boot would be buying ~80s of simulator wait for
+  ~240s of build.
+
+[run]: https://github.com/Julesseg/Quickie/actions/runs/31406392287
 
 ## Considered options
 
