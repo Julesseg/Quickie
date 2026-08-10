@@ -27,6 +27,11 @@ struct InputBar: View {
     /// button can be an exactly-matching circle beside it — see `ClipboardPasteButton`.
     static let barHeight: CGFloat = 52
 
+    /// HIG's minimum tap target. The clear button's *glyph* is text-sized, but its
+    /// target is this — the same floor the rest of the bottom row meets (the paste
+    /// chip is a full `barHeight` circle).
+    private static let minTapTarget: CGFloat = 44
+
     @Binding var query: String
     var focused: FocusState<Bool>.Binding
     /// The field's placeholder — the neutral "Type to search…" by default, or a
@@ -57,6 +62,20 @@ struct InputBar: View {
     /// measuring view is needed.
     private var lineHeight: CGFloat { UIFont.preferredFont(forTextStyle: .title3).lineHeight }
 
+    /// The row's own vertical padding — what keeps one line centred in `barHeight`.
+    private var rowPadding: CGFloat { max(0, (Self.barHeight - lineHeight) / 2) }
+
+    /// How far the clear button's *hit area* spills above and below its layout box.
+    /// Its box is capped at one line-height (it must never be the tallest thing in
+    /// the row, or the bar grows past `barHeight`), which at default Dynamic Type
+    /// leaves the target well short of `minTapTarget` — so the missing height is
+    /// taken back as hit area alone. Bounded by `rowPadding`, the space the target
+    /// spills into, so it stays *inside* the glass capsule rather than reaching past
+    /// its edge; at large Dynamic Type the line itself clears the floor and this is 0.
+    private var hitSlop: CGFloat {
+        min(max(0, (Self.minTapTarget - lineHeight) / 2), rowPadding)
+    }
+
     /// The Liquid Glass surface: a Capsule on one line, a RoundedRectangle whose
     /// ends stay as round as the capsule's once the text wraps.
     private var glassShape: AnyShape {
@@ -86,13 +105,13 @@ struct InputBar: View {
             if showsClear { clearButton }
         }
         .padding(.leading, 20)
-        // Tuck the button nearer the capsule's trailing edge than the text sits
-        // from the leading one — an icon reads centred in the round end where a
-        // glyph-width of extra inset would just look like a gap.
-        .padding(.trailing, showsClear ? 10 : 20)
+        // Tuck the 44pt-wide button in tight: that lands its glyph on the centre of
+        // the capsule's round end, where an icon reads best — the text's 20 would
+        // push it off-centre and just look like a gap.
+        .padding(.trailing, showsClear ? 4 : 20)
         // Keep the one-line vertical centring identical to the old fixed-height
         // capsule, and give each wrapped line the same breathing room.
-        .padding(.vertical, max(0, (Self.barHeight - lineHeight) / 2))
+        .padding(.vertical, rowPadding)
         // `minHeight` (not a fixed height) so the box can grow upward past the
         // one-line capsule as lines are added.
         .frame(minHeight: Self.barHeight)
@@ -115,11 +134,18 @@ struct InputBar: View {
                 .font(.system(.title3, design: .rounded))
                 .symbolRenderingMode(.hierarchical)
                 .foregroundStyle(.secondary)
-                // Bounded to one line-height: the button must never be the tallest
-                // thing in the row, or it would inflate the bar past `barHeight`
-                // and break the paste chip's matching circle.
-                .frame(width: 28, height: lineHeight)
+                // A full-width tap target, but only one line-height tall: the button
+                // must never be the tallest thing in the row, or it would inflate the
+                // bar past `barHeight` and break the paste chip's matching circle.
+                .frame(width: Self.minTapTarget, height: lineHeight)
+                // So the height it can't take in layout, it takes in hit area: pad
+                // out to the 44pt floor, claim *that* as the tappable shape, then
+                // hand the space straight back so the row's geometry is untouched.
+                // The reclaimed strip is the row's own padding — inside the glass —
+                // so the target grows into the capsule, never past it.
+                .padding(.vertical, hitSlop)
                 .contentShape(Rectangle())
+                .padding(.vertical, -hitSlop)
         }
         // Plain, so nothing tints or platters the glyph over the glass.
         .buttonStyle(.plain)
