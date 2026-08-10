@@ -179,15 +179,20 @@ jobs:
       - name: Toolchain versions
         run: xcodebuild -version
 
-      # Resolve a concrete device *id* rather than a name, then start booting it
-      # before the build runs. A cold simulator boot is dead time on the critical
-      # path — typically ~90s, and once measured at 8.7 min — that xcodebuild
-      # otherwise pays *after* compiling. Kicking it off here overlaps it with
-      # the ~2 min build instead. Booting needs the exact device the test run
-      # will use, hence `id=` on the destination below: with `name=…,OS=latest`
-      # xcodebuild is free to pick a same-named device on another runtime and
-      # boot that one from cold anyway, wasting the head start.
-      - name: Resolve an iPhone simulator and start booting it
+      # Resolve a concrete device *id* rather than a name, so `id=` on the
+      # destination below pins the exact device: with `name=…,OS=latest`
+      # xcodebuild is free to pick a same-named device on another runtime, and
+      # which one it lands on is not visible in the log.
+      #
+      # Do NOT pre-boot the device here. It was tried (see ADR 0038) on the
+      # theory that overlapping the ~90s cold boot with the build would take it
+      # off the critical path. Measured across six shard-runs in two independent
+      # runs, it does the opposite: xcodebuild then sits ~3 min before it even
+      # reaches "Resolve Package Graph" (4-5s into the build without it), so the
+      # build phase grows ~250s to save ~85s of simulator wait. The boot does not
+      # overlap the build — it blocks it, the same CPU starvation ADR 0026 found
+      # for same-runner parallel testing.
+      - name: Resolve an iPhone simulator
         id: sim
         run: |
           set -euo pipefail
@@ -213,10 +218,6 @@ jobs:
           print(dev["udid"])
           PY
           )
-          # Non-fatal: returns as soon as the boot *starts*, so the sim warms up
-          # while the build runs. If it fails, xcodebuild boots the device itself
-          # and we only lose the head start.
-          xcrun simctl boot "$UDID" || true
           echo "udid=$UDID" >> "$GITHUB_OUTPUT"
 
       - name: Build & run UI tests

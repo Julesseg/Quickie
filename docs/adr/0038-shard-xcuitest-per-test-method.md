@@ -118,15 +118,28 @@ Two things the model did not predict, neither of which the plan controls:
 - **Runners queued 2m10s–17m54s.** Only one or two macOS runners were free, so
   the five shards ran in waves and the run took 38m22s end to end. This is the
   cost the `SHARD_COUNT` comment warns about, arriving on the first run.
-- **The build phase ran ~3× slower** (302–412s against 91–129s across six
-  baseline samples), cancelling the test-execution win: slowest *job* 20m10s
-  against the baseline's 21m12s. Unresolved between two causes — the
-  pre-booting simulator stealing CPU from the compile on a 3-core runner (the
-  ADR 0026 starvation lesson again), or the same degraded capacity window that
-  produced the queueing and a 143s package-graph resolution. If a clean run
-  does not put compile back near 110s, drop the `simctl boot` call and keep the
-  device-`id` pinning: the pre-boot would be buying ~80s of simulator wait for
-  ~240s of build.
+- **The build phase ran ~3× slower** (302–412s against 91–111s in the
+  baseline), cancelling the test-execution win: slowest *job* 20m10s against the
+  baseline's 21m12s.
+
+### The pre-boot is removed
+
+A second run two hours later, on different runners, reproduced the build
+slowdown exactly (355s), which rules out the degraded capacity window. One
+column identifies the mechanism: `Resolve Package Graph` — the first real thing
+`xcodebuild` does — starts **4–5s** into the build without the pre-boot and
+**106–206s** into it with. The compiler is not slower; `xcodebuild` is blocked
+at startup while the simulator boots.
+
+So the boot does not overlap the build, it *blocks* it — the same starvation
+ADR 0026 measured for same-runner parallel testing, arriving by a different
+door. It buys ~85s of simulator wait for ~250s of build. Removed, per the rule
+registered here before the data came in. The device-`id` pinning stays: it
+costs nothing and makes the chosen device visible in the log.
+
+What the pre-boot was aiming at is real and still open — one baseline shard
+spent 8m41s on a cold boot. Any future attempt has to keep the boot off the
+build's critical path rather than on it.
 
 [run]: https://github.com/Julesseg/Quickie/actions/runs/31406392287
 
