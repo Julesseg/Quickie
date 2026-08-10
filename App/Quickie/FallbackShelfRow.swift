@@ -94,6 +94,19 @@ struct FallbackShelfRow: View {
 
     private var motion: MotionPolicy { MotionPolicy(reduceMotion: reduceMotion) }
 
+    /// How much of the action's kind hue the glass carries.
+    ///
+    /// The full-strength colour is `ProviderBadge`'s treatment, and it belongs there:
+    /// a 30pt squircle inside a row wants to be unmistakably *that provider*. At 52pt
+    /// on its own above the input the same colour stops being a badge and becomes the
+    /// button — four flat, saturated discs with no material left in them, louder than
+    /// the input they sit over. Held back to a tint the glass carries rather than one
+    /// that replaces it: the hue still says which action each button is, and the row
+    /// still reads as part of the bottom glass body (ADR 0010 — depth is the glass's
+    /// job). Matches the capture breadcrumb's own tinted crumbs, the only other
+    /// tinted glass in the app.
+    private static let tintStrength = 0.4
+
     /// One Shelf member: its glyph on a circle of glass tinted by the action's kind.
     ///
     /// The tint is the **provider-kind-derived** one for now — the same hue the
@@ -107,9 +120,16 @@ struct FallbackShelfRow: View {
             // sized by the peek rule, so a fixed glyph would swim in a wide row and
             // crowd a shrunk one.
             .font(.system(size: diameter * 0.4, weight: .semibold))
-            .foregroundStyle(.white)
+            // `.primary`, not the badge's white: white reads on a saturated badge, but
+            // over a *held-back* tint on a pale backdrop it washes out. `.primary`
+            // follows the theme, so the glyph stays legible in both — the same reason
+            // the paste chip, the other circle on this bar, draws its icon this way.
+            .foregroundStyle(.primary)
             .frame(width: diameter, height: diameter)
-            .glassEffect(.regular.tint(action.kind.tint).interactive(), in: Circle())
+            .glassEffect(
+                .regular.tint(action.kind.tint.opacity(Self.tintStrength)).interactive(),
+                in: Circle()
+            )
             .contentShape(Circle())
             // **Exclusive**, not simultaneous, and not a `Button` carrying a long press
             // beside it: a SwiftUI button fires on touch-up however long the touch was
