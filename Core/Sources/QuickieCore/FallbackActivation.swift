@@ -13,8 +13,7 @@ import Foundation
 /// The list-shaped rules below — reconcile, forgetting-prune, reorder — are the
 /// **per-tier primitives**: `FallbackTiers` applies each of them to the Shelf as well,
 /// because a Shelf member is reconciled and pruned by exactly the same rules as an
-/// enabled one (ADR 0037). Their parameter names still read `enabled` for the tier
-/// they were written for; read them as "one ordered tier list".
+/// enabled one (ADR 0037), so each takes a neutral `list:` rather than naming a tier.
 public enum FallbackActivation {
     /// The first-run enabled list, in most-important-first order: the **fallback-
     /// eligible** default seeds — web search, App Store search, Wikipedia, YouTube
@@ -45,7 +44,7 @@ public enum FallbackActivation {
     /// launch before SwiftData's `@Query` has surfaced the just-seeded web-search row,
     /// so gating on "live" here would silently drop the pre-enabled default. Stale ids
     /// (a genuinely deleted Custom Action) are harmless — the engine gates every row on
-    /// `Action.isFallbackEligible`, and `reconciledEnabledIDs` hides them from the page
+    /// `Action.isFallbackEligible`, and `reconciled` hides them from the page
     /// — and real eligibility *loss* is forgotten by `prunedForgettingLost` instead.
     public static func migratedEnabledIDs(
         legacyOrder: [String],
@@ -58,22 +57,22 @@ public enum FallbackActivation {
         return base.filter { !legacyDisabled.contains($0) && seen.insert($0).inserted }
     }
 
-    /// The enabled list **displayed** through the live fallback-eligible catalog: ids
+    /// One tier list **displayed** through the live fallback-eligible catalog: ids
     /// that don't currently resolve to an eligible Action are hidden (a deleted Custom
     /// Action, a Shortcut whose accepts-input is off), survivors keep their order. This
     /// is a non-destructive read for the engine's `enabledFallbacks` and the page's
-    /// enabled section — it hides without forgetting, so a value momentarily missing
+    /// Shelf and Active sections — it hides without forgetting, so a value momentarily missing
     /// during load (before `@Query` populates) simply reappears once it resolves.
     /// Order-preserving and idempotent.
-    public static func reconciledEnabledIDs(
-        enabled: [String],
+    public static func reconciled(
+        list: [String],
         liveEligibleIDs: Set<String>
     ) -> [String] {
         var seen = Set<String>()
-        return enabled.filter { liveEligibleIDs.contains($0) && seen.insert($0).inserted }
+        return list.filter { liveEligibleIDs.contains($0) && seen.insert($0).inserted }
     }
 
-    /// The enabled list with **genuinely lost** eligibility forgotten (CONTEXT.md →
+    /// One tier list with **genuinely lost** eligibility forgotten (CONTEXT.md →
     /// Fallback list, "no memory of its rank"; issue #114): an id drops only if it was
     /// eligible earlier this session (`everEligible`) but no longer is (`liveEligible`)
     /// — a real loss (a Shortcut's accepts-input turned off, a Custom Action's first
@@ -87,33 +86,33 @@ public enum FallbackActivation {
     /// that happens *while the app isn't running* — a CloudKit-synced edit that turns a
     /// Shortcut's accepts-input off — is indistinguishable at the next launch from a
     /// value not-yet-loaded, and is therefore *not* forgotten: the stale id stays in
-    /// `enabled` (hidden by `reconciledEnabledIDs`), and a later re-gain would restore
+    /// the list (hidden by `reconciled`), and a later re-gain would restore
     /// its old rank rather than land it in the pool. Forgetting only on *observed*
     /// losses is the deliberate trade for never false-dropping the launch-race seed;
     /// the alternative (forgetting any id absent at launch) would drop the pre-enabled
     /// web search before `@Query` surfaces it. The window is small — the id must lose
     /// eligibility out-of-session *and* later regain it — so it is left as-is.
     public static func prunedForgettingLost(
-        enabled: [String],
+        list: [String],
         liveEligible: Set<String>,
         everEligible: Set<String>
     ) -> [String] {
-        enabled.filter { id in
+        list.filter { id in
             !(everEligible.contains(id) && !liveEligible.contains(id))
         }
     }
 
-    /// Applies a reorder of the **currently-visible** enabled ids to the full enabled
-    /// list without dropping ids that aren't visible yet (issue #114). The Fallbacks
-    /// page's Active section shows only ids that resolve against the loaded catalog, so
-    /// a drag yields a permutation of that visible subset; an id still in `enabled` but
+    /// Applies a reorder of the **currently-visible** ids of one tier to its full list
+    /// without dropping ids that aren't visible yet (issue #114). The Fallbacks
+    /// page's sections show only ids that resolve against the loaded catalog, so
+    /// a drag yields a permutation of that visible subset; an id still in the list but
     /// not yet loaded (the launch race) must keep its slot rather than be silently
-    /// erased by a wholesale overwrite. Each visible slot in `enabled` is filled from
+    /// erased by a wholesale overwrite. Each visible slot in the list is filled from
     /// `visibleOrder` in sequence; non-visible ids stay exactly where they are. Any
     /// visible id short of `visibleOrder` keeps its own id (never fewer than present).
-    public static func reorderedEnabled(enabled: [String], visibleOrder: [String]) -> [String] {
+    public static func reordered(list: [String], visibleOrder: [String]) -> [String] {
         let visible = Set(visibleOrder)
         var next = visibleOrder.makeIterator()
-        return enabled.map { visible.contains($0) ? (next.next() ?? $0) : $0 }
+        return list.map { visible.contains($0) ? (next.next() ?? $0) : $0 }
     }
 }

@@ -165,25 +165,23 @@ final class FallbacksStore {
     /// **top** of Active, and the tiers stay disjoint. Persists only on a real change,
     /// so re-tapping a row can never quietly re-sort a list.
     func move(_ id: String, to tier: FallbackTier) {
-        var next = tiers
-        next.move(id, to: tier)
-        setTiers(next)
+        edit { $0.move(id, to: tier) }
     }
 
-    /// Applies a drag-reorder of the **visible** rows of one tier without dropping an
-    /// id that hasn't resolved yet (issue #114). The page shows only ids that resolve
+    /// Applies a drag-reorder of the **visible** Shelf rows without dropping a member
+    /// that hasn't resolved yet (issue #114). The page shows only ids that resolve
     /// against the loaded catalog, so `visibleOrder` is a permutation of that subset; an
     /// id still stored but not yet loaded (the launch race) keeps its slot rather
     /// than being erased by a wholesale overwrite — the same not-yet-loaded-vs-lost care
     /// `pruneToEligible` takes. Persists only when the order actually changed.
-    func reorder(_ tier: FallbackTier, visibleOrder: [String]) {
-        var next = tiers
-        switch tier {
-        case .shelf: next.reorderShelf(visibleOrder: visibleOrder)
-        case .enabled: next.reorderEnabled(visibleOrder: visibleOrder)
-        case .pool: return  // the pool is derived and alphabetical — never reorderable
-        }
-        setTiers(next)
+    func reorderShelf(visibleOrder: [String]) {
+        edit { $0.reorderShelf(visibleOrder: visibleOrder) }
+    }
+
+    /// Applies a drag-reorder of the **visible** Active rows, with the same
+    /// not-yet-loaded care as `reorderShelf`.
+    func reorderEnabled(visibleOrder: [String]) {
+        edit { $0.reorderEnabled(visibleOrder: visibleOrder) }
     }
 
     /// Demotes any id that is currently **instance-disabled** off *both* tiers,
@@ -193,9 +191,7 @@ final class FallbacksStore {
     /// restoring its old rank. Called whenever the disabled set changes, from any
     /// surface, so the coupling is uniform. Persists only on a change.
     func demoteDisabled(_ disabledIDs: Set<String>) {
-        var next = tiers
-        next.demoteToPool(disabledIDs)
-        setTiers(next)
+        edit { $0.demoteToPool(disabledIDs) }
     }
 
     /// Forgets an id's rank on **either** tier once its eligibility is *genuinely* lost
@@ -207,15 +203,15 @@ final class FallbacksStore {
     /// the launch-race pre-enable survives. A no-op before migration and when unchanged.
     func pruneToEligible(liveEligible: [String], everEligible: Set<String>) {
         guard defaults.bool(forKey: Self.migratedKey) else { return }
-        var next = tiers
-        next.pruneForgettingLost(liveEligible: Set(liveEligible), everEligible: everEligible)
-        setTiers(next)
+        edit { $0.pruneForgettingLost(liveEligible: Set(liveEligible), everEligible: everEligible) }
     }
 
-    /// The edit write path: swaps the ladder in and persists both lists, but only when
-    /// something actually moved — so the observable value never churns and the defaults
-    /// are not rewritten on every launch or every no-op tap.
-    private func setTiers(_ next: FallbackTiers) {
+    /// The single edit path: applies a Core mutation to a copy of the ladder and swaps
+    /// it in, but only when something actually moved — so the observable value never
+    /// churns and the defaults are not rewritten on a no-op tap.
+    private func edit(_ mutate: (inout FallbackTiers) -> Void) {
+        var next = tiers
+        mutate(&next)
         guard next != tiers else { return }
         tiers = next
         persist()

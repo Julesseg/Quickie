@@ -92,14 +92,12 @@ struct FallbacksView: View {
                         FallbackRow(
                             action: action,
                             style: .shelf,
-                            isDisabled: false,
                             onPrimary: { withAnimation { store.move(action.id, to: .enabled) } },
-                            onShelve: nil,
-                            onToggleDisabled: {}
+                            onShelve: nil
                         )
                     }
                     .onMove { offsets, destination in
-                        reorder(.shelf, shelvedActions, from: offsets, to: destination)
+                        store.reorderShelf(visibleOrder: moved(shelvedActions, from: offsets, to: destination))
                     }
                 }
             } header: {
@@ -121,14 +119,12 @@ struct FallbacksView: View {
                         FallbackRow(
                             action: action,
                             style: .active,
-                            isDisabled: false,
                             onPrimary: { withAnimation { store.move(action.id, to: .pool) } },
-                            onShelve: { withAnimation { store.move(action.id, to: .shelf) } },
-                            onToggleDisabled: {}
+                            onShelve: { withAnimation { store.move(action.id, to: .shelf) } }
                         )
                     }
                     .onMove { offsets, destination in
-                        reorder(.enabled, activeActions, from: offsets, to: destination)
+                        store.reorderEnabled(visibleOrder: moved(activeActions, from: offsets, to: destination))
                     }
                 }
             } header: {
@@ -149,11 +145,12 @@ struct FallbacksView: View {
                         // enable/disable toggle — the toggle only appears here.
                         FallbackRow(
                             action: action,
-                            style: .pool,
-                            isDisabled: enablement.isDisabled(action.id),
+                            style: .pool(
+                                isDisabled: enablement.isDisabled(action.id),
+                                onToggleDisabled: { withAnimation { enablement.toggleDisabled(action.id) } }
+                            ),
                             onPrimary: { promote(action, to: .enabled) },
-                            onShelve: { promote(action, to: .shelf) },
-                            onToggleDisabled: { withAnimation { enablement.toggleDisabled(action.id) } }
+                            onShelve: { promote(action, to: .shelf) }
                         )
                     }
                 }
@@ -183,19 +180,14 @@ struct FallbacksView: View {
         }
     }
 
-    /// Persists a drag-reorder of one tier's section. The offsets index into the
-    /// section's resolved, loaded rows, so the moved ids are the new visible order;
-    /// the store applies it while keeping any stored id that hasn't resolved yet in
-    /// place (the launch race) rather than dropping it.
-    private func reorder(
-        _ tier: FallbackTier,
-        _ rows: [Action],
-        from offsets: IndexSet,
-        to destination: Int
-    ) {
+    /// The new **visible** id order after a drag in one section. The offsets index
+    /// into that section's resolved, loaded rows; the store applies the result while
+    /// keeping any stored id that hasn't resolved yet in place (the launch race)
+    /// rather than dropping it.
+    private func moved(_ rows: [Action], from offsets: IndexSet, to destination: Int) -> [String] {
         var ids = rows.map(\.id)
         ids.move(fromOffsets: offsets, toOffset: destination)
-        store.reorder(tier, visibleOrder: ids)
+        return ids
     }
 }
 
@@ -205,32 +197,48 @@ struct FallbacksView: View {
 /// the **pool** it is a green plus (promote to Active) + title + a shelf button + the
 /// action's instance enable/disable toggle. No delete affordance in any of them.
 private struct FallbackRow: View {
-    enum Style { case shelf, active, pool }
+    /// Which section the row is rendering in — and, for the pool, the instance
+    /// Disabled state and switch that only *it* carries, so the two ordered tiers
+    /// don't pass placeholders for a control they never show.
+    enum Style {
+        case shelf
+        case active
+        case pool(isDisabled: Bool, onToggleDisabled: () -> Void)
+
+        /// The pool's dimming/toggle state; the ordered tiers never hold a disabled
+        /// action (`demoteDisabled` drops it to the pool), so they read as enabled.
+        var isDisabled: Bool {
+            if case .pool(let isDisabled, _) = self { return isDisabled }
+            return false
+        }
+
+        var isPool: Bool {
+            if case .pool = self { return true }
+            return false
+        }
+    }
 
     let action: Action
     let style: Style
-    /// Whether the action is instance-disabled — only meaningful (and shown) in the pool.
-    let isDisabled: Bool
     /// Demote (Shelf, Active) or promote (pool) — the section's primary activation verb.
     let onPrimary: () -> Void
     /// Promote onto the Shelf. `nil` on Shelf rows, which are already there.
     let onShelve: (() -> Void)?
-    let onToggleDisabled: () -> Void
 
     var body: some View {
         HStack(spacing: 12) {
             Button(action: onPrimary) {
-                Image(systemName: style == .pool ? "plus.circle.fill" : "minus.circle.fill")
-                    .foregroundStyle(style == .pool ? .green : .red)
+                Image(systemName: style.isPool ? "plus.circle.fill" : "minus.circle.fill")
+                    .foregroundStyle(style.isPool ? .green : .red)
             }
             .buttonStyle(.borderless)
             .accessibilityLabel(primaryLabel)
-            .accessibilityIdentifier("\(style == .pool ? "fallback-promote" : "fallback-demote").\(action.id)")
+            .accessibilityIdentifier("\(style.isPool ? "fallback-promote" : "fallback-demote").\(action.id)")
 
             VStack(alignment: .leading, spacing: 2) {
                 Text(action.title)
                     .font(.body)
-                    .foregroundStyle(isDisabled ? .secondary : .primary)
+                    .foregroundStyle(style.isDisabled ? .secondary : .primary)
                 if let caption = kindCaption {
                     Text(caption)
                         .font(.caption)
@@ -255,7 +263,7 @@ private struct FallbackRow: View {
             // disabling hides the action everywhere; a shelved or active fallback is
             // demoted here first (or disabled from its home page) before it can be
             // switched off.
-            if style == .pool {
+            if case .pool(let isDisabled, let onToggleDisabled) = style {
                 Toggle("Enabled", isOn: Binding(get: { !isDisabled }, set: { _ in onToggleDisabled() }))
                     .labelsHidden()
                     .accessibilityIdentifier("fallback-enabled.\(action.id)")
