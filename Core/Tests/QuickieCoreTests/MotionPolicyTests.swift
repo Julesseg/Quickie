@@ -187,4 +187,40 @@ struct MotionPolicyTests {
             Issue.record("expected Reduce Motion to stop the drift, still got \(style)")
         }
     }
+
+    // MARK: - The Shelf's long-press title reveal (#242)
+
+    @Test("the Shelf title dissolves rather than springing, and faster than a hint")
+    func shelfTitleRevealIsAQuickDissolve() {
+        let policy = MotionPolicy(reduceMotion: false)
+        guard case .fade(let reveal) = policy.style(for: .shelfTitleReveal),
+              case .fade(let hint) = policy.style(for: .hintRotation) else {
+            Issue.record("expected fades — a label appearing has nothing to spring")
+            return
+        }
+        // The user is holding a finger down waiting to read it, so it must not
+        // linger the way the idle hint line's dissolve deliberately does.
+        #expect(reveal < hint)
+        #expect(reveal <= 0.3)
+    }
+
+    @Test("the revealed title outlasts its own fade, long enough to actually read")
+    func shelfTitleDwellsLongEnoughToRead() {
+        let policy = MotionPolicy(reduceMotion: false)
+        guard case .fade(let reveal) = policy.style(for: .shelfTitleReveal) else {
+            Issue.record("expected a fade")
+            return
+        }
+        #expect(policy.shelfTitleDwell > reveal * 2)
+        #expect(policy.shelfTitleDwell >= 1.5)
+    }
+
+    @Test("Reduce Motion shortens the reveal but never freezes the title on screen")
+    func reduceMotionStillDismissesTheShelfTitle() {
+        // The opposite of `hintDwell`'s `nil`: freezing an unrequested *rotation* is
+        // a suppression, but freezing a self-dismissing label would leave it up
+        // forever — adding screen furniture in the name of removing motion.
+        #expect(MotionPolicy(reduceMotion: true).shelfTitleDwell
+            == MotionPolicy(reduceMotion: false).shelfTitleDwell)
+    }
 }

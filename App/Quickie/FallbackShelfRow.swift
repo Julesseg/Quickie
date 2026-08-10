@@ -21,19 +21,11 @@ import QuickieCore
 /// readable sizes). The title floats *over* the content above rather than pushing the
 /// row down, so revealing it never reflows the input or the result list.
 struct FallbackShelfRow: View {
-    /// The launcher's Shelf metrics. The preferred diameter is the input bar's own
-    /// height — the same circle the paste chip is — so the Shelf reads as part of the
-    /// bottom glass body rather than a foreign strip above it, and the spacing matches
-    /// the gap the bar's own surfaces sit apart.
-    static let layout = FallbackShelf.Layout(
-        preferredDiameter: InputBar.barHeight,
-        // The HIG's comfortable tap target: below this a shrunk button stops being
-        // reliably hittable, so the row scrolls further instead.
-        minimumDiameter: 44,
-        spacing: 8,
-        contentInset: 12,
-        peek: 0.5
-    )
+    /// The launcher's Shelf metrics — Core's own preset, so the sizing rule is tested
+    /// against the numbers that ship. The one value passed in is the bar's height: the
+    /// buttons are the same circle the paste chip is, which is what makes the Shelf read
+    /// as part of the bottom glass body rather than a foreign strip above it.
+    static let layout = FallbackShelf.Layout.launcher(preferredDiameter: InputBar.barHeight)
 
     /// The shelved Actions, most-important-first — already resolved to the live
     /// catalog and filtered of disabled instances by the host.
@@ -72,6 +64,9 @@ struct FallbackShelfRow: View {
                         button(for: member)
                     }
                 }
+                // Both edges — and Core's sizing reserves both, so a row it calls
+                // settled really does sit inside the viewport instead of scrolling by
+                // the width of its own trailing padding.
                 .padding(.horizontal, Self.layout.contentInset)
             }
             // No scroll bar under the thumb: the peeking button is the affordance.
@@ -82,20 +77,22 @@ struct FallbackShelfRow: View {
         }
         .frame(height: diameter)
         .overlay(alignment: .top) { revealedTitleLabel }
-        // The reveal fades rather than popping; instant under Reduce Motion and under
-        // UI test, like every other motion in the app (issue #79).
-        .animation(animatesReveal ? .snappy : nil, value: revealedID)
+        // Both the curve and the dwell come from Core's budget (ADR 0034), never a
+        // hand-picked animation or a hand-rolled timer: `MotionStyle.animation` is what
+        // degrades the fade for Reduce Motion and drops it entirely under UI test
+        // (issue #79), exactly as every other animated surface degrades.
+        .animation(motion.style(for: .shelfTitleReveal).animation, value: revealedID)
         // Hold the reveal long enough to read a title, then let it go on its own —
-        // there is nothing to dismiss and no menu to escape from.
+        // there is nothing to dismiss it with, and no menu to escape from.
         .task(id: revealedID) {
             guard revealedID != nil else { return }
-            try? await Task.sleep(for: .seconds(2.5))
+            try? await Task.sleep(for: .seconds(motion.shelfTitleDwell))
             guard !Task.isCancelled else { return }
             revealedID = nil
         }
     }
 
-    private var animatesReveal: Bool { !reduceMotion && !MotionStyle.isInstantForUITesting }
+    private var motion: MotionPolicy { MotionPolicy(reduceMotion: reduceMotion) }
 
     /// One Shelf member: its glyph on a circle of glass tinted by the action's kind.
     ///
@@ -123,8 +120,10 @@ struct FallbackShelfRow: View {
             // short press fails it so the tap runs as normal.
             .gesture(
                 ExclusiveGesture(
-                    LongPressGesture(minimumDuration: 0.4)
-                        .onEnded { _ in revealedID = action.id },
+                    // The system's own long-press threshold, not a tuned one: holding
+                    // to see what something is should take exactly as long here as it
+                    // does everywhere else on the platform.
+                    LongPressGesture().onEnded { _ in revealedID = action.id },
                     TapGesture().onEnded { run(action) }
                 )
             )

@@ -419,13 +419,15 @@ struct RootView: View {
     ///   before `demoteDisabled` prunes it off the tier.
     ///
     /// Takes the already-built eligible catalog rather than rebuilding it, so putting
-    /// the row in the view hierarchy costs no extra pass over `makeAction`.
+    /// the row in the view hierarchy costs no extra pass over `makeAction`, and renders
+    /// through the same `liveMembers` the Fallbacks page's sections do.
     private func shelfMembers(from eligible: [Action]) -> [Action] {
         guard providerEnablement.enablement.isEffectivelyEnabled(.fallbacks) else { return [] }
-        let byID = Dictionary(eligible.map { ($0.id, $0) }, uniquingKeysWith: { first, _ in first })
-        return fallbacks.resolvedShelf(for: eligible.map(\.id))
-            .compactMap { byID[$0] }
-            .filter { !instanceEnablement.isDisabled($0.id) }
+        return FallbackTiers.liveMembers(
+            of: fallbacks.resolvedShelf(for: eligible.map(\.id)),
+            in: eligible,
+            hiding: instanceEnablement.disabled
+        )
     }
 
 

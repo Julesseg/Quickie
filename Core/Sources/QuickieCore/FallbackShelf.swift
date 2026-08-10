@@ -48,7 +48,8 @@ public enum FallbackShelf {
         public let minimumDiameter: CGFloat
         /// The gap between two buttons.
         public let spacing: CGFloat
-        /// The row's leading inset — where the most important member starts.
+        /// The row's content inset, applied to **both** edges — where the most
+        /// important member starts, and the breathing room the last one keeps.
         public let contentInset: CGFloat
         /// How much of the next button is left showing past the trailing edge, as a
         /// fraction of its diameter. Half a button is unmistakably "cut off".
@@ -68,6 +69,28 @@ public enum FallbackShelf {
             self.peek = peek
         }
 
+        /// **The** metrics the launcher's Shelf renders with. It lives here rather than
+        /// beside the view so the sizing rule is tested against the numbers that ship,
+        /// instead of a hand-copied twin in the test that nothing keeps in step.
+        ///
+        /// Only `preferredDiameter` is the caller's: the bar's height is App chrome
+        /// (`InputBar.barHeight`), and matching it is what makes the Shelf read as part
+        /// of the bottom glass body rather than a foreign strip above it. Everything
+        /// else is this rule's own — a minimum that holds the HIG's comfortable tap
+        /// target rather than shrinking past it, the same 8pt the bar's glass surfaces
+        /// sit apart, the same 12pt inset the bar's contents keep, and a half-button
+        /// peek, which is unmistakably "cut off" where a thinner sliver reads as a
+        /// rendering slip.
+        public static func launcher(preferredDiameter: CGFloat) -> Layout {
+            Layout(
+                preferredDiameter: preferredDiameter,
+                minimumDiameter: 44,
+                spacing: 8,
+                contentInset: 12,
+                peek: 0.5
+            )
+        }
+
         /// The diameter every button in the row renders at, in three cases:
         ///
         /// 1. **They fit.** Nothing to signal — the preferred diameter, and the row
@@ -80,8 +103,10 @@ public enum FallbackShelf {
         ///    scrolls further.
         /// 3. **They overflow by less than a peek.** No `k` yields a small enough
         ///    button (peeking would need *bigger* ones), so shrink just enough that
-        ///    every member is whole and the row stops scrolling — an honest "that's
-        ///    all of them" beats a 4pt shave off the last button.
+        ///    every member is whole *and the row stops scrolling* — an honest "that's
+        ///    all of them" beats a 4pt shave off the last button. Both insets come out
+        ///    of the width here for the same reason they do in the fit check: the row
+        ///    is only settled if the laid-out content, padding included, fits inside it.
         ///
         /// An unmeasured row (`availableWidth` 0, the first frame) or an empty one
         /// takes the preferred diameter; the result never drops below the minimum.
@@ -98,17 +123,18 @@ public enum FallbackShelf {
                 if candidate <= preferredDiameter { return max(candidate, minimumDiameter) }
             }
             let shrunkToFit =
-                (availableWidth - contentInset - CGFloat(memberCount - 1) * spacing)
+                (availableWidth - 2 * contentInset - CGFloat(memberCount - 1) * spacing)
                 / CGFloat(memberCount)
             return max(shrunkToFit, minimumDiameter)
         }
 
-        /// The width `count` whole buttons occupy at `diameter`, from the row's leading
-        /// edge to the trailing edge of the last one. No trailing inset: a button whose
-        /// edge lands inside the row *is* fully visible, and demanding symmetric
-        /// padding would call that row overflowing and shrink it for nothing.
+        /// The width `count` whole buttons occupy at `diameter`, insets included — what
+        /// the row actually lays out, which is why **both** insets are counted. Reserving
+        /// only the leading one would call a row settled while its trailing padding
+        /// pushed the content a few points past the viewport: a row that scrolls by a
+        /// hair, showing the shaved sliver the peek sizing exists to avoid.
         private func width(of count: Int, at diameter: CGFloat) -> CGFloat {
-            contentInset + CGFloat(count) * diameter + CGFloat(count - 1) * spacing
+            2 * contentInset + CGFloat(count) * diameter + CGFloat(count - 1) * spacing
         }
 
         /// The diameter at which `whole` buttons plus a `peek` of the next one exactly

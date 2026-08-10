@@ -46,13 +46,12 @@ final class ShelfRowUITests: XCTestCase {
         command.tap()
 
         // On a short screen (CI runs on iPhone SE) the row can land outside the fold,
-        // and the page is three sections tall, so walk it into the render tree.
+        // and the page is three sections tall, so walk it into the render tree — both
+        // directions, the newer idiom `FallbackShelfUITests` settled on: rewind to the
+        // top first, then walk down, so a row above the current viewport is found too.
         let row = app.cells.containing(NSPredicate(format: "label CONTAINS[c] %@", title)).firstMatch
-        var scrolls = 0
-        while !row.exists && scrolls < 6 {
-            app.swipeUp()
-            scrolls += 1
-        }
+        for _ in 0..<4 where !row.exists { app.swipeDown() }
+        for _ in 0..<5 where !row.exists { app.swipeUp() }
         XCTAssertTrue(row.waitForExistence(timeout: 10), "\(title) is listed on the Fallbacks page")
         let shelfButton = row.buttons["Move to the shelf"]
         XCTAssertTrue(shelfButton.waitForExistence(timeout: 5), "the row carries the shelf button")
