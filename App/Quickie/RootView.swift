@@ -995,18 +995,19 @@ struct RootView: View {
                 signals.reconcileFavorites(
                     against: engine.resolvableHomeIDs().union(storedCustomActionIDs)
                 )
-                // One-time migration to the single enabled Fallback list (issue
-                // #114): enabled = old order minus old disabled, with the pre-enabled
-                // web-search + capture trio seeded for fresh installs. Independent of
-                // the catalog's load timing so the seeded web search is pre-enabled
-                // even before @Query surfaces it.
+                // One-time migration of the fallback tiers (issues #114, #241):
+                // enabled = old order minus old disabled, with the pre-enabled
+                // web-search + capture trio seeded for fresh installs, then the Shelf
+                // seeded with its four defaults (which claim the two captures off the
+                // Active list). Independent of the catalog's load timing so the seeded
+                // web search is pre-enabled even before @Query surfaces it.
                 fallbacks.migrateIfNeeded(
                     firstRunDefaults: FallbackActivation.firstRunEnabledIDs()
                 )
                 everEligibleFallbacks.formUnion(eligibleFallbackIDs)
-                // Couple instance-disable with the Fallback list: a disabled action is
-                // demoted out of the enabled list into the Available pool, so it never
-                // renders as active and re-enabling doesn't restore its old rank.
+                // Couple instance-disable with the fallback tiers: a disabled action is
+                // demoted off the Shelf and the enabled list into the Available pool, so
+                // it never renders as active and re-enabling doesn't restore its old rank.
                 fallbacks.demoteDisabled(instanceEnablement.disabled)
                 // Publish the initial Bridged Action snapshot (issue #122): `onChange`
                 // only fires on later changes, so the out-of-process entity query needs

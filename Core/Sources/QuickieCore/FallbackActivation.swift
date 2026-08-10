@@ -9,6 +9,12 @@ import Foundation
 /// There is no stored fallback flag anymore: eligibility is `Action.isFallbackEligible`
 /// (derived from shape) and *activation* is membership in the ordered enabled list.
 /// The disabled pool is everything eligible but not enabled, so it is never stored.
+///
+/// The list-shaped rules below — reconcile, forgetting-prune, reorder — are the
+/// **per-tier primitives**: `FallbackTiers` applies each of them to the Shelf as well,
+/// because a Shelf member is reconciled and pruned by exactly the same rules as an
+/// enabled one (ADR 0037). Their parameter names still read `enabled` for the tier
+/// they were written for; read them as "one ordered tier list".
 public enum FallbackActivation {
     /// The first-run enabled list, in most-important-first order: the **fallback-
     /// eligible** default seeds — web search, App Store search, Wikipedia, YouTube
