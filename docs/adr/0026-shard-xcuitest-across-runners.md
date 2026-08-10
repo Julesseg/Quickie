@@ -77,3 +77,11 @@ rest are green, and each keeps its own crash log and
   workflow). Rejected: it rots — the silent failure mode is a new suite
   that runs nowhere, which is exactly what computing the split from source
   (plus the loud convention check) makes impossible.
+
+## Update — ADR 0038
+
+The split is now **per test method**, and `SHARD_COUNT` is pinned at 5 (the
+account's concurrent-macOS-job cap). Class granularity put a floor under the
+run at the slowest single class, which no shard count could lift. The
+one-class-per-file convention and the loud plan-job check are unchanged.
+See `0038-shard-xcuitest-per-test-method.md`.

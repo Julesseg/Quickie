@@ -62,10 +62,17 @@ jobs:
       - name: Check the stamp phase is wired into the app target
         run: python3 App/Scripts/check-build-stamp.py
 
-  # Partition the XCUITest classes into shards so the (slow) UI suite can run
+  # Partition the XCUITest suite into shards so the (slow) UI suite can run
   # across several macOS runners in parallel. One sim-per-runner sidesteps the
   # contention that made same-runner `-parallel-testing-enabled` *slower* and
   # crash SwiftUI under CPU starvation on the ~3-core/7 GB hosted boxes.
+  #
+  # The split is per *test method*, not per class. Class-granularity capped the
+  # run's wall clock at the slowest single class no matter how many shards were
+  # thrown at it — CustomActionUITests alone is 11m30s of the suite's 48 min,
+  # so every shard count from 5 up landed on the same 15m30s floor. Method
+  # filters drop that floor to the slowest single test (~2 min).
+  # See docs/adr/0038-shard-xcuitest-per-test-method.md.
   #
   # The split is computed from source, not hand-maintained: every UI suite is a
   # `class <Name>UITests: XCTestCase` in its own file, so a newly added suite is
@@ -83,22 +90,32 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - id: plan
-        name: Partition test classes into shards
+        name: Partition test methods into shards
         run: |
           set -euo pipefail
-          # Bump SHARD_COUNT to trade billed macOS minutes for wall-clock: each
-          # shard is a separate runner doing its own build + its slice of the suite.
-          SHARD_COUNT=4
-          # Balance shards by *test-method* count, not class count: a class holds
-          # anywhere from 1 to 8 `func test`s, so round-robining classes lands
-          # most of the work on one runner and the wall clock barely moves. Instead
-          # weigh each class by its test count and greedily pack the heaviest into
-          # the currently-lightest shard (longest-processing-time bin packing).
-          # Reading from source means a newly added suite is always assigned.
+          # SHARD_COUNT is the one knob trading runners for wall clock. 5 is the
+          # ceiling, not a preference: GitHub caps this account at 5 concurrent
+          # *macOS* jobs, so a 6th shard doesn't run alongside the others — it
+          # waits for a slot and lands a whole shard-length after them, which is
+          # strictly worse than packing the same tests into 5. Runner minutes are
+          # free on this public repo, so wall clock is the only currency.
+          SHARD_COUNT=5
+          # Deal individual test *methods* round-robin, in source order. Two
+          # reasons not to bin-pack classes:
+          #   * A class is indivisible, so the heaviest one is a floor on the
+          #     whole run — CustomActionUITests is 11m30s of the suite's 48 min,
+          #     which pins every shard count from 5 up at 15m30s. Methods have no
+          #     such floor beyond the slowest single test.
+          #   * Nothing here can weigh a *method* usefully. Measured durations
+          #     span 10s–123s and correlate only weakly (r≈0.35) with anything
+          #     visible in source, so a "smart" weight would be false precision.
+          #     Round-robin over source order spreads each class's methods across
+          #     every shard, which is what actually evens the load out.
+          # Reading from source means a newly added test is always assigned.
           python3 - "$SHARD_COUNT" <<'PY' >> "$GITHUB_OUTPUT"
           import glob, json, re, sys
           n = int(sys.argv[1])
-          weights, problems = [], []
+          tests, problems = [], []
           # Recursive: the Xcode target is a filesystem-synchronized group, so a
           # file in a subdirectory is in the test bundle and must be planned too.
           for path in sorted(glob.glob("App/QuickieUITests/**/*.swift", recursive=True)):
@@ -112,34 +129,31 @@ jobs:
               if not suites:
                   continue  # helper file — nothing runnable to assign
               if len(suites) > 1:
-                  problems.append(f"{path}: multiple test classes ({', '.join(suites)}) — keep one per file so shard weights stay attributable")
+                  problems.append(f"{path}: multiple test classes ({', '.join(suites)}) — keep one per file so the planner can address each test")
                   continue
               cls = suites[0]
               if not cls.endswith("UITests"):
                   problems.append(f"{path}: test class {cls} must be named <Name>UITests for the shard planner to address it")
                   continue
-              # `or 1` so a class with no test methods still occupies a slot.
-              weights.append((len(re.findall(r'func\s+test', src)) or 1, cls))
+              # Source order, so the round-robin below interleaves each class's
+              # methods across shards rather than clumping them on one.
+              tests += [f"{cls}/{m}" for m in re.findall(r'func\s+(test[A-Za-z0-9_]*)\s*\(', src)]
           if problems:
               for p in problems:
                   sys.stderr.write(f"ERROR: {p}\n")
               sys.stderr.write("A suite the planner can't address would run in NO shard (every shard is -only-testing filtered). Fix the convention violation above.\n")
               sys.exit(1)
-          if not weights:
-              sys.stderr.write("No XCUITest classes found under App/QuickieUITests.\n")
+          if not tests:
+              sys.stderr.write("No XCUITest methods found under App/QuickieUITests.\n")
               sys.exit(1)
-          weights.sort(reverse=True)
-          buckets = [{"tests": 0, "classes": []} for _ in range(n)]
-          for count, cls in weights:
-              b = min(buckets, key=lambda x: x["tests"])
-              b["tests"] += count
-              b["classes"].append(cls)
+          buckets = [tests[i::n] for i in range(n)]
           include = []
           for idx, b in enumerate(buckets, start=1):
-              if not b["classes"]:
+              if not b:
                   continue
-              only = " ".join(f"-only-testing:QuickieUITests/{c}" for c in b["classes"])
-              include.append({"shard": str(idx), "of": str(n), "only": only, "tests": str(b["tests"])})
+              only = " ".join(f"-only-testing:QuickieUITests/{t}" for t in b)
+              include.append({"shard": str(idx), "of": str(n), "only": only, "tests": str(len(b))})
+          sys.stderr.write(f"{len(tests)} test methods across {len(include)} shards\n")
           for e in include:
               sys.stderr.write(f"shard {e['shard']}/{e['of']}: {e['tests']} tests — {e['only']}\n")
           print("matrix=" + json.dumps({"include": include}))
@@ -165,14 +179,45 @@ jobs:
       - name: Toolchain versions
         run: xcodebuild -version
 
-      - name: Resolve an available iPhone simulator
+      # Resolve a concrete device *id* rather than a name, then start booting it
+      # before the build runs. A cold simulator boot is dead time on the critical
+      # path — typically ~90s, and once measured at 8.7 min — that xcodebuild
+      # otherwise pays *after* compiling. Kicking it off here overlaps it with
+      # the ~2 min build instead. Booting needs the exact device the test run
+      # will use, hence `id=` on the destination below: with `name=…,OS=latest`
+      # xcodebuild is free to pick a same-named device on another runtime and
+      # boot that one from cold anyway, wasting the head start.
+      - name: Resolve an iPhone simulator and start booting it
         id: sim
         run: |
           set -euo pipefail
-          NAME=$(xcrun simctl list devices available --json \
-            | python3 -c "import json,sys; d=json.load(sys.stdin)['devices']; names=[x['name'] for rt in d for x in d[rt] if x['name'].startswith('iPhone')]; print(sorted(names)[-1] if names else 'iPhone 16')")
-          echo "Using simulator: $NAME"
-          echo "name=$NAME" >> "$GITHUB_OUTPUT"
+          UDID=$(python3 - <<'PY'
+          import json, re, subprocess, sys
+          out = subprocess.run(["xcrun", "simctl", "list", "devices", "available", "--json"],
+                               capture_output=True, text=True, check=True).stdout
+          runtimes = json.loads(out)["devices"]
+          def version(rt):
+              m = re.search(r"iOS-([0-9]+)-([0-9]+)", rt)
+              return (int(m.group(1)), int(m.group(2))) if m else (-1, -1)
+          ios = [rt for rt in runtimes if "iOS" in rt and runtimes[rt]]
+          if not ios:
+              sys.exit("No available iOS simulator runtime on this runner.")
+          newest = max(ios, key=version)
+          phones = [d for d in runtimes[newest] if d["name"].startswith("iPhone")]
+          if not phones:
+              sys.exit(f"No available iPhone simulator in runtime {newest}.")
+          # Same selection as the name-based resolver this replaced — last by
+          # name — so the device the suite is proven against doesn't move.
+          dev = sorted(phones, key=lambda d: d["name"])[-1]
+          sys.stderr.write(f"Using simulator: {dev['name']} on {newest} ({dev['udid']})\n")
+          print(dev["udid"])
+          PY
+          )
+          # Non-fatal: returns as soon as the boot *starts*, so the sim warms up
+          # while the build runs. If it fails, xcodebuild boots the device itself
+          # and we only lose the head start.
+          xcrun simctl boot "$UDID" || true
+          echo "udid=$UDID" >> "$GITHUB_OUTPUT"
 
       - name: Build & run UI tests
         working-directory: App
@@ -185,13 +230,13 @@ jobs:
           # `app.launch()` on a fresh sim) without masking real regressions — a
           # genuinely broken test fails all three attempts and still reports failure.
           #
-          # This shard runs only its assigned classes (`-only-testing:` from the
-          # plan job) on a single simulator — no `-parallel-testing-enabled`, since
-          # the parallelism here is across runners, not within one starved box.
+          # This shard runs only its assigned test methods (`-only-testing:` from
+          # the plan job) on a single simulator — no `-parallel-testing-enabled`,
+          # since the parallelism here is across runners, not within one starved box.
           xcodebuild test \
             -project Quickie.xcodeproj \
             -scheme Quickie \
-            -destination "platform=iOS Simulator,name=${{ steps.sim.outputs.name }},OS=latest" \
+            -destination "platform=iOS Simulator,id=${{ steps.sim.outputs.udid }}" \
             -resultBundlePath "TestResults-shard-${{ matrix.shard }}.xcresult" \
             -retry-tests-on-failure \
             -test-iterations 3 \
