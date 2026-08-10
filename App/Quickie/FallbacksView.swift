@@ -1,67 +1,112 @@
 import SwiftUI
 import QuickieCore
 
-/// The two-section **Fallbacks** page (CONTEXT.md → Fallback list; issue #114) — the
-/// same shape as editing the app row of the native iOS share sheet. An **Active
-/// section** (user-ordered, most-important-first, reorderable, a red minus demotes to
-/// the pool) sits above an **Available pool** (every fallback-eligible Action not
-/// active, alphabetical by title, a green plus promotes to the *bottom* of Active).
-/// Membership in the Active section is the fact the user sets here — the pool is
-/// derived, and **nothing on this page deletes anything**: deletion lives on an
-/// action's home page (Custom Actions / Shortcuts). Save for later and New Snippet are
-/// demotable but permanent.
+/// The three-section **Fallbacks** page (CONTEXT.md → Fallback list, Shelf; issues
+/// #114, #241) — the same shape as editing the app row of the native iOS share sheet.
+/// It renders the promotion ladder top-down: the **Shelf** (the glass button row above
+/// the input — drag-ordered, a red minus drops a member to the *top* of Active), then
+/// the **Active section** (user-ordered, most-important-first, reorderable, a red minus
+/// demotes to the pool), then the **Available pool** (every fallback-eligible Action on
+/// neither rung, alphabetical by title, a green plus promotes to the *bottom* of
+/// Active). Every row that isn't already shelved carries a shelf button, so a pool row
+/// can climb straight to the Shelf without a forced two-step climb.
 ///
-/// Each row also carries the action's **enable/disable** toggle — the same instance
+/// Rung membership is the fact the user sets here — the pool is derived, and **nothing
+/// on this page deletes anything**: deletion lives on an action's home page (Custom
+/// Actions / Shortcuts). Save for later and New Snippet are demotable but permanent.
+/// There is deliberately no capture-vs-search category behind the Shelf (ADR 0037):
+/// membership is purely the user's choice, seeded with four sensible defaults.
+///
+/// Pool rows also carry the action's **enable/disable** toggle — the same instance
 /// switch its home page shows. Disabling an action hides it from every launcher surface
-/// *and* demotes it from Active into the pool; re-enabling leaves it in the pool until
-/// the user promotes it again. So the pool holds both enabled-but-not-active actions
-/// (a green plus, ready to promote) and disabled ones (dimmed).
+/// *and* demotes it off both tiers into the pool; re-enabling leaves it in the pool
+/// until the user promotes it again. So the pool holds both enabled-but-not-active
+/// actions (a green plus, ready to promote) and disabled ones (dimmed).
 ///
 /// Reached as the typed "Fallbacks" command row and presented full-screen. It is fed
 /// the live fallback-eligible Actions (text-first Custom Actions, accepts-input
-/// Shortcuts, the two built-in captures) so eligibility stays derived from shape.
+/// Shortcuts, the built-in captures) so eligibility stays derived from shape.
 struct FallbacksView: View {
     let store: FallbacksStore
     /// The per-action instance Disabled state (issue #68) — the same toggle the
     /// action's home page shows, surfaced here and coupled to demotion.
     let enablement: EnablementStore
-    /// The live fallback-eligible Actions, from `RootView` — the union the two
-    /// sections partition by the store's enabled list and the disabled set.
+    /// The live fallback-eligible Actions, from `RootView` — the union the three
+    /// sections partition by the store's tiers and the disabled set.
     let eligible: [Action]
 
-    /// The eligible Actions keyed by id, so an enabled/pooled id resolves to its row.
+    /// The eligible Actions keyed by id, so a shelved/enabled/pooled id resolves to its row.
     private var byID: [String: Action] {
         Dictionary(eligible.map { ($0.id, $0) }, uniquingKeysWith: { first, _ in first })
     }
 
-    /// The Active section, most-important-first: the enabled list resolved to live
-    /// Actions, minus any that are instance-disabled (a disabled action always sits in
-    /// the pool, even for the frame before `demoteDisabled` prunes it from the list).
-    private var activeActions: [Action] {
-        store.resolvedEnabled(for: eligible.map(\.id))
-            .compactMap { byID[$0] }
-            .filter { !enablement.isDisabled($0.id) }
+    /// The Shelf section, most-important-first (leading edge of the button row): the
+    /// Shelf resolved to live Actions, minus any that are instance-disabled — a
+    /// disabled action always sits in the pool, even for the frame before
+    /// `demoteDisabled` prunes it from the lists.
+    private var shelvedActions: [Action] {
+        liveActions(store.resolvedShelf(for: eligible.map(\.id)))
     }
 
-    /// The Available pool: every eligible Action not in the Active section — the ones
-    /// not activated *plus* the disabled ones — alphabetical by title (id as the
-    /// deterministic tie-break). Derived from `activeActions` so no Action shows twice.
+    /// The Active section, most-important-first: the enabled list resolved to live
+    /// Actions, minus the instance-disabled ones (same reason as the Shelf).
+    private var activeActions: [Action] {
+        liveActions(store.resolvedEnabled(for: eligible.map(\.id)))
+    }
+
+    /// The Available pool: every eligible Action on neither rung — the ones not
+    /// activated *plus* the disabled ones — alphabetical by title (id as the
+    /// deterministic tie-break). Derived from the two sections above so no Action
+    /// shows twice.
     private var pooledActions: [Action] {
-        let activeIDs = Set(activeActions.map(\.id))
+        let claimed = Set(shelvedActions.map(\.id)).union(activeActions.map(\.id))
         return eligible
-            .filter { !activeIDs.contains($0.id) }
+            .filter { !claimed.contains($0.id) }
             .sorted { lhs, rhs in
                 let order = lhs.title.localizedCaseInsensitiveCompare(rhs.title)
                 return order == .orderedSame ? lhs.id < rhs.id : order == .orderedAscending
             }
     }
 
+    /// Resolves an ordered id list to Actions, dropping the instance-disabled ones.
+    private func liveActions(_ ids: [String]) -> [Action] {
+        ids.compactMap { byID[$0] }.filter { !enablement.isDisabled($0.id) }
+    }
+
     // Pushed onto the launcher's navigation stack — no own stack or Done button.
     var body: some View {
         List {
             // The unified page shape (ADR 0019): Options (the kind-level master
-            // Enabled switch over the whole bottom region) lead the two sections.
+            // Enabled switch over the whole bottom region) lead the sections.
             ProviderOptionsSection(provider: .fallbacks)
+
+            Section {
+                if shelvedActions.isEmpty {
+                    Text("No shelved fallbacks. The shelf above the input stays hidden.")
+                        .foregroundStyle(.secondary)
+                        .accessibilityIdentifier("fallbacks-shelf-empty")
+                } else {
+                    ForEach(shelvedActions) { action in
+                        // Shelf rows: a red minus that drops the member to the *top*
+                        // of Active, plus the drag grip. No shelf button — it's here.
+                        FallbackRow(
+                            action: action,
+                            style: .shelf,
+                            isDisabled: false,
+                            onPrimary: { withAnimation { store.move(action.id, to: .enabled) } },
+                            onShelve: nil,
+                            onToggleDisabled: {}
+                        )
+                    }
+                    .onMove { offsets, destination in
+                        reorder(.shelf, shelvedActions, from: offsets, to: destination)
+                    }
+                }
+            } header: {
+                Text("Shelf")
+            } footer: {
+                Text("The round buttons above the input while you're typing — leading edge first. Drag the grip to reorder; the red minus moves one down to the top of the active list. A shelved fallback leaves the bottom of the result list.")
+            }
 
             Section {
                 if activeActions.isEmpty {
@@ -70,38 +115,44 @@ struct FallbacksView: View {
                         .accessibilityIdentifier("fallbacks-enabled-empty")
                 } else {
                     ForEach(activeActions) { action in
-                        // Active rows: a red minus to demote and the drag grip to
-                        // reorder — no enable/disable toggle (it lives on the pool).
+                        // Active rows: a red minus to demote, the shelf button to
+                        // promote a rung up, and the drag grip to reorder — no
+                        // enable/disable toggle (it lives on the pool).
                         FallbackRow(
                             action: action,
                             style: .active,
                             isDisabled: false,
-                            onPrimary: { withAnimation { store.demote(action.id) } },
+                            onPrimary: { withAnimation { store.move(action.id, to: .pool) } },
+                            onShelve: { withAnimation { store.move(action.id, to: .shelf) } },
                             onToggleDisabled: {}
                         )
                     }
-                    .onMove(perform: reorder)
+                    .onMove { offsets, destination in
+                        reorder(.enabled, activeActions, from: offsets, to: destination)
+                    }
                 }
             } header: {
                 Text("Active")
             } footer: {
-                Text("Top is most important — nearest the input in results. Drag the grip to reorder; the red minus moves a fallback down to the list below. Nothing here deletes it.")
+                Text("Top is most important — nearest the input in results. Drag the grip to reorder; the red minus moves a fallback down to the list below, the up arrow onto the shelf. Nothing here deletes it.")
             }
 
             Section {
                 if pooledActions.isEmpty {
-                    Text("Every eligible fallback is active.")
+                    Text("Every eligible fallback is shelved or active.")
                         .foregroundStyle(.secondary)
                         .accessibilityIdentifier("fallbacks-pool-empty")
                 } else {
                     ForEach(pooledActions) { action in
-                        // Pool rows: a green plus to promote and the action's
+                        // Pool rows: a green plus to promote to Active, the shelf
+                        // button to climb straight to the Shelf, and the action's
                         // enable/disable toggle — the toggle only appears here.
                         FallbackRow(
                             action: action,
                             style: .pool,
                             isDisabled: enablement.isDisabled(action.id),
-                            onPrimary: { promote(action) },
+                            onPrimary: { promote(action, to: .enabled) },
+                            onShelve: { promote(action, to: .shelf) },
                             onToggleDisabled: { withAnimation { enablement.toggleDisabled(action.id) } }
                         )
                     }
@@ -109,63 +160,72 @@ struct FallbacksView: View {
             } header: {
                 Text("Available")
             } footer: {
-                Text("Fallback-eligible actions you haven't activated, plus any you've disabled. The green plus adds one to the bottom of the active list; the toggle disables the action everywhere. A Custom Action or Shortcut becomes eligible when its first argument is free text.")
+                Text("Fallback-eligible actions you haven't activated, plus any you've disabled. The green plus adds one to the bottom of the active list and the up arrow puts it straight on the shelf; the toggle disables the action everywhere. A Custom Action or Shortcut becomes eligible when its first argument is free text.")
             }
         }
-        // Always in edit mode so the reorder grips show on the Active rows without a
-        // separate Edit step — the same always-editable shape as the iOS share sheet's
-        // app row. The custom minus/plus buttons and the pool toggles stay interactive
-        // (they carry explicit button/toggle styles, not row-selection taps).
+        // Always in edit mode so the reorder grips show on the Shelf and Active rows
+        // without a separate Edit step — the same always-editable shape as the iOS
+        // share sheet's app row. The custom minus/plus/shelf buttons and the pool
+        // toggles stay interactive (they carry explicit button/toggle styles, not
+        // row-selection taps).
         .environment(\.editMode, .constant(.active))
         .navigationTitle("Fallbacks")
     }
 
-    /// Promotes a pooled Action to the bottom of Active, sliding it up to the Active
-    /// list. A disabled one is re-enabled first, so a promoted fallback is always live
-    /// (an active-but-hidden row would be a contradiction) — the plus reads as "make
-    /// this an active fallback".
-    private func promote(_ action: Action) {
+    /// Promotes a pooled Action a rung up — to the bottom of Active or onto the Shelf.
+    /// A disabled one is re-enabled first, so a promoted fallback is always live (an
+    /// active-but-hidden row would be a contradiction) — the plus reads as "make this
+    /// an active fallback", the up arrow as "put this on the shelf".
+    private func promote(_ action: Action, to tier: FallbackTier) {
         withAnimation {
             if enablement.isDisabled(action.id) { enablement.toggleDisabled(action.id) }
-            store.promote(action.id)
+            store.move(action.id, to: tier)
         }
     }
 
-    /// Persists a reorder of the Active section. The offsets index into
-    /// `activeActions` (the resolved, loaded list), so the moved ids are the new
-    /// visible order; `reorderEnabled` applies it while keeping any enabled id that
-    /// hasn't resolved yet in place (the launch race) rather than dropping it.
-    private func reorder(from offsets: IndexSet, to destination: Int) {
-        var ids = activeActions.map(\.id)
+    /// Persists a drag-reorder of one tier's section. The offsets index into the
+    /// section's resolved, loaded rows, so the moved ids are the new visible order;
+    /// the store applies it while keeping any stored id that hasn't resolved yet in
+    /// place (the launch race) rather than dropping it.
+    private func reorder(
+        _ tier: FallbackTier,
+        _ rows: [Action],
+        from offsets: IndexSet,
+        to destination: Int
+    ) {
+        var ids = rows.map(\.id)
         ids.move(fromOffsets: offsets, toOffset: destination)
-        store.reorderEnabled(visibleOrder: ids)
+        store.reorder(tier, visibleOrder: ids)
     }
 }
 
-/// One Fallbacks-page row. In **Active** it is a red minus (demote) + title, with the
-/// system drag grip trailing (edit mode) to reorder — no toggle. In the **pool** it is
-/// a green plus (promote) + title + the action's instance enable/disable toggle. No
-/// delete affordance in either.
+/// One Fallbacks-page row. In the **Shelf** it is a red minus (drop to the top of
+/// Active) + title, with the system drag grip trailing (edit mode). In **Active** it is
+/// a red minus (demote to the pool) + title + a shelf button, also with the grip. In
+/// the **pool** it is a green plus (promote to Active) + title + a shelf button + the
+/// action's instance enable/disable toggle. No delete affordance in any of them.
 private struct FallbackRow: View {
-    enum Style { case active, pool }
+    enum Style { case shelf, active, pool }
 
     let action: Action
     let style: Style
     /// Whether the action is instance-disabled — only meaningful (and shown) in the pool.
     let isDisabled: Bool
-    /// Demote (Active) or promote (pool) — the section's activation verb.
+    /// Demote (Shelf, Active) or promote (pool) — the section's primary activation verb.
     let onPrimary: () -> Void
+    /// Promote onto the Shelf. `nil` on Shelf rows, which are already there.
+    let onShelve: (() -> Void)?
     let onToggleDisabled: () -> Void
 
     var body: some View {
         HStack(spacing: 12) {
             Button(action: onPrimary) {
-                Image(systemName: style == .active ? "minus.circle.fill" : "plus.circle.fill")
-                    .foregroundStyle(style == .active ? .red : .green)
+                Image(systemName: style == .pool ? "plus.circle.fill" : "minus.circle.fill")
+                    .foregroundStyle(style == .pool ? .green : .red)
             }
             .buttonStyle(.borderless)
-            .accessibilityLabel(style == .active ? "Remove from active fallbacks" : "Add to active fallbacks")
-            .accessibilityIdentifier("\(style == .active ? "fallback-demote" : "fallback-promote").\(action.id)")
+            .accessibilityLabel(primaryLabel)
+            .accessibilityIdentifier("\(style == .pool ? "fallback-promote" : "fallback-demote").\(action.id)")
 
             VStack(alignment: .leading, spacing: 2) {
                 Text(action.title)
@@ -179,14 +239,37 @@ private struct FallbackRow: View {
             }
             Spacer(minLength: 8)
 
+            // The shelf button — one rung up, from Active *or* straight from the pool
+            // (no forced two-step climb). Absent on Shelf rows, which are already there.
+            if let onShelve {
+                Button(action: onShelve) {
+                    Image(systemName: "arrow.up.circle.fill")
+                        .foregroundStyle(.tint)
+                }
+                .buttonStyle(.borderless)
+                .accessibilityLabel("Move to the shelf")
+                .accessibilityIdentifier("fallback-shelve.\(action.id)")
+            }
+
             // The instance enable/disable toggle lives only on the pool rows —
-            // disabling hides the action everywhere; an Active fallback is demoted
-            // here first (or disabled from its home page) before it can be switched off.
+            // disabling hides the action everywhere; a shelved or active fallback is
+            // demoted here first (or disabled from its home page) before it can be
+            // switched off.
             if style == .pool {
                 Toggle("Enabled", isOn: Binding(get: { !isDisabled }, set: { _ in onToggleDisabled() }))
                     .labelsHidden()
                     .accessibilityIdentifier("fallback-enabled.\(action.id)")
             }
+        }
+    }
+
+    /// What the leading circle does, spelled out for VoiceOver — the same verb the
+    /// section's footer uses.
+    private var primaryLabel: String {
+        switch style {
+        case .shelf: return "Remove from the shelf"
+        case .active: return "Remove from active fallbacks"
+        case .pool: return "Add to active fallbacks"
         }
     }
 
@@ -196,7 +279,7 @@ private struct FallbackRow: View {
         switch action.kind {
         case .customAction: return "Custom Action"
         case .shortcut: return "Shortcut"
-        case .saveForLater, .newSnippet: return "Built-in capture"
+        case .saveForLater, .newSnippet, .reminder, .event: return "Built-in capture"
         case .system: return "System built-in"
         default: return nil
         }

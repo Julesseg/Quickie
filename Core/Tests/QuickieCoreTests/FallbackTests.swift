@@ -197,6 +197,37 @@ struct FallbackTests {
         #expect(engine.results(for: "search the web").map(\.id).contains("web-search"))
     }
 
+    @Test("shelving an action vacates the bottom fallback region, ranked name-match unaffected")
+    func shelvedActionLeavesTheFallbackRegion() {
+        // The engine is fed the *enabled* tier only (CONTEXT.md → Shelf; issue #241),
+        // so promoting an action onto the Shelf removes its bottom-region row the
+        // moment the page writes the move — while the dual-row rule's ranked
+        // name-match duplicate keeps behaving exactly as before.
+        let catalog: [Action] = [
+            .quicklink(id: "github", title: "Open GitHub", aliases: ["git"], url: URL(string: "https://github.com")!),
+            CustomActionDefinition(name: "Search the web", template: "https://duckduckgo.com/?q={query}")
+                .makeAction(id: "web-search")!,
+        ]
+        var tiers = FallbackTiers(enabled: ["web-search"])
+        func rows(_ query: String) -> [ResultRow] {
+            SearchEngine(
+                providers: [IndexedProvider(catalog: catalog)],
+                enabledFallbacks: tiers.resolvedEnabled(for: catalog.map(\.id))
+            ).rows(for: query)
+        }
+        // Active: the region row rides along even when nothing name-matches.
+        #expect(rows("qwerty").map(\.action.id) == ["web-search"])
+
+        tiers.move("web-search", to: .shelf)
+
+        // Shelved: no region row at all for a non-matching query.
+        #expect(rows("qwerty").isEmpty)
+        // ...and the name-match still surfaces, as a plain ranked row.
+        let matched = rows("search")
+        #expect(matched.contains { $0.action.id == "web-search" && $0.region == .ranked })
+        #expect(matched.contains { $0.region == .fallback } == false)
+    }
+
     @Test("an empty query surfaces no Fallback (Home state)")
     func emptyQueryHasNoFallback() {
         #expect(engine().results(for: "").isEmpty)
