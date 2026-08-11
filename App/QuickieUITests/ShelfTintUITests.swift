@@ -223,8 +223,15 @@ final class ShelfTintUITests: XCTestCase {
         while !maps.exists && scrolls < 6 { app.swipeUp(); scrolls += 1 }
         XCTAssertTrue(maps.waitForExistence(timeout: 10), "the seeded Maps action is listed")
         maps.tap()
+        XCTAssertTrue(app.textFields["custom-action-name-field"].waitForExistence(timeout: 10),
+                      "tapping the row opens the editor on that action")
 
+        // Maps is a *slotted* action, so its editor carries an Arguments section that a
+        // slot-less one doesn't — enough to push the appearance row past the fold on a
+        // short screen (CI runs on an iPhone SE, where this is the difference between
+        // the row being rendered and not existing at all). Walk it up into the sheet.
         let appearance = app.buttons["custom-action-appearance-row"]
+        for _ in 0..<5 where !appearance.exists { app.swipeUp() }
         XCTAssertTrue(appearance.waitForExistence(timeout: 10), "the editor offers the Symbol & Color row")
         appearance.tap()
         let purple = app.buttons["action-color-option.purple"]
