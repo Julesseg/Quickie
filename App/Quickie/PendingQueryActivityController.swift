@@ -1,6 +1,17 @@
 import Foundation
 import UIKit
-import ActivityKit
+// `Activity` is a plain non-Sendable class whose `update`/`end` are **nonisolated**
+// async methods, so every call below — made from this `@MainActor` enum on a handle
+// this enum caches — reads to Swift 6 as sending a main-actor value into a nonisolated
+// context, and fails to compile from Xcode 26.6 on. The handle is a token for
+// system-owned state rather than state of ours (ActivityKit is documented as callable
+// from any context, and there is nothing here for a second thread to tear), so the
+// module is simply not concurrency-audited yet. `@preconcurrency` is the sanctioned
+// escape for exactly that, and it is self-retiring: it applies only to this module's
+// declarations, and the compiler flags the attribute as unused once Apple annotates
+// them. Preferred over `nonisolated(unsafe)` locals at each call site, which would
+// state the same exemption four times and keep stating it forever.
+@preconcurrency import ActivityKit
 import QuickieCore
 
 /// Starts, updates, and ends the Pending-query Live Activity (issue #152) at
