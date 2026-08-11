@@ -548,15 +548,19 @@ final class CustomActionUITests: XCTestCase {
         XCTAssertTrue(app.staticTexts["Dupe Me"].exists, "the original remains")
     }
 
-    // MARK: - Editor: the optional glyph picker (curated, searchable, clearable)
+    // MARK: - Editor: the merged Symbol & Color page
 
-    /// The editor offers an optional **glyph picker** (CONTEXT.md → Custom Action;
-    /// issue #163): the Symbol row reads "None" until a symbol is chosen from the
-    /// curated, fuzzy-searchable set, and the "No symbol" row clears it back. Proves
-    /// the picker furniture end to end — open, search, select, and clear — without
-    /// leaving the editor.
+    /// The editor offers **one** appearance row (CONTEXT.md → Custom Action, Action
+    /// color; issues #163, #243) that pushes the merged Symbol & Color page: a live
+    /// composed-badge hero over the colour swatches and the searchable glyph gallery.
+    /// Proves the page's furniture end to end — open, search, select a symbol, select a
+    /// colour, and reset both — without the page dismissing itself under you.
+    ///
+    /// Unlike the two pickers this replaced, selecting does **not** pop: the hero is the
+    /// point, so you keep tapping until it looks right and Back confirms. The test
+    /// therefore navigates back explicitly.
     @MainActor
-    func testGlyphPickerSelectsAndClearsSymbol() throws {
+    func testAppearancePickerSelectsSymbolAndColorTogether() throws {
         let app = launchApp()
         openCustomActionsPage(app)
         openNewEditor(app)
@@ -564,18 +568,26 @@ final class CustomActionUITests: XCTestCase {
         setText("Mailer", in: app.textFields["custom-action-name-field"])
         setText("https://example.com", in: app.textFields["custom-action-url-field"])
 
-        // The Symbol row starts at "None" — pure opt-in.
-        let symbolRow = app.buttons["custom-action-symbol-row"]
-        XCTAssertTrue(symbolRow.waitForExistence(timeout: 5), "the editor offers a Symbol row")
-        XCTAssertTrue(app.staticTexts["None"].exists, "no symbol is chosen by default")
+        // The row starts at "Default" — neither a symbol nor a colour chosen.
+        let appearanceRow = app.buttons["custom-action-appearance-row"]
+        XCTAssertTrue(appearanceRow.waitForExistence(timeout: 5),
+                      "the editor offers a single Symbol & Color row")
+        XCTAssertTrue(app.staticTexts["Default"].exists,
+                      "neither a symbol nor a colour is chosen by default")
 
-        // Open the picker and fuzzy-search by intent ("mail" → the envelope symbol),
-        // then select it.
-        symbolRow.tap()
-        XCTAssertTrue(app.buttons["glyph-option-none"].waitForExistence(timeout: 5),
-                      "the picker leads with a No-symbol clear cell")
-        let search = app.searchFields.firstMatch
-        XCTAssertTrue(search.waitForExistence(timeout: 5), "the picker is searchable")
+        appearanceRow.tap()
+
+        // The hero and both resets are present the moment the page opens.
+        XCTAssertTrue(app.images["appearance-hero"].waitForExistence(timeout: 5),
+                      "the page leads with the live composed badge")
+        XCTAssertTrue(app.buttons["glyph-option-none"].exists,
+                      "the gallery leads with a No-symbol reset")
+        XCTAssertTrue(app.buttons["action-color-option-default"].exists,
+                      "the swatches lead with a Default reset")
+
+        // Fuzzy-search the gallery by intent ("mail" → envelope) and pick it.
+        let search = app.textFields["glyph-search-field"]
+        XCTAssertTrue(search.waitForExistence(timeout: 5), "the gallery is searchable")
         search.tap()
         search.typeText("mail")
         let envelope = app.buttons["glyph-option.envelope"]
@@ -583,24 +595,37 @@ final class CustomActionUITests: XCTestCase {
                       "fuzzy-searching by intent surfaces the envelope symbol")
         envelope.tap()
 
-        // Back in the editor the Symbol row now reads the chosen symbol's label.
-        XCTAssertTrue(app.staticTexts["Mail"].waitForExistence(timeout: 5),
-                      "selecting a symbol updates the Symbol row's value")
+        // Selecting does not dismiss — the page stays put so the hero can be judged.
+        XCTAssertTrue(app.images["appearance-hero"].exists,
+                      "selecting a symbol keeps the page open")
 
-        // Re-open the picker and clear back to the derived glyph via "No symbol".
-        symbolRow.tap()
-        let none = app.buttons["glyph-option-none"]
-        XCTAssertTrue(none.waitForExistence(timeout: 5))
-        none.tap()
-        XCTAssertTrue(app.staticTexts["None"].waitForExistence(timeout: 5),
-                      "the No-symbol row clears back to the derived glyph")
+        // A colour picked on the same page, without going back for it.
+        let teal = app.buttons["action-color-option.teal"]
+        XCTAssertTrue(teal.waitForExistence(timeout: 5))
+        teal.tap()
+        XCTAssertTrue(app.images["appearance-hero"].exists,
+                      "selecting a colour keeps the page open too")
+
+        // Back confirms: the row summarises both halves of the badge.
+        goBackHome(app)
+        XCTAssertTrue(app.staticTexts["Mail · Teal"].waitForExistence(timeout: 5),
+                      "the row summarises the chosen symbol and colour")
+
+        // Both resets work, from the same page.
+        appearanceRow.tap()
+        XCTAssertTrue(app.buttons["glyph-option-none"].waitForExistence(timeout: 5))
+        app.buttons["glyph-option-none"].tap()
+        app.buttons["action-color-option-default"].tap()
+        goBackHome(app)
+        XCTAssertTrue(app.staticTexts["Default"].waitForExistence(timeout: 5),
+                      "the resets clear back to the kind-derived badge")
     }
 
-    /// A chosen glyph is stored on the Custom Action and survives a save + reopen —
-    /// the "syncs through the content store like any other attribute" guarantee, proven
-    /// at the store round-trip the editor drives (issue #163).
+    /// A chosen symbol **and** colour are stored on the Custom Action and survive a save
+    /// + reopen — the "persisted on the action and synced like any other attribute"
+    /// guarantee, proven at the store round-trip the editor drives (issues #163, #243).
     @MainActor
-    func testChosenGlyphPersistsAcrossSaveAndReopen() throws {
+    func testChosenAppearancePersistsAcrossSaveAndReopen() throws {
         let app = launchApp()
         openCustomActionsPage(app)
         openNewEditor(app)
@@ -608,15 +633,18 @@ final class CustomActionUITests: XCTestCase {
         setText("Bookmarked", in: app.textFields["custom-action-name-field"])
         setText("https://example.com", in: app.textFields["custom-action-url-field"])
 
-        // Choose a symbol.
-        app.buttons["custom-action-symbol-row"].tap()
+        app.buttons["custom-action-appearance-row"].tap()
         let bookmark = app.buttons["glyph-option.bookmark"]
         XCTAssertTrue(bookmark.waitForExistence(timeout: 5))
         bookmark.tap()
-        XCTAssertTrue(app.staticTexts["Bookmark"].waitForExistence(timeout: 5),
-                      "the chosen symbol shows on the Symbol row")
+        let purple = app.buttons["action-color-option.purple"]
+        XCTAssertTrue(purple.waitForExistence(timeout: 5))
+        purple.tap()
+        goBackHome(app)
 
-        // Save and find the authored row on the Management page.
+        XCTAssertTrue(app.staticTexts["Bookmark · Purple"].waitForExistence(timeout: 5),
+                      "the chosen appearance shows on the row")
+
         let save = app.buttons["save-custom-action"]
         XCTAssertTrue(save.isEnabled)
         save.tap()
@@ -629,92 +657,16 @@ final class CustomActionUITests: XCTestCase {
         }
         XCTAssertTrue(authored.waitForExistence(timeout: 10), "the authored action is listed")
 
-        // Re-open its editor by tapping the row; the chosen symbol must have persisted.
         authored.tap()
         XCTAssertTrue(app.textFields["custom-action-name-field"].waitForExistence(timeout: 5),
                       "tapping the row re-opens the editor")
-        XCTAssertTrue(app.staticTexts["Bookmark"].waitForExistence(timeout: 5),
-                      "the chosen symbol was stored and restored on reopen")
+        XCTAssertTrue(app.staticTexts["Bookmark · Purple"].waitForExistence(timeout: 5),
+                      "both halves were stored and restored on reopen")
     }
 
-    /// The editor offers a **colour picker** beside the glyph picker (CONTEXT.md →
-    /// Action color; issue #243): the Color row reads "Default" until a token is chosen
-    /// from the curated palette, and the "Default" cell restores the kind-derived tint.
-    /// The glyph picker's sibling, proven the same way — open, select, clear.
-    @MainActor
-    func testColorPickerSelectsAndRestoresDefault() throws {
-        let app = launchApp()
-        openCustomActionsPage(app)
-        openNewEditor(app)
-
-        setText("Tinted", in: app.textFields["custom-action-name-field"])
-        setText("https://example.com", in: app.textFields["custom-action-url-field"])
-
-        // The Color row starts at "Default" — the kind-derived tint, pure opt-in.
-        let colorRow = app.buttons["custom-action-color-row"]
-        XCTAssertTrue(colorRow.waitForExistence(timeout: 5), "the editor offers a Color row")
-        XCTAssertTrue(app.staticTexts["Default"].exists, "no colour is chosen by default")
-
-        // Open the palette and pick a token.
-        colorRow.tap()
-        XCTAssertTrue(app.buttons["action-color-option-default"].waitForExistence(timeout: 5),
-                      "the picker leads with a Default cell that restores the derived tint")
-        let green = app.buttons["action-color-option.green"]
-        XCTAssertTrue(green.waitForExistence(timeout: 5), "the curated palette offers Green")
-        green.tap()
-
-        XCTAssertTrue(app.staticTexts["Green"].waitForExistence(timeout: 5),
-                      "selecting a colour updates the Color row's value")
-
-        // Re-open and restore Default.
-        colorRow.tap()
-        let defaultCell = app.buttons["action-color-option-default"]
-        XCTAssertTrue(defaultCell.waitForExistence(timeout: 5))
-        defaultCell.tap()
-        XCTAssertTrue(app.staticTexts["Default"].waitForExistence(timeout: 5),
-                      "the Default cell restores the kind-derived tint")
-    }
-
-    /// A chosen colour is stored on the Custom Action and survives a save + reopen —
-    /// the "persisted on the action and synced like the glyph" guarantee, proven at the
-    /// store round-trip the editor drives (issue #243).
-    @MainActor
-    func testChosenColorPersistsAcrossSaveAndReopen() throws {
-        let app = launchApp()
-        openCustomActionsPage(app)
-        openNewEditor(app)
-
-        setText("Purpled", in: app.textFields["custom-action-name-field"])
-        setText("https://example.com", in: app.textFields["custom-action-url-field"])
-
-        app.buttons["custom-action-color-row"].tap()
-        let purple = app.buttons["action-color-option.purple"]
-        XCTAssertTrue(purple.waitForExistence(timeout: 5))
-        purple.tap()
-        XCTAssertTrue(app.staticTexts["Purple"].waitForExistence(timeout: 5),
-                      "the chosen colour shows on the Color row")
-
-        let save = app.buttons["save-custom-action"]
-        XCTAssertTrue(save.isEnabled)
-        save.tap()
-
-        let authored = app.staticTexts["Purpled"]
-        var scrolls = 0
-        while !authored.exists && scrolls < 6 {
-            app.swipeUp()
-            scrolls += 1
-        }
-        XCTAssertTrue(authored.waitForExistence(timeout: 10), "the authored action is listed")
-
-        authored.tap()
-        XCTAssertTrue(app.textFields["custom-action-name-field"].waitForExistence(timeout: 5),
-                      "tapping the row re-opens the editor")
-        XCTAssertTrue(app.staticTexts["Purple"].waitForExistence(timeout: 5),
-                      "the chosen colour was stored and restored on reopen")
-    }
-
-    /// Colour and glyph are **independent** siblings (issue #243): setting one leaves
-    /// the other alone, so an action can be recoloured without adopting a symbol.
+    /// Symbol and colour stay **independent** even sharing a page (issues #163, #243):
+    /// choosing one leaves the other at its reset, so an action can be recoloured
+    /// without adopting a symbol.
     @MainActor
     func testColorAndGlyphAreIndependent() throws {
         let app = launchApp()
@@ -724,16 +676,17 @@ final class CustomActionUITests: XCTestCase {
         setText("Solo", in: app.textFields["custom-action-name-field"])
         setText("https://example.com", in: app.textFields["custom-action-url-field"])
 
-        app.buttons["custom-action-color-row"].tap()
+        app.buttons["custom-action-appearance-row"].tap()
         let teal = app.buttons["action-color-option.teal"]
         XCTAssertTrue(teal.waitForExistence(timeout: 5))
         teal.tap()
+        goBackHome(app)
 
+        // "Teal" alone, not "<symbol> · Teal": the colour is set, the symbol is not.
         XCTAssertTrue(app.staticTexts["Teal"].waitForExistence(timeout: 5),
-                      "the colour is set")
-        XCTAssertTrue(app.staticTexts["None"].exists,
-                      "choosing a colour leaves the Symbol row untouched at None")
+                      "choosing a colour alone leaves the symbol unset")
     }
+
 
     // MARK: - End-to-end: typed arguments run through the breadcrumb
 
