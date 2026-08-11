@@ -59,6 +59,7 @@ struct ColorPickerPrototypeSwitcher: View {
             Button { raw = variant.previous.rawValue } label: {
                 Image(systemName: "chevron.left")
             }
+            .accessibilityIdentifier("prototype-variant-prev")
             Text(variant.title)
                 .font(.footnote.weight(.semibold))
                 .monospacedDigit()
@@ -66,6 +67,7 @@ struct ColorPickerPrototypeSwitcher: View {
             Button { raw = variant.next.rawValue } label: {
                 Image(systemName: "chevron.right")
             }
+            .accessibilityIdentifier("prototype-variant-next")
         }
         .padding(.horizontal, 14)
         .padding(.vertical, 9)
