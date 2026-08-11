@@ -170,4 +170,57 @@ struct ShortcutImportTests {
         let decoded = try JSONDecoder().decode([ShortcutEntry].self, from: legacy)
         #expect(decoded == [ShortcutEntry(name: "Timer", acceptsInput: true, alias: nil)])
     }
+
+    // MARK: - Appearance survival (issues #163, #243)
+
+    @Test("a re-sync preserves a survivor's glyph and color alongside its toggle")
+    func reSyncPreservesAppearance() {
+        // The chosen glyph/color ride the same name-keyed store as `acceptsInput`
+        // and `alias` (issues #163, #243): a survivor keeps its appearance across a
+        // re-sync, matched case-insensitively by name.
+        let existing = [
+            ShortcutEntry(name: "Translate", acceptsInput: true, glyph: "globe", colorToken: "teal"),
+            ShortcutEntry(name: "Scan", acceptsInput: false),
+        ]
+        let entries = ShortcutImport.reconcile(existing: existing, names: ["translate", "Scan"])
+        #expect(entries == [
+            ShortcutEntry(name: "translate", acceptsInput: true, glyph: "globe", colorToken: "teal"),
+            ShortcutEntry(name: "Scan", acceptsInput: false),
+        ])
+    }
+
+    @Test("a removed shortcut drops its appearance; a fresh import arrives with none")
+    func removalAndFreshImportDropAppearance() {
+        // A name absent from the payload is pruned, taking its glyph/color with it;
+        // a renamed shortcut (a new name, since identity is the name) arrives fresh
+        // — no appearance, the same documented trade-off as the toggle and alias.
+        let existing = [ShortcutEntry(name: "Old Name", acceptsInput: true, glyph: "bolt", colorToken: "red")]
+        let entries = ShortcutImport.reconcile(existing: existing, names: ["New Name"])
+        #expect(entries == [ShortcutEntry(name: "New Name", acceptsInput: false)])
+    }
+
+    @Test("normalizedGlyph trims and collapses a blank to nil — the shared set/unset rule")
+    func normalizedGlyphSetVsUnset() {
+        #expect(ShortcutEntry.normalizedGlyph("bolt") == "bolt")
+        #expect(ShortcutEntry.normalizedGlyph("   ") == nil)
+        #expect(ShortcutEntry.normalizedGlyph("") == nil)
+        #expect(ShortcutEntry.normalizedGlyph(nil) == nil)
+    }
+
+    @Test("color resolves a stored token tolerantly, degrading an unknown one to Default")
+    func colorResolvesTolerantly() {
+        #expect(ShortcutEntry(name: "Timer", colorToken: "teal").color == .teal)
+        #expect(ShortcutEntry(name: "Timer", colorToken: "not-a-real-token").color == nil)
+        #expect(ShortcutEntry(name: "Timer", colorToken: nil).color == nil)
+    }
+
+    @Test("a pre-appearance payload without glyph/colorToken keys decodes as no appearance")
+    func decodesLegacyPayloadWithoutAppearance() throws {
+        // Both fields are optional so a stored set written before appearance shipped
+        // still decodes — the missing keys read as no glyph/color rather than
+        // failing, the same forward-compat the `alias` default gives.
+        let legacy = #"[{"name":"Timer","acceptsInput":true}]"#.data(using: .utf8)!
+        let decoded = try JSONDecoder().decode([ShortcutEntry].self, from: legacy)
+        #expect(decoded == [ShortcutEntry(name: "Timer", acceptsInput: true)])
+    }
 }

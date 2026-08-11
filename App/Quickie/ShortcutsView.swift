@@ -106,11 +106,23 @@ struct ShortcutsView: View {
                         NavigationLink {
                             ShortcutDetailView(name: entry.name, store: store, enablement: enablement)
                         } label: {
-                            Text(entry.name)
-                                .foregroundStyle(
-                                    enablement.isDisabled(Action.shortcutID(for: entry.name))
-                                        ? .secondary : .primary
-                                )
+                            HStack(spacing: 12) {
+                                // The shortcut's customization appears as a leading
+                                // badge on the management-page row (CONTEXT.md →
+                                // Shortcut Action, Action color; issues #163, #243) —
+                                // the same badge, tint, and weight the result rows
+                                // wear, and the same show-when-either-is-set rule
+                                // `CustomActionRow` uses, so an untouched import reads
+                                // exactly as before.
+                                if entry.normalizedGlyph != nil || entry.color != nil {
+                                    ProviderBadge(kind: .shortcut, symbol: entry.normalizedGlyph, color: entry.color)
+                                }
+                                Text(entry.name)
+                                    .foregroundStyle(
+                                        enablement.isDisabled(Action.shortcutID(for: entry.name))
+                                            ? .secondary : .primary
+                                    )
+                            }
                         }
                         .accessibilityIdentifier("shortcut-row.\(entry.name)")
                     }
@@ -152,10 +164,10 @@ struct ShortcutsView: View {
 
 /// One imported shortcut's own settings page (issue #68 follow-up; issue #198):
 /// the **Enabled** switch (the instance-level Disabled toggle), the **Accepts
-/// input** switch, and the optional **Alias** field, each in its own explained
-/// section — the several controls a single list row couldn't hold apart. Pushed
-/// from the Shortcuts page's navigation rows, riding the launcher's stack like
-/// every other pushed page.
+/// input** switch, the **appearance** row (issues #163, #243), and the optional
+/// **Alias** field, each in its own explained section — the several controls a
+/// single list row couldn't hold apart. Pushed from the Shortcuts page's
+/// navigation rows, riding the launcher's stack like every other pushed page.
 struct ShortcutDetailView: View {
     let name: String
     let store: ShortcutsStore
@@ -165,10 +177,16 @@ struct ShortcutDetailView: View {
     /// filters by (`Action.shortcutID(for:)`), so the toggle can't drift.
     private var actionID: String { Action.shortcutID(for: name) }
 
+    /// The live entry, re-read on every access so a re-sync landing while this page
+    /// is up (or a deletion) is reflected immediately rather than a stale snapshot.
+    private var entry: ShortcutEntry? {
+        store.entries.first(where: { $0.name == name })
+    }
+
     /// Read live from the store: the entry can be re-synced while this page is
     /// up, and a deleted entry simply reads as input-off.
     private var acceptsInput: Bool {
-        store.entries.first(where: { $0.name == name })?.acceptsInput ?? false
+        entry?.acceptsInput ?? false
     }
 
     /// The shortcut's current alias, read live from the store (like `acceptsInput`),
@@ -177,9 +195,47 @@ struct ShortcutDetailView: View {
     /// and its pill (issue #198).
     private var aliasBinding: Binding<String> {
         Binding(
-            get: { store.entries.first(where: { $0.name == name })?.alias ?? "" },
+            get: { entry?.alias ?? "" },
             set: { store.setAlias($0, for: name) }
         )
+    }
+
+    /// The shortcut's chosen glyph, bound straight to the store — the shared
+    /// `AppearancePickerView`'s binding, mirroring the Custom Action editor's
+    /// `$def.glyph` (issues #163, #243).
+    private var glyphBinding: Binding<String?> {
+        Binding(
+            get: { entry?.glyph },
+            set: { store.setGlyph($0, for: name) }
+        )
+    }
+
+    /// The shortcut's chosen Action color, bound the same way as `glyphBinding`.
+    private var colorBinding: Binding<ActionColor?> {
+        Binding(
+            get: { entry?.color },
+            set: { store.setColor($0, for: name) }
+        )
+    }
+
+    /// The row's trailing summary — both parts when both are set ("Mail · Teal"),
+    /// the one that is set otherwise, and "Default" when neither is. Mirrors
+    /// `CustomActionEditorView.appearanceValueLabel` so the two appearance rows read
+    /// identically.
+    private var appearanceValueLabel: String {
+        switch (symbolValueLabel, entry?.color?.label) {
+        case ("None", nil): return "Default"
+        case ("None", let color?): return color
+        case (let symbol, nil): return symbol
+        case (let symbol, let color?): return "\(symbol) · \(color)"
+        }
+    }
+
+    /// The trailing value label's symbol half — the chosen symbol's human name, or
+    /// "None" when unset, read through the same normalization the surfaces use.
+    private var symbolValueLabel: String {
+        guard let glyph = entry?.normalizedGlyph else { return "None" }
+        return CustomActionGlyphCatalog.all.first { $0.name == glyph }?.label ?? glyph
     }
 
     var body: some View {
@@ -202,6 +258,26 @@ struct ShortcutDetailView: View {
                 .accessibilityIdentifier("shortcut-accepts-input.\(name)")
             } footer: {
                 Text("Turn on for a shortcut that takes text — Quickie collects the input before running it, since the import can't tell.")
+            }
+
+            Section {
+                NavigationLink {
+                    AppearancePickerView(glyph: glyphBinding, color: colorBinding, kind: .shortcut)
+                } label: {
+                    HStack(spacing: 12) {
+                        // The same badge every surface renders (CONTEXT.md → Shortcut
+                        // Action, Action color; issues #163, #243): the chosen symbol
+                        // over the chosen colour, or the kind-derived glyph when None.
+                        ProviderBadge(kind: .shortcut, symbol: entry?.normalizedGlyph, color: entry?.color)
+                        Text("Symbol & Color")
+                        Spacer(minLength: 8)
+                        Text(appearanceValueLabel)
+                            .foregroundStyle(.secondary)
+                    }
+                }
+                .accessibilityIdentifier("shortcut-appearance-row")
+            } footer: {
+                Text("Give this shortcut its own symbol and color, shown everywhere it appears. Leave them as None and Default to use the ones Shortcuts provides.")
             }
 
             Section {

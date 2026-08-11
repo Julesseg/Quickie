@@ -665,7 +665,20 @@ extension Action {
     /// it alongside the title and the row wears it as an [[Alias pill]] (`aliasPill`
     /// returns it for the `.shortcut` kind). A `nil` or blank alias carries no alias,
     /// so an alias-less shortcut matches by name only and shows no pill.
-    public static func shortcut(name: String, acceptsInput: Bool = false, alias: String? = nil) -> Action {
+    ///
+    /// `glyph` and `color` are the shortcut's own opt-in appearance (issues #163,
+    /// #243), edited on the same page — the same customization a Custom Action
+    /// carries, mirrored here so a Shortcut Action's badge is no less its own. Both
+    /// default to `nil`, so an untouched import wears the kind-derived badge exactly
+    /// as before; `glyph` is normalized through `ShortcutEntry.normalizedGlyph` so a
+    /// blank stored value reads as unset rather than an unrenderable symbol.
+    public static func shortcut(
+        name: String,
+        acceptsInput: Bool = false,
+        alias: String? = nil,
+        glyph: String? = nil,
+        color: ActionColor? = nil
+    ) -> Action {
         // The input Argument is **optional** (issue #46): the user can submit it empty
         // and still run the shortcut, so the breadcrumb never traps someone who has
         // nothing to type.
@@ -691,6 +704,8 @@ extension Action {
             // (`shortcuts://open-shortcut`) — even though a runnable row carries no
             // text to copy or share.
             content: .shortcut(name: name),
+            glyph: ShortcutEntry.normalizedGlyph(glyph),
+            color: color,
             effect: { _ in .runShortcut(name: name, input: nil) },
             // An empty (or whitespace-only) collected value reads as **no input** —
             // the same as an `acceptsInput`-off run — rather than an empty-string

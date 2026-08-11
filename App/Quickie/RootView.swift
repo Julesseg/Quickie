@@ -291,7 +291,7 @@ struct RootView: View {
         // #198) rides as the row's sole alias, so the matcher scores it and the row
         // wears its Alias pill.
         let storedShortcuts = shortcuts.entries.map { entry in
-            Action.shortcut(name: entry.name, acceptsInput: entry.acceptsInput, alias: entry.alias)
+            Action.shortcut(name: entry.name, acceptsInput: entry.acceptsInput, alias: entry.alias, glyph: entry.glyph, color: entry.color)
         }
         // Derive the fallback-eligible set from the Actions already built above, so
         // `makeAction` (which re-parses each URL template via regex) runs once per
@@ -398,7 +398,7 @@ struct RootView: View {
     private var eligibleFallbackActions: [Action] {
         eligibleFallbacks(
             customActionActions: customActions.compactMap { $0.definition.makeAction(id: $0.id) },
-            shortcutActions: shortcuts.entries.map { Action.shortcut(name: $0.name, acceptsInput: $0.acceptsInput, alias: $0.alias) }
+            shortcutActions: shortcuts.entries.map { Action.shortcut(name: $0.name, acceptsInput: $0.acceptsInput, alias: $0.alias, glyph: $0.glyph, color: $0.color) }
         )
     }
 

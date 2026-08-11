@@ -245,6 +245,14 @@ private struct FallbackRow: View {
                 .accessibilityIdentifier("fallback-shelve.\(action.id)")
             }
 
+            // The same leading provider badge every other surface renders (result
+            // rows, Favorites, the Custom Actions/Shortcuts management rows) — an
+            // eligible fallback is always a real Action with a kind (and, for a
+            // customized Custom Action or Shortcut, its own glyph/color), so the
+            // page that governs *which* fallbacks run should say *what* each one is
+            // at a glance, the same way its home page already does.
+            ProviderBadge(kind: action.kind, symbol: action.glyph, color: action.color)
+
             VStack(alignment: .leading, spacing: 2) {
                 Text(action.title)
                     .font(.body)

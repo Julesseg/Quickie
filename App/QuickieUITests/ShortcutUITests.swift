@@ -351,6 +351,72 @@ final class ShortcutUITests: XCTestCase {
                       "the shortcut row wears its 'xq' alias pill (label: \(row.label))")
     }
 
+    /// The shortcut's own **Symbol & Color** row (issues #163, #243) pushes the same
+    /// shared `AppearancePickerView` the Custom Action editor uses — proven end to end
+    /// by `CustomActionUITests.testAppearancePickerSelectsSymbolAndColorTogether` — so
+    /// this only proves the Shortcuts-side wiring: the row starts at Default, opening
+    /// it shows the live composed badge, a chosen symbol + colour summarise on the row,
+    /// and the choice survives leaving and re-entering the shortcut's own settings page
+    /// — the store round-trip behind "gets a default before customized" persisting.
+    @MainActor
+    func testShortcutAppearancePickerSelectsSymbolAndColor() throws {
+        let app = launchApp(seed: "Translate")
+
+        let input = app.textFields["search-input"]
+        XCTAssertTrue(input.waitForExistence(timeout: 30))
+        input.tap()
+        input.typeText("shortcuts")
+        let command = app.buttons["builtin.shortcuts-page"]
+        XCTAssertTrue(command.waitForExistence(timeout: 5))
+        command.tap()
+
+        let listRow = app.buttons["shortcut-row.Translate"]
+        XCTAssertTrue(listRow.waitForExistence(timeout: 10), "the Shortcuts page lists the import")
+        listRow.tap()
+
+        // The detail page's appearance row starts at Default.
+        let appearanceRow = app.buttons["shortcut-appearance-row"]
+        XCTAssertTrue(appearanceRow.waitForExistence(timeout: 10),
+                      "the shortcut's settings page offers a Symbol & Color row")
+        XCTAssertTrue(app.staticTexts["Default"].exists,
+                      "neither a symbol nor a colour is chosen by default")
+
+        appearanceRow.tap()
+        XCTAssertTrue(app.images["appearance-hero"].waitForExistence(timeout: 5),
+                      "the shared appearance page opens, leading with the composed badge")
+
+        // Fuzzy-search the shared gallery and pick a symbol, then a colour — the same
+        // furniture `CustomActionUITests` already exercises in depth.
+        let search = app.textFields["glyph-search-field"]
+        XCTAssertTrue(search.waitForExistence(timeout: 5))
+        search.tap()
+        search.typeText("globe")
+        let globe = app.buttons["glyph-option.globe"]
+        XCTAssertTrue(globe.waitForExistence(timeout: 5))
+        globe.tap()
+
+        let teal = app.buttons["action-color-option.teal"]
+        XCTAssertTrue(teal.waitForExistence(timeout: 5))
+        teal.tap()
+
+        // Back confirms — the same no-auto-dismiss shape the Custom Action page uses.
+        let bar = app.navigationBars["Symbol & Color"]
+        XCTAssertTrue(bar.waitForExistence(timeout: 10), "the appearance page is showing")
+        bar.buttons.firstMatch.tap()
+        XCTAssertTrue(app.staticTexts["Globe · Teal"].waitForExistence(timeout: 5),
+                      "the row summarises the chosen symbol and colour")
+
+        // Leaving the settings page and coming straight back proves the choice was
+        // persisted through the store, not just held in the picker's live state.
+        let back = app.navigationBars.buttons.firstMatch
+        XCTAssertTrue(back.waitForExistence(timeout: 10))
+        back.tap()
+        XCTAssertTrue(listRow.waitForExistence(timeout: 10))
+        listRow.tap()
+        XCTAssertTrue(app.staticTexts["Globe · Teal"].waitForExistence(timeout: 10),
+                      "the chosen symbol and colour persist across leaving and re-entering the page")
+    }
+
     /// A Shortcut Action with `acceptsInput` **off** fires immediately (issue #46 AC
     /// #1): tapping it hands off via x-callback-url with no input — it must not start
     /// the input breadcrumb. The hand-off leaves the app (or no-ops in a simulator
