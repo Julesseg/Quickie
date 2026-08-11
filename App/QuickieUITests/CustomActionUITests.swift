@@ -64,6 +64,24 @@ final class CustomActionUITests: XCTestCase {
         field.typeText(text)
     }
 
+    /// Dismisses the pushed **Symbol & Color** page back to the editor form.
+    ///
+    /// Targets that page's *own* navigation bar by title rather than
+    /// `app.navigationBars.buttons.firstMatch` (what `goBackHome` uses): the editor is
+    /// a sheet with its own nav bar carrying Cancel/Save, so with the appearance page
+    /// pushed there are two bars in the hierarchy and `firstMatch` can resolve to the
+    /// editor's **Cancel** — throwing away the whole edit instead of confirming it.
+    /// That resolved the way we wanted locally and the other way on CI, which is
+    /// exactly why the ambiguity has to go rather than be re-run.
+    @MainActor
+    private func closeAppearancePage(_ app: XCUIApplication) {
+        let bar = app.navigationBars["Symbol & Color"]
+        XCTAssertTrue(bar.waitForExistence(timeout: 10), "the appearance page is showing")
+        bar.buttons.firstMatch.tap()
+        XCTAssertTrue(app.buttons["custom-action-appearance-row"].waitForExistence(timeout: 10),
+                      "Back returns to the editor form, not out of the sheet")
+    }
+
     /// Pops the pushed page back to the launcher.
     @MainActor
     private func goBackHome(_ app: XCUIApplication) {
@@ -607,7 +625,7 @@ final class CustomActionUITests: XCTestCase {
                       "selecting a colour keeps the page open too")
 
         // Back confirms: the row summarises both halves of the badge.
-        goBackHome(app)
+        closeAppearancePage(app)
         XCTAssertTrue(app.staticTexts["Mail · Teal"].waitForExistence(timeout: 5),
                       "the row summarises the chosen symbol and colour")
 
@@ -616,7 +634,7 @@ final class CustomActionUITests: XCTestCase {
         XCTAssertTrue(app.buttons["glyph-option-none"].waitForExistence(timeout: 5))
         app.buttons["glyph-option-none"].tap()
         app.buttons["action-color-option-default"].tap()
-        goBackHome(app)
+        closeAppearancePage(app)
         XCTAssertTrue(app.staticTexts["Default"].waitForExistence(timeout: 5),
                       "the resets clear back to the kind-derived badge")
     }
@@ -640,7 +658,7 @@ final class CustomActionUITests: XCTestCase {
         let purple = app.buttons["action-color-option.purple"]
         XCTAssertTrue(purple.waitForExistence(timeout: 5))
         purple.tap()
-        goBackHome(app)
+        closeAppearancePage(app)
 
         XCTAssertTrue(app.staticTexts["Bookmark · Purple"].waitForExistence(timeout: 5),
                       "the chosen appearance shows on the row")
@@ -680,7 +698,7 @@ final class CustomActionUITests: XCTestCase {
         let teal = app.buttons["action-color-option.teal"]
         XCTAssertTrue(teal.waitForExistence(timeout: 5))
         teal.tap()
-        goBackHome(app)
+        closeAppearancePage(app)
 
         // "Teal" alone, not "<symbol> · Teal": the colour is set, the symbol is not.
         XCTAssertTrue(app.staticTexts["Teal"].waitForExistence(timeout: 5),
@@ -722,7 +740,7 @@ final class CustomActionUITests: XCTestCase {
         }
         XCTAssertTrue(authored.waitForExistence(timeout: 10),
                       "the authored Custom Action is listed on the Management page")
-        goBackHome(app)
+        closeAppearancePage(app)
 
         // Activate it as a fallback (its free-text first slot makes it eligible) so the
         // typed query seeds the first (text) slot.
