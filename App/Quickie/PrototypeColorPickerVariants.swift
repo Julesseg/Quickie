@@ -31,13 +31,14 @@ import QuickieCore
 /// Which variant the floating pill currently shows. Persisted so the choice
 /// survives pushes and relaunches while flipping around.
 enum ColorPickerPrototypeVariant: String, CaseIterable {
-    case a, b, c
+    case a, b, c, d
 
     var title: String {
         switch self {
         case .a: return "A — Inline strip"
         case .b: return "B — Live preview"
         case .c: return "C — Badge list"
+        case .d: return "D — Merged page"
         }
     }
 
@@ -87,6 +88,20 @@ struct PrototypeColorRow: View {
 
     var body: some View {
         switch ColorPickerPrototypeVariant(rawValue: raw) ?? .a {
+        case .d:
+            // Variant D replaces BOTH rows: one merged "Symbol & Color" page (the
+            // editor hides its shipped Symbol row via PrototypeSymbolRowGate).
+            NavigationLink {
+                VariantDMergedAppearance(def: $def, kind: previewKind)
+            } label: {
+                HStack(spacing: 12) {
+                    ProviderBadge(kind: previewKind, symbol: def.normalizedGlyph, color: def.color)
+                    Text("Symbol & Color")
+                    Spacer(minLength: 8)
+                    Text(def.color?.label ?? "Default")
+                        .foregroundStyle(.secondary)
+                }
+            }
         case .a:
             VariantAInlineStrip(selection: $def.color)
         case .b:
@@ -132,6 +147,19 @@ private struct ActionColorSwatchDot: View {
                 }
             }
             .accessibilityHidden(true)
+    }
+}
+
+/// Hides the editor's shipped Symbol row while variant D (the merged page) is
+/// active — D's single row covers both symbol and color.
+struct PrototypeSymbolRowGate<Content: View>: View {
+    @AppStorage("prototype-color-picker-variant") private var raw = ColorPickerPrototypeVariant.a.rawValue
+    @ViewBuilder let content: Content
+
+    var body: some View {
+        if ColorPickerPrototypeVariant(rawValue: raw) != .d {
+            content
+        }
     }
 }
 
@@ -306,6 +334,113 @@ private struct VariantCBadgeList: View {
             }
         }
         .accessibilityLabel(color?.label ?? "Default")
+    }
+}
+
+// MARK: - Variant D — merged symbol + color page (B's hero, icons underneath)
+
+/// One pushed page for the whole appearance: B's large live composed badge as
+/// the hero, the color circles beneath it, then the full glyph gallery under
+/// that. Tapping either restyles the hero live; Back confirms. Replaces both
+/// of the editor's Symbol and Color rows while active.
+private struct VariantDMergedAppearance: View {
+    @Binding var def: CustomActionDefinition
+    let kind: ActionKind
+
+    private let colorColumns = [GridItem(.adaptive(minimum: 44), spacing: 12)]
+    private let glyphColumns = [GridItem(.adaptive(minimum: 52), spacing: 10)]
+
+    var body: some View {
+        ScrollView {
+            VStack(spacing: 18) {
+                ProviderBadge(kind: kind, symbol: def.normalizedGlyph, color: def.color)
+                    .scaleEffect(2.8)
+                    .frame(width: 110, height: 110)
+                    .animation(.snappy(duration: 0.18), value: def.color)
+                    .animation(.snappy(duration: 0.18), value: def.normalizedGlyph)
+
+                Text(def.color?.label ?? "Default")
+                    .font(.headline)
+
+                LazyVGrid(columns: colorColumns, spacing: 12) {
+                    colorCircle(nil)
+                    ForEach(ActionColor.allCases, id: \.rawValue) { color in
+                        colorCircle(color)
+                    }
+                }
+                .padding(.horizontal)
+
+                Divider().padding(.horizontal)
+
+                LazyVGrid(columns: glyphColumns, spacing: 10) {
+                    glyphCell(nil, symbol: "slash.circle")
+                    ForEach(CustomActionGlyphCatalog.all) { option in
+                        glyphCell(option.name, symbol: option.name)
+                    }
+                }
+                .padding(.horizontal)
+            }
+            .padding(.top, 20)
+            .padding(.bottom, 60)
+        }
+        .navigationTitle("Symbol & Color")
+        .navigationBarTitleDisplayMode(.inline)
+    }
+
+    private func colorCircle(_ color: ActionColor?) -> some View {
+        Button {
+            def.color = color
+        } label: {
+            ZStack {
+                Circle()
+                    .fill(color?.swiftUIColor ?? Color.secondary.opacity(0.15))
+                if color == nil {
+                    Image(systemName: "slash.circle")
+                        .font(.system(size: 15, weight: .semibold))
+                        .foregroundStyle(.secondary)
+                }
+            }
+            .frame(width: 40, height: 40)
+            .overlay {
+                if def.color == color {
+                    Circle().strokeBorder(Color.accentColor, lineWidth: 3)
+                        .frame(width: 48, height: 48)
+                }
+            }
+            .frame(width: 50, height: 50)
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel(color?.label ?? "Default")
+    }
+
+    /// A glyph cell tinted with the *current* color choice when selected, so the
+    /// gallery echoes the hero rather than a foreign accent.
+    private func glyphCell(_ value: String?, symbol: String) -> some View {
+        let isSelected = def.normalizedGlyph == value || (value == nil && def.normalizedGlyph == nil)
+        return Button {
+            def.glyph = value
+        } label: {
+            ZStack {
+                RoundedRectangle(cornerRadius: 10, style: .continuous)
+                    .fill(isSelected
+                          ? resolvedActionTint(kind: kind, color: def.color).opacity(0.22)
+                          : Color.secondary.opacity(0.10))
+                Image(systemName: symbol)
+                    .font(.system(size: 19, weight: .regular))
+                    .foregroundStyle(isSelected
+                                     ? resolvedActionTint(kind: kind, color: def.color)
+                                     : (value == nil ? Color.secondary : .primary))
+            }
+            .frame(height: 46)
+            .overlay {
+                if isSelected {
+                    RoundedRectangle(cornerRadius: 10, style: .continuous)
+                        .strokeBorder(resolvedActionTint(kind: kind, color: def.color), lineWidth: 2)
+                }
+            }
+        }
+        .buttonStyle(.plain)
+        .accessibilityIdentifier("proto-glyph.\(value ?? "none")")
     }
 }
 

@@ -205,24 +205,36 @@ struct CustomActionEditorView: View {
     /// curated, fuzzy-searchable `GlyphPickerView`. Purely opt-in — leaving it "None"
     /// keeps the kind-derived leading glyph on every surface, so an untouched action
     /// looks exactly as before.
+    /// The shipped Symbol row, unchanged — a navigation row previewing the current
+    /// symbol (or "None") that pushes the curated, fuzzy-searchable `GlyphPickerView`.
+    private var shippedSymbolRow: some View {
+        NavigationLink {
+            GlyphPickerView(selection: $def.glyph)
+        } label: {
+            HStack(spacing: 12) {
+                // Preview the leading badge exactly as a surface renders it: the
+                // chosen symbol over the chosen colour (or the kind's tint), or the
+                // derived glyph when None. Read through `normalizedGlyph` so a blank
+                // value previews the derived glyph rather than an empty badge.
+                ProviderBadge(kind: previewKind, symbol: def.normalizedGlyph, color: def.color)
+                Text("Symbol")
+                Spacer(minLength: 8)
+                Text(symbolValueLabel)
+                    .foregroundStyle(.secondary)
+            }
+        }
+        .accessibilityIdentifier("custom-action-symbol-row")
+    }
+
     private var symbolSection: some View {
         Section {
-            NavigationLink {
-                GlyphPickerView(selection: $def.glyph)
-            } label: {
-                HStack(spacing: 12) {
-                    // Preview the leading badge exactly as a surface renders it: the
-                    // chosen symbol over the chosen colour (or the kind's tint), or the
-                    // derived glyph when None. Read through `normalizedGlyph` so a blank
-                    // value previews the derived glyph rather than an empty badge.
-                    ProviderBadge(kind: previewKind, symbol: def.normalizedGlyph, color: def.color)
-                    Text("Symbol")
-                    Spacer(minLength: 8)
-                    Text(symbolValueLabel)
-                        .foregroundStyle(.secondary)
-                }
-            }
-            .accessibilityIdentifier("custom-action-symbol-row")
+            // PROTOTYPE (throwaway): variant D merges symbol + color into one page,
+            // so the gate hides this shipped Symbol row while D is active.
+            #if DEBUG
+            PrototypeSymbolRowGate { shippedSymbolRow }
+            #else
+            shippedSymbolRow
+            #endif
 
             // PROTOTYPE (throwaway): DEBUG builds swap the shipped Color row for the
             // variant under evaluation — see PrototypeColorPickerVariants.swift.

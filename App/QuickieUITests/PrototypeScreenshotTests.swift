@@ -38,9 +38,9 @@ final class PrototypeScreenshotTests: XCTestCase {
         XCTAssertTrue(next.waitForExistence(timeout: 5), "the prototype pill is present in DEBUG builds")
 
         // Normalize to variant A (the pill persists across runs): press next up
-        // to three times until the inline strip's Blue dot is visible.
+        // to four times until the inline strip's Blue dot is visible.
         var hops = 0
-        while !app.buttons["Blue"].exists && hops < 3 {
+        while !app.buttons["Blue"].exists && hops < 4 {
             next.tap()
             hops += 1
         }
@@ -67,6 +67,22 @@ final class PrototypeScreenshotTests: XCTestCase {
         colorRow.tap()
         XCTAssertTrue(app.buttons["Teal"].waitForExistence(timeout: 5), "variant C lists the badges")
         shoot(app, "variant-C-badge-list")
+        app.navigationBars.buttons.firstMatch.tap()
+
+        // Variant D — merged symbol + color page: switch, push the single
+        // "Symbol & Color" row, pick Teal and a glyph so the hero composes both.
+        next.tap()
+        XCTAssertTrue(colorRow.waitForExistence(timeout: 5))
+        colorRow.tap()
+        let teal = app.buttons["Teal"]
+        XCTAssertTrue(teal.waitForExistence(timeout: 5), "variant D shows the color circles")
+        teal.tap()
+        let glyphs = app.buttons.matching(
+            NSPredicate(format: "identifier BEGINSWITH 'proto-glyph.' AND NOT identifier == 'proto-glyph.none'")
+        )
+        XCTAssertTrue(glyphs.firstMatch.waitForExistence(timeout: 5), "variant D shows the glyph gallery")
+        glyphs.element(boundBy: 2).tap()
+        shoot(app, "variant-D-merged-page")
     }
 
     @MainActor
