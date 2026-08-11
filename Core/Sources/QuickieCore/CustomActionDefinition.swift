@@ -58,6 +58,15 @@ public struct CustomActionDefinition: Equatable, Sendable {
     /// looks exactly as before. `var` so it doubles as the editor's live view-model
     /// surface, like the other fields.
     public var glyph: String?
+    /// The user-chosen **badge tint** (CONTEXT.md → Action color; issue #243): a
+    /// curated `ActionColor` token the editor's colour picker sets beside the glyph,
+    /// which `makeAction` stamps onto the produced `Action.color` so it replaces the
+    /// kind-derived tint on every surface. `nil` is **Default** — the derived tint,
+    /// unchanged. Held as the *typed* token rather than a raw string so the editor
+    /// binds a picker straight to it and no surface can smuggle in a hex; the store's
+    /// raw string crosses the boundary through `colorToken` / `init(colorToken:)`.
+    /// `var` so it doubles as the editor's live view-model surface, like the others.
+    public var color: ActionColor?
 
     public init(
         name: String,
@@ -65,7 +74,8 @@ public struct CustomActionDefinition: Equatable, Sendable {
         template: String,
         fillOrder: [String] = [],
         argumentSpecs: [String: ArgumentSpec] = [:],
-        glyph: String? = nil
+        glyph: String? = nil,
+        color: ActionColor? = nil
     ) {
         self.name = name
         self.aliases = aliases
@@ -73,7 +83,36 @@ public struct CustomActionDefinition: Equatable, Sendable {
         self.fillOrder = fillOrder
         self.argumentSpecs = argumentSpecs
         self.glyph = glyph
+        self.color = color
     }
+
+    /// The persistence spelling of `init`: takes the store's **raw** colour string and
+    /// resolves it through `ActionColor(token:)`, so an absent, blank, or unknown token
+    /// (a record synced from a build with a newer palette) reads as Default rather than
+    /// failing. The one door a stored string uses to become a typed token.
+    public init(
+        name: String,
+        aliases: [String] = [],
+        template: String,
+        fillOrder: [String] = [],
+        argumentSpecs: [String: ArgumentSpec] = [:],
+        glyph: String? = nil,
+        colorToken: String?
+    ) {
+        self.init(
+            name: name,
+            aliases: aliases,
+            template: template,
+            fillOrder: fillOrder,
+            argumentSpecs: argumentSpecs,
+            glyph: glyph,
+            color: ActionColor(token: colorToken)
+        )
+    }
+
+    /// The chosen colour as the raw string the store persists — `nil` for Default, so
+    /// an untouched action stores no token and migrates cleanly.
+    public var colorToken: String? { color?.rawValue }
 
     /// The distinct `{name}` token names in **URL-appearance order** — the raw slots
     /// the template declares. The same name appearing twice collapses to one entry
@@ -295,7 +334,8 @@ public struct CustomActionDefinition: Equatable, Sendable {
                 inputTypes: [],
                 outputType: .url,
                 content: .quicklink(id: id),
-                glyph: normalizedGlyph
+                glyph: normalizedGlyph,
+                color: color
             ) { _ in .openURL(url) }
         }
         let template = self.template
@@ -320,6 +360,7 @@ public struct CustomActionDefinition: Equatable, Sendable {
             // the universal Copy action deeplink.
             content: .customAction(id: id),
             glyph: normalizedGlyph,
+            color: color,
             effect: { _ in .none },
             multiStepEffect: { values in
                 CustomActionDefinition.fill(template: template, tokenNames: names, specs: specs, values: values)

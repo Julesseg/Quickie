@@ -55,6 +55,13 @@ public struct CatalogEntry: Identifiable, Equatable, Sendable {
     public let category: CatalogCategory
     public let template: String
     public let glyph: String?
+    /// The entry's shipped **Action color** (CONTEXT.md → Action color; issue #243):
+    /// the brand-appropriate palette token an install stamps onto the new action, so a
+    /// catalog-installed Maps reads green and a YouTube red without the user picking.
+    /// Deliberately **not defaulted** on the initializer — adding an entry is a decision
+    /// about its colour too, and a silent fallback would let one ship untinted. Still
+    /// optional, because Default (the kind-derived tint) is a valid choice.
+    public let color: ActionColor?
     public let requiresApp: String?
     public let argumentSpecs: [String: ArgumentSpec]
 
@@ -65,6 +72,7 @@ public struct CatalogEntry: Identifiable, Equatable, Sendable {
         category: CatalogCategory,
         template: String,
         glyph: String? = nil,
+        color: ActionColor?,
         requiresApp: String? = nil,
         argumentSpecs: [String: ArgumentSpec] = [:]
     ) {
@@ -74,6 +82,7 @@ public struct CatalogEntry: Identifiable, Equatable, Sendable {
         self.category = category
         self.template = template
         self.glyph = glyph
+        self.color = color
         self.requiresApp = requiresApp
         self.argumentSpecs = argumentSpecs
     }
@@ -87,7 +96,8 @@ public struct CatalogEntry: Identifiable, Equatable, Sendable {
             aliases: aliases,
             template: template,
             argumentSpecs: argumentSpecs,
-            glyph: glyph
+            glyph: glyph,
+            color: color
         )
     }
 }
@@ -112,27 +122,27 @@ public enum Catalog {
     public static let entries: [CatalogEntry] = [
         // Search engines
         CatalogEntry(id: "catalog.google", name: "Google", aliases: ["google"], category: .searchEngines,
-                     template: "https://www.google.com/search?q={query}", glyph: "magnifyingglass"),
+                     template: "https://www.google.com/search?q={query}", glyph: "magnifyingglass", color: .blue),
         CatalogEntry(id: "catalog.duckduckgo", name: "DuckDuckGo", aliases: ["ddg"], category: .searchEngines,
-                     template: "https://duckduckgo.com/?q={query}", glyph: "magnifyingglass"),
+                     template: "https://duckduckgo.com/?q={query}", glyph: "magnifyingglass", color: .orange),
         CatalogEntry(id: "catalog.bing", name: "Bing", aliases: ["bing"], category: .searchEngines,
-                     template: "https://www.bing.com/search?q={query}", glyph: "magnifyingglass"),
+                     template: "https://www.bing.com/search?q={query}", glyph: "magnifyingglass", color: .teal),
         CatalogEntry(id: "catalog.kagi", name: "Kagi", aliases: ["kagi"], category: .searchEngines,
-                     template: "https://kagi.com/search?q={query}", glyph: "magnifyingglass"),
+                     template: "https://kagi.com/search?q={query}", glyph: "magnifyingglass", color: .amber),
         CatalogEntry(id: "catalog.ecosia", name: "Ecosia", aliases: ["ecosia"], category: .searchEngines,
-                     template: "https://www.ecosia.org/search?q={query}", glyph: "magnifyingglass"),
+                     template: "https://www.ecosia.org/search?q={query}", glyph: "magnifyingglass", color: .green),
         CatalogEntry(id: "catalog.brave", name: "Brave Search", aliases: ["brave"], category: .searchEngines,
-                     template: "https://search.brave.com/search?q={query}", glyph: "magnifyingglass"),
+                     template: "https://search.brave.com/search?q={query}", glyph: "magnifyingglass", color: .orange),
         CatalogEntry(id: "catalog.startpage", name: "Startpage", aliases: ["startpage"], category: .searchEngines,
-                     template: "https://www.startpage.com/sp/search?query={query}", glyph: "magnifyingglass"),
+                     template: "https://www.startpage.com/sp/search?query={query}", glyph: "magnifyingglass", color: .blue),
 
         // AI chats
         CatalogEntry(id: "catalog.chatgpt", name: "ChatGPT", aliases: ["gpt", "chatgpt"], category: .aiChats,
-                     template: "https://chatgpt.com/?q={prompt}", glyph: "sparkles"),
+                     template: "https://chatgpt.com/?q={prompt}", glyph: "sparkles", color: .teal),
         CatalogEntry(id: "catalog.claude", name: "Claude", aliases: ["claude"], category: .aiChats,
-                     template: "https://claude.ai/new?q={prompt}", glyph: "sparkles"),
+                     template: "https://claude.ai/new?q={prompt}", glyph: "sparkles", color: .orange),
         CatalogEntry(id: "catalog.perplexity", name: "Perplexity", aliases: ["perplexity"], category: .aiChats,
-                     template: "https://www.perplexity.ai/search?q={query}", glyph: "sparkles"),
+                     template: "https://www.perplexity.ai/search?q={query}", glyph: "sparkles", color: .teal),
 
         // Reference & site search. The three non-web seeds are listed here for
         // re-install (CONTEXT.md → Catalog); their name/aliases/template/glyph are
@@ -143,63 +153,63 @@ public enum Catalog {
         seedEntry(CatalogSeed.googleMaps, in: .reference),
         seedEntry(CatalogSeed.appStoreSearch, in: .reference),
         CatalogEntry(id: "catalog.amazon", name: "Amazon", aliases: ["amazon"], category: .reference,
-                     template: "https://www.amazon.com/s?k={query}", glyph: "cart"),
+                     template: "https://www.amazon.com/s?k={query}", glyph: "cart", color: .amber),
         CatalogEntry(id: "catalog.reddit", name: "Reddit", aliases: ["reddit"], category: .reference,
-                     template: "https://www.reddit.com/search/?q={query}", glyph: "bubble.left.and.bubble.right"),
+                     template: "https://www.reddit.com/search/?q={query}", glyph: "bubble.left.and.bubble.right", color: .orange),
         CatalogEntry(id: "catalog.github", name: "GitHub", aliases: ["github", "gh"], category: .reference,
-                     template: "https://github.com/search?q={query}", glyph: "curlybraces"),
+                     template: "https://github.com/search?q={query}", glyph: "curlybraces", color: .graphite),
         CatalogEntry(id: "catalog.stackoverflow", name: "Stack Overflow", aliases: ["so", "stackoverflow"], category: .reference,
-                     template: "https://stackoverflow.com/search?q={query}", glyph: "curlybraces"),
+                     template: "https://stackoverflow.com/search?q={query}", glyph: "curlybraces", color: .orange),
         CatalogEntry(id: "catalog.imdb", name: "IMDb", aliases: ["imdb"], category: .reference,
-                     template: "https://www.imdb.com/find/?q={query}", glyph: "star"),
+                     template: "https://www.imdb.com/find/?q={query}", glyph: "star", color: .amber),
         CatalogEntry(id: "catalog.wolfram", name: "Wolfram Alpha", aliases: ["wolfram"], category: .reference,
-                     template: "https://www.wolframalpha.com/input?i={query}", glyph: "chart.line.uptrend.xyaxis"),
+                     template: "https://www.wolframalpha.com/input?i={query}", glyph: "chart.line.uptrend.xyaxis", color: .red),
         CatalogEntry(id: "catalog.google-translate", name: "Google Translate", aliases: ["translate"], category: .reference,
-                     template: "https://translate.google.com/?sl=auto&tl=en&text={text}", glyph: "globe"),
+                     template: "https://translate.google.com/?sl=auto&tl=en&text={text}", glyph: "globe", color: .blue),
         CatalogEntry(id: "catalog.deepl", name: "DeepL", aliases: ["deepl"], category: .reference,
-                     template: "https://www.deepl.com/translator#auto/en/{text}", glyph: "globe"),
+                     template: "https://www.deepl.com/translator#auto/en/{text}", glyph: "globe", color: .blue),
         CatalogEntry(id: "catalog.merriam-webster", name: "Merriam-Webster", aliases: ["dictionary", "define"], category: .reference,
-                     template: "https://www.merriam-webster.com/dictionary/{word}", glyph: "book"),
+                     template: "https://www.merriam-webster.com/dictionary/{word}", glyph: "book", color: .red),
 
         // App captures
         CatalogEntry(id: "catalog.things", name: "Things", aliases: ["things"], category: .appCaptures,
-                     template: "things:///add?title={title}&notes={notes}", glyph: "checklist", requiresApp: "Things"),
+                     template: "things:///add?title={title}&notes={notes}", glyph: "checklist", color: .blue, requiresApp: "Things"),
         CatalogEntry(id: "catalog.todoist", name: "Todoist", aliases: ["todoist"], category: .appCaptures,
-                     template: "todoist://addtask?content={content}", glyph: "checklist", requiresApp: "Todoist"),
+                     template: "todoist://addtask?content={content}", glyph: "checklist", color: .red, requiresApp: "Todoist"),
         CatalogEntry(id: "catalog.omnifocus", name: "OmniFocus", aliases: ["omnifocus"], category: .appCaptures,
-                     template: "omnifocus:///add?name={name}&note={note}", glyph: "checklist", requiresApp: "OmniFocus"),
+                     template: "omnifocus:///add?name={name}&note={note}", glyph: "checklist", color: .purple, requiresApp: "OmniFocus"),
         CatalogEntry(id: "catalog.bear", name: "Bear", aliases: ["bear"], category: .appCaptures,
-                     template: "bear://x-callback-url/create?title={title}&text={text}", glyph: "note.text", requiresApp: "Bear"),
+                     template: "bear://x-callback-url/create?title={title}&text={text}", glyph: "note.text", color: .red, requiresApp: "Bear"),
         CatalogEntry(id: "catalog.drafts", name: "Drafts", aliases: ["drafts"], category: .appCaptures,
-                     template: "drafts://x-callback-url/create?text={text}", glyph: "pencil", requiresApp: "Drafts"),
+                     template: "drafts://x-callback-url/create?text={text}", glyph: "pencil", color: .blue, requiresApp: "Drafts"),
         CatalogEntry(id: "catalog.obsidian", name: "Obsidian", aliases: ["obsidian"], category: .appCaptures,
-                     template: "obsidian://new?name={name}&content={content}", glyph: "note.text", requiresApp: "Obsidian"),
+                     template: "obsidian://new?name={name}&content={content}", glyph: "note.text", color: .purple, requiresApp: "Obsidian"),
         CatalogEntry(id: "catalog.dayone", name: "Day One", aliases: ["dayone", "journal"], category: .appCaptures,
-                     template: "dayone://post?entry={entry}", glyph: "book", requiresApp: "Day One"),
+                     template: "dayone://post?entry={entry}", glyph: "book", color: .blue, requiresApp: "Day One"),
         CatalogEntry(id: "catalog.fantastical", name: "Fantastical", aliases: ["fantastical"], category: .appCaptures,
-                     template: "x-fantastical3://parse?sentence={sentence}", glyph: "calendar", requiresApp: "Fantastical"),
+                     template: "x-fantastical3://parse?sentence={sentence}", glyph: "calendar", color: .red, requiresApp: "Fantastical"),
         CatalogEntry(id: "catalog.google-calendar", name: "Google Calendar", aliases: ["gcal", "calendar"], category: .appCaptures,
-                     template: "https://calendar.google.com/calendar/render?action=TEMPLATE&text={title}", glyph: "calendar"),
+                     template: "https://calendar.google.com/calendar/render?action=TEMPLATE&text={title}", glyph: "calendar", color: .blue),
 
         // Communication & utilities
         CatalogEntry(id: "catalog.email", name: "Email compose", aliases: ["email", "mail"], category: .communication,
-                     template: "mailto:{to}?subject={subject}&body={body}", glyph: "envelope"),
+                     template: "mailto:{to}?subject={subject}&body={body}", glyph: "envelope", color: .blue),
         CatalogEntry(id: "catalog.sms", name: "Text a number", aliases: ["sms", "text"], category: .communication,
-                     template: "sms:{number}&body={message}", glyph: "message", argumentSpecs: number),
+                     template: "sms:{number}&body={message}", glyph: "message", color: .green, argumentSpecs: number),
         CatalogEntry(id: "catalog.tel", name: "Call a number", aliases: ["call", "phone"], category: .communication,
-                     template: "tel:{number}", glyph: "phone", argumentSpecs: number),
+                     template: "tel:{number}", glyph: "phone", color: .green, argumentSpecs: number),
         CatalogEntry(id: "catalog.whatsapp", name: "WhatsApp", aliases: ["whatsapp"], category: .communication,
-                     template: "https://wa.me/?text={text}", glyph: "bubble.left.and.bubble.right"),
+                     template: "https://wa.me/?text={text}", glyph: "bubble.left.and.bubble.right", color: .green),
         CatalogEntry(id: "catalog.telegram", name: "Telegram share", aliases: ["telegram"], category: .communication,
-                     template: "https://t.me/share/url?url={url}", glyph: "square.and.arrow.up"),
+                     template: "https://t.me/share/url?url={url}", glyph: "square.and.arrow.up", color: .blue),
         CatalogEntry(id: "catalog.spotify", name: "Spotify search", aliases: ["spotify"], category: .communication,
-                     template: "https://open.spotify.com/search/{query}", glyph: "music.note"),
+                     template: "https://open.spotify.com/search/{query}", glyph: "music.note", color: .green),
         CatalogEntry(id: "catalog.apple-music", name: "Apple Music search", aliases: ["apple music", "music"], category: .communication,
-                     template: "https://music.apple.com/search?term={term}", glyph: "music.note"),
+                     template: "https://music.apple.com/search?term={term}", glyph: "music.note", color: .pink),
         CatalogEntry(id: "catalog.17track", name: "17track package tracking", aliases: ["17track", "track"], category: .communication,
-                     template: "https://t.17track.net/en#nums={tracking}", glyph: "mappin.and.ellipse"),
+                     template: "https://t.17track.net/en#nums={tracking}", glyph: "mappin.and.ellipse", color: .amber),
         CatalogEntry(id: "catalog.waze", name: "Waze", aliases: ["waze"], category: .communication,
-                     template: "https://waze.com/ul?q={query}", glyph: "car"),
+                     template: "https://waze.com/ul?q={query}", glyph: "car", color: .teal),
 
         // Sites — static, slot-less homepage links (ADR 0030). The three default site
         // seeds are listed here for re-install, pulled straight from `CatalogSeed` so
@@ -210,17 +220,17 @@ public enum Catalog {
         seedEntry(CatalogSeed.gmail, in: .sites),
         seedEntry(CatalogSeed.gitHubLink, in: .sites),
         CatalogEntry(id: "catalog.netflix", name: "Netflix", aliases: ["netflix"], category: .sites,
-                     template: "https://www.netflix.com", glyph: "play.rectangle"),
+                     template: "https://www.netflix.com", glyph: "play.rectangle", color: .red),
         CatalogEntry(id: "catalog.linkedin", name: "LinkedIn", aliases: ["linkedin"], category: .sites,
-                     template: "https://www.linkedin.com", glyph: "building.2"),
+                     template: "https://www.linkedin.com", glyph: "building.2", color: .blue),
         CatalogEntry(id: "catalog.x", name: "X", aliases: ["x", "twitter"], category: .sites,
-                     template: "https://x.com", glyph: "bubble.left.and.bubble.right"),
+                     template: "https://x.com", glyph: "bubble.left.and.bubble.right", color: .graphite),
         CatalogEntry(id: "catalog.instagram", name: "Instagram", aliases: ["instagram", "ig"], category: .sites,
-                     template: "https://www.instagram.com", glyph: "camera"),
+                     template: "https://www.instagram.com", glyph: "camera", color: .pink),
     ]
 
     /// A Catalog entry that re-installs a default seed: its name, aliases, template,
-    /// and default glyph come straight from the `CatalogSeed` definition (so the
+    /// default glyph, and colour come straight from the `CatalogSeed` definition (so the
     /// listing can never drift from what the seed pass plants) and it carries the
     /// seed's own fixed id. Re-installing still mints a fresh row at the App edge
     /// (ADR 0028) — the id here is only the Catalog-side identity slug.
@@ -232,7 +242,8 @@ public enum Catalog {
             aliases: def.aliases,
             category: category,
             template: def.template,
-            glyph: def.glyph
+            glyph: def.glyph,
+            color: def.color
         )
     }
 

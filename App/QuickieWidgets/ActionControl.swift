@@ -37,6 +37,12 @@ struct ActionControl: ControlWidget {
             ControlWidgetButton(action: RunFavoriteInAppIntent(actionID: action?.id)) {
                 ActionControlLabel(action: action)
             }
+            // The chosen **Action color** (CONTEXT.md → Action color; issue #243). A
+            // control has no leading badge to fill, so the token lands on the template's
+            // own tint — the colour Control Center gives the control when it is on. A
+            // `nil` token (Default, or an unconfigured/stale control) passes `nil`, which
+            // is exactly "use the system tint": today's behaviour, unchanged.
+            .tint(action?.color?.swiftUIColor)
         }
         .displayName("Quickie Action")
         .description("Run a chosen Quickie Action from Control Center.")
@@ -55,6 +61,10 @@ private struct ActionControlLabel: View {
         // never an `icon:` closure wrapping an `Image`: Control Center archives
         // the label out-of-process and resolves only symbol *references*, so a
         // nested `Image` view silently renders nothing there.
+        //
+        // That same constraint is why the chosen **Action color** is applied to the
+        // *template* (see `.tint` above) rather than here: this label may only carry a
+        // symbol reference, so there is nothing inside it to colour.
         if let action {
             Label(action.title, systemImage: action.glyph)
         } else {

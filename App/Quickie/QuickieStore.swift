@@ -22,6 +22,7 @@ extension StoredCustomAction {
         fillOrder: [String] = [],
         argumentSpecs: [String: ArgumentSpec],
         glyph: String? = nil,
+        colorToken: String? = nil,
         createdAt: Date = Date()
     ) {
         self.init(
@@ -32,6 +33,7 @@ extension StoredCustomAction {
             fillOrder: fillOrder,
             argumentSpecsData: Self.encodeSpecs(argumentSpecs),
             glyph: glyph,
+            colorToken: colorToken,
             createdAt: createdAt
         )
     }

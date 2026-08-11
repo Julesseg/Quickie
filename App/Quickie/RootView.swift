@@ -1947,7 +1947,9 @@ struct RootView: View {
         engine.home(showRecents: false).favorites.map { action in
             // A Custom Action's chosen glyph (issue #163) rides the snapshot so the
             // widget draws it from the projection alone; `nil` denormalizes the
-            // kind-derived glyph, unchanged.
+            // kind-derived glyph, unchanged. Its chosen colour (issue #243) rides too,
+            // read off the Action by `WidgetAction` itself — a palette token is Core
+            // vocabulary, unlike the App-side symbol lookup passed in here.
             WidgetAction(action: action, glyph: action.glyph ?? action.kind.symbol)
         }
     }
@@ -1973,7 +1975,8 @@ struct RootView: View {
         engine.eligibleActions().map { action in
             // A Custom Action's chosen glyph (issue #163) rides the catalog snapshot,
             // so the Actions widget and Action control render it; `nil` denormalizes
-            // the kind-derived glyph.
+            // the kind-derived glyph. The chosen colour (issue #243) rides alongside,
+            // read off the Action by `WidgetAction` itself.
             WidgetAction(action: action, glyph: action.glyph ?? action.kind.symbol)
         }
     }

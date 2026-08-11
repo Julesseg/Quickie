@@ -108,6 +108,15 @@ public final class StoredCustomAction {
     /// attribute; a synced device on a build without this attribute simply never reads
     /// it and renders the derived glyph, never a blank (the schema degrade path).
     public var glyph: String?
+    /// The user-chosen **Action color** (CONTEXT.md → Action color; issue #243): the
+    /// palette *token* name the editor's colour picker set — never a raw hex, so the
+    /// actual light/dark fills stay tuned in one place and a palette revision reaches
+    /// every stored action at once. `nil` (the default, so existing rows migrate without
+    /// a value) is **Default**: the provider-kind-derived tint, unchanged. Syncs through
+    /// CloudKit like the glyph beside it; a device on a build whose palette lacks the
+    /// synced token resolves it to Default rather than rendering nothing (the schema
+    /// degrade path — `ActionColor(token:)` is where that tolerance lives).
+    public var colorToken: String?
     public var createdAt: Date = Date()
 
     public init(
@@ -118,6 +127,7 @@ public final class StoredCustomAction {
         fillOrder: [String] = [],
         argumentSpecsData: Data? = nil,
         glyph: String? = nil,
+        colorToken: String? = nil,
         createdAt: Date = Date()
     ) {
         self.id = id
@@ -127,6 +137,7 @@ public final class StoredCustomAction {
         self.fillOrder = fillOrder
         self.argumentSpecsData = argumentSpecsData
         self.glyph = glyph
+        self.colorToken = colorToken
         self.createdAt = createdAt
     }
 }

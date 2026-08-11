@@ -173,14 +173,24 @@ private struct CustomActionRow: View {
         CustomActionDefinition.normalizedGlyph(action.glyph)
     }
 
+    /// The chosen **Action color** (issue #243), resolved from the stored token by the
+    /// same tolerant Core rule every other surface uses — so an unknown token shows the
+    /// kind's tint here exactly as it does on a result row.
+    private var chosenColor: ActionColor? {
+        ActionColor(token: action.colorToken)
+    }
+
     var body: some View {
         HStack(spacing: 12) {
-            // The chosen glyph appears as a leading badge on the management-page row
-            // (CONTEXT.md → Custom Action; issue #163) — the same badge, tint, and
-            // weight the result rows wear. Purely opt-in: an action with no chosen
-            // symbol shows no badge here, so the row reads exactly as before.
-            if let glyph = chosenGlyph {
-                ProviderBadge(kind: badgeKind, symbol: glyph)
+            // The action's customizations appear as a leading badge on the
+            // management-page row (CONTEXT.md → Custom Action, Action color; issues
+            // #163, #243) — the same badge, tint, and weight the result rows wear. Shown
+            // when **either** a symbol or a colour is set, since either alone makes the
+            // badge say something the plain row doesn't; with neither, the row reads
+            // exactly as before. A colour-only action still needs a symbol to sit on, so
+            // the badge falls back to the kind-derived glyph.
+            if chosenGlyph != nil || chosenColor != nil {
+                ProviderBadge(kind: badgeKind, symbol: chosenGlyph, color: chosenColor)
             }
             VStack(alignment: .leading, spacing: 2) {
                 Text(action.title)

@@ -205,10 +205,10 @@ struct CustomActionEditorView: View {
             } label: {
                 HStack(spacing: 12) {
                     // Preview the leading badge exactly as a surface renders it: the
-                    // chosen symbol over the kind's tint, or the derived glyph when None.
-                    // Read through `normalizedGlyph` so a blank value previews the
-                    // derived glyph rather than an empty badge.
-                    ProviderBadge(kind: previewKind, symbol: def.normalizedGlyph)
+                    // chosen symbol over the chosen colour (or the kind's tint), or the
+                    // derived glyph when None. Read through `normalizedGlyph` so a blank
+                    // value previews the derived glyph rather than an empty badge.
+                    ProviderBadge(kind: previewKind, symbol: def.normalizedGlyph, color: def.color)
                     Text("Symbol")
                     Spacer(minLength: 8)
                     Text(symbolValueLabel)
@@ -216,8 +216,28 @@ struct CustomActionEditorView: View {
                 }
             }
             .accessibilityIdentifier("custom-action-symbol-row")
+
+            // The colour picker sits directly beside the glyph picker — the two are
+            // siblings (CONTEXT.md → Action color; issue #243), one section, one preview
+            // badge each, both purely opt-in.
+            NavigationLink {
+                ActionColorPickerView(selection: $def.color)
+            } label: {
+                HStack(spacing: 12) {
+                    // A bare **swatch**, not a second copy of the badge above: the row
+                    // beside it already previews the composed badge, and repeating it
+                    // here would say nothing new (two identical badges stacked read as a
+                    // rendering fault). This shows the one thing this row controls.
+                    ActionColorSwatch(color: def.color)
+                    Text("Color")
+                    Spacer(minLength: 8)
+                    Text(def.color?.label ?? "Default")
+                        .foregroundStyle(.secondary)
+                }
+            }
+            .accessibilityIdentifier("custom-action-color-row")
         } footer: {
-            Text("Give this action its own symbol, shown everywhere it appears. Leave it as None to use the default glyph.")
+            Text("Give this action its own symbol and color, shown everywhere it appears. Leave them as None and Default to use the ones its kind provides.")
         }
     }
 
@@ -560,6 +580,124 @@ private struct GlyphClearCell: View {
     }
 }
 
+/// The curated **colour picker** (CONTEXT.md → Action color; issue #243): the glyph
+/// picker's sibling — the same grid, the same leading clear cell — offering the closed
+/// `ActionColor` palette plus a **Default** row that restores the kind-derived tint.
+/// No search: ten named swatches are a glance, not a lookup, so the searchable
+/// furniture the glyph gallery needs would only get in the way here.
+private struct ActionColorPickerView: View {
+    @Environment(\.dismiss) private var dismiss
+    /// The definition's chosen colour — written on selection, cleared by "Default".
+    @Binding var selection: ActionColor?
+
+    private let columns = [GridItem(.adaptive(minimum: 76), spacing: 12)]
+
+    var body: some View {
+        ScrollView {
+            LazyVGrid(columns: columns, spacing: 12) {
+                // The reset leads, as in the glyph picker: "back to the derived tint" is
+                // always the first, thumb-reachable choice.
+                ActionColorCell(
+                    swatch: nil,
+                    isSelected: selection == nil,
+                    identifier: "action-color-option-default"
+                ) {
+                    selection = nil
+                    dismiss()
+                }
+                ForEach(ActionColor.allCases, id: \.rawValue) { color in
+                    ActionColorCell(
+                        swatch: color,
+                        isSelected: color == selection,
+                        identifier: "action-color-option.\(color.rawValue)"
+                    ) {
+                        selection = color
+                        dismiss()
+                    }
+                }
+            }
+            .padding()
+        }
+        .navigationTitle("Color")
+        .navigationBarTitleDisplayMode(.inline)
+    }
+}
+
+/// The small colour chip the editor's Color row wears: the chosen token's fill, or the
+/// neutral "no choice" slash for Default. Sized and cornered like a `ProviderBadge` so
+/// the two rows line up, but deliberately *not* a badge — it previews the colour alone.
+private struct ActionColorSwatch: View {
+    let color: ActionColor?
+
+    var body: some View {
+        RoundedRectangle(cornerRadius: 8, style: .continuous)
+            .fill(color?.swiftUIColor ?? Color.secondary.opacity(0.18))
+            .frame(width: 30, height: 30)
+            .overlay {
+                if color == nil {
+                    Image(systemName: "slash.circle")
+                        .font(.system(size: 14, weight: .semibold))
+                        .foregroundStyle(.secondary)
+                }
+            }
+            .accessibilityHidden(true)
+    }
+}
+
+/// One swatch cell: the colour as the badge will actually fill it — with the same white
+/// checkmark the badge draws its symbol in, so the cell previews the real legibility
+/// rather than a bare colour chip. `swatch: nil` is the Default cell, which shows the
+/// neutral "no choice" slash — and, when selected, the same checkmark in the secondary
+/// ink its slash uses, so Default signals selection exactly as the ten colours do.
+private struct ActionColorCell: View {
+    let swatch: ActionColor?
+    let isSelected: Bool
+    let identifier: String
+    let onTap: () -> Void
+
+    /// The cell's caption — derived, never passed: a token always shows its own label,
+    /// and the clear cell is always "Default", so the two can't be given inconsistently.
+    private var label: String { swatch?.label ?? "Default" }
+
+    var body: some View {
+        Button(action: onTap) {
+            VStack(spacing: 6) {
+                ZStack {
+                    RoundedRectangle(cornerRadius: 12, style: .continuous)
+                        .fill(swatch?.swiftUIColor ?? Color.secondary.opacity(0.12))
+                    if swatch != nil {
+                        // White-on-fill, exactly as the badge renders — so a swatch that
+                        // couldn't hold a white glyph would be visibly wrong right here.
+                        Image(systemName: "checkmark")
+                            .font(.system(size: 20, weight: .semibold))
+                            .foregroundStyle(.white)
+                            .opacity(isSelected ? 1 : 0)
+                            .accessibilityHidden(true)
+                    } else {
+                        Image(systemName: isSelected ? "checkmark" : "slash.circle")
+                            .font(.system(size: 20, weight: .semibold))
+                            .foregroundStyle(.secondary)
+                    }
+                }
+                .frame(height: 56)
+                .overlay {
+                    if isSelected {
+                        RoundedRectangle(cornerRadius: 12, style: .continuous)
+                            .strokeBorder(Color.accentColor, lineWidth: 2)
+                    }
+                }
+                Text(label)
+                    .font(.caption2)
+                    .foregroundStyle(.secondary)
+                    .lineLimit(1)
+            }
+        }
+        .buttonStyle(.plain)
+        .accessibilityIdentifier(identifier)
+        .accessibilityLabel(label)
+    }
+}
+
 extension CustomActionDefinition {
     /// A save-ready copy: name and template trimmed, and the resolved fill order
     /// baked into `fillOrder` so the persisted order survives even if the stored
@@ -575,7 +713,10 @@ extension CustomActionDefinition {
             argumentSpecs: reconciledSpecs,
             // The chosen glyph rides through untouched (issue #163) — a blank one was
             // already cleared to nil by the "No symbol" picker row.
-            glyph: glyph
+            glyph: glyph,
+            // The chosen colour likewise (issue #243): a typed palette token, so there
+            // is nothing to normalize — "Default" is simply nil.
+            color: color
         )
     }
 }
@@ -589,7 +730,8 @@ extension StoredCustomAction {
             template: urlString,
             fillOrder: fillOrder,
             argumentSpecs: argumentSpecs,
-            glyph: glyph
+            glyph: glyph,
+            colorToken: colorToken
         )
     }
 
@@ -601,6 +743,7 @@ extension StoredCustomAction {
         fillOrder = def.orderedTokenNames
         argumentSpecs = def.reconciledSpecs
         glyph = def.glyph
+        colorToken = def.colorToken
     }
 
     /// A fresh stored row from a saved definition — the create path's insert. A
@@ -620,7 +763,8 @@ extension StoredCustomAction {
             alias: def.aliases.first,
             fillOrder: def.orderedTokenNames,
             argumentSpecs: def.reconciledSpecs,
-            glyph: def.glyph
+            glyph: def.glyph,
+            colorToken: def.colorToken
         )
     }
 }

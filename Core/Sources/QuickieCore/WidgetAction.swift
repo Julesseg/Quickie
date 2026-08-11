@@ -76,13 +76,34 @@ public struct WidgetAction: Equatable, Sendable, Codable, Identifiable {
     /// The provider badge's SF Symbol name, as the app's badge renders it.
     public let glyph: String
     public let kind: ActionKind
+    /// The chosen **Action color** token (CONTEXT.md → Action color; issue #243), so a
+    /// widget cell tints its badge from the snapshot alone — the same projection rule
+    /// the glyph follows. `nil` is Default: the widget falls back to the kind's tint.
+    ///
+    /// Carried as the **raw string**, not the typed `ActionColor`, deliberately: a
+    /// widget still running an older build must not fail the *whole* snapshot decode
+    /// over one token its palette lacks. An unrecognized value resolves to Default
+    /// through `color` below, degrading that one cell instead of blanking the grid.
+    public let colorToken: String?
     public let execution: WidgetExecution
 
-    public init(id: String, title: String, glyph: String, kind: ActionKind, execution: WidgetExecution) {
+    /// The projection's colour as a palette token, or `nil` for Default — the tolerant
+    /// read every widget surface uses (`ActionColor(token:)`, so unknown → Default).
+    public var color: ActionColor? { ActionColor(token: colorToken) }
+
+    public init(
+        id: String,
+        title: String,
+        glyph: String,
+        kind: ActionKind,
+        colorToken: String? = nil,
+        execution: WidgetExecution
+    ) {
         self.id = id
         self.title = title
         self.glyph = glyph
         self.kind = kind
+        self.colorToken = colorToken
         self.execution = execution
     }
 
@@ -96,6 +117,10 @@ public struct WidgetAction: Equatable, Sendable, Codable, Identifiable {
             title: action.title,
             glyph: glyph,
             kind: action.kind,
+            // The colour, unlike the glyph, *is* Core vocabulary (a palette token, not
+            // an SF Symbol name), so it is read off the Action here rather than passed
+            // in — one less thing a snapshot writer can forget to denormalize.
+            colorToken: action.color?.rawValue,
             execution: .classify(action)
         )
     }
