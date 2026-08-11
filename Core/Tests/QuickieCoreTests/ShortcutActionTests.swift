@@ -134,6 +134,26 @@ struct ShortcutActionTests {
         #expect(row?.match?.titleBold == [])
     }
 
+    @Test("a Shortcut Action carries its user-chosen glyph and color, normalized")
+    func carriesUserChosenAppearance() {
+        // The opt-in appearance (issues #163, #243) rides straight onto the Action,
+        // the same customization a Custom Action carries — normalized through the
+        // shared set/unset rule so a blank glyph reads as unset.
+        let action = Action.shortcut(name: "Translate", glyph: "globe", color: .teal)
+        #expect(action.glyph == "globe")
+        #expect(action.color == .teal)
+        #expect(Action.shortcut(name: "Translate", glyph: "   ").glyph == nil)
+    }
+
+    @Test("a Shortcut Action with no chosen appearance carries nil glyph and color")
+    func defaultAppearanceIsNil() {
+        // Pure opt-in: an untouched import wears the kind-derived badge, exactly
+        // as before the appearance customization existed.
+        let action = Action.shortcut(name: "Translate")
+        #expect(action.glyph == nil)
+        #expect(action.color == nil)
+    }
+
     @Test("the Shortcuts command deeplinks to the Shortcuts provider page")
     func shortcutsCommandOpensItsPage() {
         // Typed "shortcuts" surfaces the provider's Settings command row

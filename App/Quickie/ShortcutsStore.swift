@@ -148,6 +148,27 @@ final class ShortcutsStore {
         persist()
     }
 
+    /// Sets a shortcut's chosen **leading glyph** (matched by name), then persists
+    /// (issue #163) — the Shortcuts page's appearance picker writes here, mirroring
+    /// `setAlias`. `nil` clears it back to the kind-derived glyph ("No symbol" in the
+    /// picker); the picker never writes a blank string, so no normalization is needed
+    /// here (unlike `setAlias`, which takes a raw field value).
+    func setGlyph(_ glyph: String?, for name: String) {
+        guard let index = entries.firstIndex(where: { $0.name == name }) else { return }
+        entries[index].glyph = glyph
+        persist()
+    }
+
+    /// Sets a shortcut's chosen **Action color** (matched by name), then persists
+    /// (issue #243) — the appearance picker's colour swatches write here, storing the
+    /// raw `colorToken` mirroring `StoredCustomAction`. `nil` clears it back to
+    /// Default (the kind-derived tint).
+    func setColor(_ color: ActionColor?, for name: String) {
+        guard let index = entries.firstIndex(where: { $0.name == name }) else { return }
+        entries[index].colorToken = color?.rawValue
+        persist()
+    }
+
     /// Removes an imported shortcut by name, then persists. (A later re-sync that
     /// still lists the name would re-add it with input off — identity is the name.)
     func delete(_ name: String) {

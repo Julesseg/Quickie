@@ -17,24 +17,70 @@ public struct ShortcutEntry: Codable, Equatable, Sendable {
     /// no alias rather than failing, the same forward-compat the `acceptsInput`
     /// default gives.
     public var alias: String?
+    /// The user-chosen **leading glyph**, mirroring `CustomActionDefinition.glyph`
+    /// (issue #163): an SF Symbol name picked from the same curated glyph catalog on
+    /// the shortcut's own appearance page, which `Action.shortcut` stamps onto the
+    /// produced `Action.glyph`. `nil` (the default) leaves the kind-derived glyph
+    /// unchanged — a pure opt-in, so an untouched import looks exactly as before.
+    /// Optional so a pre-appearance payload decodes as no glyph.
+    public var glyph: String?
+    /// The **raw persisted** Action color token, mirroring `StoredCustomAction
+    /// .colorToken` (issue #243) — a plain string rather than the typed `ActionColor`
+    /// so an unknown or blank token (a build with an older/newer palette) decodes
+    /// cleanly instead of failing; `color` is the tolerant typed read of it. `nil`
+    /// is **Default** — the kind-derived tint, unchanged.
+    public var colorToken: String?
 
-    public init(name: String, acceptsInput: Bool = false, alias: String? = nil) {
+    public init(
+        name: String,
+        acceptsInput: Bool = false,
+        alias: String? = nil,
+        glyph: String? = nil,
+        colorToken: String? = nil
+    ) {
         self.name = name
         self.acceptsInput = acceptsInput
         self.alias = alias
+        self.glyph = glyph
+        self.colorToken = colorToken
     }
 
     /// Normalizes a raw alias string to *set* vs *unset* (issue #198): trim
     /// whitespace, and a blank result collapses to `nil` (no alias). The one place
     /// the rule lives, so the Shortcuts page's field writer (`ShortcutsStore.setAlias`)
     /// and the `Action.shortcut` factory agree — an all-whitespace field never becomes
-    /// a matchable empty alias or an empty pill. Mirrors
-    /// `CustomActionDefinition.normalizedGlyph` for the glyph (issue #163).
+    /// a matchable empty alias or an empty pill. Mirrors `normalizedGlyph` below for
+    /// the glyph (issue #163).
     public static func normalizedAlias(_ raw: String?) -> String? {
         guard let trimmed = raw?.trimmingCharacters(in: .whitespacesAndNewlines),
               !trimmed.isEmpty
         else { return nil }
         return trimmed
+    }
+
+    /// The chosen glyph normalized to *set* vs *unset*, mirroring
+    /// `CustomActionDefinition.normalizedGlyph` (issue #163): a blank or
+    /// whitespace-only name collapses to `nil` so an "empty" glyph reads as unset
+    /// (the derived glyph applies) rather than an unrenderable blank symbol.
+    public var normalizedGlyph: String? {
+        Self.normalizedGlyph(glyph)
+    }
+
+    /// The shared *set vs unset* rule for a raw stored glyph string — same
+    /// normalization the Custom Action editor's badge and this type's own
+    /// `normalizedGlyph` apply, so a whitespace-only value reads as "no symbol"
+    /// everywhere identically.
+    public static func normalizedGlyph(_ raw: String?) -> String? {
+        guard let raw, !raw.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+        else { return nil }
+        return raw
+    }
+
+    /// The chosen **Action color** (issue #243), resolved from `colorToken` through
+    /// the same tolerant `ActionColor(token:)` read every persisted surface uses —
+    /// an absent, blank, or unknown token reads as Default rather than failing.
+    public var color: ActionColor? {
+        ActionColor(token: colorToken)
     }
 }
 
@@ -93,14 +139,16 @@ public enum ShortcutImport {
     /// Reconciles a parsed name list into the persisted entry set — the **universal
     /// auto-prune** a re-sync performs (ADR 0007). Rebuilds the set to mirror the
     /// payload: it keeps existing names (**preserving each survivor's `acceptsInput`
-    /// toggle and its alias**, issue #198), adds names not seen before with input off
-    /// and no alias, and drops names absent from the payload. Matching is by name,
-    /// case-insensitively. Order follows the payload. A first import is just this
-    /// against an empty `existing`, and — since identity is the name — a rename reads
-    /// as delete + re-add, so the renamed shortcut loses both toggle and alias.
+    /// toggle, its alias, and its chosen glyph/color**, issues #198, #163, #243),
+    /// adds names not seen before with input off and no alias/appearance, and drops
+    /// names absent from the payload. Matching is by name, case-insensitively. Order
+    /// follows the payload. A first import is just this against an empty `existing`,
+    /// and — since identity is the name — a rename reads as delete + re-add, so the
+    /// renamed shortcut loses its toggle, alias, and appearance alike.
     public static func reconcile(existing: [ShortcutEntry], names: [String]) -> [ShortcutEntry] {
-        // Key the whole survivor by name so both `acceptsInput` and `alias` carry
-        // forward together — the alias survives a re-sync exactly as the toggle does.
+        // Key the whole survivor by name so `acceptsInput`, `alias`, and the
+        // appearance all carry forward together — each survives a re-sync exactly
+        // like the toggle does.
         let existingByName = Dictionary(
             existing.map { ($0.name.lowercased(), $0) },
             uniquingKeysWith: { first, _ in first }
@@ -110,7 +158,9 @@ public enum ShortcutImport {
             return ShortcutEntry(
                 name: name,
                 acceptsInput: survivor?.acceptsInput ?? false,
-                alias: survivor?.alias
+                alias: survivor?.alias,
+                glyph: survivor?.glyph,
+                colorToken: survivor?.colorToken
             )
         }
     }
