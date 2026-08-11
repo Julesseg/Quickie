@@ -23,39 +23,49 @@ struct ActionColorTests {
         #expect(all.allSatisfy { !$0.label.isEmpty })
     }
 
-    // The badge draws a **white** symbol on the token's fill, so every swatch must
-    // clear WCAG's 3:1 non-text contrast floor against white — in *both* schemes.
-    // This is the "tuned for legibility" acceptance criterion, enforced as arithmetic
-    // rather than eyeballed: a future palette edit that dims a swatch fails here.
-    @Test("every token keeps the white badge symbol legible in light and dark")
-    func everyTokenIsLegibleAgainstWhite() {
+    // The badge draws a **white** symbol on the token's fill, so every swatch must be
+    // as readable as a provider badge — not merely "readable". These bands are the ones
+    // `docs/brand/check-brand-assets.py` holds the badge ring to (issue #178, PR #189),
+    // restated here because a user-chosen badge and a kind-derived one are the same
+    // badge: a chosen swatch that sat outside them would be the one badge that reads
+    // wrong. Enforced as arithmetic rather than eyeballed, so a future palette edit
+    // that dims or brightens a swatch fails here.
+    @Test("every token keeps the white badge symbol as legible as a provider badge")
+    func everyTokenMatchesTheBadgeContrastBand() {
         for color in ActionColor.allCases {
-            let light = color.components(for: .light).contrastRatioAgainstWhite
-            let dark = color.components(for: .dark).contrastRatioAgainstWhite
-            #expect(light >= 3.0, "\(color.rawValue) light contrast \(light) < 3.0")
-            #expect(dark >= 3.0, "\(color.rawValue) dark contrast \(dark) < 3.0")
+            let contrast = color.components.contrastRatioAgainstWhite
+            #expect(contrast >= 4.4, "\(color.rawValue) contrast \(contrast) < 4.4")
+            #expect(contrast <= 5.6, "\(color.rawValue) contrast \(contrast) > 5.6")
         }
     }
 
-    @Test("every token's channels are in range and its two schemes differ")
+    // The whole family sits at one OKLCH lightness (0.55) — that is what makes ten
+    // hues read as one set and keeps the contrast band above tight. Checked through
+    // relative luminance, which Core can compute without an OKLab implementation: at
+    // L=0.55 the contrast band above *is* the lightness band, so this pins the
+    // remaining freedom — that no swatch is quietly lighter or darker than its siblings.
+    @Test("the palette holds one lightness, so it reads as a single family")
+    func paletteHoldsOneLightness() {
+        let luminances = ActionColor.allCases.map(\.components.relativeLuminance)
+        let spread = (luminances.max() ?? 0) - (luminances.min() ?? 0)
+        #expect(spread < 0.05, "lightness spread \(spread) — a swatch has drifted off the family")
+    }
+
+    @Test("every token's channels are in range")
     func componentsAreWellFormed() {
         for color in ActionColor.allCases {
-            for scheme in ActionColorScheme.allCases {
-                let c = color.components(for: scheme)
-                for channel in [c.red, c.green, c.blue] {
-                    #expect(channel >= 0 && channel <= 1, "\(color.rawValue) channel out of range")
-                }
+            for channel in [color.components.red, color.components.green, color.components.blue] {
+                #expect(channel >= 0 && channel <= 1, "\(color.rawValue) channel out of range")
             }
-            // A palette entry that renders identically in both schemes would mean the
-            // dark tuning was forgotten — the whole point of storing a token.
-            #expect(color.components(for: .light) != color.components(for: .dark))
         }
     }
 
+    // "Distinct" means *perceptually* distinct, not just "different hex" — the same
+    // thing the brand check enforces on the badge ring.
     @Test("the tokens are visually distinct — no two swatches share a fill")
     func tokensAreDistinct() {
-        let lights = ActionColor.allCases.map { $0.components(for: .light) }
-        #expect(Set(lights.map { "\($0.red)|\($0.green)|\($0.blue)" }).count == lights.count)
+        let fills = ActionColor.allCases.map(\.components)
+        #expect(Set(fills.map { "\($0.red)|\($0.green)|\($0.blue)" }).count == fills.count)
     }
 
     // MARK: - Token parsing: never a raw hex, unknown degrades to Default

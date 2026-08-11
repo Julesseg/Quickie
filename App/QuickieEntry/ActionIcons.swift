@@ -83,20 +83,16 @@ extension RGBA {
 
 extension ActionColor {
     /// This palette token as a SwiftUI `Color` (CONTEXT.md → Action color; issue #243)
-    /// — the one place a token becomes a drawable fill. The light/dark pair comes
-    /// straight from Core, where both sides are tuned (and `swift test`-checked) to keep
-    /// the white badge symbol legible; here it is only wrapped in a dynamic `UIColor`
-    /// so the badge re-resolves itself when the appearance changes.
+    /// — the one place a token becomes a drawable fill. The channels come straight from
+    /// Core, where the palette is generated at the badge ring's OKLCH lightness and
+    /// `swift test`-checked against the ring's own white-contrast band.
     ///
-    /// Resolved through the trait collection rather than `@Environment(\.colorScheme)`
-    /// deliberately: `ProviderBadge` renders in the app *and* in widget/control
-    /// processes, and a dynamic color follows whatever traits each of those hands it —
-    /// no environment to plumb through, and no surface that can forget to.
+    /// A **flat** literal, not an appearance-adaptive pair, exactly like the
+    /// `QuickieBrand.badge*` hues it sits beside: at L = 0.55 one opaque colour reads
+    /// correctly on both appearances, and a chosen swatch that shifted with the
+    /// appearance would be the one badge in the app that does.
     var swiftUIColor: Color {
-        Color(uiColor: UIColor { traits in
-            let c = components(for: traits.userInterfaceStyle == .dark ? .dark : .light)
-            return UIColor(red: c.red, green: c.green, blue: c.blue, alpha: 1)
-        })
+        Color(red: components.red, green: components.green, blue: components.blue)
     }
 }
 
