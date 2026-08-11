@@ -1,13 +1,19 @@
-# A brand accent derived from the icon, with gold reserved for the hero
+# Brand identity derived from the icon, with gold reserved for the hero
 
 ## Context
 
 Quickie shipped its icon and its Quickie mark before it ever claimed a color.
+The icon already carried a designed identity — the orbital Q: a lavender→white
+comet trail circling a warm gold mass over a deep purple field
+(`docs/brand/make-app-icon.py`). The UI, meanwhile, ran on system defaults.
+
 `AccentColor.colorset` was an *empty* colorset, so every `Color.accentColor`
 site — the [[Highlighted result]]'s ring and wash, the backdrop glow, the
 breadcrumb pills, the Enter hint, the Live Activity glyphs — and every toggle
 that merely inherits the ambient tint resolved to **system blue**. The app
-looked like a default SwiftUI project standing next to a purple icon.
+looked like a default SwiftUI project standing next to a purple icon. The accent
+was the loudest gap but not the only one: provider badges wore raw semantic
+colors, and every surface used default system type.
 
 Meanwhile the brand's real colors existed in exactly two places that could not
 see each other: `docs/brand/make-app-icon.py`, which owns them (`LAVENDER`,
@@ -92,12 +98,47 @@ gravity: the row nearest the thumb, the one Enter runs. Spending gold anywhere
 else makes it decoration; spending it there makes it *mean* focus. This is a
 budget, not a palette entry — the rule is what gives the one use its force.
 
+The glow rides that row **directly**: a gentle radial, faint at the row's centre
+and gone before its edges, that **slides side to side while a query is still
+being typed and settles to centre about a second after the last keystroke**. A
+backdrop glow was tried first and rejected — light lit behind the glass can't be
+kept to one row, it bleeds behind the neighbours stacked above it — as was a
+circling gold *border*, which never reliably drew over the row's Liquid Glass.
+The motion is ADR 0034's budget read the other way round: the flicker of life is
+*tied to* the act of typing and ends with it, rather than running forever under
+settled results.
+
+"One place" is a **role, not a screen**. The treatment lives on the single shared
+`ActionRow`, so it marks whichever surface renders `results[0]` — the root and
+file-search result lists alike — and `check-brand-assets.py` counts gold **by
+file**, failing on a second one.
+
+**Badge hues stay functionally distinct.** Provider badges keep one distinct hue
+per provider — the hue is how a row's kind is recognized at a glance — but the
+hues are a curated set tuned to sit with the purple accent, with no shared hues
+between kinds. Badges render with a subtle single-hue luminosity gradient;
+hand-rolled shadows stay banned (ADR 0010 — depth comes from glass). The brand
+governs *which* set of hues is curated, never collapses the set: identity is the
+accent's job, legibility is the badge's.
+
+**Rounded type on launcher chrome only.** SF Rounded on the input bar,
+result-row titles, favorite cards, pills, and toast — pairing with the
+glass/squircle language. Management pages keep system default type and native
+`Form` controls; they gain only backdrop parity (scroll background hidden over
+the shared backdrop) so the launcher aesthetic doesn't cliff at navigation.
+Computed results use monospaced digits.
+
 **One module owns every brand literal: `QuickieBrand`, in
 `App/QuickieEntry/`** — the folder already synchronized into both the app and
 the widget targets (`ActionIcons`, `DeeplinkInbox`). `QuickieGlyph`'s
 hand-copied gradients are absorbed into it, leaving `QuickieGlyph` with its
 actual charter: the symbol's identity. No brand color literal may live
 anywhere else.
+
+**Widgets take accents, not backdrops.** System container backgrounds are kept —
+widgets live on the user's wallpaper, and tinted mode overrides colors anyway —
+with brand carried by gradient marks, accent-washed platters, and badge hues.
+The Entry widget remains the one full-backdrop brand tile.
 
 **The module's literals are CI-anchored to the icon generators.** Swift cannot
 read Python constants, so `docs/brand/check-brand-assets.py` proves the two
@@ -133,3 +174,7 @@ says *which glyph*, never *how it looks* — the same split that keeps
 - **Gold as a general secondary accent** (badges, capture confirmations,
   favorites): rejected. Two accent colors is no accent — the gold's job is to
   mark the single row Enter runs, and that job only survives scarcity.
+- **A brand-family-only badge palette** (every provider badge a purple or a
+  gold): rejected. It trades the palette's *function* — telling fifteen kinds
+  apart at a glance — for the brand, and the brand already has the accent and
+  the mark to speak with.

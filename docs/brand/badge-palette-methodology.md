@@ -171,7 +171,9 @@ check to confirm.
 - `Core/Sources/QuickieCore/Action.swift` — the 15 `ActionKind` cases, with a
   comment on each explaining what it is (useful for deciding adjacencies).
 - `docs/adr/0033-brand-accent-derived-from-the-icon.md` — the accent/gold rules
-  the reserved arcs come from. **Read this** before moving a reserved zone.
+  the reserved arcs come from, plus the badge-hue law itself (one distinct hue
+  per kind, curated to sit with the accent; a brand-family-only palette is
+  rejected there). **Read this** before moving a reserved zone.
 - `docs/adr/0010-glass-over-quiet-backdrop.md` — depth is the glass's job (why the
   badge has no drop shadow, only a gradient). Don't reintroduce shadows.
 
