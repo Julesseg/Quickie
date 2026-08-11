@@ -480,6 +480,24 @@ private struct AppearancePickerView: View {
     /// breadcrumb choice step does.
     @State private var query = ""
 
+    /// Whether the search field holds the keyboard — half of what puts the header into
+    /// its compact form.
+    @FocusState private var searchFocused: Bool
+
+    /// Whether the header collapses to its compact form. Keyed to the **keyboard**, not
+    /// to the query: the keyboard claims roughly half a small screen, and a full-height
+    /// header above it left literally no gallery visible on an iPhone SE — you could
+    /// type a query and never see, let alone tap, a result. While the keyboard is up the
+    /// hero shrinks to an inline chip and the swatches step aside (the user is choosing a
+    /// *symbol* at that moment; the preview only has to stay legible, not large).
+    ///
+    /// Deliberately not `|| !query.isEmpty`: that would keep the swatches hidden for as
+    /// long as a filter was in play, so picking a symbol by search and then a colour
+    /// would mean clearing the search first. Dismissing the keyboard — by picking a
+    /// glyph, or by scrolling the gallery — brings the full header back with the filter
+    /// intact.
+    private var isCompact: Bool { searchFocused }
+
     private let colorColumns = [GridItem(.adaptive(minimum: 44), spacing: 12)]
     private let glyphColumns = [GridItem(.adaptive(minimum: 52), spacing: 10)]
 
@@ -517,6 +535,9 @@ private struct AppearancePickerView: View {
                     .padding()
             }
         }
+        // Scrolling the gallery dismisses the keyboard, which expands the header again —
+        // the other way out of the compact state besides picking a symbol.
+        .scrollDismissesKeyboard(.immediately)
         // Pinned, not scrolled: the preview has to stay put while the gallery moves
         // under it. A `safeAreaInset` (rather than a VStack + nested ScrollView) keeps
         // the gallery a real scroll view, so it still gets scroll-to-top, keyboard
@@ -526,38 +547,55 @@ private struct AppearancePickerView: View {
         .navigationBarTitleDisplayMode(.inline)
     }
 
-    /// The pinned half: the live hero, its caption, and the colour row.
+    /// The pinned half: the live hero, its caption, the colour row, and the gallery's
+    /// search field — full-height normally, compact while searching.
     private var header: some View {
-        VStack(spacing: 14) {
-            // The badge at the size the app draws it, scaled up as one piece — so the
-            // corner radius, glyph weight, and gradient stay in the proportions every
-            // surface uses instead of being re-specified (and drifting) here.
-            ProviderBadge(kind: kind, symbol: def.normalizedGlyph, color: def.color)
-                .scaleEffect(2.6, anchor: .center)
-                .frame(width: 78, height: 78)
-                .animation(.snappy(duration: 0.18), value: def.color)
-                .animation(.snappy(duration: 0.18), value: def.normalizedGlyph)
-                .accessibilityIdentifier("appearance-hero")
-
-            Text(heroCaption)
-                .font(.subheadline.weight(.medium))
-                .foregroundStyle(.secondary)
-                .lineLimit(1)
-
-            LazyVGrid(columns: colorColumns, spacing: 12) {
-                colorCircle(nil)
-                ForEach(ActionColor.allCases, id: \.rawValue) { color in
-                    colorCircle(color)
+        VStack(spacing: isCompact ? 10 : 14) {
+            if isCompact {
+                // Compact: the preview shrinks to an inline chip beside its caption, and
+                // the swatches step aside so the keyboard leaves room for results.
+                HStack(spacing: 10) {
+                    ProviderBadge(kind: kind, symbol: def.normalizedGlyph, color: def.color)
+                        .accessibilityIdentifier("appearance-hero")
+                    Text(heroCaption)
+                        .font(.subheadline.weight(.medium))
+                        .foregroundStyle(.secondary)
+                        .lineLimit(1)
+                    Spacer(minLength: 0)
                 }
+                .padding(.horizontal)
+            } else {
+                // The badge at the size the app draws it, scaled up as one piece — so the
+                // corner radius, glyph weight, and gradient stay in the proportions every
+                // surface uses instead of being re-specified (and drifting) here.
+                ProviderBadge(kind: kind, symbol: def.normalizedGlyph, color: def.color)
+                    .scaleEffect(2.6, anchor: .center)
+                    .frame(width: 78, height: 78)
+                    .accessibilityIdentifier("appearance-hero")
+
+                Text(heroCaption)
+                    .font(.subheadline.weight(.medium))
+                    .foregroundStyle(.secondary)
+                    .lineLimit(1)
+
+                LazyVGrid(columns: colorColumns, spacing: 12) {
+                    colorCircle(nil)
+                    ForEach(ActionColor.allCases, id: \.rawValue) { color in
+                        colorCircle(color)
+                    }
+                }
+                .padding(.horizontal)
             }
-            .padding(.horizontal)
 
             searchField
                 .padding(.horizontal)
-                .padding(.top, 2)
+                .padding(.top, isCompact ? 0 : 2)
         }
-        .padding(.top, 12)
-        .padding(.bottom, 14)
+        .animation(.snappy(duration: 0.2), value: isCompact)
+        .animation(.snappy(duration: 0.18), value: def.color)
+        .animation(.snappy(duration: 0.18), value: def.normalizedGlyph)
+        .padding(.top, isCompact ? 8 : 12)
+        .padding(.bottom, isCompact ? 10 : 14)
         .frame(maxWidth: .infinity)
         // An opaque backdrop so the gallery scrolls *under* the pinned header rather
         // than showing through it.
@@ -576,6 +614,7 @@ private struct AppearancePickerView: View {
                 .foregroundStyle(.secondary)
             TextField("Search symbols", text: $query)
                 .textFieldStyle(.plain)
+                .focused($searchFocused)
                 .autocorrectionDisabled()
                 .textInputAutocapitalization(.never)
                 .submitLabel(.done)
@@ -583,6 +622,7 @@ private struct AppearancePickerView: View {
             if !query.isEmpty {
                 Button {
                     query = ""
+                    searchFocused = false
                 } label: {
                     Image(systemName: "xmark.circle.fill")
                         .foregroundStyle(.secondary)
@@ -647,6 +687,10 @@ private struct AppearancePickerView: View {
         let isSelected = def.normalizedGlyph == value
         return Button {
             def.glyph = value
+            // Picking a symbol ends the search interaction, so drop the keyboard: the
+            // header expands and the colour swatches are reachable again without the
+            // user having to clear their query first.
+            searchFocused = false
         } label: {
             ZStack {
                 RoundedRectangle(cornerRadius: 10, style: .continuous)
