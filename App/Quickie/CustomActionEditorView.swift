@@ -129,6 +129,13 @@ struct CustomActionEditorView: View {
                     .accessibilityIdentifier("save-custom-action")
                 }
             }
+            // PROTOTYPE (throwaway): the floating variant pill — overlays the whole
+            // stack so it stays visible on the pushed picker pages too.
+            #if DEBUG
+            .overlay(alignment: .bottom) {
+                ColorPickerPrototypeSwitcher()
+            }
+            #endif
         }
     }
 
@@ -217,6 +224,12 @@ struct CustomActionEditorView: View {
             }
             .accessibilityIdentifier("custom-action-symbol-row")
 
+            // PROTOTYPE (throwaway): DEBUG builds swap the shipped Color row for the
+            // variant under evaluation — see PrototypeColorPickerVariants.swift.
+            #if DEBUG
+            PrototypeColorRow(def: $def, previewKind: previewKind)
+                .accessibilityIdentifier("custom-action-color-row")
+            #else
             // The colour picker sits directly beside the glyph picker — the two are
             // siblings (CONTEXT.md → Action color; issue #243), one section, one preview
             // badge each, both purely opt-in.
@@ -236,6 +249,7 @@ struct CustomActionEditorView: View {
                 }
             }
             .accessibilityIdentifier("custom-action-color-row")
+            #endif
         } footer: {
             Text("Give this action its own symbol and color, shown everywhere it appears. Leave them as None and Default to use the ones its kind provides.")
         }
