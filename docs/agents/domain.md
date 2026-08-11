@@ -18,10 +18,15 @@ This is a **single-context repo**:
 /
 ├── CONTEXT.md
 ├── docs/adr/
-│   ├── 0001-event-sourced-orders.md
-│   └── 0002-postgres-for-write-model.md
-└── src/
+│   ├── 0004-providers-indexed-and-dynamic.md
+│   ├── 0008-result-list-and-action-model.md
+│   └── …                                   ← 0001 upward, append-only
+├── Core/                                   ← QuickieCore, the loop's logic
+└── App/                                    ← the iOS app + its extensions
 ```
+
+There is no `CONTEXT-MAP.md` here, and `Core/`/`App/` hold no `CONTEXT.md` of
+their own — the root `CONTEXT.md` covers the whole domain.
 
 For reference, a multi-context repo (presence of `CONTEXT-MAP.md` at the root) would look like:
 
