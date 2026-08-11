@@ -565,12 +565,13 @@ private struct AppearancePickerView: View {
                 }
                 .padding(.horizontal)
             } else {
-                // The badge at the size the app draws it, scaled up as one piece — so the
-                // corner radius, glyph weight, and gradient stay in the proportions every
-                // surface uses instead of being re-specified (and drifting) here.
-                ProviderBadge(kind: kind, symbol: def.normalizedGlyph, color: def.color)
-                    .scaleEffect(2.6, anchor: .center)
-                    .frame(width: 78, height: 78)
+                // The same badge every surface draws, *drawn* at hero size rather than
+                // transformed up to it: `ProviderBadge` derives its corner radius and
+                // glyph size from `size`, so the proportions are still stated once, and
+                // the symbol stays vector all the way down instead of being a 14pt raster
+                // stretched 2.6× — which is what left the more detailed glyphs soft here
+                // while the simple ones looked fine.
+                ProviderBadge(kind: kind, symbol: def.normalizedGlyph, color: def.color, size: 78)
                     .accessibilityIdentifier("appearance-hero")
 
                 Text(heroCaption)
