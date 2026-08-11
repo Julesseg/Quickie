@@ -216,10 +216,16 @@ struct ActionRow: View {
     var body: some View {
         HStack(spacing: 12) {
             // A Custom Action's chosen glyph (issue #163) overrides the kind-derived
-            // one, and a detected hex color's parsed swatch overrides the kind's hue
-            // (issue #217) so the row wears the color it found; `nil` on either falls
-            // through to the derived badge, so every other row is unchanged.
-            ProviderBadge(kind: action.kind, symbol: action.glyph, tint: action.glyphTint?.color)
+            // one; a user-chosen Action color replaces the kind's tint (issue #243),
+            // and a detected hex color's parsed swatch overrides even that (issue #217)
+            // so the row wears the color it found; `nil` throughout falls back to the
+            // derived badge, so every other row is unchanged.
+            ProviderBadge(
+                kind: action.kind,
+                symbol: action.glyph,
+                color: action.color,
+                tint: action.glyphTint?.color
+            )
             VStack(alignment: .leading, spacing: 2) {
                 // Rounded chrome type (ADR 0033), with tabular digits on a Computed
                 // row so the answer reads as an answer: `5` and `1` take the same

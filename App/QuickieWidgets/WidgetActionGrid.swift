@@ -128,7 +128,7 @@ struct WidgetActionCellButton: View {
     /// The provider badge, drawn from the snapshot's own glyph — the projection
     /// rule (ADR 0025): the widget renders what the app wrote, it never re-derives.
     private var badge: some View {
-        ProviderBadge(kind: action.kind, symbol: action.glyph)
+        ProviderBadge(kind: action.kind, symbol: action.glyph, color: action.color)
     }
 }
 

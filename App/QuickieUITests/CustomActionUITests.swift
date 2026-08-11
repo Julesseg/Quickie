@@ -637,6 +637,104 @@ final class CustomActionUITests: XCTestCase {
                       "the chosen symbol was stored and restored on reopen")
     }
 
+    /// The editor offers a **colour picker** beside the glyph picker (CONTEXT.md →
+    /// Action color; issue #243): the Color row reads "Default" until a token is chosen
+    /// from the curated palette, and the "Default" cell restores the kind-derived tint.
+    /// The glyph picker's sibling, proven the same way — open, select, clear.
+    @MainActor
+    func testColorPickerSelectsAndRestoresDefault() throws {
+        let app = launchApp()
+        openCustomActionsPage(app)
+        openNewEditor(app)
+
+        setText("Tinted", in: app.textFields["custom-action-name-field"])
+        setText("https://example.com", in: app.textFields["custom-action-url-field"])
+
+        // The Color row starts at "Default" — the kind-derived tint, pure opt-in.
+        let colorRow = app.buttons["custom-action-color-row"]
+        XCTAssertTrue(colorRow.waitForExistence(timeout: 5), "the editor offers a Color row")
+        XCTAssertTrue(app.staticTexts["Default"].exists, "no colour is chosen by default")
+
+        // Open the palette and pick a token.
+        colorRow.tap()
+        XCTAssertTrue(app.buttons["action-color-option-default"].waitForExistence(timeout: 5),
+                      "the picker leads with a Default cell that restores the derived tint")
+        let green = app.buttons["action-color-option.green"]
+        XCTAssertTrue(green.waitForExistence(timeout: 5), "the curated palette offers Green")
+        green.tap()
+
+        XCTAssertTrue(app.staticTexts["Green"].waitForExistence(timeout: 5),
+                      "selecting a colour updates the Color row's value")
+
+        // Re-open and restore Default.
+        colorRow.tap()
+        let defaultCell = app.buttons["action-color-option-default"]
+        XCTAssertTrue(defaultCell.waitForExistence(timeout: 5))
+        defaultCell.tap()
+        XCTAssertTrue(app.staticTexts["Default"].waitForExistence(timeout: 5),
+                      "the Default cell restores the kind-derived tint")
+    }
+
+    /// A chosen colour is stored on the Custom Action and survives a save + reopen —
+    /// the "persisted on the action and synced like the glyph" guarantee, proven at the
+    /// store round-trip the editor drives (issue #243).
+    @MainActor
+    func testChosenColorPersistsAcrossSaveAndReopen() throws {
+        let app = launchApp()
+        openCustomActionsPage(app)
+        openNewEditor(app)
+
+        setText("Purpled", in: app.textFields["custom-action-name-field"])
+        setText("https://example.com", in: app.textFields["custom-action-url-field"])
+
+        app.buttons["custom-action-color-row"].tap()
+        let purple = app.buttons["action-color-option.purple"]
+        XCTAssertTrue(purple.waitForExistence(timeout: 5))
+        purple.tap()
+        XCTAssertTrue(app.staticTexts["Purple"].waitForExistence(timeout: 5),
+                      "the chosen colour shows on the Color row")
+
+        let save = app.buttons["save-custom-action"]
+        XCTAssertTrue(save.isEnabled)
+        save.tap()
+
+        let authored = app.staticTexts["Purpled"]
+        var scrolls = 0
+        while !authored.exists && scrolls < 6 {
+            app.swipeUp()
+            scrolls += 1
+        }
+        XCTAssertTrue(authored.waitForExistence(timeout: 10), "the authored action is listed")
+
+        authored.tap()
+        XCTAssertTrue(app.textFields["custom-action-name-field"].waitForExistence(timeout: 5),
+                      "tapping the row re-opens the editor")
+        XCTAssertTrue(app.staticTexts["Purple"].waitForExistence(timeout: 5),
+                      "the chosen colour was stored and restored on reopen")
+    }
+
+    /// Colour and glyph are **independent** siblings (issue #243): setting one leaves
+    /// the other alone, so an action can be recoloured without adopting a symbol.
+    @MainActor
+    func testColorAndGlyphAreIndependent() throws {
+        let app = launchApp()
+        openCustomActionsPage(app)
+        openNewEditor(app)
+
+        setText("Solo", in: app.textFields["custom-action-name-field"])
+        setText("https://example.com", in: app.textFields["custom-action-url-field"])
+
+        app.buttons["custom-action-color-row"].tap()
+        let teal = app.buttons["action-color-option.teal"]
+        XCTAssertTrue(teal.waitForExistence(timeout: 5))
+        teal.tap()
+
+        XCTAssertTrue(app.staticTexts["Teal"].waitForExistence(timeout: 5),
+                      "the colour is set")
+        XCTAssertTrue(app.staticTexts["None"].exists,
+                      "choosing a colour leaves the Symbol row untouched at None")
+    }
+
     // MARK: - End-to-end: typed arguments run through the breadcrumb
 
     /// A Custom Action mixing a text, a date, and a choice slot runs end to end: the

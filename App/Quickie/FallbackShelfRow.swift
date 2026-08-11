@@ -107,13 +107,15 @@ struct FallbackShelfRow: View {
     /// tinted glass in the app.
     private static let tintStrength = 0.4
 
-    /// One Shelf member: its glyph on a circle of glass tinted by the action's kind.
+    /// One Shelf member: its glyph on a circle of glass tinted by the action's hue.
     ///
-    /// The tint is the **provider-kind-derived** one for now — the same hue the
-    /// action's leading badge wears everywhere else, so a shelved action is
-    /// recognisable as itself; per-action tinting arrives with the [[Action color]]
-    /// ticket, at which point only this line changes. A Custom Action's chosen glyph
-    /// (issue #163) overrides the kind's symbol, exactly as it does in a result row.
+    /// The tint comes from `resolvedActionTint` — the same rule the leading badge
+    /// resolves, so a shelved action is recognisable as itself: a user-chosen
+    /// [[Action color]] token (issue #243) if it has one, otherwise the
+    /// provider-kind-derived hue. It is the *unmodified* hue held back by
+    /// `tintStrength`, not a separately-tuned one, so the two surfaces can't drift.
+    /// A Custom Action's chosen glyph (issue #163) overrides the kind's symbol,
+    /// exactly as it does in a result row.
     private func button(for action: Action) -> some View {
         Image(systemName: action.glyph ?? action.kind.symbol)
             // Scaled from the diameter rather than a text style: the button itself is
@@ -127,7 +129,8 @@ struct FallbackShelfRow: View {
             .foregroundStyle(.primary)
             .frame(width: diameter, height: diameter)
             .glassEffect(
-                .regular.tint(action.kind.tint.opacity(Self.tintStrength)).interactive(),
+                .regular.tint(resolvedActionTint(kind: action.kind, color: action.color)
+                    .opacity(Self.tintStrength)).interactive(),
                 in: Circle()
             )
             .contentShape(Circle())

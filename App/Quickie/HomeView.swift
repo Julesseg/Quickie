@@ -187,7 +187,7 @@ struct FavoriteCard: View {
         HStack(spacing: 8) {
             // A Custom Action's chosen glyph (issue #163) overrides the derived one;
             // `nil` keeps the derived glyph, so an unset Favorite is unchanged.
-            ProviderBadge(kind: action.kind, symbol: action.glyph)
+            ProviderBadge(kind: action.kind, symbol: action.glyph, color: action.color)
             Text(action.title)
                 // Rounded launcher chrome (ADR 0033), same face as the result-row
                 // titles so a pinned Action reads identically to its ranked row.

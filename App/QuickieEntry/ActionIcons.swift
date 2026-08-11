@@ -81,6 +81,42 @@ extension RGBA {
     }
 }
 
+extension ActionColor {
+    /// This palette token as a SwiftUI `Color` (CONTEXT.md → Action color; issue #243)
+    /// — the one place a token becomes a drawable fill. The light/dark pair comes
+    /// straight from Core, where both sides are tuned (and `swift test`-checked) to keep
+    /// the white badge symbol legible; here it is only wrapped in a dynamic `UIColor`
+    /// so the badge re-resolves itself when the appearance changes.
+    ///
+    /// Resolved through the trait collection rather than `@Environment(\.colorScheme)`
+    /// deliberately: `ProviderBadge` renders in the app *and* in widget/control
+    /// processes, and a dynamic color follows whatever traits each of those hands it —
+    /// no environment to plumb through, and no surface that can forget to.
+    var swiftUIColor: Color {
+        Color(uiColor: UIColor { traits in
+            let c = components(for: traits.userInterfaceStyle == .dark ? .dark : .light)
+            return UIColor(red: c.red, green: c.green, blue: c.blue, alpha: 1)
+        })
+    }
+}
+
+/// The **one** resolution of a leading-glyph hue from its three possible sources,
+/// most-specific first (CONTEXT.md → Action color, Detected result):
+///
+/// 1. a **detected swatch** (`tint`) — that row exists *because* the query is that
+///    colour, so the hue is its content, not its decoration, and it wins outright;
+/// 2. the user's chosen **Action color** token (issue #243);
+/// 3. the provider kind's own hue — which is exactly what Default means.
+///
+/// A free function rather than a `ProviderBadge` detail because the Shelf's tinted
+/// glass reads the same rule (ADR 0037), and two surfaces resolving it separately is
+/// how a badge and its Shelf button end up different colours. In practice 1 and 2 are
+/// disjoint — a detected row carries no stored token and has no editor to set one —
+/// so the order is a stated rule rather than a contested one.
+func resolvedActionTint(kind: ActionKind, color: ActionColor?, tint: Color? = nil) -> Color {
+    tint ?? color?.swiftUIColor ?? kind.tint
+}
+
 extension ReturnKeyLabel {
     /// The SwiftUI `SubmitLabel` closest to this Core intent (CONTEXT.md →
     /// Highlighted result): the Return key reads `.search` for a web query, `.go`
@@ -134,6 +170,10 @@ struct ProviderBadge: View {
     /// in the row: the chosen symbol is more specific than the derived one, not
     /// less native.
     var symbol: String? = nil
+    /// The action's chosen **Action color** (CONTEXT.md → Action color; issue #243),
+    /// overriding the kind's own tint. `nil` is Default — the kind-derived tint, so an
+    /// action with no chosen colour renders exactly as before.
+    var color: ActionColor? = nil
 
     /// An explicit hue overriding the kind's own — the **swatch** a detected hex
     /// color wears (CONTEXT.md → Detected result; issue #217), so that row *is* the
@@ -143,6 +183,11 @@ struct ProviderBadge: View {
     /// `nil` (every other row) keeps the kind's hue.
     var tint: Color? = nil
 
+    /// The squircle's fill — the shared precedence rule, resolved once.
+    private var fill: Color {
+        resolvedActionTint(kind: kind, color: color, tint: tint)
+    }
+
     var body: some View {
         RoundedRectangle(cornerRadius: QuickieRadius.badge, style: .continuous)
             // The hue's own subtle top-to-bottom luminosity ramp (issue #178) — the
@@ -150,7 +195,7 @@ struct ProviderBadge: View {
             // hand-rolled shadow under it (ADR 0010: depth is the glass's job, and
             // the badge sits *on* glass; a drop shadow here would be a second, fake
             // light source arguing with the material).
-            .fill((tint ?? kind.tint).gradient)
+            .fill(fill.gradient)
             .frame(width: 30, height: 30)
             .overlay {
                 Image(systemName: symbol ?? kind.symbol)

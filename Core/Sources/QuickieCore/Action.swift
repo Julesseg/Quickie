@@ -249,6 +249,21 @@ public struct Action: Identifiable, Sendable {
     /// derived from the value the row carries — which is why the two stay separate
     /// properties rather than one "appearance" bundle.
     public let glyphTint: RGBA?
+    /// A user-chosen **badge tint** overriding the kind-derived one (CONTEXT.md →
+    /// Action color; issue #243): the glyph's sibling customization, picked from the
+    /// curated `ActionColor` palette so it is always a *token* — never a raw hex —
+    /// and light/dark legibility stays centrally tuned. `nil` (the default) is
+    /// **Default**: the provider-kind-derived tint, today's behaviour unchanged, so an
+    /// action with no chosen colour renders exactly as before (pure opt-in).
+    ///
+    /// It tints the **leading** badge on every surface that draws one — result rows,
+    /// the Favorites grid, both widgets, its management-page row — and, on the Action
+    /// control (which has no badge, only a symbol reference), the control template's own
+    /// tint. The *trailing* main-action glyph is never affected: it stays derived from
+    /// the outcome, so what a tap does can't be recoloured into meaning something else.
+    /// The App resolves `color?.components(for:) ?? kind.tint` at its badge edge (the
+    /// `Color` type is App vocabulary), the same split as the glyph.
+    public let color: ActionColor?
 
     private let effect: @Sendable (String?) -> ActionOutcome
     /// How collected Argument values become an outcome (issue #37) — the
@@ -268,6 +283,7 @@ public struct Action: Identifiable, Sendable {
         content: ResultContent? = nil,
         glyph: String? = nil,
         glyphTint: RGBA? = nil,
+        color: ActionColor? = nil,
         effect: @escaping @Sendable (String?) -> ActionOutcome,
         multiStepEffect: (@Sendable ([ArgumentValue]) -> ActionOutcome)? = nil
     ) {
@@ -281,6 +297,7 @@ public struct Action: Identifiable, Sendable {
         self.arguments = arguments
         self.glyph = glyph
         self.glyphTint = glyphTint
+        self.color = color
         // Content is a declared property (ADR 0017). Factories that carry a value
         // pass it explicitly; when omitted it defaults to a derive-from-outcome
         // helper so a content-bearing Action never silently reads as `.none` —

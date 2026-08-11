@@ -35,7 +35,8 @@ public enum CatalogSeed {
             name: "Search the web",
             aliases: ["search"],
             template: "https://duckduckgo.com/?q={query}",
-            glyph: "magnifyingglass"
+            glyph: "magnifyingglass",
+            color: .orange
         )
     )
 
@@ -50,7 +51,8 @@ public enum CatalogSeed {
             name: "Search the App Store",
             aliases: ["app store"],
             template: "itms-apps://search.itunes.apple.com/WebObjects/MZSearch.woa/wa/search?media=software&term={query}",
-            glyph: "bag"
+            glyph: "bag",
+            color: .blue
         )
     )
 
@@ -60,7 +62,8 @@ public enum CatalogSeed {
             name: "Wikipedia",
             aliases: ["wiki"],
             template: "https://en.wikipedia.org/wiki/Special:Search?search={query}",
-            glyph: "book"
+            glyph: "book",
+            color: .graphite
         )
     )
 
@@ -70,7 +73,8 @@ public enum CatalogSeed {
             name: "YouTube",
             aliases: ["yt", "youtube"],
             template: "https://www.youtube.com/results?search_query={query}",
-            glyph: "play.rectangle"
+            glyph: "play.rectangle",
+            color: .red
         )
     )
 
@@ -80,7 +84,8 @@ public enum CatalogSeed {
             name: "Google Maps",
             aliases: ["maps"],
             template: "https://www.google.com/maps/search/{query}",
-            glyph: "map"
+            glyph: "map",
+            color: .green
         )
     )
 
@@ -99,7 +104,8 @@ public enum CatalogSeed {
             name: "YouTube",
             aliases: ["yt"],
             template: "https://www.youtube.com",
-            glyph: "play.rectangle"
+            glyph: "play.rectangle",
+            color: .red
         )
     )
 
@@ -109,7 +115,8 @@ public enum CatalogSeed {
             name: "Gmail",
             aliases: ["mail"],
             template: "https://mail.google.com",
-            glyph: "envelope"
+            glyph: "envelope",
+            color: .red
         )
     )
 
@@ -119,7 +126,8 @@ public enum CatalogSeed {
             name: "GitHub",
             aliases: ["gh"],
             template: "https://github.com",
-            glyph: "curlybraces"
+            glyph: "curlybraces",
+            color: .graphite
         )
     )
 
