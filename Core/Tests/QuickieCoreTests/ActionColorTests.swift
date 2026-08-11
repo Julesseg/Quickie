@@ -232,4 +232,43 @@ struct ActionColorTests {
         let maps = Catalog.entries.first { $0.id == CatalogSeed.googleMaps.id }
         #expect(maps?.color == CatalogSeed.googleMaps.definition.color)
     }
+
+    // MARK: - The built-in captures, and the Shelf they ship on
+
+    // The four permanent captures are the actions a fresh install actually *sees* on
+    // the Shelf, and they are the only shelvable actions with no editor to recolour
+    // them — so whatever they ship with is what that user has. They therefore state a
+    // token like every seed and Catalog entry does, rather than falling through to the
+    // kind-derived tint by omission.
+    //
+    // And because the Shelf's buttons are icon-only, colour carries the disambiguation
+    // (ADR 0037; issue #244) — which makes "no two first-run members share a colour" a
+    // real acceptance criterion of the shipped default, not a style preference.
+    // Resolved through `liveMembers` rather than by listing the four factories, so this
+    // also pins that the ids on the tier still name these Actions.
+    @Test("the first-run Shelf opens on four differently-coloured buttons")
+    func firstRunShelfMembersAreDistinctlyColoured() {
+        let catalog = [Action.newReminder(), .newEvent(), .saveForLater(), .newSnippet()]
+        let members = FallbackTiers.liveMembers(
+            of: FallbackTiers.firstRunShelfIDs, in: catalog, hiding: []
+        )
+        #expect(members.count == 4, "every first-run Shelf id resolves to a live Action")
+        let colors = members.compactMap(\.color)
+        #expect(colors.count == 4, "every first-run Shelf member carries a token")
+        #expect(Set(colors.map(\.rawValue)).count == 4, "two first-run Shelf buttons share a colour")
+    }
+
+    // The one built-in whose token deliberately departs from its kind's hue. The badge
+    // ring seats New Event beside New Reminder on purpose — they are EventKit twins,
+    // and in a result row the title tells them apart. On the Shelf there is no title,
+    // so the shipped row would open on two near-identical warm circles. Pinned as
+    // arithmetic (blue leads red) rather than as the token name, because what matters
+    // is that it left the warm arc, not which cool token it landed on.
+    @Test("New Event's colour leaves its kind's warm arc, so the Shelf has no twins")
+    func newEventDepartsFromTheReminderHue() throws {
+        let event = try #require(Action.newEvent().color)
+        #expect(event != Action.newReminder().color)
+        #expect(event.components.blue > event.components.red,
+                "New Event still reads as a warm, Reminder-like circle")
+    }
 }
