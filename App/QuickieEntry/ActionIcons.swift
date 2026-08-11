@@ -179,23 +179,47 @@ struct ProviderBadge: View {
     /// `nil` (every other row) keeps the kind's hue.
     var tint: Color? = nil
 
+    /// The badge's edge length. Every other metric — the corner radius and the
+    /// symbol's point size — is derived from it, so a badge drawn larger is the
+    /// *same* badge at a bigger size rather than a second set of numbers that can
+    /// drift from this one.
+    ///
+    /// Exists so a surface that wants a big badge (the appearance page's hero,
+    /// issue #243) can ask for one **drawn** at that size instead of reaching for
+    /// `.scaleEffect`. A transform scales the badge's rendered bitmap: the symbol
+    /// is rasterized at `symbolSize` and then stretched, which simple solid glyphs
+    /// survive and detailed ones (`doc.text.magnifyingglass`, `checklist`) visibly
+    /// do not. Passing the size down keeps the glyph vector all the way to the
+    /// screen, so every symbol is equally crisp.
+    var size: CGFloat = Self.baseSize
+
+    /// The proportions are authored at the row badge's 30pt and scale from there.
+    private static let baseSize: CGFloat = 30
+
+    /// How far this badge is from the authored proportions — the one factor the
+    /// derived metrics multiply by.
+    private var scale: CGFloat { size / Self.baseSize }
+
+    /// The white symbol's point size: 14pt on a 30pt badge, in proportion above it.
+    private var symbolSize: CGFloat { 14 * scale }
+
     /// The squircle's fill — the shared precedence rule, resolved once.
     private var fill: Color {
         resolvedActionTint(kind: kind, color: color, tint: tint)
     }
 
     var body: some View {
-        RoundedRectangle(cornerRadius: QuickieRadius.badge, style: .continuous)
+        RoundedRectangle(cornerRadius: QuickieRadius.badge * scale, style: .continuous)
             // The hue's own subtle top-to-bottom luminosity ramp (issue #178) — the
             // system's gradient, so the badge gains a little depth without a
             // hand-rolled shadow under it (ADR 0010: depth is the glass's job, and
             // the badge sits *on* glass; a drop shadow here would be a second, fake
             // light source arguing with the material).
             .fill(fill.gradient)
-            .frame(width: 30, height: 30)
+            .frame(width: size, height: size)
             .overlay {
                 Image(systemName: symbol ?? kind.symbol)
-                    .font(.system(size: 14, weight: .semibold))
+                    .font(.system(size: symbolSize, weight: .semibold))
                     .foregroundStyle(.white)
             }
             // Decorative: the row's meaning is its title, so the badge shouldn't
