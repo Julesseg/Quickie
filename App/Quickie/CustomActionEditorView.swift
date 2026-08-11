@@ -193,51 +193,48 @@ struct CustomActionEditorView: View {
         }
     }
 
-    /// The optional **glyph picker** (CONTEXT.md → Custom Action; issue #163): a
-    /// navigation row previewing the current symbol (or "None") that pushes the
-    /// curated, fuzzy-searchable `GlyphPickerView`. Purely opt-in — leaving it "None"
-    /// keeps the kind-derived leading glyph on every surface, so an untouched action
-    /// looks exactly as before.
+    /// The optional **appearance picker** (CONTEXT.md → Custom Action, Action color;
+    /// issues #163, #243): one row previewing the composed badge that pushes the merged
+    /// Symbol & Color page. Purely opt-in — leaving it at None/Default keeps the
+    /// kind-derived badge on every surface, so an untouched action looks exactly as
+    /// before.
+    ///
+    /// Symbol and colour share **one** row and one page rather than a row each. They are
+    /// not two settings that happen to sit together: they compose into a single object —
+    /// the badge — and the only question worth asking is "how does this action look?",
+    /// which a preview of the composed result answers and two separate pickers cannot.
     private var symbolSection: some View {
         Section {
             NavigationLink {
-                GlyphPickerView(selection: $def.glyph)
+                AppearancePickerView(def: $def, kind: previewKind)
             } label: {
                 HStack(spacing: 12) {
                     // Preview the leading badge exactly as a surface renders it: the
-                    // chosen symbol over the chosen colour (or the kind's tint), or the
-                    // derived glyph when None. Read through `normalizedGlyph` so a blank
-                    // value previews the derived glyph rather than an empty badge.
+                    // chosen symbol over the chosen colour, or the derived glyph when
+                    // None. Read through `normalizedGlyph` so a blank value previews the
+                    // derived glyph rather than an empty badge.
                     ProviderBadge(kind: previewKind, symbol: def.normalizedGlyph, color: def.color)
-                    Text("Symbol")
+                    Text("Symbol & Color")
                     Spacer(minLength: 8)
-                    Text(symbolValueLabel)
+                    Text(appearanceValueLabel)
                         .foregroundStyle(.secondary)
                 }
             }
-            .accessibilityIdentifier("custom-action-symbol-row")
-
-            // The colour picker sits directly beside the glyph picker — the two are
-            // siblings (CONTEXT.md → Action color; issue #243), one section, one preview
-            // badge each, both purely opt-in.
-            NavigationLink {
-                ActionColorPickerView(selection: $def.color)
-            } label: {
-                HStack(spacing: 12) {
-                    // A bare **swatch**, not a second copy of the badge above: the row
-                    // beside it already previews the composed badge, and repeating it
-                    // here would say nothing new (two identical badges stacked read as a
-                    // rendering fault). This shows the one thing this row controls.
-                    ActionColorSwatch(color: def.color)
-                    Text("Color")
-                    Spacer(minLength: 8)
-                    Text(def.color?.label ?? "Default")
-                        .foregroundStyle(.secondary)
-                }
-            }
-            .accessibilityIdentifier("custom-action-color-row")
+            .accessibilityIdentifier("custom-action-appearance-row")
         } footer: {
             Text("Give this action its own symbol and color, shown everywhere it appears. Leave them as None and Default to use the ones its kind provides.")
+        }
+    }
+
+    /// The row's trailing summary: what the badge is currently made of. Both parts when
+    /// both are set ("Mail · Teal"), the one that is set otherwise, and "Default" when
+    /// neither is — so the row says what the page would show without opening it.
+    private var appearanceValueLabel: String {
+        switch (symbolValueLabel, def.color?.label) {
+        case ("None", nil): return "Default"
+        case ("None", let color?): return color
+        case (let symbol, nil): return symbol
+        case (let symbol, let color?): return "\(symbol) · \(color)"
         }
     }
 
@@ -458,43 +455,61 @@ private struct ArgumentRowEditor: View {
     }
 }
 
-/// The curated **glyph picker** (CONTEXT.md → Custom Action; issue #163): a
-/// searchable gallery of SF Symbols the user can set as a Custom Action's leading
-/// glyph, plus a "No symbol" row that clears back to the derived glyph. The search
-/// reuses the same `Matcher` fuzzy-find furniture the choice input method uses
-/// (`CustomActionGlyphCatalog.search`), so it ranks best-match-first exactly like a
-/// breadcrumb choice step. Selecting a symbol writes the binding and pops back.
-private struct GlyphPickerView: View {
-    @Environment(\.dismiss) private var dismiss
-    /// The definition's chosen glyph — written on selection, cleared by "No symbol".
-    @Binding var selection: String?
+/// The merged **Symbol & Color page** (CONTEXT.md → Custom Action, Action color;
+/// issues #163, #243) — one pushed page for the whole appearance, replacing the two
+/// separate pickers this editor used to offer.
+///
+/// The hero is the **composed result**: the same `ProviderBadge` every surface draws,
+/// at the same proportions, restyling live as you tap. That is the point of merging
+/// them — a symbol and a colour are only ever seen together, so choosing them apart
+/// meant judging each against an imagined version of the other. Here the answer to
+/// "how will this look?" is on screen the whole time.
+///
+/// The hero and the colour row are **pinned**; only the glyph gallery scrolls. A hero
+/// that scrolled away would be a preview you cannot see while making the choice it
+/// previews. Back confirms — there is no auto-dismiss on tap, so a wrong tap is
+/// corrected by tapping again rather than by re-opening the page.
+private struct AppearancePickerView: View {
+    @Binding var def: CustomActionDefinition
+    /// The kind the badge composes over — the shape-derived tint behind a Default
+    /// colour, so the hero matches what the action will actually wear.
+    let kind: ActionKind
 
+    /// The glyph gallery's fuzzy query, ranked by the same `Matcher` furniture the
+    /// choice input method uses, so the gallery reads best-match-first exactly as a
+    /// breadcrumb choice step does.
     @State private var query = ""
+
+    private let colorColumns = [GridItem(.adaptive(minimum: 44), spacing: 12)]
+    private let glyphColumns = [GridItem(.adaptive(minimum: 52), spacing: 10)]
 
     /// The curated options ranked by the shared fuzzy matcher — best first.
     private var results: [GlyphOption] {
         CustomActionGlyphCatalog.search(query)
     }
 
-    private let columns = [GridItem(.adaptive(minimum: 76), spacing: 12)]
+    /// The hue the page echoes: the chosen colour, else the kind's own tint. Resolved
+    /// through the shared rule so the gallery's selection never disagrees with the hero.
+    private var tint: Color {
+        resolvedActionTint(kind: kind, color: def.color)
+    }
 
     var body: some View {
         ScrollView {
-            LazyVGrid(columns: columns, spacing: 12) {
-                // The clear row leads so "back to the derived glyph" is always the
-                // first, thumb-reachable choice — a curated set never buries the reset.
-                GlyphClearCell(isSelected: selection == nil) {
-                    selection = nil
-                    dismiss()
-                }
+            LazyVGrid(columns: glyphColumns, spacing: 10) {
+                // The reset leads its group, as it did in the picker this replaces:
+                // "back to the derived glyph" is never buried behind a scroll.
+                glyphCell(nil, symbol: "slash.circle", label: "No symbol",
+                          identifier: "glyph-option-none")
                 ForEach(results) { option in
-                    GlyphCell(option: option, isSelected: option.name == selection) {
-                        selection = option.name
-                        dismiss()
-                    }
+                    glyphCell(option.name, symbol: option.name, label: option.label,
+                              identifier: "glyph-option.\(option.name)")
                 }
             }
-            .padding()
+            .padding(.horizontal)
+            .padding(.top, 12)
+            .padding(.bottom, 40)
+
             if results.isEmpty {
                 Text("No symbols match “\(query)”.")
                     .font(.callout)
@@ -502,201 +517,159 @@ private struct GlyphPickerView: View {
                     .padding()
             }
         }
-        .navigationTitle("Symbol")
+        // Pinned, not scrolled: the preview has to stay put while the gallery moves
+        // under it. A `safeAreaInset` (rather than a VStack + nested ScrollView) keeps
+        // the gallery a real scroll view, so it still gets scroll-to-top, keyboard
+        // dismissal, and correct safe-area insets.
+        .safeAreaInset(edge: .top, spacing: 0) { header }
+        .navigationTitle("Symbol & Color")
         .navigationBarTitleDisplayMode(.inline)
-        .searchable(text: $query, placement: .navigationBarDrawer(displayMode: .always), prompt: "Search symbols")
-        .autocorrectionDisabled()
-        .textInputAutocapitalization(.never)
     }
-}
 
-/// One symbol cell in the picker: the glyph in a tinted badge over its label, with a
-/// selection ring on the current choice.
-private struct GlyphCell: View {
-    let option: GlyphOption
-    let isSelected: Bool
-    let onTap: () -> Void
+    /// The pinned half: the live hero, its caption, and the colour row.
+    private var header: some View {
+        VStack(spacing: 14) {
+            // The badge at the size the app draws it, scaled up as one piece — so the
+            // corner radius, glyph weight, and gradient stay in the proportions every
+            // surface uses instead of being re-specified (and drifting) here.
+            ProviderBadge(kind: kind, symbol: def.normalizedGlyph, color: def.color)
+                .scaleEffect(2.6, anchor: .center)
+                .frame(width: 78, height: 78)
+                .animation(.snappy(duration: 0.18), value: def.color)
+                .animation(.snappy(duration: 0.18), value: def.normalizedGlyph)
+                .accessibilityIdentifier("appearance-hero")
 
-    var body: some View {
-        Button(action: onTap) {
-            VStack(spacing: 6) {
-                ZStack {
-                    RoundedRectangle(cornerRadius: QuickieRadius.card, style: .continuous)
-                        .fill(isSelected ? Color.accentColor.opacity(0.18) : Color.secondary.opacity(0.12))
-                    Image(systemName: option.name)
-                        .font(.system(size: 22, weight: .regular))
-                        .foregroundStyle(isSelected ? Color.accentColor : .primary)
+            Text(heroCaption)
+                .font(.subheadline.weight(.medium))
+                .foregroundStyle(.secondary)
+                .lineLimit(1)
+
+            LazyVGrid(columns: colorColumns, spacing: 12) {
+                colorCircle(nil)
+                ForEach(ActionColor.allCases, id: \.rawValue) { color in
+                    colorCircle(color)
                 }
-                .frame(height: 56)
-                .overlay {
-                    if isSelected {
-                        RoundedRectangle(cornerRadius: QuickieRadius.card, style: .continuous)
-                            .strokeBorder(Color.accentColor, lineWidth: 2)
-                    }
-                }
-                Text(option.label)
-                    .font(.caption2)
-                    .foregroundStyle(.secondary)
-                    .lineLimit(1)
             }
+            .padding(.horizontal)
+
+            searchField
+                .padding(.horizontal)
+                .padding(.top, 2)
         }
-        .buttonStyle(.plain)
-        .accessibilityIdentifier("glyph-option.\(option.name)")
-        .accessibilityLabel(option.label)
+        .padding(.top, 12)
+        .padding(.bottom, 14)
+        .frame(maxWidth: .infinity)
+        // An opaque backdrop so the gallery scrolls *under* the pinned header rather
+        // than showing through it.
+        .background(.bar)
+        .overlay(alignment: .bottom) { Divider() }
     }
-}
 
-/// The "No symbol" cell: clears the chosen glyph back to the kind-derived one.
-private struct GlyphClearCell: View {
-    let isSelected: Bool
-    let onTap: () -> Void
-
-    var body: some View {
-        Button(action: onTap) {
-            VStack(spacing: 6) {
-                ZStack {
-                    RoundedRectangle(cornerRadius: QuickieRadius.card, style: .continuous)
-                        .fill(isSelected ? Color.accentColor.opacity(0.18) : Color.secondary.opacity(0.12))
-                    Image(systemName: "slash.circle")
-                        .font(.system(size: 22, weight: .regular))
+    /// The gallery's filter, sitting at the **bottom** of the pinned header — directly
+    /// above the thing it filters. An inline field rather than `.searchable`'s nav-bar
+    /// drawer: the drawer would sit above the *hero*, detaching the control from the
+    /// grid it acts on and pushing the preview down the screen.
+    private var searchField: some View {
+        HStack(spacing: 8) {
+            Image(systemName: "magnifyingglass")
+                .font(.footnote.weight(.semibold))
+                .foregroundStyle(.secondary)
+            TextField("Search symbols", text: $query)
+                .textFieldStyle(.plain)
+                .autocorrectionDisabled()
+                .textInputAutocapitalization(.never)
+                .submitLabel(.done)
+                .accessibilityIdentifier("glyph-search-field")
+            if !query.isEmpty {
+                Button {
+                    query = ""
+                } label: {
+                    Image(systemName: "xmark.circle.fill")
                         .foregroundStyle(.secondary)
                 }
-                .frame(height: 56)
-                .overlay {
-                    if isSelected {
-                        RoundedRectangle(cornerRadius: QuickieRadius.card, style: .continuous)
-                            .strokeBorder(Color.accentColor, lineWidth: 2)
-                    }
-                }
-                Text("None")
-                    .font(.caption2)
-                    .foregroundStyle(.secondary)
-                    .lineLimit(1)
+                .buttonStyle(.plain)
+                .accessibilityLabel("Clear search")
+                .accessibilityIdentifier("glyph-search-clear")
             }
         }
-        .buttonStyle(.plain)
-        .accessibilityIdentifier("glyph-option-none")
-        .accessibilityLabel("No symbol")
+        .font(.subheadline)
+        .padding(.horizontal, 12)
+        .padding(.vertical, 9)
+        .background(Capsule().fill(Color.secondary.opacity(0.14)))
     }
-}
 
-/// The curated **colour picker** (CONTEXT.md → Action color; issue #243): the glyph
-/// picker's sibling — the same grid, the same leading clear cell — offering the closed
-/// `ActionColor` palette plus a **Default** row that restores the kind-derived tint.
-/// No search: ten named swatches are a glance, not a lookup, so the searchable
-/// furniture the glyph gallery needs would only get in the way here.
-private struct ActionColorPickerView: View {
-    @Environment(\.dismiss) private var dismiss
-    /// The definition's chosen colour — written on selection, cleared by "Default".
-    @Binding var selection: ActionColor?
-
-    private let columns = [GridItem(.adaptive(minimum: 76), spacing: 12)]
-
-    var body: some View {
-        ScrollView {
-            LazyVGrid(columns: columns, spacing: 12) {
-                // The reset leads, as in the glyph picker: "back to the derived tint" is
-                // always the first, thumb-reachable choice.
-                ActionColorCell(
-                    swatch: nil,
-                    isSelected: selection == nil,
-                    identifier: "action-color-option-default"
-                ) {
-                    selection = nil
-                    dismiss()
-                }
-                ForEach(ActionColor.allCases, id: \.rawValue) { color in
-                    ActionColorCell(
-                        swatch: color,
-                        isSelected: color == selection,
-                        identifier: "action-color-option.\(color.rawValue)"
-                    ) {
-                        selection = color
-                        dismiss()
-                    }
-                }
-            }
-            .padding()
-        }
-        .navigationTitle("Color")
-        .navigationBarTitleDisplayMode(.inline)
+    /// What the hero is currently made of, spelled out — the colour's name, and the
+    /// symbol's when one is chosen. The caption carries the names so the swatches and
+    /// glyph cells don't each need a label crowding the grid.
+    private var heroCaption: String {
+        let color = def.color?.label ?? "Default"
+        guard let glyph = def.normalizedGlyph,
+              let option = CustomActionGlyphCatalog.all.first(where: { $0.name == glyph })
+        else { return color }
+        return "\(option.label) · \(color)"
     }
-}
 
-/// The small colour chip the editor's Color row wears: the chosen token's fill, or the
-/// neutral "no choice" slash for Default. Sized and cornered like a `ProviderBadge` so
-/// the two rows line up, but deliberately *not* a badge — it previews the colour alone.
-private struct ActionColorSwatch: View {
-    let color: ActionColor?
-
-    var body: some View {
-        RoundedRectangle(cornerRadius: 8, style: .continuous)
-            .fill(color?.swiftUIColor ?? Color.secondary.opacity(0.18))
-            .frame(width: 30, height: 30)
-            .overlay {
+    private func colorCircle(_ color: ActionColor?) -> some View {
+        Button {
+            def.color = color
+        } label: {
+            ZStack {
+                Circle()
+                    .fill(color?.swiftUIColor ?? Color.secondary.opacity(0.15))
                 if color == nil {
                     Image(systemName: "slash.circle")
-                        .font(.system(size: 14, weight: .semibold))
+                        .font(.system(size: 15, weight: .semibold))
                         .foregroundStyle(.secondary)
                 }
             }
-            .accessibilityHidden(true)
+            .frame(width: 38, height: 38)
+            .overlay {
+                if def.color == color {
+                    Circle()
+                        .strokeBorder(Color.accentColor, lineWidth: 3)
+                        .frame(width: 46, height: 46)
+                }
+            }
+            // A 48pt square around a 38pt circle: the ring needs the room, and the tap
+            // target should not be the circle alone.
+            .frame(width: 48, height: 48)
+        }
+        .buttonStyle(.plain)
+        .accessibilityIdentifier(color.map { "action-color-option.\($0.rawValue)" } ?? "action-color-option-default")
+        .accessibilityLabel(color?.label ?? "Default")
+        .accessibilityAddTraits(def.color == color ? [.isButton, .isSelected] : .isButton)
     }
-}
 
-/// One swatch cell: the colour as the badge will actually fill it — with the same white
-/// checkmark the badge draws its symbol in, so the cell previews the real legibility
-/// rather than a bare colour chip. `swatch: nil` is the Default cell, which shows the
-/// neutral "no choice" slash — and, when selected, the same checkmark in the secondary
-/// ink its slash uses, so Default signals selection exactly as the ten colours do.
-private struct ActionColorCell: View {
-    let swatch: ActionColor?
-    let isSelected: Bool
-    let identifier: String
-    let onTap: () -> Void
-
-    /// The cell's caption — derived, never passed: a token always shows its own label,
-    /// and the clear cell is always "Default", so the two can't be given inconsistently.
-    private var label: String { swatch?.label ?? "Default" }
-
-    var body: some View {
-        Button(action: onTap) {
-            VStack(spacing: 6) {
-                ZStack {
-                    RoundedRectangle(cornerRadius: 12, style: .continuous)
-                        .fill(swatch?.swiftUIColor ?? Color.secondary.opacity(0.12))
-                    if swatch != nil {
-                        // White-on-fill, exactly as the badge renders — so a swatch that
-                        // couldn't hold a white glyph would be visibly wrong right here.
-                        Image(systemName: "checkmark")
-                            .font(.system(size: 20, weight: .semibold))
-                            .foregroundStyle(.white)
-                            .opacity(isSelected ? 1 : 0)
-                            .accessibilityHidden(true)
-                    } else {
-                        Image(systemName: isSelected ? "checkmark" : "slash.circle")
-                            .font(.system(size: 20, weight: .semibold))
-                            .foregroundStyle(.secondary)
-                    }
+    /// One gallery cell. The selected one is tinted with the **current colour choice**,
+    /// not the app accent, so the gallery echoes the hero instead of introducing a third
+    /// colour that means nothing here.
+    private func glyphCell(_ value: String?, symbol: String, label: String, identifier: String) -> some View {
+        let isSelected = def.normalizedGlyph == value
+        return Button {
+            def.glyph = value
+        } label: {
+            ZStack {
+                RoundedRectangle(cornerRadius: 10, style: .continuous)
+                    .fill(isSelected ? tint.opacity(0.22) : Color.secondary.opacity(0.10))
+                Image(systemName: symbol)
+                    .font(.system(size: 19, weight: .regular))
+                    .foregroundStyle(isSelected ? tint : (value == nil ? Color.secondary : .primary))
+            }
+            .frame(height: 46)
+            .overlay {
+                if isSelected {
+                    RoundedRectangle(cornerRadius: 10, style: .continuous)
+                        .strokeBorder(tint, lineWidth: 2)
                 }
-                .frame(height: 56)
-                .overlay {
-                    if isSelected {
-                        RoundedRectangle(cornerRadius: 12, style: .continuous)
-                            .strokeBorder(Color.accentColor, lineWidth: 2)
-                    }
-                }
-                Text(label)
-                    .font(.caption2)
-                    .foregroundStyle(.secondary)
-                    .lineLimit(1)
             }
         }
         .buttonStyle(.plain)
         .accessibilityIdentifier(identifier)
         .accessibilityLabel(label)
+        .accessibilityAddTraits(isSelected ? [.isButton, .isSelected] : .isButton)
     }
 }
+
 
 extension CustomActionDefinition {
     /// A save-ready copy: name and template trimmed, and the resolved fill order
