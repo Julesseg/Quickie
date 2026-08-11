@@ -69,6 +69,11 @@ extension Action {
     /// each time); with `.list` absent the reminder routes to `listTarget` (a `nil`
     /// meaning the system default list) with no step. The default plan
     /// (`ReminderStep.firstRun`) is Due Date then List — today's flow.
+    ///
+    /// Ships **red** (CONTEXT.md → Action color; issue #244): the palette's own red,
+    /// which is where this capture's kind-derived hue already sat, so nothing about
+    /// the badge moves — the token only makes the colour a *stated* default the way
+    /// every seed and Catalog entry states one.
     public static func newReminder(
         steps: [ReminderStep] = ReminderStep.firstRun,
         listTarget: String? = nil,
@@ -109,6 +114,7 @@ extension Action {
             inputTypes: [.text],
             outputType: .text,
             arguments: declared,
+            color: .red,
             effect: { _ in .none },
             multiStepEffect: { values in
                 .createReminder(draft(from: values, arguments: declared, listTarget: listTarget))

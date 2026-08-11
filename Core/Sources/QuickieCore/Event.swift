@@ -75,6 +75,21 @@ extension Action {
     /// decides the final commit: silent resolves to `.createEvent` (a direct write),
     /// editor to `.composeEvent` (the pre-filled system event editor). The default plan
     /// (`EventStep.firstRun`) is Start then Calendar — today's flow.
+    ///
+    /// Ships **indigo** (CONTEXT.md → Action color, Shelf; issue #244) — the one built-in
+    /// capture whose default token deliberately *departs* from its kind's hue. The badge
+    /// ring puts New Event next to New Reminder on purpose ("its EventKit twin"), which
+    /// is right in a result row, where a title says which is which. On the [[Shelf]] the
+    /// buttons are icon-only and colour carries the disambiguation, so the first-run row
+    /// — New Reminder, New Event, Save for later, New Snippet — would open on two
+    /// near-identical warm circles.
+    ///
+    /// Indigo rather than the obvious calendar blue: the palette and the badge ring are
+    /// generated from the same arc, so `.blue` is *byte-identical* to `badgeSettings`,
+    /// and shipping it here would put a New Event row and a Settings row in one result
+    /// list wearing the same badge — the one thing the ring's "no two kinds alike" rule
+    /// exists to prevent, and one `check-brand-assets.py` cannot catch because it reads
+    /// kind tints only. Indigo is the nearest cool token that is no other kind's hue.
     public static func newEvent(
         steps: [EventStep] = EventStep.firstRun,
         calendarTarget: String? = nil,
@@ -112,6 +127,7 @@ extension Action {
             inputTypes: [.text],
             outputType: .text,
             arguments: declared,
+            color: .indigo,
             effect: { _ in .none },
             multiStepEffect: { values in
                 let draft = draft(from: values, arguments: declared, calendarTarget: calendarTarget, now: now)

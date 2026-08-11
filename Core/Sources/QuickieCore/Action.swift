@@ -614,6 +614,15 @@ extension Action {
     /// bottom region and, when run, drops the user's literal typed text straight
     /// into the Pile — no editor, no confirm step. A permanent, disable-only
     /// Fallback like New Snippet.
+    ///
+    /// Ships **pink** (CONTEXT.md → Action color; issue #244): the palette's nearest
+    /// neighbour to the crimson its kind already derives, so the badge lands a shade
+    /// along the same arc rather than on a new hue — and, like that crimson, it stays
+    /// well clear of `badgePile`, because a row must never read as the entries it
+    /// creates. It sits close to `badgeShortcut`, closer than the crimson did; that is
+    /// accepted rather than designed around, because the palette and the ring are one
+    /// arc (every token is near *some* kind's hue by construction) and the Shelf's job
+    /// is to separate its own members, which no Shortcut is by default.
     public static func saveForLater() -> Action {
         Action(
             id: saveForLaterID,
@@ -621,7 +630,8 @@ extension Action {
             title: "Save for later",
             aliases: ["later", "save", "pile"],
             inputTypes: [.text],
-            outputType: .text
+            outputType: .text,
+            color: .pink
         ) { input in .saveToPile(text: input ?? "") }
     }
 
@@ -636,6 +646,13 @@ extension Action {
     /// snippet counterpart to `newNote`. It rides the bottom region and, when run,
     /// opens the Snippet editor seeded with the typed text as the copy-out body,
     /// which the user titles and confirms before it is stored.
+    ///
+    /// Ships **green** (issue #244) — the palette's nearest neighbour to the green its
+    /// kind already derives, so it keeps reading as the Snippet family's green while
+    /// carrying a token like every other shelvable action. The token is a touch purer
+    /// than the kind's slight teal lean: green and teal sit almost equidistant from it,
+    /// and green is the one that stays clear of `badgeSnippet` — the *stored* snippet a
+    /// New Snippet creates, which this row must not be mistaken for.
     public static func newSnippet() -> Action {
         Action(
             id: newSnippetID,
@@ -643,7 +660,8 @@ extension Action {
             title: "New Snippet",
             aliases: ["snippet", "clip", "save text"],
             inputTypes: [.text],
-            outputType: .text
+            outputType: .text,
+            color: .green
         ) { input in .composeSnippet(seed: input ?? "") }
     }
 
