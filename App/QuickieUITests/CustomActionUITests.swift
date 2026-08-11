@@ -740,7 +740,7 @@ final class CustomActionUITests: XCTestCase {
         }
         XCTAssertTrue(authored.waitForExistence(timeout: 10),
                       "the authored Custom Action is listed on the Management page")
-        closeAppearancePage(app)
+        goBackHome(app)
 
         // Activate it as a fallback (its free-text first slot makes it eligible) so the
         // typed query seeds the first (text) slot.
