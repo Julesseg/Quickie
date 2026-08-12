@@ -119,6 +119,13 @@ final class ShelfRowUITests: XCTestCase {
     /// agreed disambiguation affordance. Crucially it *only* reveals: lifting the finger
     /// must not also run the action, or reading the title could never save you from the
     /// wrong one.
+    ///
+    /// The reveal's 2.5s self-dismiss is *held* under UI test
+    /// (`MotionPolicy.shelfTitleDwellUnlessHeld`), so this asserts against a label that
+    /// stays put. It used to race the dwell: XCUITest needs about three seconds to
+    /// synthesize the press and snapshot the hierarchy, which is longer than the label
+    /// lives — the reason this test failed on slow runners. What the dwell *is* stays
+    /// Core's to pin, in `MotionPolicyTests`.
     @MainActor
     func testLongPressingAShelfButtonRevealsTheTitleWithoutRunningIt() throws {
         let app = launchApp(["-uitest-stub-reminders"])
