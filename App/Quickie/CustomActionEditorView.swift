@@ -99,7 +99,6 @@ struct CustomActionEditorView: View {
 
                 if def.hasSlot {
                     argumentsSection
-                    eligibilityNote
                 }
 
                 symbolSection
@@ -132,18 +131,16 @@ struct CustomActionEditorView: View {
         }
     }
 
-    /// The URL field's footer: a scheme warning when the URL won't parse, the plain
-    /// slotted hint when the URL carries `{name}` slots, and the **static link** note
-    /// when it has none — a slot-less URL is a valid static Custom Action that opens
-    /// directly (ADR 0030), not an error.
+    /// The URL field's footer: a scheme warning when the URL won't parse, and the
+    /// **static link** note when it carries no `{name}` slot — a slot-less URL is a
+    /// valid static Custom Action that opens directly (ADR 0030), not an error. A
+    /// slotted URL needs no line: the Arguments section below lists what it found.
     @ViewBuilder
     private var urlFooter: some View {
         if !def.template.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty && !def.urlIsSchemedAfterProbe {
             Text("Add a scheme (like https:// or things://) so the URL can open.")
                 .foregroundStyle(.red)
-        } else if def.hasSlot {
-            Text("Each {name} becomes an argument the breadcrumb fills, then opens the URL.")
-        } else {
+        } else if !def.hasSlot {
             Text("This link has no {slot}, so it opens directly — a static link.")
                 .accessibilityIdentifier("custom-action-static-link-note")
         }
@@ -154,7 +151,8 @@ struct CustomActionEditorView: View {
     /// *position*, not by token name — a name-keyed row would change identity on
     /// every character and drop the field's focus — and each field binds straight to
     /// the model by position, so typing a name rewrites the `{token}` live while the
-    /// cursor stays put. The footer states the order rule explicitly.
+    /// cursor stays put. The footer states only the one rule the rows can't show:
+    /// fill order is independent of where the slots sit in the URL.
     private var argumentsSection: some View {
         Section {
             // Keyed by fill-order position (`\.offset`), not token name: a name-keyed
@@ -173,23 +171,7 @@ struct CustomActionEditorView: View {
                     .accessibilityIdentifier("custom-action-reorder")
             }
         } footer: {
-            Text("The breadcrumb asks for these in this order, independent of where the slots sit in the URL. Renaming a row rewrites its {token}.")
-        }
-    }
-
-    /// The **fallback-eligibility note** (issue #114): there is no fallback control —
-    /// eligibility is derived from shape, never declared. When the first fill-order
-    /// argument is free text the action *can* be added to the Fallbacks page's pool;
-    /// this line tells the user where activation lives (and, when the first argument
-    /// isn't free text, why it isn't offered). Informational only, so a section footer.
-    private var eligibilityNote: some View {
-        Section {
-            EmptyView()
-        } footer: {
-            Text(def.isFallbackEligible
-                 ? "This action can be a fallback — activate it on the Fallbacks page."
-                 : "To use this as a fallback, make its first argument free text.")
-                .accessibilityIdentifier("custom-action-eligibility-note")
+            Text("Filled in this order, whatever order the slots appear in the URL.")
         }
     }
 

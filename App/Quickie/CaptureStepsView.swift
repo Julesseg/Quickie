@@ -14,13 +14,11 @@ import QuickieCore
 struct CaptureStepsPage<Step: CaptureStepKind>: View {
     let provider: ProviderID
     let store: CaptureStepsStore
-    /// The footer under the On section — the routing this kind's steps decide.
-    let stepsFooter: String
 
     var body: some View {
         List {
             ProviderOptionsSection(provider: provider)
-            CaptureStepsSection<Step>(store: store, footer: stepsFooter)
+            CaptureStepsSection<Step>(store: store)
         }
         .environment(\.editMode, .constant(.active))
         .navigationTitle(provider.displayName)
@@ -32,7 +30,6 @@ struct CaptureStepsPage<Step: CaptureStepKind>: View {
 /// off the store and resolves them to typed steps for their labels and icons.
 struct CaptureStepsSection<Step: CaptureStepKind>: View {
     let store: CaptureStepsStore
-    let footer: String
 
     /// The enabled steps, in order — the store's raw ids resolved to typed steps.
     private var enabled: [Step] { store.enabledRaw.compactMap { Step(rawValue: $0) } }
@@ -55,8 +52,6 @@ struct CaptureStepsSection<Step: CaptureStepKind>: View {
             }
         } header: {
             Text("Steps")
-        } footer: {
-            Text(footer)
         }
 
         Section {
@@ -73,8 +68,6 @@ struct CaptureStepsSection<Step: CaptureStepKind>: View {
             }
         } header: {
             Text("Off")
-        } footer: {
-            Text("Title always comes first, so it isn't listed.")
         }
     }
 

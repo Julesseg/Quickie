@@ -52,8 +52,6 @@ struct CustomActionsView: View {
                     Label("Browse catalog", systemImage: "square.grid.2x2")
                 }
                 .accessibilityIdentifier("browse-catalog")
-            } footer: {
-                Text("Each install creates a new, fully editable copy.")
             }
 
             Section {
@@ -89,8 +87,6 @@ struct CustomActionsView: View {
                 .onDelete(perform: delete)
             } header: {
                 Text("Custom Actions")
-            } footer: {
-                Text("A Custom Action opens a URL. With {slots} the breadcrumb fills them; with none it's a static link that opens directly.")
             }
         }
         .navigationTitle("Custom Actions")

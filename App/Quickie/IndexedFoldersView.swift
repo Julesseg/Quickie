@@ -52,8 +52,6 @@ struct IndexedFoldersView: View {
                 .onDelete(perform: delete)
             } header: {
                 Text("Indexed Folders")
-            } footer: {
-                Text("Access is stored on this device only and never synced. Disabling a folder hides its files without revoking access; removing it revokes the grant.")
             }
         }
         .navigationTitle("File Search")

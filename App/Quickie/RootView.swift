@@ -1323,17 +1323,9 @@ struct RootView: View {
         // double-list (issue #145 follow-up) — the arrangeable steps beyond the pinned
         // Title — so they get a dedicated page rather than the options-only one.
         case .reminders:
-            CaptureStepsPage<ReminderStep>(
-                provider: .reminders,
-                store: reminderSteps,
-                stepsFooter: "List on asks each time; off saves to the default list above."
-            )
+            CaptureStepsPage<ReminderStep>(provider: .reminders, store: reminderSteps)
         case .events:
-            CaptureStepsPage<EventStep>(
-                provider: .events,
-                store: eventSteps,
-                stepsFooter: "Start off makes the event all-day today; Calendar on asks each time, off saves to the default calendar above."
-            )
+            CaptureStepsPage<EventStep>(provider: .events, store: eventSteps)
         // The System umbrella page (ADR 0029): the cascading Enabled toggle and the
         // Reminders/Events link rows (its declared schema), plus an actions section
         // for its two disable-only built-ins.

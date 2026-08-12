@@ -99,8 +99,6 @@ struct FallbacksView: View {
                 }
             } header: {
                 Text("Shelf")
-            } footer: {
-                Text("The round buttons above the input while you're typing, leading edge first. A shelved fallback leaves the result list.")
             }
 
             Section {
@@ -127,7 +125,7 @@ struct FallbacksView: View {
             } header: {
                 Text("Active")
             } footer: {
-                Text("Top is most important — nearest the input in results. Nothing here deletes an action; that lives on its own page.")
+                Text("Top is most important — nearest the input in results.")
             }
 
             Section {
@@ -153,8 +151,6 @@ struct FallbacksView: View {
                 }
             } header: {
                 Text("Available")
-            } footer: {
-                Text("A Custom Action or Shortcut becomes eligible here when its first argument is free text.")
             }
         }
         // Always in edit mode so the reorder grips show on the Shelf and Active rows
