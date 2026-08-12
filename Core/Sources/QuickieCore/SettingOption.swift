@@ -282,16 +282,19 @@ public extension ProviderID {
                 SettingOption(
                     key: SettingsKey.calculatorURL,
                     title: "URLs",
+                    footer: "Detects a typed link or domain and offers to open it.",
                     kind: .toggle(default: true)
                 ),
                 SettingOption(
                     key: SettingsKey.calculatorPhone,
                     title: "Phone numbers",
+                    footer: "Detects a typed number and offers to call or message it.",
                     kind: .toggle(default: true)
                 ),
                 SettingOption(
                     key: SettingsKey.calculatorEmail,
                     title: "Email addresses",
+                    footer: "Detects a typed address and offers to email it.",
                     kind: .toggle(default: true)
                 ),
                 SettingOption(
