@@ -277,34 +277,28 @@ final class CustomActionUITests: XCTestCase {
         XCTAssertTrue(save.isEnabled, "a named, slotted, schemed URL validates for Save")
     }
 
-    // MARK: - Editor: derived fallback eligibility note (no toggle)
+    // MARK: - Editor: fallbacks are never declared here
 
-    /// There is no fallback toggle anymore (issue #114) — eligibility is derived from
-    /// shape. The editor shows only an informational note, which appears once the URL
-    /// carries a slot and reads "can be a fallback" while the first argument is free
-    /// text. The slot-less case shows the static-link note instead of the eligibility note.
+    /// The editor says nothing about fallbacks (issue #114): no toggle — eligibility is
+    /// derived from shape, never declared — and, since the copy trim, no explanatory
+    /// note either. Activation lives on the Fallbacks page, which is where the pool
+    /// shows what became eligible; the derivation itself is covered by QuickieCore.
     @MainActor
-    func testEligibilityNoteReflectsFreeTextFirstArgument() throws {
+    func testEditorDeclaresNothingAboutFallbacks() throws {
         let app = launchApp()
         openCustomActionsPage(app)
         openNewEditor(app)
 
-        // The retired toggle must be gone entirely.
         XCTAssertFalse(app.switches["custom-action-fallback-toggle"].exists,
                        "the fallback toggle is retired — eligibility is derived, not declared")
 
-        // No slot yet → no eligibility note (the static-link note shows instead).
-        setText("https://example.com", in: app.textFields["custom-action-url-field"])
-        XCTAssertFalse(app.staticTexts["custom-action-eligibility-note"].exists,
-                       "with no slot there is no argument, so no eligibility note")
-
-        // Add a free-text slot → the note appears and reads that it can be a fallback.
+        // A free-text first argument is the eligible shape, and even then the editor
+        // stays quiet about it.
         setText("https://example.com/?q={q}", in: app.textFields["custom-action-url-field"])
-        let note = app.staticTexts["custom-action-eligibility-note"]
-        XCTAssertTrue(note.waitForExistence(timeout: 5),
-                      "a slotted URL shows the eligibility note")
-        XCTAssertTrue((note.label).localizedCaseInsensitiveContains("can be a fallback"),
-                      "a free-text first argument reads as fallback-eligible (was: \(note.label))")
+        XCTAssertTrue(app.textFields["custom-action-arg.q"].waitForExistence(timeout: 5),
+                      "the slot's argument row appears")
+        XCTAssertFalse(app.staticTexts["custom-action-eligibility-note"].exists,
+                       "the editor carries no fallback-eligibility note")
     }
 
     // Note on drag-to-reorder: the fill-order reorder *logic* — that a drag sets the
@@ -499,33 +493,24 @@ final class CustomActionUITests: XCTestCase {
         XCTAssertTrue(save.isEnabled, "a choice with a non-empty option validates for Save")
     }
 
-    /// Setting an argument to **Date** reveals its output-format override fields, and a
-    /// date-first-by-fill-order argument flips the eligibility note to ineligible — the
-    /// derived gate that "now bites" once types land (issue #96, #114).
+    /// Setting an argument to **Date** reveals its output-format override fields (issue
+    /// #96). What that does to fallback eligibility — a date-first argument has nowhere
+    /// to seed the query, so the action drops out of the pool — is derived in Core and
+    /// covered there; the editor no longer narrates it (issue #114).
     @MainActor
-    func testDateTypeRevealsFormatsAndFlipsEligibilityNote() throws {
+    func testDateTypeRevealsFormatFields() throws {
         let app = launchApp()
         openCustomActionsPage(app)
         openNewEditor(app)
 
         setText("When", in: app.textFields["custom-action-name-field"])
         setText("things:///add?when={when}", in: app.textFields["custom-action-url-field"])
+        XCTAssertTrue(app.textFields["custom-action-arg.when"].waitForExistence(timeout: 5),
+                      "the slot's argument row appears")
 
-        // A text first argument reads as fallback-eligible.
-        let note = app.staticTexts["custom-action-eligibility-note"]
-        XCTAssertTrue(note.waitForExistence(timeout: 5))
-        XCTAssertTrue(note.label.localizedCaseInsensitiveContains("can be a fallback"),
-                      "a free-text first argument reads as eligible (was: \(note.label))")
-
-        // Switch the (only, first) slot to Date → format fields appear and the note
-        // flips to ineligible (a date-first action has nowhere to seed the query).
         setType(app, token: "when", to: "Date")
         XCTAssertTrue(app.textFields["custom-action-date-format.when"].waitForExistence(timeout: 5),
                       "a date slot reveals its single output-format field")
-        let ineligible = app.staticTexts["custom-action-eligibility-note"]
-        XCTAssertTrue(ineligible.waitForExistence(timeout: 5))
-        XCTAssertTrue(ineligible.label.localizedCaseInsensitiveContains("make its first argument free text"),
-                      "a date first argument reads as ineligible (was: \(ineligible.label))")
     }
 
     // MARK: - Duplicate swipe action

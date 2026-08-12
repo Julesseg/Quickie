@@ -82,10 +82,6 @@ struct ShortcutsView: View {
                 }
             } header: {
                 Text("Sync Shortcut")
-            } footer: {
-                Text(ShortcutsStore.syncShortcutInstallURL == nil
-                     ? "Install the companion Sync Shortcut, then run it to import your shortcuts. New imports start disabled; a re-sync rebuilds the list to match your library, keeping each \u{201C}accepts input\u{201D} setting."
-                     : "New imports start disabled. A re-sync rebuilds the list to match your library, keeping each \u{201C}accepts input\u{201D} setting.")
             }
 
             if store.entries.isEmpty {
@@ -129,8 +125,6 @@ struct ShortcutsView: View {
                     .onDelete(perform: delete)
                 } header: {
                     Text("Imported shortcuts")
-                } footer: {
-                    Text("Removing one here isn't permanent: a later re-sync re-adds it, disabled and without its alias, if it's still in your library.")
                 }
             }
         }
@@ -246,8 +240,6 @@ struct ShortcutDetailView: View {
                     set: { _ in enablement.toggleDisabled(actionID) }
                 ))
                 .accessibilityIdentifier("shortcut-enabled.\(name)")
-            } footer: {
-                Text("This setting survives a re-sync.")
             }
 
             Section {
@@ -256,8 +248,6 @@ struct ShortcutDetailView: View {
                     set: { _ in store.toggleAcceptsInput(name) }
                 ))
                 .accessibilityIdentifier("shortcut-accepts-input.\(name)")
-            } footer: {
-                Text("Turn on for a shortcut that takes text — Quickie collects the input before running it. The import can't tell on its own.")
             }
 
             Section {
@@ -291,8 +281,6 @@ struct ShortcutDetailView: View {
                     .accessibilityIdentifier("shortcut-alias-field.\(name)")
             } header: {
                 Text("Alias")
-            } footer: {
-                Text("Another name to find this shortcut by. Its result rows wear the alias as a pill, and it survives a re-sync.")
             }
         }
         .navigationTitle(name)

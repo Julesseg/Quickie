@@ -193,26 +193,14 @@ public extension ProviderID {
     }
 
     /// The Enabled toggle every schema leads with (issue #67) — reversibly hides the
-    /// whole kind while its data and configuration are retained.
+    /// whole kind while its data and configuration are retained. It carries no
+    /// footer: a switch labeled Enabled on a provider's own page says what it does.
     private var enabledOption: SettingOption {
         SettingOption(
             key: SettingOption.enabledKey,
             title: "Enabled",
-            footer: enabledFooter,
             kind: .enabled
         )
-    }
-
-    /// The Enabled toggle's footer. The umbrella provider (System, ADR 0029)
-    /// describes its **cascade** — off silences its member kinds too — while every
-    /// other provider gets the plain reversible-hide copy.
-    private var enabledFooter: String {
-        switch self {
-        case .system:
-            return "Off also hides Reminders, Events, and Open iOS Settings. Their own settings are kept."
-        default:
-            return "Off hides \(displayName) everywhere. Its data and settings are kept."
-        }
     }
 
     /// The provider's own options beyond Enabled. Providers with no configurable
@@ -225,7 +213,6 @@ public extension ProviderID {
                 SettingOption(
                     key: SettingsKey.eventCalendar,
                     title: "Default calendar",
-                    footer: "Used when the Calendar step is off.",
                     kind: .choice(ChoiceSetting(
                         source: .dynamic(.eventCalendars),
                         leadingOptions: [
@@ -236,7 +223,6 @@ public extension ProviderID {
                 SettingOption(
                     key: SettingsKey.eventEditor,
                     title: "Review in Calendar before saving",
-                    footer: "Opens the system editor pre-filled, so you can set alerts, invitees, or recurrence before saving.",
                     kind: .toggle(default: false)
                 ),
             ]
@@ -245,7 +231,6 @@ public extension ProviderID {
                 SettingOption(
                     key: SettingsKey.reminderList,
                     title: "Default list",
-                    footer: "Used when the List step is off.",
                     kind: .choice(ChoiceSetting(
                         source: .dynamic(.reminderLists),
                         leadingOptions: [
@@ -266,7 +251,7 @@ public extension ProviderID {
                 SettingOption(
                     key: SettingsKey.pileAutoSave,
                     title: "Save unfinished input",
-                    footer: "Unfinished text is saved here 30 seconds after you leave the app. Off keeps it in the input indefinitely.",
+                    footer: "Unfinished text is saved here 30 seconds after you leave the app.",
                     kind: .toggle(default: true)
                 ),
             ]
@@ -297,7 +282,7 @@ public extension ProviderID {
                 SettingOption(
                     key: SettingsKey.calculatorURL,
                     title: "URLs",
-                    footer: "A typed link or bare domain (\"apple.com\") becomes an Open row. Off leaves it to the web-search fallback.",
+                    footer: "A typed link or bare domain (\"apple.com\") becomes an Open row.",
                     kind: .toggle(default: true)
                 ),
                 SettingOption(
@@ -324,7 +309,6 @@ public extension ProviderID {
                 SettingOption(
                     key: SettingsKey.fileSearchInlineCap,
                     title: "Inline results",
-                    footer: "The Search Files context always shows every match.",
                     kind: .stepper(StepperSetting(range: 1...10, defaultValue: 3))
                 ),
             ]

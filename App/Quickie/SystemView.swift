@@ -56,8 +56,6 @@ struct SystemView: View {
                 // never deletable (CONTEXT.md → Management page).
             } header: {
                 Text("Actions")
-            } footer: {
-                Text("Built-in actions can be disabled, but never deleted.")
             }
         }
         .navigationTitle("System")
