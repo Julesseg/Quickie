@@ -282,19 +282,16 @@ public extension ProviderID {
                 SettingOption(
                     key: SettingsKey.calculatorURL,
                     title: "URLs",
-                    footer: "A typed link or bare domain (\"apple.com\") becomes an Open row.",
                     kind: .toggle(default: true)
                 ),
                 SettingOption(
                     key: SettingsKey.calculatorPhone,
                     title: "Phone numbers",
-                    footer: "A typed number (\"555-1212\") becomes Message and Call rows.",
                     kind: .toggle(default: true)
                 ),
                 SettingOption(
                     key: SettingsKey.calculatorEmail,
                     title: "Email addresses",
-                    footer: "A typed address (\"me@work.com\") becomes an Email row.",
                     kind: .toggle(default: true)
                 ),
                 SettingOption(
