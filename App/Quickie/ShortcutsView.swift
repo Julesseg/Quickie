@@ -84,8 +84,8 @@ struct ShortcutsView: View {
                 Text("Sync Shortcut")
             } footer: {
                 Text(ShortcutsStore.syncShortcutInstallURL == nil
-                     ? "Install the companion Sync Shortcut, then run it to import your shortcuts. New imports start disabled. Re-syncing rebuilds the list to match your library, keeping each \u{201C}accepts input\u{201D} setting."
-                     : "Run the Sync Shortcut to import your shortcuts. New imports start disabled. Re-syncing rebuilds the list to match your library, keeping each \u{201C}accepts input\u{201D} setting.")
+                     ? "Install the companion Sync Shortcut, then run it to import your shortcuts. New imports start disabled; a re-sync rebuilds the list to match your library, keeping each \u{201C}accepts input\u{201D} setting."
+                     : "New imports start disabled. A re-sync rebuilds the list to match your library, keeping each \u{201C}accepts input\u{201D} setting.")
             }
 
             if store.entries.isEmpty {
@@ -118,7 +118,7 @@ struct ShortcutsView: View {
                 } header: {
                     Text("Imported shortcuts")
                 } footer: {
-                    Text("Imported shortcuts start disabled — tap one to enable it, mark whether it accepts input, and give it a search alias. Swipe to remove one; a later re-sync re-adds it (disabled again, no alias) if it's still in your library.")
+                    Text("Removing one here isn't permanent: a later re-sync re-adds it, disabled and without its alias, if it's still in your library.")
                 }
             }
         }
@@ -191,7 +191,7 @@ struct ShortcutDetailView: View {
                 ))
                 .accessibilityIdentifier("shortcut-enabled.\(name)")
             } footer: {
-                Text("Imported shortcuts start disabled. Turn on to show this shortcut in results, Recents, and Favorites; turn off to hide it again without removing it. It stays in the list and keeps this setting through a re-sync.")
+                Text("This setting survives a re-sync.")
             }
 
             Section {
@@ -201,7 +201,7 @@ struct ShortcutDetailView: View {
                 ))
                 .accessibilityIdentifier("shortcut-accepts-input.\(name)")
             } footer: {
-                Text("Turn on for a shortcut that takes text — Quickie collects the input before running it, since the import can't tell.")
+                Text("Turn on for a shortcut that takes text — Quickie collects the input before running it. The import can't tell on its own.")
             }
 
             Section {
@@ -216,7 +216,7 @@ struct ShortcutDetailView: View {
             } header: {
                 Text("Alias")
             } footer: {
-                Text("Give this shortcut another name to find it by — typing the alias surfaces it, and its result rows wear the alias as a pill. Clear the field to remove it. The alias survives a re-sync.")
+                Text("Another name to find this shortcut by. Its result rows wear the alias as a pill, and it survives a re-sync.")
             }
         }
         .navigationTitle(name)

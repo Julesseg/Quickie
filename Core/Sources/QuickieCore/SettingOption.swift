@@ -209,9 +209,9 @@ public extension ProviderID {
     private var enabledFooter: String {
         switch self {
         case .system:
-            return "Off hides Reminders, Events, and Open iOS Settings from results, Recents, and Favorites until you turn it back on. Reminders and Events keep their own settings underneath, so turning System back on restores them. You can always reach this page by typing its name."
+            return "Off also hides Reminders, Events, and Open iOS Settings. Their own settings are kept."
         default:
-            return "Off hides \(displayName) from results, Recents, and Favorites until you turn it back on. Its data is kept, and you can always reach this page by typing its name."
+            return "Off hides \(displayName) everywhere. Its data and settings are kept."
         }
     }
 
@@ -225,7 +225,7 @@ public extension ProviderID {
                 SettingOption(
                     key: SettingsKey.eventCalendar,
                     title: "Default calendar",
-                    footer: "Where an event is saved when the Calendar step is off. Turn the Calendar step on below to pick per event instead.",
+                    footer: "Used when the Calendar step is off.",
                     kind: .choice(ChoiceSetting(
                         source: .dynamic(.eventCalendars),
                         leadingOptions: [
@@ -236,7 +236,7 @@ public extension ProviderID {
                 SettingOption(
                     key: SettingsKey.eventEditor,
                     title: "Review in Calendar before saving",
-                    footer: "On opens the system event editor pre-filled with what you captured — so you can set alerts, invitees, or recurrence before saving. Off saves silently.",
+                    footer: "Opens the system editor pre-filled, so you can set alerts, invitees, or recurrence before saving.",
                     kind: .toggle(default: false)
                 ),
             ]
@@ -245,7 +245,7 @@ public extension ProviderID {
                 SettingOption(
                     key: SettingsKey.reminderList,
                     title: "Default list",
-                    footer: "Where a reminder is saved when the List step is off. Turn the List step on below to pick per reminder instead.",
+                    footer: "Used when the List step is off.",
                     kind: .choice(ChoiceSetting(
                         source: .dynamic(.reminderLists),
                         leadingOptions: [
@@ -266,7 +266,7 @@ public extension ProviderID {
                 SettingOption(
                     key: SettingsKey.pileAutoSave,
                     title: "Save unfinished input",
-                    footer: "Leave the app with unfinished text in the input and it's saved here after 30 seconds — come back sooner and it's still where you left it. Off keeps whatever you typed in place indefinitely.",
+                    footer: "Unfinished text is saved here 30 seconds after you leave the app. Off keeps it in the input indefinitely.",
                     kind: .toggle(default: true)
                 ),
             ]
@@ -279,43 +279,43 @@ public extension ProviderID {
                 SettingOption(
                     key: SettingsKey.calculatorMath,
                     title: "Math",
-                    footer: "On answers arithmetic (e.g. \"23 * 7\") and number bases (e.g. \"0xff + 1\", \"255 to hex\"). Off keeps the row from appearing for either.",
+                    footer: "Arithmetic and number bases — \"23 * 7\", \"0xff + 1\", \"255 to hex\".",
                     kind: .toggle(default: true)
                 ),
                 SettingOption(
                     key: SettingsKey.calculatorUnitConversion,
                     title: "Unit conversion",
-                    footer: "On also answers offline unit conversions (e.g. \"10 km in mi\"). Off keeps Computed to arithmetic only.",
+                    footer: "Offline conversions — \"10 km in mi\".",
                     kind: .toggle(default: true)
                 ),
                 SettingOption(
                     key: SettingsKey.calculatorDateTime,
                     title: "Date & time",
-                    footer: "On answers date and time questions (e.g. \"3 weeks from friday\", \"days until dec 25\", \"9am PST in tokyo\"). Off suppresses those rows.",
+                    footer: "\"3 weeks from friday\", \"days until dec 25\", \"9am PST in tokyo\".",
                     kind: .toggle(default: true)
                 ),
                 SettingOption(
                     key: SettingsKey.calculatorURL,
                     title: "URLs",
-                    footer: "On turns a typed link or bare domain (e.g. \"apple.com\") into an Open row. Off leaves it to the web-search fallback.",
+                    footer: "A typed link or bare domain (\"apple.com\") becomes an Open row. Off leaves it to the web-search fallback.",
                     kind: .toggle(default: true)
                 ),
                 SettingOption(
                     key: SettingsKey.calculatorPhone,
                     title: "Phone numbers",
-                    footer: "On turns a typed phone number (e.g. \"555-1212\") into Message and Call rows. Off suppresses them.",
+                    footer: "A typed number (\"555-1212\") becomes Message and Call rows.",
                     kind: .toggle(default: true)
                 ),
                 SettingOption(
                     key: SettingsKey.calculatorEmail,
                     title: "Email addresses",
-                    footer: "On turns a typed email address (e.g. \"me@work.com\") into an Email row. Off suppresses it.",
+                    footer: "A typed address (\"me@work.com\") becomes an Email row.",
                     kind: .toggle(default: true)
                 ),
                 SettingOption(
                     key: SettingsKey.calculatorColor,
                     title: "Colors",
-                    footer: "On turns a typed hex color (e.g. \"#ff6600\") into a Copy row wearing the color. The \"#\" is required. Off suppresses it.",
+                    footer: "A typed hex color (\"#ff6600\") becomes a Copy row wearing the color. The \"#\" is required.",
                     kind: .toggle(default: true)
                 ),
             ]
@@ -324,7 +324,7 @@ public extension ProviderID {
                 SettingOption(
                     key: SettingsKey.fileSearchInlineCap,
                     title: "Inline results",
-                    footer: "How many file matches can appear inline while you type. The Search Files context always shows every match.",
+                    footer: "The Search Files context always shows every match.",
                     kind: .stepper(StepperSetting(range: 1...10, defaultValue: 3))
                 ),
             ]

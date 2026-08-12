@@ -57,7 +57,7 @@ struct SystemView: View {
             } header: {
                 Text("Actions")
             } footer: {
-                Text("Open Reminders or Events to configure their capture. Built-in actions can be disabled to hide them from results without removing them — they can't be deleted.")
+                Text("Built-in actions can be disabled, but never deleted.")
             }
         }
         .navigationTitle("System")

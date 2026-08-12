@@ -173,7 +173,7 @@ struct CustomActionEditorView: View {
                     .accessibilityIdentifier("custom-action-reorder")
             }
         } footer: {
-            Text("The breadcrumb asks for these in this order — drag to reorder. This fill order is independent of where the slots sit in the URL. Rename a row to rewrite its {token}.")
+            Text("The breadcrumb asks for these in this order, independent of where the slots sit in the URL. Renaming a row rewrites its {token}.")
         }
     }
 
@@ -187,8 +187,8 @@ struct CustomActionEditorView: View {
             EmptyView()
         } footer: {
             Text(def.isFallbackEligible
-                 ? "This action can be a fallback — add it on the Fallbacks page to have it consume your typed text as the first argument."
-                 : "To use this as a fallback (consuming your typed text), make its first argument free text.")
+                 ? "This action can be a fallback — activate it on the Fallbacks page."
+                 : "To use this as a fallback, make its first argument free text.")
                 .accessibilityIdentifier("custom-action-eligibility-note")
         }
     }
@@ -221,8 +221,6 @@ struct CustomActionEditorView: View {
                 }
             }
             .accessibilityIdentifier("custom-action-appearance-row")
-        } footer: {
-            Text("Give this action its own symbol and color, shown everywhere it appears. Leave them as None and Default to use the ones its kind provides.")
         }
     }
 

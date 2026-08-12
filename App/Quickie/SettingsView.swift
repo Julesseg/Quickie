@@ -104,8 +104,6 @@ struct SettingsView: View {
                 }
             } header: {
                 Text("Providers")
-            } footer: {
-                Text("Each provider's settings and content live on its own page. You can also get there by typing its name.")
             }
 
             // The build identifier, last on the page (CONTEXT.md → Settings):
