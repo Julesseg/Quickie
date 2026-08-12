@@ -83,10 +83,12 @@ struct FallbackShelfRow: View {
         // (issue #79), exactly as every other animated surface degrades.
         .animation(motion.style(for: .shelfTitleReveal).animation, value: revealedID)
         // Hold the reveal long enough to read a title, then let it go on its own —
-        // there is nothing to dismiss it with, and no menu to escape from.
+        // there is nothing to dismiss it with, and no menu to escape from. Under UI
+        // test the dwell is `nil` and the reveal is held instead (see
+        // `shelfTitleDwellUnlessHeld`), so the assertion is not racing a timer.
         .task(id: revealedID) {
-            guard revealedID != nil else { return }
-            try? await Task.sleep(for: .seconds(motion.shelfTitleDwell))
+            guard revealedID != nil, let dwell = motion.shelfTitleDwellUnlessHeld else { return }
+            try? await Task.sleep(for: .seconds(dwell))
             guard !Task.isCancelled else { return }
             revealedID = nil
         }
