@@ -1326,13 +1326,13 @@ struct RootView: View {
             CaptureStepsPage<ReminderStep>(
                 provider: .reminders,
                 store: reminderSteps,
-                stepsFooter: "The steps this capture collects after the title, in order. Turn a step off to skip it; drag to reorder. List on asks each time; off saves to the default list above."
+                stepsFooter: "List on asks each time; off saves to the default list above."
             )
         case .events:
             CaptureStepsPage<EventStep>(
                 provider: .events,
                 store: eventSteps,
-                stepsFooter: "The steps this capture collects after the title, in order. Turn a step off to skip it; drag to reorder. Start off makes the event all-day today; Calendar on asks each time; off saves to the default calendar above."
+                stepsFooter: "Start off makes the event all-day today; Calendar on asks each time, off saves to the default calendar above."
             )
         // The System umbrella page (ADR 0029): the cascading Enabled toggle and the
         // Reminders/Events link rows (its declared schema), plus an actions section

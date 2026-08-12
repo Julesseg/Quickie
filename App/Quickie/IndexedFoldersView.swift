@@ -53,7 +53,7 @@ struct IndexedFoldersView: View {
             } header: {
                 Text("Indexed Folders")
             } footer: {
-                Text("Folders Quickie is allowed to search. Access is stored on this device only and never synced. Disable a folder to hide its files from results without revoking access.")
+                Text("Access is stored on this device only and never synced. Disabling a folder hides its files without revoking access; removing it revokes the grant.")
             }
         }
         .navigationTitle("File Search")

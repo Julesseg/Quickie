@@ -14,7 +14,7 @@ import QuickieCore
 struct CaptureStepsPage<Step: CaptureStepKind>: View {
     let provider: ProviderID
     let store: CaptureStepsStore
-    /// The explanatory footer under the On section — what the steps mean for this kind.
+    /// The footer under the On section — the routing this kind's steps decide.
     let stepsFooter: String
 
     var body: some View {
@@ -74,7 +74,7 @@ struct CaptureStepsSection<Step: CaptureStepKind>: View {
         } header: {
             Text("Off")
         } footer: {
-            Text("Steps you've turned off. The green plus adds one to the bottom of the list above; drag the grip there to reorder. Title always comes first.")
+            Text("Title always comes first, so it isn't listed.")
         }
     }
 

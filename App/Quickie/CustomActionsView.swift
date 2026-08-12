@@ -53,7 +53,7 @@ struct CustomActionsView: View {
                 }
                 .accessibilityIdentifier("browse-catalog")
             } footer: {
-                Text("Install a ready-made Custom Action from the catalog. Each install creates a new, fully editable copy.")
+                Text("Each install creates a new, fully editable copy.")
             }
 
             Section {
@@ -90,7 +90,7 @@ struct CustomActionsView: View {
             } header: {
                 Text("Custom Actions")
             } footer: {
-                Text("A Custom Action opens a URL. With {slots} the breadcrumb fills them (a text-first one can be a fallback on the Fallbacks page); with no slot it's a static link that opens directly. Disable one to hide it without deleting it.")
+                Text("A Custom Action opens a URL. With {slots} the breadcrumb fills them; with none it's a static link that opens directly.")
             }
         }
         .navigationTitle("Custom Actions")

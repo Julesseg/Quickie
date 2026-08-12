@@ -100,7 +100,7 @@ struct FallbacksView: View {
             } header: {
                 Text("Shelf")
             } footer: {
-                Text("The round buttons above the input while you're typing — leading edge first. Drag the grip to reorder; the red minus moves one down to the top of the active list. A shelved fallback leaves the bottom of the result list.")
+                Text("The round buttons above the input while you're typing, leading edge first. A shelved fallback leaves the result list.")
             }
 
             Section {
@@ -127,7 +127,7 @@ struct FallbacksView: View {
             } header: {
                 Text("Active")
             } footer: {
-                Text("Top is most important — nearest the input in results. Drag the grip to reorder; the red minus moves a fallback down to the list below, the up arrow onto the shelf. Nothing here deletes it.")
+                Text("Top is most important — nearest the input in results. Nothing here deletes an action; that lives on its own page.")
             }
 
             Section {
@@ -154,7 +154,7 @@ struct FallbacksView: View {
             } header: {
                 Text("Available")
             } footer: {
-                Text("Fallback-eligible actions you haven't activated, plus any you've disabled. The green plus adds one to the bottom of the active list and the up arrow puts it straight on the shelf; the toggle disables the action everywhere. A Custom Action or Shortcut becomes eligible when its first argument is free text.")
+                Text("A Custom Action or Shortcut becomes eligible here when its first argument is free text.")
             }
         }
         // Always in edit mode so the reorder grips show on the Shelf and Active rows
@@ -277,8 +277,8 @@ private struct FallbackRow: View {
         }
     }
 
-    /// What the leading circle does, spelled out for VoiceOver — the same verb the
-    /// section's footer uses.
+    /// What the leading circle does, spelled out for VoiceOver — the section's own
+    /// footer no longer narrates the buttons.
     private var primaryLabel: String {
         switch style {
         case .shelf: return "Remove from the shelf"

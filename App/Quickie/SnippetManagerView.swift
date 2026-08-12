@@ -68,8 +68,6 @@ struct SnippetManagerView: View {
                         )
                     }
                     .onDelete(perform: delete)
-                } footer: {
-                    Text("Disable a snippet to hide it from results without removing it.")
                 }
             }
         }
