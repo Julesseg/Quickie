@@ -46,7 +46,15 @@ struct CustomActionEditorView: View {
 
     var body: some View {
         NavigationStack {
-            Form {
+            // A `List`, not a `Form`, for one reason: the Arguments section is
+            // drag-to-reorder, and **`Form` does not support `.onMove`** — it renders
+            // the grips under `EditButton` and then silently drops every drop, which
+            // is why the fill-order drag never took despite the explicit Edit toggle.
+            // Inside a `NavigationStack` a plain `List` is inset-grouped, so the two
+            // are visually the same surface; the one control the two styles would
+            // render differently — the type `Picker` — already names `.menu`
+            // explicitly, so it reads identically either way.
+            List {
                 Section("Name") {
                     TextField("Add to Things", text: $def.name)
                         .accessibilityIdentifier("custom-action-name-field")

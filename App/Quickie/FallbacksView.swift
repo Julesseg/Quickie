@@ -90,20 +90,24 @@ struct FallbacksView: View {
                     Text("No shelved fallbacks. The shelf above the input stays hidden.")
                         .foregroundStyle(.secondary)
                         .accessibilityIdentifier("fallbacks-shelf-empty")
-                } else {
-                    ForEach(shelvedActions) { action in
-                        // Shelf rows: a red minus that drops the member to the *top*
-                        // of Active, plus the drag grip. No shelf button — it's here.
-                        FallbackRow(
-                            action: action,
-                            style: .shelf,
-                            onPrimary: { withAnimation { store.move(action.id, to: .enabled) } },
-                            onShelve: nil
-                        )
-                    }
-                    .onMove { offsets, destination in
-                        store.reorderShelf(visibleOrder: moved(shelvedActions, from: offsets, to: destination))
-                    }
+                }
+                // The `ForEach` is a *sibling* of the empty-state row, never the
+                // `else` branch of it: `.onMove` has to hang off dynamic content the
+                // section always declares, not off one arm of a conditional, or the
+                // `List` has no movable range to drop into. An empty `ForEach` draws
+                // nothing, so the placeholder above still stands alone.
+                ForEach(shelvedActions) { action in
+                    // Shelf rows: a red minus that drops the member to the *top*
+                    // of Active, plus the drag grip. No shelf button — it's here.
+                    FallbackRow(
+                        action: action,
+                        style: .shelf,
+                        onPrimary: { withAnimation { store.move(action.id, to: .enabled) } },
+                        onShelve: nil
+                    )
+                }
+                .onMove { offsets, destination in
+                    store.reorderShelf(visibleOrder: moved(shelvedActions, from: offsets, to: destination))
                 }
             } header: {
                 Text("Shelf")
@@ -114,21 +118,21 @@ struct FallbacksView: View {
                     Text("No active fallbacks. Add one from the list below.")
                         .foregroundStyle(.secondary)
                         .accessibilityIdentifier("fallbacks-enabled-empty")
-                } else {
-                    ForEach(activeActions) { action in
-                        // Active rows: a red minus to demote, the shelf button to
-                        // promote a rung up, and the drag grip to reorder — no
-                        // enable/disable toggle (it lives on the pool).
-                        FallbackRow(
-                            action: action,
-                            style: .active,
-                            onPrimary: { withAnimation { store.move(action.id, to: .pool) } },
-                            onShelve: { withAnimation { store.move(action.id, to: .shelf) } }
-                        )
-                    }
-                    .onMove { offsets, destination in
-                        store.reorderEnabled(visibleOrder: moved(activeActions, from: offsets, to: destination))
-                    }
+                }
+                // Unconditional, for the same reason as the Shelf section above.
+                ForEach(activeActions) { action in
+                    // Active rows: a red minus to demote, the shelf button to
+                    // promote a rung up, and the drag grip to reorder — no
+                    // enable/disable toggle (it lives on the pool).
+                    FallbackRow(
+                        action: action,
+                        style: .active,
+                        onPrimary: { withAnimation { store.move(action.id, to: .pool) } },
+                        onShelve: { withAnimation { store.move(action.id, to: .shelf) } }
+                    )
+                }
+                .onMove { offsets, destination in
+                    store.reorderEnabled(visibleOrder: moved(activeActions, from: offsets, to: destination))
                 }
             } header: {
                 Text("Active")

@@ -49,14 +49,17 @@ struct CaptureStepsSection<Step: CaptureStepKind>: View {
                 Text("No extra steps. This capture asks only for a title. Add a step below.")
                     .foregroundStyle(.secondary)
                     .accessibilityIdentifier("capture-steps-on-empty")
-            } else {
-                ForEach(enabled, id: \.self) { step in
-                    CaptureStepRow(step: step, style: .on) {
-                        withAnimation { store.demote(step.rawValue) }
-                    }
-                }
-                .onMove(perform: reorder)
             }
+            // The `ForEach` is a *sibling* of the empty-state row, never the `else`
+            // branch of it: `.onMove` has to hang off dynamic content the section
+            // always declares, not off one arm of a conditional, or the `List` has no
+            // movable range to drop into. An empty `ForEach` draws nothing.
+            ForEach(enabled, id: \.self) { step in
+                CaptureStepRow(step: step, style: .on) {
+                    withAnimation { store.demote(step.rawValue) }
+                }
+            }
+            .onMove(perform: reorder)
         } header: {
             Text("Steps")
         }
