@@ -9,18 +9,25 @@ import QuickieCore
 /// pool (every step not on, a green plus turns it on). Title is always the first
 /// breadcrumb step, so it is pinned out of the list — only the steps after it arrange.
 ///
-/// The whole list sits in constant edit mode (like the Fallbacks page) so the reorder
-/// grips show without a separate Edit step; the Options rows above stay interactive.
+/// The whole list sits in edit mode (like the Fallbacks page) so the reorder grips
+/// show without a separate Edit step; the Options rows above stay interactive.
 struct CaptureStepsPage<Step: CaptureStepKind>: View {
     let provider: ProviderID
     let store: CaptureStepsStore
+
+    /// The page's edit mode, held as real state rather than passed down as
+    /// `.constant(.active)`. It never changes — the page is always editable — but a
+    /// **writable** binding is what makes drag-to-reorder commit: a `List` drives the
+    /// drop through this binding, so an immutable one leaves the grips visible and the
+    /// drag working while every release snaps the row back and `onMove` never fires.
+    @State private var editMode: EditMode = .active
 
     var body: some View {
         List {
             ProviderOptionsSection(provider: provider)
             CaptureStepsSection<Step>(store: store)
         }
-        .environment(\.editMode, .constant(.active))
+        .environment(\.editMode, $editMode)
         .navigationTitle(provider.displayName)
     }
 }

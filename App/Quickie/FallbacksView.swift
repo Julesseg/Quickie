@@ -35,6 +35,14 @@ struct FallbacksView: View {
     /// sections partition by the store's tiers and the disabled set.
     let eligible: [Action]
 
+    /// The page's edit mode, held as real state rather than passed down as
+    /// `.constant(.active)`. It never changes — the page is always editable, with no
+    /// Edit button — but a **writable** binding is what makes drag-to-reorder commit:
+    /// a `List` drives the drop through this binding, so an immutable one leaves the
+    /// grips visible and the drag working while every release snaps the row back and
+    /// `onMove` never fires.
+    @State private var editMode: EditMode = .active
+
     /// The Shelf section, most-important-first (leading edge of the button row): the
     /// Shelf resolved to live Actions, minus any that are instance-disabled — a
     /// disabled action always sits in the pool, even for the frame before
@@ -157,8 +165,9 @@ struct FallbacksView: View {
         // without a separate Edit step — the same always-editable shape as the iOS
         // share sheet's app row. The custom minus/plus/shelf buttons and the pool
         // toggles stay interactive (they carry explicit button/toggle styles, not
-        // row-selection taps).
-        .environment(\.editMode, .constant(.active))
+        // row-selection taps). Bound to `editMode` state, never `.constant(.active)`:
+        // see the property for why a constant binding breaks the drop.
+        .environment(\.editMode, $editMode)
         .navigationTitle("Fallbacks")
     }
 
