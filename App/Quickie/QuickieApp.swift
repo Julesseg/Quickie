@@ -103,8 +103,12 @@ struct QuickieApp: App {
             // purple. Setting it once here is what makes the accent unforgettable
             // — a control that names no color inherits it rather than each Toggle
             // having to remember `.tint`.
-            RootView()
-                .tint(.accentColor)
+            // ⚠️ TEMPORARY DIAGNOSTIC — revert to `RootView().tint(.accentColor)`
+            // once this build has reported. Standing the probe here, *instead* of the
+            // launcher, is the whole point: it puts a bare `List` outside the shell,
+            // so whether it reorders says whether the shell or SwiftUI itself is
+            // eating the drop. The app is deliberately unusable in this build.
+            ReorderDiagnosticRoot()
         }
         .modelContainer(container)
     }
