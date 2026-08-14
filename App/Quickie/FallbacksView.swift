@@ -81,6 +81,9 @@ struct FallbacksView: View {
     // Pushed onto the launcher's navigation stack — no own stack or Done button.
     var body: some View {
         List {
+            // ⚠️ TEMPORARY DIAGNOSTIC — remove before this branch merges.
+            ReorderProbeSection()
+
             // The unified page shape (ADR 0019): Options (the kind-level master
             // Enabled switch over the whole bottom region) lead the sections.
             ProviderOptionsSection(provider: .fallbacks)
@@ -111,6 +114,14 @@ struct FallbacksView: View {
                 }
             } header: {
                 Text("Shelf")
+            } footer: {
+                // ⚠️ TEMPORARY DIAGNOSTIC — remove before this branch merges.
+                // The *stored* order, straight off the store. It changes the instant
+                // `onMove` fires, whether or not the rows above redraw — so it tells
+                // a drop that never reached the handler from one that did and simply
+                // didn't repaint.
+                Text("stored: \(store.tiers.shelf.joined(separator: " › "))")
+                    .font(.caption2.monospaced())
             }
 
             Section {
@@ -138,6 +149,9 @@ struct FallbacksView: View {
                 Text("Active")
             } footer: {
                 Text("Top is most important — nearest the input in results.")
+                // ⚠️ TEMPORARY DIAGNOSTIC — remove before this branch merges.
+                Text("stored: \(store.tiers.enabled.joined(separator: " › "))")
+                    .font(.caption2.monospaced())
             }
 
             Section {
@@ -194,6 +208,39 @@ struct FallbacksView: View {
         var ids = rows.map(\.id)
         ids.move(fromOffsets: offsets, toOffset: destination)
         return ids
+    }
+}
+
+/// ⚠️ TEMPORARY DIAGNOSTIC — remove before this branch merges.
+///
+/// The most vanilla drag-to-reorder SwiftUI permits: three local strings in `@State`,
+/// no store, no `Action`, no resolution, no observation — textbook `ForEach` +
+/// `.onMove`, sitting in the same `List` and inheriting the same edit mode as the real
+/// sections. It exists to split the question I have been guessing at:
+///
+/// - **Probe reorders, real rows don't** → the shape is fine and the fault is in the
+///   fallback data path (the store, the `@Observable` read, the resolved arrays).
+/// - **Neither reorders** → nothing about the Fallbacks page is to blame; List reorder
+///   is broken app-wide, which points at the shell or the toolchain, not this file.
+///
+/// Its own footer shows its own order, so it reports even if the rows don't repaint.
+private struct ReorderProbeSection: View {
+    @State private var items = ["Probe A", "Probe B", "Probe C"]
+
+    var body: some View {
+        Section {
+            ForEach(items, id: \.self) { item in
+                Text(item)
+            }
+            .onMove { offsets, destination in
+                items.move(fromOffsets: offsets, toOffset: destination)
+            }
+        } header: {
+            Text("Reorder probe (diagnostic)")
+        } footer: {
+            Text("order: \(items.joined(separator: " › "))")
+                .font(.caption2.monospaced())
+        }
     }
 }
 
