@@ -43,6 +43,18 @@ struct FallbacksView: View {
     /// never called. `CaptureStepsPage` carries the same fix.
     @State private var editMode: EditMode = .active
 
+    /// XCUITest-only **order probe** (see `ReorderUITests`): under `--uitesting`
+    /// the section headers expose the stored tier order as their accessibility
+    /// value, so a drag test can tell "`onMove` never fired" (value unchanged)
+    /// apart from "the store moved but the rows sprang back" (value changed,
+    /// frames didn't). Empty outside UI test runs, so VoiceOver reads nothing.
+    private static let exposesOrderProbe =
+        ProcessInfo.processInfo.arguments.contains("--uitesting")
+
+    private func orderProbe(_ ids: [String]) -> String {
+        Self.exposesOrderProbe ? ids.joined(separator: ",") : ""
+    }
+
     /// The Shelf section, most-important-first (leading edge of the button row): the
     /// Shelf resolved to live Actions, minus any that are instance-disabled — a
     /// disabled action always sits in the pool, even for the frame before
@@ -107,6 +119,7 @@ struct FallbacksView: View {
                 }
             } header: {
                 Text("Shelf")
+                    .accessibilityValue(orderProbe(shelvedActions.map(\.id)))
             }
 
             Section {
@@ -132,6 +145,7 @@ struct FallbacksView: View {
                 }
             } header: {
                 Text("Active")
+                    .accessibilityValue(orderProbe(activeActions.map(\.id)))
             } footer: {
                 Text("Top is most important — nearest the input in results.")
             }

@@ -185,7 +185,15 @@ struct CustomActionEditorView: View {
             }
         } header: {
             HStack {
+                // The accessibility value is the XCUITest-only order probe (see
+                // `ReorderUITests` and the same probe on the Fallbacks page's
+                // section headers): the fill order as stored, so a drag test can
+                // tell a never-fired `onMove` from a committed-but-sprung-back row.
                 Text("Arguments")
+                    .accessibilityValue(
+                        ProcessInfo.processInfo.arguments.contains("--uitesting")
+                            ? def.rows.map(\.name).joined(separator: ",") : ""
+                    )
                 Spacer()
                 EditButton()
                     .accessibilityIdentifier("custom-action-reorder")
