@@ -15,12 +15,18 @@ struct CaptureStepsPage<Step: CaptureStepKind>: View {
     let provider: ProviderID
     let store: CaptureStepsStore
 
+    /// Real, writable edit-mode state, pinned at `.active` so the grips always
+    /// show — a genuine binding, not `.constant(.active)`, because `List` writes
+    /// to the edit-mode binding while committing a drag and a read-only constant
+    /// left every reorder springing back uncommitted (same fix as `FallbacksView`).
+    @State private var editMode: EditMode = .active
+
     var body: some View {
         List {
             ProviderOptionsSection(provider: provider)
             CaptureStepsSection<Step>(store: store)
         }
-        .environment(\.editMode, .constant(.active))
+        .environment(\.editMode, $editMode)
         .navigationTitle(provider.displayName)
     }
 }

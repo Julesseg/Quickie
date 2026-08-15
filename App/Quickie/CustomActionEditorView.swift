@@ -34,6 +34,18 @@ struct CustomActionEditorView: View {
     /// the close after a skip-over).
     @State private var templateSelection: TextSelection?
 
+    /// View-side identity for each argument row, parallel to fill order. A row
+    /// can't key by its token name (a rename changes it per keystroke, and the
+    /// identity change would drop the field's focus) — but keying by *position*
+    /// broke drag-to-reorder: after `onMove` the offsets 0…n-1 were still in
+    /// ascending order, so SwiftUI saw an unchanged identity order and snapped the
+    /// dragged row back. These UUIDs give each row an identity that survives a
+    /// rename *and* is permuted alongside the model on a drag, so the move
+    /// commits. Grown/truncated in step with the rows as the template gains and
+    /// loses tokens (new tokens append to fill order, so appending fresh ids
+    /// keeps existing rows' identities — and focus — stable).
+    @State private var rowIDs: [UUID]
+
     init(
         definition: CustomActionDefinition,
         isNew: Bool,
@@ -42,6 +54,7 @@ struct CustomActionEditorView: View {
         self.isNew = isNew
         self.onSave = onSave
         _def = State(initialValue: definition)
+        _rowIDs = State(initialValue: definition.rows.map { _ in UUID() })
     }
 
     var body: some View {
@@ -114,6 +127,12 @@ struct CustomActionEditorView: View {
             // fallback toggle, the alias field) are reachable after typing the URL
             // rather than staying pinned under the keyboard.
             .scrollDismissesKeyboard(.immediately)
+            // Attached to the Form, not the arguments section — the section isn't
+            // in the tree while the template has no slot, and the ids must track
+            // the very edit that brings the first row in.
+            .onChange(of: def.rows.count) { _, count in
+                syncRowIDs(to: count)
+            }
             .navigationTitle(isNew ? "New Custom Action" : "Edit Custom Action")
             .toolbar {
                 ToolbarItem(placement: .topBarLeading) {
@@ -147,20 +166,21 @@ struct CustomActionEditorView: View {
     }
 
     /// The live-mirrored argument rows in **fill order**, drag-to-reorder, each
-    /// renaming its URL token **per keystroke**. The rows are keyed by fill-order
-    /// *position*, not by token name — a name-keyed row would change identity on
+    /// renaming its URL token **per keystroke**. The rows are keyed by the stable
+    /// `rowIDs`, not by token name — a name-keyed row would change identity on
     /// every character and drop the field's focus — and each field binds straight to
     /// the model by position, so typing a name rewrites the `{token}` live while the
     /// cursor stays put. The footer states only the one rule the rows can't show:
     /// fill order is independent of where the slots sit in the URL.
     private var argumentsSection: some View {
         Section {
-            // Keyed by fill-order position (`\.offset`), not token name: a name-keyed
-            // row changes identity on every keystroke and drops the field's focus.
-            ForEach(Array(def.rows.enumerated()), id: \.offset) { item in
-                ArgumentRowEditor(def: $def, index: item.offset, row: item.element)
+            ForEach(identifiedRows) { item in
+                ArgumentRowEditor(def: $def, index: item.index, row: item.row)
             }
             .onMove { offsets, destination in
+                // Permute the identities with the model, so the drag reads as a
+                // real identity move and the drop commits.
+                rowIDs.move(fromOffsets: offsets, toOffset: destination)
                 def.moveArguments(fromOffsets: offsets, toOffset: destination)
             }
         } header: {
@@ -172,6 +192,37 @@ struct CustomActionEditorView: View {
             }
         } footer: {
             Text("Filled in this order, whatever order the slots appear in the URL.")
+        }
+    }
+
+    /// One argument row paired with its stable view-side identity and its
+    /// fill-order position (the position is what the row's bindings edit by).
+    private struct IdentifiedArgumentRow: Identifiable {
+        let id: UUID
+        let index: Int
+        let row: ArgumentRow
+    }
+
+    /// The rows zipped with `rowIDs`. `zip` truncates to the shorter side, so a
+    /// frame where the template has changed but `syncRowIDs` hasn't run yet renders
+    /// the paired prefix rather than crashing on a count mismatch.
+    private var identifiedRows: [IdentifiedArgumentRow] {
+        zip(rowIDs, def.rows.enumerated()).map { id, item in
+            IdentifiedArgumentRow(id: id, index: item.offset, row: item.element)
+        }
+    }
+
+    /// Keeps `rowIDs` the same length as the rows as the template gains and loses
+    /// tokens. New tokens append to fill order, so appending fresh ids leaves every
+    /// existing row's identity — and the focused field — untouched; on a loss the
+    /// tail ids are dropped (identity for rows past a mid-list removal shifts, which
+    /// is harmless: the edit that removed the token happened in the URL field, so no
+    /// argument field held focus).
+    private func syncRowIDs(to count: Int) {
+        if rowIDs.count < count {
+            rowIDs.append(contentsOf: (rowIDs.count..<count).map { _ in UUID() })
+        } else if rowIDs.count > count {
+            rowIDs.removeLast(rowIDs.count - count)
         }
     }
 

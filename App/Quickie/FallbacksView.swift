@@ -35,6 +35,14 @@ struct FallbacksView: View {
     /// sections partition by the store's tiers and the disabled set.
     let eligible: [Action]
 
+    /// Real, writable edit-mode state, pinned at `.active` so the reorder grips
+    /// always show. It must be a genuine `@State` binding, not
+    /// `.constant(.active)`: `List` writes to the edit-mode binding while
+    /// committing a drag, and against a read-only constant the drop never
+    /// commits — every drag sprang back to its original spot with `onMove`
+    /// never called. `CaptureStepsPage` carries the same fix.
+    @State private var editMode: EditMode = .active
+
     /// The Shelf section, most-important-first (leading edge of the button row): the
     /// Shelf resolved to live Actions, minus any that are instance-disabled — a
     /// disabled action always sits in the pool, even for the frame before
@@ -158,7 +166,7 @@ struct FallbacksView: View {
         // share sheet's app row. The custom minus/plus/shelf buttons and the pool
         // toggles stay interactive (they carry explicit button/toggle styles, not
         // row-selection taps).
-        .environment(\.editMode, .constant(.active))
+        .environment(\.editMode, $editMode)
         .navigationTitle("Fallbacks")
     }
 
