@@ -149,6 +149,18 @@ final class ReorderUITests: XCTestCase {
         XCTAssertTrue(app.textFields["custom-action-arg.notes"].waitForExistence(timeout: 5),
                       "the {notes} slot mirrors into a row")
 
+        // Drop the URL keyboard before dragging: on a short screen (CI's iPhone
+        // SE) the argument rows sit *behind* the raised keyboard, so a synthesized
+        // press at their reported frames lands on the keyboard, not the grip —
+        // that is exactly how this test's first CI run failed. The form dismisses
+        // its keyboard on any drag (`.scrollDismissesKeyboard(.immediately)`), so
+        // a neutral swipe clears it; wait for it to actually go.
+        app.swipeDown()
+        XCTAssertTrue(
+            waitUntil(timeout: 5) { !app.keyboards.firstMatch.exists },
+            "the URL keyboard dismisses so the argument rows are reachable"
+        )
+
         // Enter edit mode so the grips show.
         let edit = app.buttons["custom-action-reorder"]
         XCTAssertTrue(edit.waitForExistence(timeout: 5), "the Arguments header offers Edit")
