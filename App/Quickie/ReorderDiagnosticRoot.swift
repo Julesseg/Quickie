@@ -1,4 +1,5 @@
 import SwiftUI
+import UIKit
 
 /// ⚠️ TEMPORARY DIAGNOSTIC — this whole file is reverted once it has answered.
 ///
@@ -28,6 +29,7 @@ struct ReorderDiagnosticRoot: View {
     @State private var withEditButton = ["A1", "A2", "A3"]
     @State private var alwaysEditing = ["B1", "B2", "B3"]
     @State private var noEditMode = ["C1", "C2", "C3"]
+    @State private var uikitItems = ["D1", "D2", "D3"]
     @State private var editMode: EditMode = .active
 
     var body: some View {
@@ -61,8 +63,81 @@ struct ReorderDiagnosticRoot: View {
                     Text(noEditMode.joined(separator: " › ")).font(.caption2.monospaced())
                 }
             }
+                Section {
+                    NavigationLink("Open the UIKit table probe") {
+                        UIKitReorderProbe(items: $uikitItems)
+                            .ignoresSafeArea()
+                            .navigationTitle("UIKit table")
+                    }
+                } header: {
+                    Text("D — UIKit UITableView reorder")
+                } footer: {
+                    Text(uikitItems.joined(separator: " › ")).font(.caption2.monospaced())
+                }
+            }
             .navigationTitle("Reorder diagnostic")
             .toolbar { EditButton() }
         }
+    }
+}
+
+/// ⚠️ TEMPORARY DIAGNOSTIC — the workaround floor.
+///
+/// A plain `UITableView` in permanent editing mode: the same thing Settings →
+/// Keyboards uses, which reorders correctly on the affected device. If SwiftUI's
+/// `.onMove` is broken at the framework level, this is what a fix has to be built on,
+/// so it is worth proving it works *inside this app* before committing to that route.
+///
+/// Deliberately does **not** `reloadData` on update: UIKit has already animated the
+/// move itself, and reloading on top of it would fight that animation. The order is
+/// pushed back through the binding, so the SwiftUI footer on the previous screen is
+/// the independent readout that the drop actually committed.
+private struct UIKitReorderProbe: UIViewControllerRepresentable {
+    @Binding var items: [String]
+
+    func makeCoordinator() -> Coordinator { Coordinator(items: $items) }
+
+    func makeUIViewController(context: Context) -> UITableViewController {
+        let controller = UITableViewController(style: .insetGrouped)
+        controller.tableView.dataSource = context.coordinator
+        controller.tableView.register(UITableViewCell.self, forCellReuseIdentifier: "cell")
+        controller.tableView.isEditing = true
+        return controller
+    }
+
+    func updateUIViewController(_ controller: UITableViewController, context: Context) {}
+
+    final class Coordinator: NSObject, UITableViewDataSource {
+        @Binding var items: [String]
+
+        init(items: Binding<[String]>) { _items = items }
+
+        func tableView(_ tableView: UITableView, numberOfRowsInSection section: Int) -> Int {
+            items.count
+        }
+
+        func tableView(_ tableView: UITableView, cellForRowAt path: IndexPath) -> UITableViewCell {
+            let cell = tableView.dequeueReusableCell(withIdentifier: "cell", for: path)
+            var content = cell.defaultContentConfiguration()
+            content.text = items[path.row]
+            cell.contentConfiguration = content
+            return cell
+        }
+
+        func tableView(_ tableView: UITableView, canMoveRowAt path: IndexPath) -> Bool { true }
+
+        func tableView(_ tableView: UITableView, moveRowAt from: IndexPath, to: IndexPath) {
+            var next = items
+            next.insert(next.remove(at: from.row), at: to.row)
+            items = next
+        }
+
+        func tableView(
+            _ tableView: UITableView, editingStyleForRowAt path: IndexPath
+        ) -> UITableViewCell.EditingStyle { .none }
+
+        func tableView(
+            _ tableView: UITableView, shouldIndentWhileEditingRowAt path: IndexPath
+        ) -> Bool { false }
     }
 }
