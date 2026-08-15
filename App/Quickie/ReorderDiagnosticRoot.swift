@@ -21,10 +21,11 @@ import UIKit
 ///   answer is a workaround (a UIKit-backed list, or `.draggable`/`.dropDestination`
 ///   in place of `.onMove`).
 ///
-/// Three variants, because they fail differently if the cause is subtle: the textbook
-/// `EditButton` shape, an always-on edit mode driven by real state, and a reorder with
-/// no edit mode at all (long-press then drag, which is a different code path in
-/// SwiftUI and worth knowing about independently).
+/// Four variants, because they can fail differently if the cause is subtle: the
+/// textbook `EditButton` shape, an always-on edit mode driven by real state, a reorder
+/// with no edit mode at all (long-press then drag, a separate code path in SwiftUI),
+/// and — once those three had all failed — a plain `UITableView`, to find out what a
+/// workaround can be built on.
 struct ReorderDiagnosticRoot: View {
     @State private var withEditButton = ["A1", "A2", "A3"]
     @State private var alwaysEditing = ["B1", "B2", "B3"]
@@ -62,7 +63,7 @@ struct ReorderDiagnosticRoot: View {
                 } footer: {
                     Text(noEditMode.joined(separator: " › ")).font(.caption2.monospaced())
                 }
-            }
+
                 Section {
                     NavigationLink("Open the UIKit table probe") {
                         UIKitReorderProbe(items: $uikitItems)
