@@ -147,7 +147,8 @@ your own needed). Docs-only changes skip CI entirely.
 
 `.github/workflows/release.yml` additionally builds a **signed, installable
 `.ipa`** per PR (on the hosted `macos-15` runner) and publishes it to a GitHub
-Pages site, so you can install any PR's build on your iPhone from Safari. See
+Pages site, so you can install any PR's build on your iPhone or iPad from
+Safari. See
 [`ci/README.md`](ci/README.md) for the one-time signing secrets / Pages setup.
 
 ## Providers
