@@ -23,6 +23,17 @@ struct HomeView: View {
     /// extras (which the cap should already prevent) are never shown.
     private var gridFavorites: [Action] { Array(content.favorites.prefix(4)) }
 
+    /// PROTOTYPE (iPad UI audit): a regular-width window lays the four
+    /// Favorites out as one row inside the readable column; compact keeps 2×2.
+    @Environment(\.horizontalSizeClass) private var hSize
+
+    private var favoriteColumns: [GridItem] {
+        Array(
+            repeating: GridItem(.flexible(), spacing: 10),
+            count: hSize == .regular ? 4 : 2
+        )
+    }
+
     private var isEmpty: Bool {
         content.favorites.isEmpty && content.frecent.isEmpty
     }
@@ -42,6 +53,9 @@ struct HomeView: View {
                         }
                     }
                     .frame(maxWidth: .infinity, alignment: .leading)
+                    // PROTOTYPE (iPad UI audit): Recents share the readable
+                    // command column on regular-width windows.
+                    .commandColumn()
                     // Top padding only — the bottom edge stays flush with the
                     // scroll view, exactly like the Result list, so the lowest
                     // Recent row sits the same distance above the input bar as
@@ -82,7 +96,7 @@ struct HomeView: View {
             sectionHeader("Favorites")
                 .padding(.horizontal, 20)
             LazyVGrid(
-                columns: [GridItem(.flexible(), spacing: 10), GridItem(.flexible(), spacing: 10)],
+                columns: favoriteColumns,
                 spacing: 10
             ) {
                 ForEach(gridFavorites) { action in
@@ -92,6 +106,8 @@ struct HomeView: View {
                         FavoriteCard(action: action)
                     }
                     .buttonStyle(.plain)
+                    // PROTOTYPE (iPad UI audit): pointer hover highlight.
+                    .hoverEffect(.highlight)
                     .accessibilityIdentifier("favorite.\(action.id)")
                     .resultContextMenu(
                         secondaryActions: secondaryActions(for: action.content, includeDeeplink: !action.isSilentQueryCapture),
@@ -108,7 +124,9 @@ struct HomeView: View {
             .padding(.horizontal, 16)
         }
         .padding(.bottom, 16)
-        .frame(maxWidth: .infinity)
+        // PROTOTYPE (iPad UI audit): the grid clamps to the readable column
+        // while the blur band behind it still spans the full window width.
+        .commandColumn()
         // The progressive-blur band: a soft material that fades out at its lower
         // edge so the Recent list dissolves under it rather than meeting a hard
         // line (CONTEXT.md → Home; ADR 0010). It bleeds into the status bar as one

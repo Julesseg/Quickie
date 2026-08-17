@@ -68,6 +68,9 @@ struct ResultListView: View {
                                 ActionRow(action: action, isHighlighted: rank == 0, match: row.match)
                             }
                             .buttonStyle(.plain)
+                            // PROTOTYPE (iPad UI audit): pointer hover highlight
+                            // for trackpad/mouse on iPad.
+                            .hoverEffect(.highlight)
                             .accessibilityIdentifier(action.id)
                             .resultContextMenu(
                                 secondaryActions: secondaryActions(for: action.content, includeDeeplink: !action.isSilentQueryCapture),
@@ -85,7 +88,9 @@ struct ResultListView: View {
                             .transition(rowMotion.insertionTransition)
                         }
                     }
-                    .frame(maxWidth: .infinity)
+                    // PROTOTYPE (iPad UI audit): results share the input bar's
+                    // readable column instead of running edge to edge.
+                    .commandColumn()
                 }
                 .frame(maxWidth: .infinity, minHeight: viewport.size.height, alignment: .bottom)
             }

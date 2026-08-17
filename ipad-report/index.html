@@ -1,0 +1,585 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Quickie on iPad — UI Audit &amp; Prototype</title>
+<style>
+  :root {
+    --bg: #f6f5fa; --card: #ffffff; --ink: #1c1b22; --muted: #6e6a7c;
+    --accent: #6c4fd8; --accent-soft: #ece7fb; --line: #e5e2ee;
+    --crit: #c62828; --high: #b26a00; --med: #2e6bb0; --low: #4b7d4f;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #17161c; --card: #211f2a; --ink: #eceaf4; --muted: #a09aae;
+      --accent: #a68bff; --accent-soft: #322a4e; --line: #363244;
+      --crit: #ff8a80; --high: #ffb74d; --med: #82b1ff; --low: #a5d6a7;
+    }
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; background: var(--bg); color: var(--ink);
+    font: 16px/1.6 -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  }
+  .wrap { max-width: 1080px; margin: 0 auto; padding: 32px 24px 96px; }
+  header.hero { padding: 48px 0 8px; }
+  h1 { font-size: 34px; line-height: 1.2; margin: 0 0 8px; letter-spacing: -0.5px; }
+  .sub { color: var(--muted); font-size: 17px; max-width: 70ch; }
+  h2 { font-size: 24px; margin: 56px 0 12px; letter-spacing: -0.3px; }
+  h3 { font-size: 18px; margin: 28px 0 8px; }
+  p  { max-width: 76ch; }
+  a  { color: var(--accent); }
+  code {
+    font: 13px/1.5 ui-monospace, "SF Mono", Menlo, monospace;
+    background: var(--accent-soft); border-radius: 5px; padding: 1px 6px;
+  }
+  pre {
+    background: var(--card); border: 1px solid var(--line); border-radius: 12px;
+    padding: 16px 18px; overflow-x: auto;
+    font: 13px/1.55 ui-monospace, "SF Mono", Menlo, monospace;
+  }
+  pre code { background: none; padding: 0; }
+  .card {
+    background: var(--card); border: 1px solid var(--line);
+    border-radius: 16px; padding: 22px 24px; margin: 18px 0;
+  }
+  .chip {
+    display: inline-block; font-size: 12px; font-weight: 700;
+    letter-spacing: 0.4px; text-transform: uppercase;
+    border-radius: 99px; padding: 2px 11px; margin-right: 8px; color: #fff;
+  }
+  .chip.crit { background: var(--crit); } .chip.high { background: var(--high); }
+  .chip.med  { background: var(--med);  } .chip.low  { background: var(--low); }
+  @media (prefers-color-scheme: dark) { .chip { color: #17161c; } }
+  .finding h3 { margin-top: 0; }
+  .refs { font-size: 13.5px; color: var(--muted); margin-top: 10px; }
+  .refs code { font-size: 12px; }
+  figure { margin: 16px 0; }
+  figcaption { font-size: 13.5px; color: var(--muted); padding-top: 6px; }
+  img.shot {
+    width: 100%; border-radius: 12px; border: 1px solid var(--line);
+    display: block; background: #ddd;
+  }
+  .pair { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+  .pair figure { margin: 0; }
+  .pair .tag {
+    font-size: 12px; font-weight: 700; text-transform: uppercase;
+    letter-spacing: 0.5px; margin-bottom: 6px;
+  }
+  .tag.before { color: var(--crit); } .tag.after { color: var(--low); }
+  .grid3 { display: grid; grid-template-columns: repeat(3, 1fr); gap: 14px; }
+  @media (max-width: 760px) { .pair, .grid3 { grid-template-columns: 1fr; } }
+  table { border-collapse: collapse; width: 100%; font-size: 14.5px; }
+  th, td { text-align: left; padding: 9px 12px; border-bottom: 1px solid var(--line); vertical-align: top; }
+  th { font-size: 12.5px; text-transform: uppercase; letter-spacing: 0.4px; color: var(--muted); }
+  kbd {
+    font: 12px ui-monospace, Menlo, monospace; border: 1px solid var(--line);
+    border-bottom-width: 2px; border-radius: 5px; padding: 1px 6px; background: var(--card);
+  }
+  .toc { columns: 2; gap: 32px; font-size: 15px; }
+  .toc a { text-decoration: none; }
+  .mock {
+    border-radius: 14px; border: 1px solid var(--line); overflow: hidden;
+    background: linear-gradient(135deg, #cfc3f2, #b7a6e8 55%, #c9baf0);
+    aspect-ratio: 4/3; position: relative; font-size: 11px;
+  }
+  .mock * { position: absolute; }
+  .mock .palette {
+    left: 50%; top: 14%; transform: translateX(-50%);
+    width: 54%; background: rgba(255,255,255,0.92); border-radius: 12px;
+    box-shadow: 0 18px 50px rgba(40,20,90,0.35); padding: 10px; color: #333;
+    position: absolute;
+  }
+  .mock .palette .in {
+    position: static; display: block; background: #efecf7; border-radius: 8px;
+    padding: 7px 10px; color: #7a7590; margin-bottom: 8px;
+  }
+  .mock .palette .row {
+    position: static; display: flex; gap: 8px; align-items: center;
+    padding: 6px 8px; border-radius: 7px;
+  }
+  .mock .palette .row.hl { background: #e5ddfa; }
+  .mock .palette .dot {
+    position: static; width: 14px; height: 14px; border-radius: 4px; background: #6c4fd8;
+    flex: none;
+  }
+  .mock .palette .dot.g { background: #34a853; } .mock .palette .dot.o { background: #f29900; }
+  .mock2 { display: grid; grid-template-columns: 34% 1fr; position: static; }
+  .mock .side {
+    left: 0; top: 0; bottom: 0; width: 34%;
+    background: rgba(255,255,255,0.55); backdrop-filter: blur(6px);
+    border-right: 1px solid rgba(255,255,255,0.7); padding: 10px; color: #333;
+  }
+  .mock .side .in {
+    position: static; display: block; background: rgba(255,255,255,0.9);
+    border-radius: 8px; padding: 6px 9px; color: #7a7590; margin-bottom: 8px;
+  }
+  .mock .side .row {
+    position: static; display: flex; gap: 7px; align-items: center;
+    padding: 5px 7px; border-radius: 6px;
+  }
+  .mock .side .row.hl { background: rgba(108,79,216,0.18); }
+  .mock .side .dot { position: static; width: 12px; height: 12px; border-radius: 4px; background: #6c4fd8; flex: none; }
+  .mock .detail {
+    left: 34%; right: 0; top: 0; bottom: 0; padding: 14px 18px; color: #333;
+  }
+  .mock .detail .bar {
+    position: static; display: block; background: rgba(255,255,255,0.85);
+    border-radius: 9px; padding: 8px 12px; margin-bottom: 10px; font-weight: 600;
+  }
+  .mock .detail .blk {
+    position: static; display: block; background: rgba(255,255,255,0.6);
+    border-radius: 9px; height: 38px; margin-bottom: 8px;
+  }
+  .note { font-size: 13.5px; color: var(--muted); }
+  .pill-ok { color: var(--low); font-weight: 700; }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+<header class="hero">
+  <h1>Quickie on iPad<br>UI audit, prototype &amp; recommendations</h1>
+  <p class="sub">
+    Audited on an <strong>iPad Pro 13″ (M5) simulator, iPadOS 26.3</strong> — every screen
+    exercised by a scripted XCUITest walk, in portrait and landscape. Verdict: the app is
+    fully functional on iPad but every surface is the iPhone layout stretched to fill the
+    window. A working prototype (branch <code>prototype/ipad-ui-audit</code>) fixes the
+    core issue — the full-bleed command surfaces — with one ~20-line, size-class-driven
+    modifier applied at six sites.
+  </p>
+</header>
+
+<nav class="card">
+  <div class="toc">
+    <div><a href="#tldr">1 · TL;DR</a></div>
+    <div><a href="#method">2 · Method</a></div>
+    <div><a href="#findings">3 · Findings (F1–F12)</a></div>
+    <div><a href="#prototype">4 · Prototype: before / after</a></div>
+    <div><a href="#alternatives">5 · Direction alternatives</a></div>
+    <div><a href="#roadmap">6 · Suggested roadmap</a></div>
+    <div><a href="#gallery">7 · Full screenshot gallery</a></div>
+    <div><a href="#sources">8 · Sources</a></div>
+  </div>
+</nav>
+
+<h2 id="tldr">1 · TL;DR</h2>
+<div class="card">
+  <p><strong>The one structural problem:</strong> nothing in the codebase knows about width.
+  There is not a single <code>horizontalSizeClass</code> read, width clamp, or adaptive
+  grid in any Swift file — so the input bar, result rows, Favorites, breadcrumbs, and
+  settings forms all stretch edge-to-edge across 1,376 pt of landscape iPad. A result row
+  puts its icon and its chevron ~1,300 pt apart.</p>
+  <p><strong>The one structural fix:</strong> a centered, readable-width
+  <em>command column</em> (~680 pt) on regular-width windows — prototyped, built, and
+  screenshotted below. Size class (not device idiom) is the switch, so Split View and
+  narrow Stage Manager windows correctly keep the iPhone layout.</p>
+  <p><strong>Beyond layout, the two big gaps for a launcher on iPad:</strong>
+  hardware-keyboard support (no <kbd>⌘K</kbd>, no arrow-key navigation, no <kbd>esc</kbd> —
+  iPad launchers live on the keyboard) and keyboard-avoidance math that assumes
+  window = screen (<code>UIScreen.main</code>), which breaks in Split View / Stage Manager
+  / iPadOS 26 windowing.</p>
+</div>
+
+<h2 id="method">2 · Method</h2>
+<div class="card">
+  <ul>
+    <li>Built and installed the app on the iPad Pro 13″ (M5) simulator (iPadOS 26.3). The
+        project already targets iPad (<code>TARGETED_DEVICE_FAMILY = "1,2"</code>, all four
+        orientations enabled) — it runs natively, no compatibility mode.</li>
+    <li>Drove every reachable surface with a throwaway XCUITest
+        (<code>App/QuickieUITests/IPadExplorerUITests.swift</code>): Home (placeholder and
+        populated), ranked results, calculator, Settings hub + all eight provider pages,
+        both editor sheets, the catalog, Search Files, the Reminder capture flow
+        (title → list → date), Pile — in portrait, key screens again in landscape.</li>
+    <li>Cross-checked against Apple's current guidance: HIG (Layout, Designing for iPadOS,
+        Multitasking, Sheets, Popovers, Tab bars, Keyboards, The menu bar), SwiftUI API docs,
+        WWDC24 10147 and WWDC25 208/256. Citations inline per finding.</li>
+    <li>Applied the prototype on branch <code>prototype/ipad-ui-audit</code>, rebuilt, and
+        re-ran the same scripted walk for like-for-like after shots.</li>
+  </ul>
+</div>
+
+<h2 id="findings">3 · Findings</h2>
+
+<div class="card finding">
+  <span class="chip crit">Critical</span>
+  <h3>F1 — Every command surface is full-bleed on a 13″ canvas</h3>
+  <p>The input bar, result list, shelf, and paste chip are all
+  <code>maxWidth: .infinity</code> with fixed 12–16 pt padding. On the 13″ iPad a ranked
+  result row spans the entire window: label at the far left, action glyph at the far
+  right, ~85% of the row empty. Apple's readable-content guide tops out around
+  ~660–700 pt for exactly this reason; the HIG's iPad framing is "elevate the content
+  people care about" — not "fill the display".</p>
+  <div class="pair">
+    <figure><div class="tag before">Before</div><img class="shot" src="img/before-12-results-ranked.png" alt="Results stretched across full portrait width"></figure>
+    <figure><div class="tag before">Before — landscape</div><img class="shot" src="img/before-61-results-landscape.png" alt="Results stretched across full landscape width"></figure>
+  </div>
+  <p class="refs">Code: <code>ResultListView.swift:88</code>, <code>RootView.swift:722–827</code> (bottom bar), <code>InputBar.swift</code> · Fix prototyped (§4) ·
+  HIG <a href="https://developer.apple.com/design/human-interface-guidelines/layout">Layout</a>,
+  <a href="https://developer.apple.com/design/human-interface-guidelines/designing-for-ipados">Designing for iPadOS</a></p>
+</div>
+
+<div class="card finding">
+  <span class="chip high">High</span>
+  <h3>F2 — Favorites grid is hard-coded 2×2; one favorite becomes a half-screen slab</h3>
+  <p><code>HomeView.swift:84</code> pins the grid to two flexible columns. With one pinned
+  favorite, the card is half the window wide (~1,000 pt in portrait); Recents rows below it
+  span the full width. The grid should be column-count-adaptive inside the readable column
+  (4-across at regular width) — <code>LazyVGrid</code> with adaptive/size-class columns is
+  the standard mechanism.</p>
+  <div class="pair">
+    <figure><div class="tag before">Before</div><img class="shot" src="img/before-10-home-populated.png" alt="One favorite card stretched to half screen width"></figure>
+    <figure><div class="tag after">After (prototype)</div><img class="shot" src="img/after-10-home-populated.png" alt="Compact favorite card in centered column"></figure>
+  </div>
+  <p class="refs">Code: <code>HomeView.swift:24, 84–108</code> · Fix prototyped ·
+  <a href="https://developer.apple.com/documentation/swiftui/lazyvgrid">LazyVGrid</a></p>
+</div>
+
+<div class="card finding">
+  <span class="chip high">High</span>
+  <h3>F3 — Capture breadcrumb crumbs stretch into enormous cards</h3>
+  <p>The breadcrumb gives each crumb an equal weighted share of the measured container —
+  the full window. On 13″ each of TITLE / DUE DATE / LIST becomes a ~450 pt card for a
+  one-word value. The capture input at the bottom is likewise full-width.</p>
+  <div class="pair">
+    <figure><div class="tag before">Before</div><img class="shot" src="img/before-40-capture-reminder.png" alt="Breadcrumb crumbs stretched across full width"></figure>
+    <figure><div class="tag after">After (prototype)</div><img class="shot" src="img/after-40-capture-reminder.png" alt="Compact breadcrumb pills in centered column"></figure>
+  </div>
+  <p class="refs">Code: <code>Capture.swift:800–822</code> (bar), crumb weighting ≈ <code>Capture.swift:1042–1058</code> · Fix prototyped</p>
+</div>
+
+<div class="card finding">
+  <span class="chip high">High</span>
+  <h3>F4 — No hardware-keyboard support beyond Return</h3>
+  <p>Zero <code>.keyboardShortcut</code>, no <code>onKeyPress</code>, no arrow-key result
+  navigation, no <kbd>esc</kbd>. A launcher is <em>the</em> keyboard-first app category, and
+  iPads routinely have Magic Keyboards; the HIG says people "generally expect to rely on
+  the standard keyboard shortcuts that work in other apps". Expected baseline:</p>
+  <table>
+    <tr><th>Key</th><th>Action</th></tr>
+    <tr><td><kbd>⌘K</kbd> (or any typing)</td><td>focus the search field</td></tr>
+    <tr><td><kbd>↑</kbd> / <kbd>↓</kbd></td><td>move the highlight through results (needs Core: highlight is currently pinned to rank 0)</td></tr>
+    <tr><td><kbd>⏎</kbd></td><td>run highlighted <span class="pill-ok">✓ already works</span></td></tr>
+    <tr><td><kbd>esc</kbd></td><td>clear query → exit capture / Search Files context</td></tr>
+    <tr><td><kbd>⌘1…4</kbd></td><td>run Favorites 1–4</td></tr>
+    <tr><td><kbd>⌘,</kbd></td><td>open Settings</td></tr>
+  </table>
+  <p>On iPadOS 26 the same <code>.commands { }</code> API that builds macOS menus now
+  populates the iPad <strong>menu bar</strong> — the shortcut table above should land there
+  so it's discoverable (hold <kbd>⌘</kbd> shows the HUD for free).</p>
+  <p class="refs">HIG <a href="https://developer.apple.com/design/human-interface-guidelines/keyboards">Keyboards</a>,
+  <a href="https://developer.apple.com/design/human-interface-guidelines/the-menu-bar">The menu bar</a> ·
+  <a href="https://developer.apple.com/documentation/swiftui/view/keyboardshortcut(_:modifiers:)">keyboardShortcut</a> · WWDC25 256</p>
+</div>
+
+<div class="card finding">
+  <span class="chip high">High</span>
+  <h3>F5 — Keyboard-lift math assumes the window is the screen</h3>
+  <p><code>RootView.swift:851</code> computes keyboard overlap as
+  <code>UIScreen.main.bounds.height − endFrame.minY</code>. <code>UIScreen.main</code> is
+  deprecated, and in Split View / Slide Over / Stage Manager / iPadOS 26 windowing the
+  window is <em>not</em> the screen — the bar gets lifted by the wrong amount. A floating
+  or split iPad keyboard feeds the same math a small detached frame, and the 120 pt
+  software-keyboard threshold in <code>KeyboardBarLift.swift:19</code> sits in ambiguous
+  territory for Magic Keyboard accessory bars. SwiftUI's own avoidance is disabled
+  globally, so nothing falls back to system behavior when this math is wrong.</p>
+  <p><strong>Fix:</strong> convert the keyboard frame into the app window's coordinate
+  space (or adopt <code>keyboardLayoutGuide</code> with
+  <code>followsUndockedKeyboard</code>), treat floating/split keyboards as zero overlap,
+  and keep the policy in Core where it's already <code>swift test</code>-gated.</p>
+  <p class="refs">Code: <code>RootView.swift:851</code>, <code>Core/…/KeyboardBarLift.swift:19</code>, <code>KeyboardFrameObserver.swift</code> ·
+  <a href="https://developer.apple.com/forums/thread/718535">keyboardLayoutGuide / followsUndockedKeyboard</a></p>
+</div>
+
+<div class="card finding">
+  <span class="chip med">Medium</span>
+  <h3>F6 — Management pages: full-width forms, toggles a metre from their labels</h3>
+  <p>Settings hub, provider pages, Custom Actions, Fallbacks, Snippets, Shortcuts, File
+  Search, Pile — all rows run edge-to-edge with a switch or chevron on the far right.
+  The prototype deliberately left these untouched (scope: launcher surfaces), but the same
+  readable-width treatment applies — either the command-column clamp or grouped-list
+  styling that respects the readable guide.</p>
+  <div class="pair">
+    <figure><div class="tag before">Settings hub</div><img class="shot" src="img/before-20-settings-hub.png" alt="Settings rows full width"></figure>
+    <figure><div class="tag before">Custom Actions</div><img class="shot" src="img/before-21-settings-custom-actions.png" alt="Custom actions rows full width"></figure>
+  </div>
+  <p class="refs">Code: <code>SettingsView.swift</code>, <code>ProviderPages.swift</code>, per-page views ·
+  HIG <a href="https://developer.apple.com/design/human-interface-guidelines/lists-and-tables">Lists and tables</a></p>
+</div>
+
+<div class="card finding">
+  <span class="chip med">Medium</span>
+  <h3>F7 — No pointer (trackpad/mouse) affordances</h3>
+  <p>No <code>.hoverEffect</code> anywhere: result rows, favorite cards, shelf buttons, and
+  crumbs give zero hover feedback with a trackpad. iPadOS 26 pointer behavior makes the
+  hover highlight the primary "this is clickable" signal. The prototype adds
+  <code>.hoverEffect(.highlight)</code> to result rows and favorite cards; shelf buttons,
+  recents, crumbs, and the paste chip should follow.</p>
+  <p class="refs">Code: <code>ResultListView.swift</code>, <code>HomeView.swift</code>, <code>FallbackShelfRow.swift</code> ·
+  HIG <a href="https://developer.apple.com/design/human-interface-guidelines/pointing-devices">Pointing devices</a>, WWDC25 208</p>
+</div>
+
+<div class="card finding">
+  <span class="chip med">Medium</span>
+  <h3>F8 — No window configuration for iPadOS 26 resizable windows</h3>
+  <p>The scene is a bare <code>WindowGroup</code>: no minimum content size, no default
+  size. On iPadOS 26 windows resize arbitrarily (and <code>UIRequiresFullScreen</code> is
+  deprecated-and-ignored) — the app should declare
+  <code>.frame(minWidth:minHeight:)</code> + <code>.windowResizability(.contentMinSize)</code>
+  and be QA'd at half/third/quadrant tiles. The command-column clamp makes resizing
+  non-destructive by construction (layout reverts as the window grows back — a WWDC25 208
+  requirement).</p>
+  <p class="refs">Code: <code>QuickieApp.swift:97–110</code> ·
+  HIG <a href="https://developer.apple.com/design/human-interface-guidelines/multitasking">Multitasking</a> ·
+  <a href="https://developer.apple.com/documentation/swiftui/scene/windowresizability(_:)">windowResizability</a></p>
+</div>
+
+<div class="card finding">
+  <span class="chip med">Medium</span>
+  <h3>F9 — Share sheet is an unanchored full sheet</h3>
+  <p>The Share secondary action wraps <code>UIActivityViewController</code> in a plain
+  SwiftUI sheet. The iPad-native pattern for a transient action on a specific row is a
+  <strong>popover anchored to that row</strong> (HIG: reserve popovers for wide views —
+  this is exactly that case). Same for future transient pickers.</p>
+  <p class="refs">Code: <code>RootView.swift:2174, 1260</code> ·
+  HIG <a href="https://developer.apple.com/design/human-interface-guidelines/popovers">Popovers</a> ·
+  <a href="https://developer.apple.com/documentation/swiftui/view/presentationcompactadaptation(_:)">presentationCompactAdaptation</a></p>
+</div>
+
+<div class="card finding">
+  <span class="chip low">Low</span>
+  <h3>F10 — Shelf peek sizing degenerates on wide windows</h3>
+  <p>The shelf solves for a button diameter so that <em>k</em> buttons + a half-button peek
+  exactly fill the row. On a 1,376 pt row it always resolves to the 52 pt maximum, never
+  scrolls, and the "there's more" peek cue disappears while buttons hug the leading edge.
+  <strong>The command column fixes this for free</strong> — the measured row is ≤ 680 pt
+  again, back inside the rule's design envelope.</p>
+  <p class="refs">Code: <code>Core/Sources/QuickieCore/FallbackShelf.swift:113–130</code>, <code>FallbackShelfRow.swift:73</code></p>
+</div>
+
+<div class="card finding">
+  <span class="chip low">Low</span>
+  <h3>F11 — Editor sheets are already decent; make the sizing explicit</h3>
+  <p>Good news: the Custom Action and Snippet editors already present as centered cards on
+  iPad (see gallery). Adopt <code>.presentationSizing(.form)</code> (iOS 18+) so the
+  intent is explicit rather than an accident of defaults, and audit any custom sheet
+  backgrounds against Liquid Glass insets.</p>
+  <p class="refs">Code: <code>RootView.swift:1221–1247</code>, <code>CustomActionsView.swift:104</code>, <code>SnippetManagerView.swift:85</code> ·
+  HIG <a href="https://developer.apple.com/design/human-interface-guidelines/sheets">Sheets</a> ·
+  <a href="https://developer.apple.com/documentation/swiftui/presentationsizing">presentationSizing</a></p>
+</div>
+
+<div class="card finding">
+  <span class="chip low">Low</span>
+  <h3>F12 — Landscape empty states drift off-balance</h3>
+  <p>With the keyboard docked in landscape, only ~3.5 rows fit above the fold and the
+  brand-mark placeholder sits visually off-center between breadcrumb chrome and keyboard.
+  Minor today; worth re-checking after the column ships, and worth a deliberate empty-state
+  composition for short-and-wide windows (Stage Manager half-height).</p>
+  <p class="refs">Evidence: <code>img/before-01-home-landscape.png</code>, gallery §7</p>
+</div>
+
+<h2 id="prototype">4 · Prototype: the readable command column</h2>
+<div class="card">
+  <p>Branch <code>prototype/ipad-ui-audit</code> (built, walked, screenshotted on the same
+  simulator). One new modifier, applied at six sites — launcher bottom bar, result list,
+  file-search list, Home recents, Favorites band, and both breadcrumb bars — plus
+  size-class-adaptive Favorites columns and hover effects:</p>
+<pre><code>struct CommandColumn: ViewModifier {
+    @Environment(\.horizontalSizeClass) private var hSize
+
+    func body(content: Content) -> some View {
+        content
+            .frame(maxWidth: hSize == .regular ? 680 : .infinity)
+            .frame(maxWidth: .infinity)   // centers the clamped column
+    }
+}</code></pre>
+  <p class="note">Size class — not <code>UIDevice.idiom</code> — is the switch, so an iPad
+  app windowed to half-width (compact) keeps today's iPhone layout, exactly as the HIG
+  prescribes. Full-bleed layers (mesh backdrop, progressive-blur bands) intentionally stay
+  edge-to-edge; only <em>content</em> clamps. All existing iPhone snapshots are unaffected
+  (compact width is a no-op).</p>
+
+  <h3>Ranked results — portrait</h3>
+  <div class="pair">
+    <figure><div class="tag before">Before</div><img class="shot" src="img/before-12-results-ranked.png" alt=""></figure>
+    <figure><div class="tag after">After</div><img class="shot" src="img/after-12-results-ranked.png" alt=""></figure>
+  </div>
+
+  <h3>Ranked results — landscape</h3>
+  <div class="pair">
+    <figure><div class="tag before">Before</div><img class="shot" src="img/before-61-results-landscape.png" alt=""></figure>
+    <figure><div class="tag after">After</div><img class="shot" src="img/after-61-results-landscape.png" alt=""></figure>
+  </div>
+
+  <h3>Reminder capture</h3>
+  <div class="pair">
+    <figure><div class="tag before">Before</div><img class="shot" src="img/before-40-capture-reminder.png" alt=""></figure>
+    <figure><div class="tag after">After</div><img class="shot" src="img/after-40-capture-reminder.png" alt=""></figure>
+  </div>
+
+  <h3>Search Files context</h3>
+  <div class="pair">
+    <figure><div class="tag before">Before</div><img class="shot" src="img/before-30-file-search-context.png" alt=""></figure>
+    <figure><div class="tag after">After</div><img class="shot" src="img/after-30-file-search-context.png" alt=""></figure>
+  </div>
+
+  <h3>Calculator result</h3>
+  <div class="pair">
+    <figure><div class="tag before">Before</div><img class="shot" src="img/before-11-results-calc.png" alt=""></figure>
+    <figure><div class="tag after">After</div><img class="shot" src="img/after-11-results-calc.png" alt=""></figure>
+  </div>
+
+  <p><strong>Files touched:</strong> <code>AdaptiveLayout.swift</code> (new),
+  <code>RootView.swift</code>, <code>ResultListView.swift</code>,
+  <code>FileSearchContextView.swift</code>, <code>HomeView.swift</code>,
+  <code>Capture.swift</code>. If promoted to a real change, the 680 pt constant and the
+  Favorites column count belong in Core as a tested layout policy, per the repo's
+  presentation-arithmetic convention (like <code>FallbackShelf.Layout</code> /
+  <code>KeyboardBarLift</code>).</p>
+</div>
+
+<h2 id="alternatives">5 · Direction alternatives</h2>
+
+<div class="card">
+  <h3>A · Centered command column <span class="pill-ok">— prototyped, recommended first step</span></h3>
+  <p>What §4 shows. Keeps the product's bottom-anchored, keyboard-adjacent interaction
+  model fully intact — results still stack up from the input, best match nearest the
+  thumb/cursor. Lowest risk, no navigation rework, immediately makes 100% of screens feel
+  intentional on iPad.</p>
+</div>
+
+<div class="card">
+  <h3>B · Spotlight-style floating palette (concept mock)</h3>
+  <p>With a hardware keyboard there is no on-screen keyboard — the bottom-anchored bar
+  floats alone at the foot of a big empty canvas. The natural iPad-with-keyboard shape is
+  the <em>Spotlight/Raycast palette</em>: input near the top, results dropping downward,
+  eye-line at the top third. This inverts the "rank 0 nearest the input" stack (rank 0
+  would sit directly <em>under</em> the field — still adjacent) and earns its keep only
+  when a hardware keyboard is attached (soft-keyboard mode should keep layout A).</p>
+  <div class="mock" role="img" aria-label="Mock of a Spotlight-style centered palette on iPad">
+    <div class="palette">
+      <span class="in">Type to search…</span>
+      <div class="row hl"><span class="dot"></span> Settings <span style="position:static;margin-left:auto">⏎</span></div>
+      <div class="row"><span class="dot g"></span> Search Files</div>
+      <div class="row"><span class="dot o"></span> Search the web</div>
+      <div class="row"><span class="dot"></span> New Reminder</div>
+    </div>
+  </div>
+  <figcaption>CSS concept mock — not built. Trigger: regular width + hardware keyboard
+  (<code>keyboardLayoutGuide</code> overlap ≈ 0).</figcaption>
+  <p class="note">Trade-offs: a second layout mode to maintain and test; motion budget
+  (ADR 0010) and rank-0 stability guarantees must be re-proven for a top-anchored list.
+  Decide after A ships and hardware-keyboard telemetry/feel is in.</p>
+</div>
+
+<div class="card">
+  <h3>C · Two-pane management (concept mock)</h3>
+  <p>The launcher's management pages are a textbook sidebar/detail shape:
+  <code>path: [ManagementPage]</code> on one stack would map directly onto
+  <code>NavigationSplitView</code> at regular width — launcher stays live on the left,
+  Settings/provider pages open on the right instead of covering the launcher. Typing a
+  provider name still deep-links, but the launcher never disappears.</p>
+  <div class="mock" role="img" aria-label="Mock of launcher plus settings split view">
+    <div class="side">
+      <span class="in">Type to search…</span>
+      <div class="row hl"><span class="dot"></span> Settings</div>
+      <div class="row"><span class="dot"></span> Fallbacks</div>
+      <div class="row"><span class="dot"></span> Snippets</div>
+    </div>
+    <div class="detail">
+      <span class="bar">Settings — Providers</span>
+      <span class="blk"></span><span class="blk"></span><span class="blk"></span>
+    </div>
+  </div>
+  <figcaption>CSS concept mock — not built. <code>NavigationSplitView</code> collapses to
+  today's push navigation at compact width automatically.</figcaption>
+  <p class="note">Trade-offs: the biggest structural change of the three; touches focus
+  handling (input keeps focus while a detail pane is open?) and the "no chrome" identity.
+  Worth a real <code>/prototype</code> round of its own if the two-pane feel is tempting.</p>
+</div>
+
+<h2 id="roadmap">6 · Suggested roadmap</h2>
+<div class="card">
+  <table>
+    <tr><th>Phase</th><th>Scope</th><th>Findings</th><th>Size</th></tr>
+    <tr><td>1</td><td>Ship the command column: promote the prototype, move constants into a Core-tested layout policy, extend the clamp to management pages</td><td>F1 F2 F3 F6 F10</td><td>S — prototype exists; mostly tests + Core policy</td></tr>
+    <tr><td>2</td><td>Fix keyboard-lift math for windows ≠ screen and undocked keyboards</td><td>F5</td><td>M — Core policy change + device-matrix QA</td></tr>
+    <tr><td>3</td><td>Hardware keyboard: ⌘K / esc / ⌘1–4 / menu-bar commands; arrow-key highlight (Core: decouple highlight from rank 0)</td><td>F4</td><td>M</td></tr>
+    <tr><td>4</td><td>Pointer polish (hover on all tappables), popover share, explicit form sheets</td><td>F7 F9 F11</td><td>S</td></tr>
+    <tr><td>5</td><td>Windowing config + Stage Manager / tiled-size QA pass; landscape empty-state composition</td><td>F8 F12</td><td>S</td></tr>
+    <tr><td>6</td><td>Direction decision: palette mode (B) and/or two-pane management (C)</td><td>—</td><td>Design + dedicated prototypes</td></tr>
+  </table>
+</div>
+
+<h2 id="gallery">7 · Full screenshot gallery (before)</h2>
+<div class="card">
+  <div class="grid3">
+    <figure><img class="shot" src="img/before-00-home-portrait.png" alt=""><figcaption>Home — first-run placeholder</figcaption></figure>
+    <figure><img class="shot" src="img/before-10-home-populated.png" alt=""><figcaption>Home — populated</figcaption></figure>
+    <figure><img class="shot" src="img/before-11-results-calc.png" alt=""><figcaption>Calculator result</figcaption></figure>
+    <figure><img class="shot" src="img/before-12-results-ranked.png" alt=""><figcaption>Ranked results</figcaption></figure>
+    <figure><img class="shot" src="img/before-20-settings-hub.png" alt=""><figcaption>Settings hub</figcaption></figure>
+    <figure><img class="shot" src="img/before-21-settings-custom-actions.png" alt=""><figcaption>Custom Actions</figcaption></figure>
+    <figure><img class="shot" src="img/before-21b-custom-action-editor-sheet.png" alt=""><figcaption>Custom Action editor (sheet)</figcaption></figure>
+    <figure><img class="shot" src="img/before-21c-catalog.png" alt=""><figcaption>Browse catalog</figcaption></figure>
+    <figure><img class="shot" src="img/before-22-settings-fallbacks.png" alt=""><figcaption>Fallbacks</figcaption></figure>
+    <figure><img class="shot" src="img/before-23-settings-snippets.png" alt=""><figcaption>Snippets</figcaption></figure>
+    <figure><img class="shot" src="img/before-23b-snippet-editor-sheet.png" alt=""><figcaption>Snippet editor (sheet)</figcaption></figure>
+    <figure><img class="shot" src="img/before-24-settings-shortcuts.png" alt=""><figcaption>Shortcuts</figcaption></figure>
+    <figure><img class="shot" src="img/before-25-settings-system.png" alt=""><figcaption>System</figcaption></figure>
+    <figure><img class="shot" src="img/before-26-settings-computed.png" alt=""><figcaption>Computed</figcaption></figure>
+    <figure><img class="shot" src="img/before-27-settings-file-search.png" alt=""><figcaption>File Search settings</figcaption></figure>
+    <figure><img class="shot" src="img/before-30-file-search-context.png" alt=""><figcaption>Search Files context</figcaption></figure>
+    <figure><img class="shot" src="img/before-40-capture-reminder.png" alt=""><figcaption>Capture — title step</figcaption></figure>
+    <figure><img class="shot" src="img/before-41-capture-reminder-list-step.png" alt=""><figcaption>Capture — list step</figcaption></figure>
+    <figure><img class="shot" src="img/before-42-capture-reminder-date-step.png" alt=""><figcaption>Capture — date step</figcaption></figure>
+    <figure><img class="shot" src="img/before-50-pile.png" alt=""><figcaption>Pile</figcaption></figure>
+    <figure><img class="shot" src="img/before-01-home-landscape.png" alt=""><figcaption>Home — landscape</figcaption></figure>
+    <figure><img class="shot" src="img/before-61-results-landscape.png" alt=""><figcaption>Results — landscape</figcaption></figure>
+    <figure><img class="shot" src="img/before-62-settings-landscape.png" alt=""><figcaption>Settings — landscape</figcaption></figure>
+    <figure><img class="shot" src="img/before-63-capture-landscape.png" alt=""><figcaption>Capture — landscape</figcaption></figure>
+    <figure><img class="shot" src="img/before-60-home-landscape.png" alt=""><figcaption>Home populated — landscape</figcaption></figure>
+  </div>
+  <p class="note">After-shots for every walked screen exist as <code>img/after-*.png</code>;
+  §4 shows the pairs where the prototype changes anything. Dark-mode and Split-View passes
+  are listed in the roadmap, not yet captured.</p>
+</div>
+
+<h2 id="sources">8 · Sources</h2>
+<div class="card">
+  <ul style="font-size:14px">
+    <li>HIG: <a href="https://developer.apple.com/design/human-interface-guidelines/layout">Layout</a> ·
+        <a href="https://developer.apple.com/design/human-interface-guidelines/designing-for-ipados">Designing for iPadOS</a> ·
+        <a href="https://developer.apple.com/design/human-interface-guidelines/multitasking">Multitasking</a> ·
+        <a href="https://developer.apple.com/design/human-interface-guidelines/sheets">Sheets</a> ·
+        <a href="https://developer.apple.com/design/human-interface-guidelines/popovers">Popovers</a> ·
+        <a href="https://developer.apple.com/design/human-interface-guidelines/tab-bars">Tab bars</a> ·
+        <a href="https://developer.apple.com/design/human-interface-guidelines/keyboards">Keyboards</a> ·
+        <a href="https://developer.apple.com/design/human-interface-guidelines/the-menu-bar">The menu bar</a> ·
+        <a href="https://developer.apple.com/design/human-interface-guidelines/pointing-devices">Pointing devices</a> ·
+        <a href="https://developer.apple.com/design/human-interface-guidelines/typography">Typography</a></li>
+    <li>SwiftUI docs: <a href="https://developer.apple.com/documentation/swiftui/environmentvalues/horizontalsizeclass">horizontalSizeClass</a> ·
+        <a href="https://developer.apple.com/documentation/swiftui/navigationsplitview">NavigationSplitView</a> ·
+        <a href="https://developer.apple.com/documentation/swiftui/presentationsizing">presentationSizing</a> ·
+        <a href="https://developer.apple.com/documentation/swiftui/lazyvgrid">LazyVGrid</a> ·
+        <a href="https://developer.apple.com/documentation/swiftui/view/hovereffect(_:)">hoverEffect</a> ·
+        <a href="https://developer.apple.com/documentation/swiftui/scene/windowresizability(_:)">windowResizability</a> ·
+        <a href="https://developer.apple.com/documentation/swiftui/view/keyboardshortcut(_:modifiers:)">keyboardShortcut</a></li>
+    <li>WWDC: <a href="https://developer.apple.com/videos/play/wwdc2024/10147/">24 · Elevate your tab and sidebar experience in iPadOS</a> ·
+        <a href="https://developer.apple.com/videos/play/wwdc2025/208/">25 · Elevate the design of your iPad app</a> ·
+        <a href="https://developer.apple.com/videos/play/wwdc2025/256/">25 · What's new in SwiftUI</a></li>
+    <li>Platform: <a href="https://developer.apple.com/documentation/technologyoverviews/adopting-liquid-glass">Adopting Liquid Glass</a> ·
+        <a href="https://developer.apple.com/documentation/bundleresources/information-property-list/uirequiresfullscreen">UIRequiresFullScreen (deprecated)</a> ·
+        <a href="https://developer.apple.com/forums/thread/718535">keyboardLayoutGuide / followsUndockedKeyboard</a></li>
+  </ul>
+  <p class="note">Audit run 2026-08-18 · iPad Pro 13″ (M5) simulator · iPadOS 26.3 ·
+  branch <code>prototype/ipad-ui-audit</code> · driver test
+  <code>App/QuickieUITests/IPadExplorerUITests.swift</code>.</p>
+</div>
+
+</div>
+</body>
+</html>

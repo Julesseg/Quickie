@@ -811,7 +811,9 @@ struct CaptureBreadcrumbBar: View {
             }
             BreadcrumbSteps(model: model)
         }
-        .frame(maxWidth: .infinity, alignment: .leading)
+        // PROTOTYPE (iPad UI audit): crumbs clamp to the readable column; the
+        // progressive-blur band behind them still spans the full window width.
+        .commandColumn()
         .padding(.horizontal, 16)
         .padding(.bottom, 16)
         // Span the status bar as one cohesive frame so the bar slides in and out

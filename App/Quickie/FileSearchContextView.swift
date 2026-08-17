@@ -54,7 +54,9 @@ struct FileSearchBreadcrumbBar: View {
                 Spacer(minLength: 0)
             }
         }
-        .frame(maxWidth: .infinity, alignment: .leading)
+        // PROTOTYPE (iPad UI audit): crumbs clamp to the readable column; the
+        // blur band behind them still spans the full window width.
+        .commandColumn()
         .padding(.horizontal, 16)
         .padding(.bottom, 16)
         .statusBarBleed(topPadding: 6) { FileSearchBlur() }
@@ -147,7 +149,9 @@ struct FileSearchResultList: View {
                             .transition(rowMotion.insertionTransition)
                         }
                     }
-                    .frame(maxWidth: .infinity)
+                    // PROTOTYPE (iPad UI audit): file rows share the readable
+                    // command column on regular-width windows.
+                    .commandColumn()
                 }
                 .frame(maxWidth: .infinity, minHeight: viewport.size.height, alignment: .bottom)
             }

@@ -1,0 +1,4 @@
+# Full-resolution audit screenshots stay local; the report references the
+# downscaled copies in img/.
+screens/
+screens-proto/

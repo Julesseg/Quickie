@@ -814,6 +814,9 @@ struct RootView: View {
                     }
                 }
                 }
+                // PROTOTYPE (iPad UI audit): the bar reads as a command palette,
+                // not a full-bleed toolbar, on regular-width windows.
+                .commandColumn()
                 // Reserve the held keyboard height so the bar floats where the
                 // keyboard's top is — and stays there when the keyboard drops. Zero
                 // when a page is pushed (the bar is gone), so no phantom inset.
