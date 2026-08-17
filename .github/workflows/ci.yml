@@ -75,6 +75,12 @@ jobs:
   # into the bundle, and each shard runs `-only-testing:` filters, so a suite
   # this planner can't address would otherwise run in NO shard, silently.
   # See docs/adr/0026-shard-xcuitest-across-runners.md for the full rationale.
+  #
+  # Every shard is planned once per device family: Quickie ships universal
+  # (TARGETED_DEVICE_FAMILY = "1,2") and the two families do not lay the app out
+  # the same — an iPad is regular-width where an iPhone in portrait is compact,
+  # so a sheet, a split view or a shelf that never fits on one can be the wrong
+  # shape on the other. See docs/adr/0038-run-the-ui-suite-on-both-families.md.
   ui-test-plan:
     name: Plan UI test shards
     runs-on: ubuntu-24.04
@@ -86,9 +92,17 @@ jobs:
         name: Partition test classes into shards
         run: |
           set -euo pipefail
-          # Bump SHARD_COUNT to trade billed macOS minutes for wall-clock: each
-          # shard is a separate runner doing its own build + its slice of the suite.
-          SHARD_COUNT=4
+          # SHARD_COUNT trades billed macOS minutes for wall-clock: each shard is a
+          # separate runner doing its own build + its slice of the suite. It is per
+          # *device family*, so the matrix is SHARD_COUNT × 2 runners.
+          #
+          # 2 — because only ~4 macOS jobs actually run at once here (the account's
+          # cap, less the slot the Release workflow's build job takes on the same
+          # PR). Past that, extra shards do not run in parallel: they queue into a
+          # second wave and each still pays its own ~6 min build, so the gate gets
+          # *slower* and more expensive at the same time. Raise this only alongside
+          # a higher concurrent-macOS budget.
+          SHARD_COUNT=2
           # Balance shards by *test-method* count, not class count: a class holds
           # anywhere from 1 to 8 `func test`s, so round-robining classes lands
           # most of the work on one runner and the wall clock barely moves. Instead
@@ -134,24 +148,31 @@ jobs:
               b = min(buckets, key=lambda x: x["tests"])
               b["tests"] += count
               b["classes"].append(cls)
+          # The same split, run once per device family. `device` is both the
+          # check's name and the prefix its simulator is resolved by — every
+          # simulator in a family is named after it.
+          devices = ["iPhone", "iPad"]
           include = []
-          for idx, b in enumerate(buckets, start=1):
-              if not b["classes"]:
-                  continue
-              only = " ".join(f"-only-testing:QuickieUITests/{c}" for c in b["classes"])
-              include.append({"shard": str(idx), "of": str(n), "only": only, "tests": str(b["tests"])})
+          for device in devices:
+              for idx, b in enumerate(buckets, start=1):
+                  if not b["classes"]:
+                      continue
+                  only = " ".join(f"-only-testing:QuickieUITests/{c}" for c in b["classes"])
+                  include.append({"device": device, "shard": str(idx), "of": str(n), "only": only, "tests": str(b["tests"])})
           for e in include:
-              sys.stderr.write(f"shard {e['shard']}/{e['of']}: {e['tests']} tests — {e['only']}\n")
+              sys.stderr.write(f"{e['device']} shard {e['shard']}/{e['of']}: {e['tests']} tests — {e['only']}\n")
           print("matrix=" + json.dumps({"include": include}))
           PY
 
   app-ui-tests:
-    name: App · XCUITest (macOS) [shard ${{ matrix.shard }}/${{ matrix.of }}]
+    name: App · XCUITest (${{ matrix.device }}) [shard ${{ matrix.shard }}/${{ matrix.of }}]
     needs: ui-test-plan
     runs-on: macos-15
     strategy:
       # Don't cancel the other shards when one fails — a red shard shouldn't hide
       # whether the rest are green, and it keeps each shard's crash log available.
+      # That covers the families too: an iPad-only regression still reports every
+      # iPhone shard rather than cancelling it.
       fail-fast: false
       matrix: ${{ fromJSON(needs.ui-test-plan.outputs.matrix) }}
     steps:
@@ -165,12 +186,28 @@ jobs:
       - name: Toolchain versions
         run: xcodebuild -version
 
-      - name: Resolve an available iPhone simulator
+      - name: Resolve an available ${{ matrix.device }} simulator
         id: sim
+        env:
+          DEVICE_PREFIX: ${{ matrix.device }}
         run: |
           set -euo pipefail
+          # Last by name within the family, which is how the iPhone leg has
+          # always landed on an iPhone SE (and the iPad leg lands on an iPad
+          # mini): the tightest layout the family has, where a row below the
+          # fold or a clipped sheet shows up first. Fail loudly rather than
+          # falling back to a hardcoded name — a leg that silently ran the
+          # other family's simulator would be a green check for nothing.
           NAME=$(xcrun simctl list devices available --json \
-            | python3 -c "import json,sys; d=json.load(sys.stdin)['devices']; names=[x['name'] for rt in d for x in d[rt] if x['name'].startswith('iPhone')]; print(sorted(names)[-1] if names else 'iPhone 16')")
+            | python3 -c "
+          import json, os, sys
+          prefix = os.environ['DEVICE_PREFIX']
+          d = json.load(sys.stdin)['devices']
+          names = [x['name'] for rt in d for x in d[rt] if x['name'].startswith(prefix)]
+          if not names:
+              sys.exit(f'::error::no {prefix} simulator is available on this runner')
+          print(sorted(names)[-1])
+          ")
           echo "Using simulator: $NAME"
           echo "name=$NAME" >> "$GITHUB_OUTPUT"
 
@@ -192,7 +229,7 @@ jobs:
             -project Quickie.xcodeproj \
             -scheme Quickie \
             -destination "platform=iOS Simulator,name=${{ steps.sim.outputs.name }},OS=latest" \
-            -resultBundlePath "TestResults-shard-${{ matrix.shard }}.xcresult" \
+            -resultBundlePath "TestResults-${{ matrix.device }}-shard-${{ matrix.shard }}.xcresult" \
             -retry-tests-on-failure \
             -test-iterations 3 \
             ${{ matrix.only }} \
@@ -223,15 +260,18 @@ jobs:
         if: ${{ !cancelled() }}
         uses: actions/upload-artifact@v4
         with:
-          name: ui-test-results-shard-${{ matrix.shard }}
-          path: App/TestResults-shard-${{ matrix.shard }}.xcresult
+          # Per family as well as per shard — upload-artifact@v4 rejects a name a
+          # sibling job in the same run already claimed.
+          name: ui-test-results-${{ matrix.device }}-shard-${{ matrix.shard }}
+          path: App/TestResults-${{ matrix.device }}-shard-${{ matrix.shard }}.xcresult
           if-no-files-found: ignore
 
   # Single stable check that branch protection can require, regardless of how
   # many shards exist or how they're named. This carries the exact name the
   # serial job used to have ("App · XCUITest (macOS)"), so the required-check
-  # configuration keeps working across shard-count changes — the check-name
-  # churn is what bit the previous sharding attempt (see PR #88).
+  # configuration keeps working across shard-count changes — and across the
+  # device families, which are shards of the same matrix. The check-name churn
+  # is what bit the previous sharding attempt (see PR #88).
   app-ui-tests-gate:
     name: App · XCUITest (macOS)
     needs: [ui-test-plan, app-ui-tests]

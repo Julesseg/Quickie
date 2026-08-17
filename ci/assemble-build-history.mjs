@@ -209,7 +209,7 @@ const slotPage = (slot, isLatest) => `${pageHead(slot.title)}
     <p class="sub">PR #${slot.pr} · ${escapeHtml(slot.sha)} · ${escapeHtml(formatTime(slot.time))}</p>
     <a class="btn" href="${installLink(slot.pr)}">Install</a>
     <p class="slot-pr"><a class="pr-link" href="${prUrl(slot.pr)}">View PR #${slot.pr} on GitHub →</a></p>
-    <p class="hint">Open this page in Safari on your iPhone, then tap Install.</p>
+    <p class="hint">Open this page in Safari on your iPhone or iPad, then tap Install.</p>
   </main>
 ${ENHANCE_SCRIPT}
 </body>
@@ -231,7 +231,7 @@ ${slots
   )
   .join("\n")}
   </ul>
-  <p class="hint">Open this page in Safari on your iPhone, then tap Install on the build you want.</p>
+  <p class="hint">Open this page in Safari on your iPhone or iPad, then tap Install on the build you want.</p>
 ${ENHANCE_SCRIPT}
 </body>
 </html>

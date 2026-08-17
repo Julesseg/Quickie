@@ -115,6 +115,21 @@ struct InputBar: View {
         // `minHeight` (not a fixed height) so the box can grow upward past the
         // one-line capsule as lines are added.
         .frame(minHeight: Self.barHeight)
+        // The whole capsule is the field. A `TextField(axis: .vertical)` only
+        // hit-tests around its *text*, not across its layout width — invisible on a
+        // narrow iPhone, where a one-character query still leaves the centre within
+        // reach of the glyphs, and plainly wrong on an iPad, where the bar is wide
+        // enough that a tap in the empty space beside "s" landed on nothing at all
+        // and the keyboard never came back (found by the iPad CI leg, ADR 0038).
+        // A backing shape catches exactly those taps: it sits *behind* the row, so
+        // the text view still takes the ones over the text (placing a caret) and the
+        // clear button still takes its own — only what neither wanted falls through
+        // to here, which is the definition of "empty space in the bar".
+        .background {
+            Color.clear
+                .contentShape(Rectangle())
+                .onTapGesture { focused.wrappedValue = true }
+        }
         // Scoped to the offer flipping, so the button's arrival/exit and the width
         // the field gives up for it are one gesture — and every other change here
         // (a keystroke, a wrap) still applies instantly.

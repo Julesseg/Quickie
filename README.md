@@ -130,8 +130,11 @@ your own needed). Docs-only changes skip CI entirely.
   `xcodebuild test` for the `Quickie` scheme on an iOS simulator. The suite is
   **sharded across several macOS runners** (ADR 0026): a plan job partitions the
   `*UITests` classes from source — so a newly added suite can never silently run
-  in no shard — and a final gate job checks that every shard passed. Failed tests
-  are retried up to three times to absorb simulator launch flakes.
+  in no shard — and a final gate job checks that every shard passed. Every shard
+  runs **once per device family**, against an iPhone and an iPad simulator
+  (ADR 0038), because Quickie ships universal and the two families lay it out
+  differently. Failed tests are retried up to three times to absorb simulator
+  launch flakes.
 
 > **UI tests run in CI only — by design.** XCUITest needs an iOS simulator that
 > exists only on macOS, so the `QuickieUITests` target runs on the hosted macOS
@@ -144,7 +147,8 @@ your own needed). Docs-only changes skip CI entirely.
 
 `.github/workflows/release.yml` additionally builds a **signed, installable
 `.ipa`** per PR (on the hosted `macos-15` runner) and publishes it to a GitHub
-Pages site, so you can install any PR's build on your iPhone from Safari. See
+Pages site, so you can install any PR's build on your iPhone or iPad from
+Safari. See
 [`ci/README.md`](ci/README.md) for the one-time signing secrets / Pages setup.
 
 ## Providers

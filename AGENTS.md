@@ -86,7 +86,8 @@ it is for.
 #### CI is the canonical UI gate (background, not a decision to revisit)
 
 The `App · XCUITest (macOS)` job in `.github/workflows/ci.yml` is the canonical,
-reproducible gate for the `QuickieUITests` suite, and it runs on every PR. You
+reproducible gate for the `QuickieUITests` suite, and it runs on every PR — once
+per device family, against an iPhone and an iPad simulator (ADR 0038). You
 **never** need to run the UI suite locally as a precondition for implementing an
 issue. This is the settled, correct setup — do not treat it as a gap to fix.
 

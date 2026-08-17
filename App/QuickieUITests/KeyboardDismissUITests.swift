@@ -100,8 +100,15 @@ final class KeyboardDismissUITests: XCTestCase {
             "the results are preserved after dismissing the keyboard"
         )
 
-        // Tapping the input field re-summons the keyboard.
-        input.tap()
+        // Tapping the input field re-summons the keyboard — anywhere on it, not
+        // only over the glyphs. Tap the *trailing empty space* (the clear button
+        // sits outside the field's own frame, so this is still the field): a
+        // `TextField(axis: .vertical)` only hit-tests around its text, which the
+        // iPad leg caught the first time it ran — a tap beside a one-character
+        // query landed on nothing and the keyboard never came back. The bar's
+        // backing shape is what makes this point the field too; tapping here is
+        // what keeps that from being quietly removed.
+        input.coordinate(withNormalizedOffset: CGVector(dx: 0.9, dy: 0.5)).tap()
         XCTAssertTrue(
             app.keyboards.firstMatch.waitForExistence(timeout: 10),
             "tapping the input field re-summons the keyboard"
