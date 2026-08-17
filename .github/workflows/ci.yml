@@ -92,10 +92,17 @@ jobs:
         name: Partition test classes into shards
         run: |
           set -euo pipefail
-          # Bump SHARD_COUNT to trade billed macOS minutes for wall-clock: each
-          # shard is a separate runner doing its own build + its slice of the suite.
-          # It is per *device family*, so the runner count is SHARD_COUNT × 2.
-          SHARD_COUNT=4
+          # SHARD_COUNT trades billed macOS minutes for wall-clock: each shard is a
+          # separate runner doing its own build + its slice of the suite. It is per
+          # *device family*, so the matrix is SHARD_COUNT × 2 runners.
+          #
+          # 2 — because only ~4 macOS jobs actually run at once here (the account's
+          # cap, less the slot the Release workflow's build job takes on the same
+          # PR). Past that, extra shards do not run in parallel: they queue into a
+          # second wave and each still pays its own ~6 min build, so the gate gets
+          # *slower* and more expensive at the same time. Raise this only alongside
+          # a higher concurrent-macOS budget.
+          SHARD_COUNT=2
           # Balance shards by *test-method* count, not class count: a class holds
           # anywhere from 1 to 8 `func test`s, so round-robining classes lands
           # most of the work on one runner and the wall clock barely moves. Instead

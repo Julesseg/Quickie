@@ -51,11 +51,18 @@ loudly** when the family has no simulator on the runner, rather than falling
 back to a hardcoded `iPhone 16`: a leg that silently ran the other family's
 simulator would be a green check for nothing.
 
-The cost is the honest one: `SHARD_COUNT` macOS runners become
-`SHARD_COUNT × 2`, and where fewer macOS jobs can run concurrently than the
-matrix has entries, the shards run in two waves and the UI gate's wall clock
-grows accordingly. Runner minutes are free on this public repo (ADR 0026), so
-wall clock is the currency being spent, and `SHARD_COUNT` stays the one knob.
+**The matrix is sized to the concurrency cap, not to the shard count we would
+like.** Doubling the families doubles the matrix, so `SHARD_COUNT` drops from
+4 to 2 and the gate stays at four macOS legs. Measured on this repo's first
+two-family run: only ~4 macOS jobs run at once (the account's cap, less the
+slot the `Release` workflow's build job takes on the same PR), so 8 legs
+queued into two waves — and each late leg still paid its own ~6 min build. At
+a fixed cap of *k* concurrent runners, the wall clock is roughly
+`total-test-time / k + build`, and every shard past *k* adds a build to that
+sum without adding parallelism. Four legs of ~58 tests therefore finish
+*sooner* than eight legs of ~29, and bill four builds instead of eight.
+`SHARD_COUNT` stays the one knob — raise it when the concurrent-macOS budget
+rises, not before.
 
 ## Considered options
 
@@ -63,10 +70,11 @@ wall clock is the currency being spent, and `SHARD_COUNT` stays the one knob.
   layout-sensitive is precisely what nobody can know before the failure. Any
   hand-kept list rots exactly the way a hand-kept shard list does — the
   failure mode ADR 0026 built the source-derived planner to make impossible.
-- **Hold the runner budget flat by halving the per-family shard count.** Same
-  total work in half the runners: identical billed minutes, worse wall clock
-  per shard, and an extra knob to reason about. If the trade is wanted, it is
-  already available as `SHARD_COUNT`.
+- **Keep `SHARD_COUNT` at 4 and let the eight legs queue.** Tried first, and
+  measured: four legs started, four waited. Finer shards buy nothing past the
+  concurrency cap — the queued half arrives no earlier and each pays a second
+  build — so this is slower *and* dearer than the four legs above. The
+  per-family shard count is only worth raising with the cap.
 - **One leg, on an iPad only.** The iPhone is the primary target and carries
   the compact-width behaviors — dropping it to buy the iPad trades one blind
   spot for a worse one.
