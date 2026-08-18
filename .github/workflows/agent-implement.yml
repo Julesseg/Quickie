@@ -1,11 +1,11 @@
-name: Agent implement (Paseo)
+name: Agent implement (T3 Code)
 
 run-name: "Agent implement: issue #${{ inputs.issue }}"
 
-# Spawns a detached Paseo agent session on the self-hosted Mac runner to
-# implement one issue. Dispatched by unblock-dispatch.yml; can also be run
-# manually from the Actions tab for any issue number.
-# See docs/agents/auto-dispatch.md for the runner + Paseo setup.
+# Spawns a T3 Code agent session on the self-hosted Mac runner to implement one
+# issue. Dispatched by unblock-dispatch.yml; can also be run manually from the
+# Actions tab for any issue number.
+# See docs/agents/auto-dispatch.md for the runner + T3 Code setup.
 
 on:
   workflow_dispatch:
@@ -22,9 +22,10 @@ jobs:
     runs-on: [self-hosted, macOS]
     timeout-minutes: 15
     steps:
-      - name: Spawn detached Paseo session
+      - name: Spawn a T3 Code session
         env:
           ISSUE: ${{ inputs.issue }}
+          RUN_NUMBER: ${{ github.run_number }}
           PROJECT_DIR: ${{ vars.PASEO_PROJECT_DIR }}
           # Optional repo Actions variables; the defaults below apply when unset.
           PASEO_MODEL: ${{ vars.PASEO_MODEL }}
@@ -35,51 +36,239 @@ jobs:
           # Runner services start with a minimal PATH; include the usual
           # CLI install locations.
           export PATH="$PATH:/opt/homebrew/bin:/usr/local/bin:$HOME/.local/bin"
-          command -v paseo >/dev/null || { echo "::error::paseo CLI not found on the runner's PATH" >&2; exit 1; }
+
           if [ -z "${PROJECT_DIR:-}" ]; then
             echo "::error::Set the PASEO_PROJECT_DIR repository Actions variable to the Quickie checkout path on this Mac" >&2
             exit 1
           fi
 
-          # Pinned rather than left to the Paseo daemon's defaults, which move
-          # as new models ship. Override per-repo with the PASEO_MODEL /
-          # PASEO_THINKING Actions variables.
+          # T3 Code's server runs inside the desktop app, which records its live
+          # address here on startup. No file, or nothing answering, means the app
+          # is not running: fail loudly rather than dispatch into the void.
+          T3_HOME="${T3CODE_HOME:-$HOME/.t3}"
+          RUNTIME_FILE="$T3_HOME/userdata/server-runtime.json"
+          if [ ! -f "$RUNTIME_FILE" ]; then
+            echo "::error::No T3 Code server runtime at $RUNTIME_FILE - is the T3 Code app running on this Mac?" >&2
+            exit 1
+          fi
+          ORIGIN="$(python3 -c 'import json,sys; print(json.load(open(sys.argv[1]))["origin"])' "$RUNTIME_FILE")"
+          if ! curl -sf -o /dev/null "$ORIGIN/api/health"; then
+            echo "::error::T3 Code server at $ORIGIN is not answering - the app records its address on startup but is not running now" >&2
+            exit 1
+          fi
+
+          # Pin the CLI to the running server's version: it mints the token by
+          # reading the state directory the app owns, and a mismatched build has
+          # no reason to agree about that format.
+          SERVER_VERSION="$(curl -sf "$ORIGIN/.well-known/t3/environment" | python3 -c 'import json,sys; print(json.load(sys.stdin)["serverVersion"])')"
+          if command -v t3 >/dev/null; then
+            t3_cli() { t3 "$@"; }
+          elif command -v npx >/dev/null; then
+            # Slower on a cold npm cache; `npm i -g t3` on the runner skips it.
+            t3_cli() { npx -y "t3@${SERVER_VERSION}" "$@"; }
+          else
+            echo "::error::Neither the t3 CLI nor npx is on the runner's PATH; install Node and run \`npm i -g t3\`" >&2
+            exit 1
+          fi
+
+          # Minted per run and short-lived: the CLI signs it locally with the
+          # server's own key, so no long-lived credential has to live in a repo
+          # secret. --base-dir is explicit because the CLI otherwise picks up a
+          # worktree-local .t3 when it runs inside a worktree.
+          TOKEN="$(t3_cli auth session issue --token-only --ttl 30m \
+            --label "GitHub Actions: issue #${ISSUE}" \
+            --base-dir "$T3_HOME" 2>/dev/null | grep -v '^$' | tail -n 1 || true)"
+          if [ -z "${TOKEN:-}" ]; then
+            echo "::error::t3 auth session issue printed no token" >&2
+            exit 1
+          fi
+          # Nothing below echoes it, but keep it out of the log if anything ever does.
+          echo "::add-mask::$TOKEN"
+
+          # Pinned rather than left to T3 Code's own defaults, which move as new
+          # models ship. Override per-repo with the PASEO_MODEL / PASEO_THINKING
+          # Actions variables.
           export MODEL="${PASEO_MODEL:-claude-opus-4-8}"
           export THINKING="${PASEO_THINKING:-high}"
 
-          # Nobody is around to answer a permission prompt in a detached CI
-          # session, so the default mode ("Always Ask") would just stall until
-          # the daemon times it out. Bypass instead. Unlike --model/--thinking,
-          # `paseo run` rejects an unknown --mode outright, so this needs no
-          # validation below.
-          MODE="${PASEO_MODE:-bypassPermissions}"
+          # Nobody is around to answer a permission prompt in a CI-spawned
+          # session, so an approval-gated mode would just stall. `full-access` is
+          # T3 Code's name for what Paseo called bypassPermissions.
+          export MODE="${PASEO_MODE:-full-access}"
 
-          # `paseo run` accepts an unknown --model/--thinking without complaint
-          # and spawns the session anyway, so a typo'd variable would silently
-          # run on the wrong model. Check both against the provider first.
-          paseo provider models claude --json | python3 -c '
-          import json, os, sys
-          models = json.load(sys.stdin)
-          model, thinking = os.environ["MODEL"], os.environ["THINKING"]
-          match = next((m for m in models if m["id"] == model), None)
-          if match is None:
-              sys.exit("::error::PASEO_MODEL %r is not a Claude model id. Available: %s"
-                       % (model, ", ".join(m["id"] for m in models)))
-          options = match.get("thinkingOptionIds") or []
-          if thinking not in options:
-              sys.exit("::error::PASEO_THINKING %r is not valid for %s. Available: %s"
-                       % (thinking, model, ", ".join(options)))
-          '
-          echo "Spawning session for issue #${ISSUE} on ${MODEL} at ${THINKING} reasoning effort in ${MODE} mode"
+          export ORIGIN TOKEN ISSUE PROJECT_DIR RUN_NUMBER
+          export WORKTREES_DIR="$T3_HOME/worktrees"
+          python3 - <<'PY'
+          import json, os, subprocess, sys, time, urllib.error, urllib.request, uuid
+          from datetime import datetime, timezone
 
-          # --detach: the session runs under the Paseo daemon, so it outlives
-          # this job; progress is visible in the Paseo apps. The /implement
-          # skill in the repo config carries the full workflow instructions.
-          paseo run --detach \
-            --provider claude \
-            --model "$MODEL" \
-            --thinking "$THINKING" \
-            --mode "$MODE" \
-            --cwd "$PROJECT_DIR" \
-            --worktree "claude/issue-${ISSUE}" \
-            "/implement issue #${ISSUE}"
+          ORIGIN = os.environ["ORIGIN"].rstrip("/")
+          TOKEN = os.environ["TOKEN"]
+          ISSUE = os.environ["ISSUE"]
+          PROJECT_DIR = os.path.realpath(os.environ["PROJECT_DIR"])
+          WORKTREES_DIR = os.environ["WORKTREES_DIR"]
+          PROMPT = f"/implement issue #{ISSUE}"
+
+          # T3 Code's runtime modes, plus the Paseo spellings the PASEO_MODE variable may
+          # still hold, so an existing repo needs no edit.
+          MODES = {
+              "full-access": "full-access",
+              "auto": "auto",
+              "auto-accept-edits": "auto-accept-edits",
+              "approval-required": "approval-required",
+              "bypasspermissions": "full-access",
+              "acceptedits": "auto-accept-edits",
+              "default": "approval-required",
+          }
+          mode = MODES.get(os.environ["MODE"].strip().lower())
+          if mode is None:
+              sys.exit("::error::PASEO_MODE %r is not a runtime mode. Available: %s"
+                       % (os.environ["MODE"], ", ".join(sorted(set(MODES.values())))))
+
+          model_selection = {
+              "instanceId": "claudeAgent",
+              "model": os.environ["MODEL"],
+              "options": [{"id": "effort", "value": os.environ["THINKING"]}],
+          }
+
+
+          def api(method, path, payload=None):
+              request = urllib.request.Request(ORIGIN + path, method=method)
+              request.add_header("Authorization", "Bearer " + TOKEN)
+              body = None
+              if payload is not None:
+                  body = json.dumps(payload).encode()
+                  request.add_header("Content-Type", "application/json")
+              try:
+                  with urllib.request.urlopen(request, body, timeout=60) as response:
+                      raw = response.read().decode()
+              except urllib.error.HTTPError as error:
+                  raise SystemExit("::error::%s %s failed (%s): %s"
+                                   % (method, path, error.code, error.read().decode()[:500]))
+              return json.loads(raw) if raw else None
+
+
+          def dispatch(command):
+              return api("POST", "/api/orchestration/dispatch", command)
+
+
+          def now():
+              return datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")
+
+
+          def git(*args, check=False):
+              result = subprocess.run(("git", "-C", PROJECT_DIR) + args,
+                                      capture_output=True, text=True)
+              if check and result.returncode != 0:
+                  raise SystemExit("::error::git %s failed: %s"
+                                   % (" ".join(args), (result.stderr or result.stdout).strip()))
+              return result.stdout.strip()
+
+
+          snapshot = api("GET", "/api/orchestration/snapshot")
+          project = next((p for p in snapshot["projects"]
+                          if os.path.realpath(p["workspaceRoot"]) == PROJECT_DIR), None)
+          if project is None:
+              project_id = str(uuid.uuid4())
+              dispatch({
+                  "type": "project.create",
+                  "commandId": str(uuid.uuid4()),
+                  "projectId": project_id,
+                  "title": os.path.basename(PROJECT_DIR),
+                  "workspaceRoot": PROJECT_DIR,
+                  "createdAt": now(),
+              })
+              print(f"Registered {PROJECT_DIR} as a T3 Code project")
+          else:
+              project_id = project["id"]
+
+          # The session works in its own worktree so parallel issues cannot clobber one
+          # checkout, cut off origin's default branch so it never inherits whatever the
+          # runner's clone happens to have checked out. A re-dispatch (a session that died
+          # holding the issue) would collide with the branch its predecessor left behind,
+          # so fall back to a run-scoped name instead of failing the spawn.
+          git("fetch", "--quiet", "origin", check=True)
+          head = git("symbolic-ref", "--short", "refs/remotes/origin/HEAD")
+          base_branch = head.split("/")[-1] if head else "main"
+          branch = f"claude/issue-{ISSUE}"
+          if (git("rev-parse", "--verify", "--quiet", f"refs/heads/{branch}")
+                  or git("rev-parse", "--verify", "--quiet", f"refs/remotes/origin/{branch}")):
+              branch = f"{branch}-run{os.environ['RUN_NUMBER']}"
+              print(f"::notice::claude/issue-{ISSUE} already exists; branching {branch} instead")
+
+          # Same layout the app uses for the worktrees it cuts itself, so a CI-spawned
+          # session is indistinguishable from one started by hand.
+          worktree_path = os.path.join(WORKTREES_DIR, os.path.basename(PROJECT_DIR),
+                                       branch.replace("/", "-"))
+          git("worktree", "add", "-b", branch, worktree_path, f"origin/{base_branch}", check=True)
+
+          thread_id = str(uuid.uuid4())
+          title = f"Issue #{ISSUE}"
+          print(f"Spawning session for issue #{ISSUE} on {model_selection['model']} at "
+                f"{os.environ['THINKING']} reasoning effort in {mode} mode, on {branch}")
+
+          # Two commands rather than one: the single-shot bootstrap form of
+          # thread.turn.start is only wired up on the app's WebSocket channel, so over
+          # HTTP the thread has to exist before a turn can start in it.
+          try:
+              dispatch({
+                  "type": "thread.create",
+                  "commandId": str(uuid.uuid4()),
+                  "threadId": thread_id,
+                  "projectId": project_id,
+                  "title": title,
+                  "modelSelection": model_selection,
+                  "runtimeMode": mode,
+                  "interactionMode": "default",
+                  "branch": branch,
+                  "worktreePath": worktree_path,
+                  "createdAt": now(),
+              })
+              # The prompt invokes the /implement skill, which carries the full workflow
+              # instructions — implement per AGENTS.md, push, open a PR that closes the
+              # issue. The session belongs to the T3 Code app, not to this job, so it
+              # outlives the run.
+              dispatch({
+                  "type": "thread.turn.start",
+                  "commandId": str(uuid.uuid4()),
+                  "threadId": thread_id,
+                  "message": {
+                      "messageId": f"user:{uuid.uuid4()}",
+                      "role": "user",
+                      "text": PROMPT,
+                      "attachments": [],
+                  },
+                  "modelSelection": model_selection,
+                  "titleSeed": title,
+                  "runtimeMode": mode,
+                  "interactionMode": "default",
+                  "createdAt": now(),
+              })
+          except SystemExit:
+              # Leave no half-spawned state behind: an abandoned worktree would push the
+              # retry onto a run-scoped branch for no reason.
+              git("worktree", "remove", "--force", worktree_path)
+              git("branch", "-D", branch)
+              raise
+
+          # Unlike `paseo run`, dispatching does not validate the model or the reasoning
+          # effort — an unknown one is accepted here and only fails when the provider
+          # session starts. Watch the session long enough to catch that, so a typo'd
+          # variable fails this run red instead of silently never implementing anything.
+          deadline = time.time() + 120
+          while time.time() < deadline:
+              time.sleep(5)
+              thread = api("GET", f"/api/orchestration/threads/{thread_id}")["thread"]
+              session = thread.get("session") or {}
+              status = session.get("status")
+              if status == "error":
+                  sys.exit("::error::The session failed to start: %s"
+                           % (session.get("lastError") or "no reason given"))
+              if status in ("running", "ready"):
+                  print(f"Session {status} in {worktree_path}")
+                  break
+          else:
+              print("::warning::The session has not started yet; it may still come up in the "
+                    "T3 Code app. If it never does, the dispatcher's `agent-dispatched` label "
+                    "keeps the slot held until it is removed by hand.")
+          PY
