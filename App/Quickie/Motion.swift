@@ -103,26 +103,4 @@ extension MotionPolicy {
     var hintDwellUnlessFrozen: Double? {
         MotionStyle.isInstantForUITesting ? nil : hintDwell
     }
-
-    /// How long a revealed [[Shelf]] title dwells before it fades on its own, or
-    /// `nil` when the reveal is **held** — the same App-edge fold as
-    /// `hintDwellUnlessFrozen`, under the same flag, for the same reason.
-    ///
-    /// Core's 2.5s self-dismiss is a clock XCUITest cannot beat: synthesizing the
-    /// long press, waiting for the app to idle, then snapshotting the accessibility
-    /// hierarchy costs about three seconds on a hosted runner, so the label has
-    /// already faded by the first existence check. It recognizes at the system's
-    /// 0.5s threshold and dies at press+3.0s; the CI runner's first look landed at
-    /// press+3.2s three attempts running. That is a race the suite loses whenever
-    /// the box is slow, which is what made the long-press test an intermittent
-    /// blocker.
-    ///
-    /// Held rather than lengthened: stretching the dwell would trade a flaky test
-    /// for a label that overstays on a real device, and the shipped value is Core's
-    /// call (`MotionPolicyTests` pins it). The reveal cannot linger into anything —
-    /// it is cleared when the action runs, it never takes hit-testing, and every
-    /// test relaunches the app.
-    var shelfTitleDwellUnlessHeld: Double? {
-        MotionStyle.isInstantForUITesting ? nil : shelfTitleDwell
-    }
 }

@@ -15,11 +15,13 @@ import QuickieCore
 /// scrolls", replacing the member cap and overflow menu the share sheet's app row
 /// doesn't have either.
 ///
-/// Because the buttons are icon-only, a **long press reveals the action's title** — the
-/// agreed disambiguation affordance for a glyph with no label (a design prototype
-/// settled icon-only circles over icon+label pills: labels don't fit four across at
-/// readable sizes). The title floats *over* the content above rather than pushing the
-/// row down, so revealing it never reflows the input or the result list.
+/// Because the buttons are icon-only, a **long press names the action** — the agreed
+/// disambiguation affordance for a glyph with no label (a design prototype settled
+/// icon-only circles over icon+label pills: labels don't fit four across at readable
+/// sizes). It names it in the *same* long-press menu every other Action surface carries
+/// (`resultContextMenu`), as the menu's non-action first row, rather than in a bespoke
+/// floating capsule on a bespoke gesture: one hold, one menu, and a Shelf button is no
+/// longer the one Action on screen you cannot Copy, Share, or Pin.
 struct FallbackShelfRow: View {
     /// The launcher's Shelf metrics — Core's own preset, so the sizing rule is tested
     /// against the numbers that ship. The one value passed in is the bar's height: the
@@ -33,24 +35,25 @@ struct FallbackShelfRow: View {
     /// Seeds-and-commits the typed query as this action's first Argument. The host
     /// routes it through the same run path a `.fallback` result row takes.
     let onRun: (Action) -> Void
+    /// Whether a member is pinned — drives its Pin/Unpin menu label, exactly as a
+    /// result row's does.
+    var isFavorite: (Action) -> Bool = { _ in false }
+    /// Whether a member can still be pinned (false once the Favorites cap is hit).
+    var canFavorite: (Action) -> Bool = { _ in true }
+    /// Toggles a member's Favorite pin.
+    var onToggleFavorite: (Action) -> Void = { _ in }
+    /// Runs a one-shot secondary action on a member (CONTEXT.md → Secondary action;
+    /// ADR 0017) — the same host handler the Result list's rows are given, so a
+    /// shelved action's verbs behave identically to the same action's in the list.
+    var onSecondaryAction: (Action, SecondaryActionKind) -> Void = { _, _ in }
 
     /// The row's own width, measured — the input to the peek sizing. Zero until the
     /// first layout pass, which Core reads as "unmeasured" and answers with the
     /// preferred diameter.
     @State private var rowWidth: CGFloat = 0
-    /// The member whose title a long press is currently revealing, if any.
-    @State private var revealedID: String?
-
-    @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     private var diameter: CGFloat {
         Self.layout.diameter(availableWidth: rowWidth, memberCount: members.count)
-    }
-
-    /// The revealed title, resolved from the live members so a shelf edit (or a member
-    /// losing eligibility) can't leave a stale label floating.
-    private var revealedTitle: String? {
-        members.first { $0.id == revealedID }?.title
     }
 
     var body: some View {
@@ -76,25 +79,7 @@ struct FallbackShelfRow: View {
             .onGeometryChange(for: CGFloat.self) { $0.size.width } action: { rowWidth = $0 }
         }
         .frame(height: diameter)
-        .overlay(alignment: .top) { revealedTitleLabel }
-        // Both the curve and the dwell come from Core's budget (ADR 0034), never a
-        // hand-picked animation or a hand-rolled timer: `MotionStyle.animation` is what
-        // degrades the fade for Reduce Motion and drops it entirely under UI test
-        // (issue #79), exactly as every other animated surface degrades.
-        .animation(motion.style(for: .shelfTitleReveal).animation, value: revealedID)
-        // Hold the reveal long enough to read a title, then let it go on its own —
-        // there is nothing to dismiss it with, and no menu to escape from. Under UI
-        // test the dwell is `nil` and the reveal is held instead (see
-        // `shelfTitleDwellUnlessHeld`), so the assertion is not racing a timer.
-        .task(id: revealedID) {
-            guard revealedID != nil, let dwell = motion.shelfTitleDwellUnlessHeld else { return }
-            try? await Task.sleep(for: .seconds(dwell))
-            guard !Task.isCancelled else { return }
-            revealedID = nil
-        }
     }
-
-    private var motion: MotionPolicy { MotionPolicy(reduceMotion: reduceMotion) }
 
     /// How much of the action's kind hue the glass carries.
     ///
@@ -109,7 +94,50 @@ struct FallbackShelfRow: View {
     /// tinted glass in the app.
     private static let tintStrength = 0.4
 
-    /// One Shelf member: its glyph on a circle of glass tinted by the action's hue.
+    /// One Shelf member: a tap seeds-and-commits the query, a long press opens the
+    /// Action's own menu.
+    private func button(for action: Action) -> some View {
+        Button {
+            onRun(action)
+        } label: {
+            glyphCircle(for: action)
+        }
+        // Plain, like every other Action surface's button: the glass circle *is* the
+        // control's appearance, and a bordered style would draw a second one around it.
+        .buttonStyle(.plain)
+        // The one long-press menu every Action carries (CONTEXT.md → Secondary action;
+        // ADR 0017), with the action's **title** as its non-action first row: an
+        // icon-only button has nowhere else to say what it is, which is what the old
+        // bespoke reveal existed for. Nothing here is Shelf-specific — a shelved
+        // action's verbs, its Pin/Unpin item, and its cap hint are resolved exactly as
+        // the same action's are in the Result list, because they run through the same
+        // modifier. The system's own long press opens it, so there is no gesture to
+        // hand-roll and no risk of a hold also running the action: the menu
+        // interaction cancels the button's touch, as it does for every result row.
+        .resultContextMenu(
+            title: action.title,
+            secondaryActions: secondaryActions(for: action.content, includeDeeplink: !action.isSilentQueryCapture),
+            onSecondaryAction: { onSecondaryAction(action, $0) },
+            isFavorite: isFavorite(action),
+            pinnable: action.isFavoriteEligible,
+            canPin: canFavorite(action),
+            toggle: { onToggleFavorite(action) }
+        ) {
+            // The lifted preview: the pressed circle itself, so the button detaches
+            // as the round card it is rather than a squared-off snapshot of it.
+            glyphCircle(for: action)
+        }
+        // The label is an `Image`, so without this the button would announce its SF
+        // Symbol name (or nothing) to VoiceOver.
+        .accessibilityLabel(action.title)
+        // The action's own id, **prefixed**: a shelved action has vacated the bottom
+        // fallback region, so a test asserting it is gone from there must not be
+        // answered by its Shelf button wearing the same identifier.
+        .accessibilityIdentifier("shelf.\(action.id)")
+    }
+
+    /// The button's face — and its lifted preview: the action's glyph on a circle of
+    /// glass tinted by its hue.
     ///
     /// The tint comes from `resolvedActionTint` — the same rule the leading badge
     /// resolves, so a shelved action is recognisable as itself: a user-chosen
@@ -118,7 +146,7 @@ struct FallbackShelfRow: View {
     /// `tintStrength`, not a separately-tuned one, so the two surfaces can't drift.
     /// A Custom Action's chosen glyph (issue #163) overrides the kind's symbol,
     /// exactly as it does in a result row.
-    private func button(for action: Action) -> some View {
+    private func glyphCircle(for action: Action) -> some View {
         Image(systemName: action.glyph ?? action.kind.symbol)
             // Scaled from the diameter rather than a text style: the button itself is
             // sized by the peek rule, so a fixed glyph would swim in a wide row and
@@ -136,68 +164,5 @@ struct FallbackShelfRow: View {
                 in: Circle()
             )
             .contentShape(Circle())
-            // **Exclusive**, not simultaneous, and not a `Button` carrying a long press
-            // beside it: a SwiftUI button fires on touch-up however long the touch was
-            // held, so a reveal would run the action the moment the finger lifted — the
-            // exact outcome the affordance exists to prevent, since the whole point of
-            // reading the title is to discover this *isn't* the button you wanted.
-            // `ExclusiveGesture` makes the long press win once it recognizes, and a
-            // short press fails it so the tap runs as normal.
-            .gesture(
-                ExclusiveGesture(
-                    // The system's own long-press threshold, not a tuned one: holding
-                    // to see what something is should take exactly as long here as it
-                    // does everywhere else on the platform.
-                    LongPressGesture().onEnded { _ in revealedID = action.id },
-                    TapGesture().onEnded { run(action) }
-                )
-            )
-            // Hand-rolled tap handling means hand-rolled semantics: without these the
-            // row would be a picture, unreachable to VoiceOver and to `app.buttons` in
-            // the UI suite.
-            .accessibilityElement()
-            .accessibilityAddTraits(.isButton)
-            .accessibilityLabel(action.title)
-            .accessibilityAction { run(action) }
-            // The action's own id, **prefixed**: a shelved action has vacated the bottom
-            // fallback region, so a test asserting it is gone from there must not be
-            // answered by its Shelf button wearing the same identifier.
-            .accessibilityIdentifier("shelf.\(action.id)")
-    }
-
-    /// Seeds-and-commits the query as `action`'s first Argument, resolving any revealed
-    /// title along the way — whatever the long press was disambiguating has been decided.
-    private func run(_ action: Action) {
-        revealedID = nil
-        onRun(action)
-    }
-
-    /// The long-press disclosure: the action's title on a small glass capsule floating
-    /// above the row. An `overlay` with a top alignment guide, so it takes no layout
-    /// space — revealing a title must not shove the input (and the whole result list)
-    /// down by a line.
-    ///
-    /// It is centred over the row rather than pinned under the pressed button: only one
-    /// title is ever revealed, the pressed button is visibly pressed, and anchoring to a
-    /// button inside a scroll view would put the label at the mercy of the scroll offset
-    /// and the row's own clipping.
-    @ViewBuilder
-    private var revealedTitleLabel: some View {
-        if let revealedTitle {
-            Text(revealedTitle)
-                .font(.footnote.weight(.medium))
-                .fontDesign(.rounded)
-                .lineLimit(1)
-                .padding(.horizontal, 12)
-                .padding(.vertical, 6)
-                .glassEffect(.regular, in: Capsule())
-                .accessibilityIdentifier("shelf-title")
-                // A label, not a control: it must never absorb a tap meant for the
-                // button underneath it or the result row behind it.
-                .allowsHitTesting(false)
-                .transition(.opacity)
-                // Sit the capsule's *bottom* a little above the row's top edge.
-                .alignmentGuide(.top) { $0[.bottom] + 8 }
-        }
     }
 }

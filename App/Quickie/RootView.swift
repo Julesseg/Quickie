@@ -751,12 +751,24 @@ struct RootView: View {
                             // rides with: the first keystroke already re-lays the whole
                             // list, and a row sliding in on top of that reads as jitter.
                             if !inFileSearch, !shelf.isEmpty, FallbackShelf.isVisible(for: query) {
-                                FallbackShelfRow(members: shelf) { action in
-                                    // The same run path a tapped fallback row takes,
-                                    // region and all — so a Shelf tap *is* a fallback
-                                    // selection, not a lookalike of one.
-                                    run(action, region: .fallback)
-                                }
+                                FallbackShelfRow(
+                                    members: shelf,
+                                    onRun: { action in
+                                        // The same run path a tapped fallback row
+                                        // takes, region and all — so a Shelf tap *is*
+                                        // a fallback selection, not a lookalike of one.
+                                        run(action, region: .fallback)
+                                    },
+                                    // The same handlers the Result list is given, for
+                                    // the same reason the run path is shared: a Shelf
+                                    // button's long-press menu is the *same* menu its
+                                    // row would show, so the two can't disagree about
+                                    // what pinning or a secondary verb does.
+                                    isFavorite: { signals.isFavorite($0.id) },
+                                    canFavorite: { signals.canFavorite($0.id) },
+                                    onToggleFavorite: toggleFavorite,
+                                    onSecondaryAction: performSecondary
+                                )
                                 // Clear the last result row: the inset's top edge is
                                 // where the list stops, so without this the buttons
                                 // sit flush against the nearest fallback and read as
