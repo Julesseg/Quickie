@@ -85,7 +85,12 @@ struct ResultListView: View {
                             .transition(rowMotion.insertionTransition)
                         }
                     }
-                    .frame(maxWidth: .infinity)
+                    // The readable command column (ADR 0039): at regular width the
+                    // rows lay out in the same centred column the input bar does,
+                    // instead of a label and its glyph sitting 1,300pt apart. The
+                    // rows keep their own 12pt inset off the column's edge, exactly
+                    // as they keep it off an iPhone's screen edge.
+                    .commandColumn()
                 }
                 .frame(maxWidth: .infinity, minHeight: viewport.size.height, alignment: .bottom)
             }

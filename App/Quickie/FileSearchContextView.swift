@@ -57,6 +57,11 @@ struct FileSearchBreadcrumbBar: View {
         .frame(maxWidth: .infinity, alignment: .leading)
         .padding(.horizontal, 16)
         .padding(.bottom, 16)
+        // The readable command column (ADR 0039), applied *outside* the padding so
+        // the crumbs keep their 16pt inset off the column's edge. Applied *inside*
+        // `statusBarBleed`, so the blur band it backgrounds still spans the whole
+        // window — only the content clamps.
+        .commandColumn()
         .statusBarBleed(topPadding: 6) { FileSearchBlur() }
         .accessibilityElement(children: .contain)
         .accessibilityIdentifier("file-search-breadcrumb")
@@ -147,7 +152,10 @@ struct FileSearchResultList: View {
                             .transition(rowMotion.insertionTransition)
                         }
                     }
-                    .frame(maxWidth: .infinity)
+                    // The same readable command column the root Result list uses
+                    // (ADR 0039) — the context borrows the list, so it borrows its
+                    // layout too.
+                    .commandColumn()
                 }
                 .frame(maxWidth: .infinity, minHeight: viewport.size.height, alignment: .bottom)
             }

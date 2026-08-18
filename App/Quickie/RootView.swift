@@ -826,6 +826,11 @@ struct RootView: View {
                     }
                 }
                 }
+                // The readable command column (ADR 0039): at regular width the bar
+                // reads as a command palette rather than a full-bleed toolbar, and
+                // the Shelf above it gets a row it can size a peek against again.
+                // Everything inside keeps its own 12pt inset off the column's edge.
+                .commandColumn()
                 // Reserve the held keyboard height so the bar floats where the
                 // keyboard's top is — and stays there when the keyboard drops. Zero
                 // when a page is pushed (the bar is gone), so no phantom inset.

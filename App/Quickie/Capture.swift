@@ -814,6 +814,12 @@ struct CaptureBreadcrumbBar: View {
         .frame(maxWidth: .infinity, alignment: .leading)
         .padding(.horizontal, 16)
         .padding(.bottom, 16)
+        // The readable command column (ADR 0039). The crumbs take an equal weighted
+        // share of the width they are *given*, so clamping here is the whole fix for
+        // a one-word DUE DATE rendering as a 450pt card — the maths now divides the
+        // column. Applied outside the padding and inside the bleed, so the crumbs
+        // keep their 16pt inset and the blur band still spans the window.
+        .commandColumn()
         // Span the status bar as one cohesive frame so the bar slides in and out
         // as a single block; bleeding only the background left the status-bar band
         // anchored behind during the slide, reading as a half-clip (`statusBarBleed`).
