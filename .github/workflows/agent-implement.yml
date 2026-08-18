@@ -200,7 +200,7 @@ jobs:
           # session is indistinguishable from one started by hand.
           worktree_path = os.path.join(WORKTREES_DIR, os.path.basename(PROJECT_DIR),
                                        branch.replace("/", "-"))
-          git("worktree", "add", "-b", branch, worktree_path, f"origin/{base_branch}", check=True)
+          git("worktree", "add", "--no-track", "-b", branch, worktree_path, f"origin/{base_branch}", check=True)
 
           thread_id = str(uuid.uuid4())
           title = f"Issue #{ISSUE}"
