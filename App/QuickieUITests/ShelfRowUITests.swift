@@ -2,7 +2,7 @@ import XCTest
 
 /// The **Shelf** as a launcher surface (CONTEXT.md → Shelf; ADR 0037; issue #242): the
 /// row of circular, icon-only glass buttons above the input — when it shows, what a tap
-/// does, and what a long press reveals.
+/// does, and what a long press opens.
 ///
 /// Its two pure rules (the visibility/seed rule, the peek sizing) are pinned
 /// deterministically in QuickieCore's `FallbackShelfTests`; these prove the wiring the
@@ -115,19 +115,18 @@ final class ShelfRowUITests: XCTestCase {
                       "the sealed pill holds the typed query verbatim")
     }
 
-    /// The buttons are icon-only, so a long press reveals the action's title — the
-    /// agreed disambiguation affordance. Crucially it *only* reveals: lifting the finger
-    /// must not also run the action, or reading the title could never save you from the
-    /// wrong one.
+    /// The buttons are icon-only, so a long press has to say what one *is* — and it
+    /// says it in the same menu every other Action surface shows (CONTEXT.md → Shelf;
+    /// Secondary action): the action's title as the menu's non-action first row, above
+    /// the verbs and the Pin item. Crucially the hold *only* opens the menu: lifting
+    /// the finger must not also run the action, or reading the title could never save
+    /// you from the wrong one.
     ///
-    /// The reveal's 2.5s self-dismiss is *held* under UI test
-    /// (`MotionPolicy.shelfTitleDwellUnlessHeld`), so this asserts against a label that
-    /// stays put. It used to race the dwell: XCUITest needs about three seconds to
-    /// synthesize the press and snapshot the hierarchy, which is longer than the label
-    /// lives — the reason this test failed on slow runners. What the dwell *is* stays
-    /// Core's to pin, in `MotionPolicyTests`.
+    /// Menu items are asserted to exist rather than fired: XCUITest can surface a
+    /// SwiftUI context-menu item but cannot run its action (the menu is a separate
+    /// remote view) — the same limit `SecondaryActionUITests` documents.
     @MainActor
-    func testLongPressingAShelfButtonRevealsTheTitleWithoutRunningIt() throws {
+    func testLongPressingAShelfButtonOpensTheActionsMenuWithoutRunningIt() throws {
         let app = launchApp(["-uitest-stub-reminders"])
         shelve(app, title: "New Reminder")
 
@@ -139,11 +138,19 @@ final class ShelfRowUITests: XCTestCase {
         XCTAssertTrue(shelfButton.waitForExistence(timeout: 5), "the shelved capture is offered for the query")
         shelfButton.press(forDuration: 1.0)
 
-        let title = app.staticTexts["shelf-title"]
-        XCTAssertTrue(title.waitForExistence(timeout: 5), "a long press reveals the action's title")
-        XCTAssertTrue(title.label.localizedCaseInsensitiveContains("New Reminder"),
-                      "…and the title is the pressed action's")
+        // Scoped to the menu's own cells: the pressed Shelf button carries the same
+        // title as its accessibility label, so an app-wide lookup would be answered by
+        // the button itself and pass whether or not the menu ever opened.
+        let titleRow = app.cells.buttons["New Reminder"].firstMatch
+        XCTAssertTrue(titleRow.waitForExistence(timeout: 5),
+                      "the long-press menu names the icon-only button it was opened from")
+        XCTAssertFalse(titleRow.isEnabled,
+                       "…as a non-action row — a label, not a verb that does nothing")
+        XCTAssertTrue(app.buttons["Copy action deeplink"].exists,
+                      "…and it is the shared Action menu, carrying the row's own verbs")
+        XCTAssertTrue(app.buttons["Pin as Favorite"].exists,
+                      "…and its Pin item, exactly as the same action's result row would")
         XCTAssertFalse(app.buttons["capture-set-date"].exists,
-                       "revealing a title does not also run the action")
+                       "opening the menu does not also run the action")
     }
 }

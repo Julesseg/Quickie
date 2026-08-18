@@ -27,12 +27,6 @@ public enum MotionMoment: Sendable {
     /// Motion — where this degrades to a plain `.fade`, i.e. no drift — as well as
     /// Low Power Mode and UI test, both decided at the App edge.
     case backdropDrift
-    /// A [[Shelf]] button's title appearing under a long press (issue #242) — the
-    /// disambiguation affordance for an icon-only glyph. Like `hintRotation` it is a
-    /// pure disclosure with nothing to move, so it dissolves rather than springing;
-    /// unlike it, a gesture *did* ask for it, so it dissolves fast — the user is
-    /// holding a finger down waiting to read it.
-    case shelfTitleReveal
 }
 
 /// How a `MotionMoment` should move: a subtle, fast spring, or a plain crossfade.
@@ -92,26 +86,8 @@ public struct MotionPolicy: Sendable {
             // slower than any spring, and gone the instant a query exists — the one
             // moment the user never triggers.
             return .drift(period: 6)
-        case .shelfTitleReveal:
-            // Faster than the hint's dissolve by a wide margin: this one answers a
-            // gesture the user is still making, so it has to be legible before the
-            // finger lifts — but still a fade, because a label that only appears has
-            // nothing to spring.
-            return .fade(duration: 0.2)
         }
     }
-
-    /// How long a [[Shelf]] button's revealed title stays up before it fades on its
-    /// own (issue #242), in seconds.
-    ///
-    /// It self-dismisses because there is nothing to dismiss it *with*: the reveal is
-    /// not a menu, so there is no escape gesture, and tying it to the finger lifting
-    /// would flash the title away at exactly the moment the user starts reading it.
-    ///
-    /// Unlike `hintDwell` this never returns `nil` under Reduce Motion. That setting
-    /// suppresses unrequested *movement*, and freezing this dwell would do the
-    /// opposite of suppressing anything — it would leave a label on screen forever.
-    public var shelfTitleDwell: Double { 2.5 }
 
     /// How long a hint dwells before the [[Hint line]] crossfades to the next, or
     /// `nil` when the line is **frozen** — a single hint, forever.

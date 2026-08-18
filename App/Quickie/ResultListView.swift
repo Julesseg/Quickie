@@ -491,7 +491,17 @@ extension View {
     /// the lifted snapshot looks like the resting row. Each caller passes its own
     /// row (an `ActionRow`, or a `FavoriteCard` for the grid) so the preview matches
     /// what was pressed.
+    ///
+    /// `title` names the pressed Action as a **non-action row** at the top of the
+    /// menu — for the surfaces whose control doesn't say what it is. A result row and
+    /// a Favorite card both wear their title already, so they pass nothing; a
+    /// [[Shelf]] button is an icon-only circle, so the name it used to reveal in a
+    /// floating capsule is now the menu's first line (CONTEXT.md → Shelf). It is a
+    /// plain `Text`, not a `Button`: the same non-action row the Favorites-cap hint
+    /// below already uses, so it reads as a label rather than a verb that does
+    /// nothing.
     func resultContextMenu<Preview: View>(
+        title: String? = nil,
         secondaryActions: [SecondaryActionKind] = [],
         onSecondaryAction: @escaping (SecondaryActionKind) -> Void = { _ in },
         isFavorite: Bool,
@@ -501,6 +511,16 @@ extension View {
         @ViewBuilder preview: () -> Preview
     ) -> some View {
         contextMenu {
+            if let title {
+                Text(title)
+                // Separated from the verbs below only when there are verbs: a menu
+                // that is nothing but the title (a shelved "Save for later", whose
+                // deeplink is withheld and which offers no pin) must not open with a
+                // rule under a single line.
+                if !secondaryActions.isEmpty || pinnable {
+                    Divider()
+                }
+            }
             ForEach(secondaryActions, id: \.self) { kind in
                 Button {
                     onSecondaryAction(kind)
