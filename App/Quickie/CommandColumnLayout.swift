@@ -19,7 +19,7 @@ private struct CommandColumnClamp: ViewModifier {
 
     /// `nil` (a size class SwiftUI hasn't resolved yet) reads as compact: the layout
     /// that ships today is the safe answer for a frame we can't classify.
-    private var windowWidth: CommandColumn.WindowWidth {
+    private var sizeClass: CommandColumn.SizeClass {
         horizontalSizeClass == .regular ? .regular : .compact
     }
 
@@ -27,7 +27,7 @@ private struct CommandColumnClamp: ViewModifier {
         content
             // The cap. `.infinity` when Core says there is none, so the compact path
             // is the *same* frame that shipped before this modifier existed.
-            .frame(maxWidth: CommandColumn.maxWidth(for: windowWidth) ?? .infinity)
+            .frame(maxWidth: CommandColumn.maxWidth(for: sizeClass) ?? .infinity)
             // Centre the capped surface in the window — and, just as importantly, keep
             // this view's own frame full-width, so a background applied outside the
             // clamp (a progressive-blur band, the backdrop) still spans the window.

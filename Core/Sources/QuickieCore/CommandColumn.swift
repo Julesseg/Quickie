@@ -31,7 +31,7 @@ public enum CommandColumn {
     /// The window's horizontal size class, as this policy needs it — the App maps
     /// SwiftUI's `horizontalSizeClass` onto it, and an *unknown* class maps to
     /// `.compact`, because the layout that ships today is the safe answer.
-    public enum WindowWidth: Sendable, Equatable, CaseIterable {
+    public enum SizeClass: Sendable, Equatable {
         /// iPhone, iPad Split View, a narrow Stage Manager window.
         case compact
         /// A full-screen iPad, or a Stage Manager window wide enough to be regular.
@@ -45,8 +45,8 @@ public enum CommandColumn {
     public static let readableWidth: CGFloat = 680
 
     /// The cap a command surface lays out under, or `nil` when it fills the window.
-    public static func maxWidth(for width: WindowWidth) -> CGFloat? {
-        switch width {
+    public static func maxWidth(for sizeClass: SizeClass) -> CGFloat? {
+        switch sizeClass {
         case .compact: return nil
         case .regular: return readableWidth
         }
@@ -54,13 +54,18 @@ public enum CommandColumn {
 
     /// The width a command surface actually gets in a window `windowWidth` across.
     ///
-    /// This is the same decision as `maxWidth(for:)`, resolved against a real window —
-    /// which is what makes it testable against the *downstream* rules that measure a
-    /// row and size themselves from it (the [[Shelf]]'s peek solver, the breadcrumb's
-    /// equal-share crumb widths). A cap can only ever subtract: a regular-width window
-    /// narrower than the cap keeps its own width.
-    public static func columnWidth(inWindowOf windowWidth: CGFloat, for width: WindowWidth) -> CGFloat {
-        guard let cap = maxWidth(for: width) else { return windowWidth }
+    /// This is the same decision as `maxWidth(for:)` — it is *defined* by it — resolved
+    /// against a real window, which is what makes it testable against the *downstream*
+    /// rules that measure a row and size themselves from it (the [[Shelf]]'s peek
+    /// solver, the breadcrumb's equal-share crumb widths). A cap can only ever
+    /// subtract: a regular-width window narrower than the cap keeps its own width.
+    ///
+    /// It models what SwiftUI does with the cap rather than being the call the App
+    /// makes — the App hands `maxWidth(for:)` straight to `.frame(maxWidth:)`, since
+    /// a view has no business knowing the window's width. `CommandColumnUITests`
+    /// closes that loop on a real iPad, where the row measures the column exactly.
+    public static func columnWidth(inWindowOf windowWidth: CGFloat, for sizeClass: SizeClass) -> CGFloat {
+        guard let cap = maxWidth(for: sizeClass) else { return windowWidth }
         return min(windowWidth, cap)
     }
 }

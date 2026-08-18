@@ -73,8 +73,11 @@ which is exactly the chrome ADR 0010 keeps out — depth is the glass's job.
 
 - The Shelf's peek cue returns on a full-screen iPad with no change to
   `FallbackShelf.Layout`, and the breadcrumb's equal-share maths divides the
-  column instead of the window. Both are asserted from the Core policy, not
-  eyeballed on a screenshot.
+  column instead of the window. Only the first of those is *asserted*: the
+  Shelf's solver is a Core rule, so a test can hand it the column's width and
+  check the peek comes back. The breadcrumb's weighting lives in the App
+  (`BreadcrumbSteps`) and is not covered — the clamp fixes F3 by construction,
+  by handing that maths a narrower container, but nothing pins it.
 - Compact width is untouched, so the iPhone suite is the regression gate it
   always was; the iPad leg of the matrix (ADR 0038) is what covers the new
   branch, and `CommandColumnUITests` asserts the shared centre line on both.
