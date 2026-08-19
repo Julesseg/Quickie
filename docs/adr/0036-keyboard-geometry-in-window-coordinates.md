@@ -40,23 +40,28 @@ overlap — a value a short window clips — so a full keyboard seen through a
 **All keyboard geometry is expressed in the host window's coordinate space, and
 the policy consumes rects rather than a pre-computed scalar.**
 
-- The App converts each `keyboardWillChangeFrame` end-frame with
+- `KeyboardBarLift.Geometry` carries the keyboard's end-frame, the window's
+  bounds, and the window's bottom safe-area inset — read off one window at one
+  moment, so the three can never disagree about which window they describe. The
+  App builds it inside `KeyboardFrameObserver`, a UIKit view that has the window
+  in hand, converting the notification's end-frame with
   `UIWindow.convert(_:from: nil as UIWindow?)` — the documented screen → window
-  hop — inside `KeyboardFrameObserver`, a UIKit view that has the window in
-  hand. The window's `bounds` and `safeAreaInsets.bottom` ride along in the same
-  `KeyboardWindowFrame`, so all three come from one window and one moment. The
-  old `UIApplication.connectedScenes` key-window walk is gone; it guessed at a
-  window in a world where the app may own several.
-- `KeyboardBarLift.coverage(keyboardFrame:windowBounds:)` classifies the result
-  as **docked** (spanning the window's full width *and* reaching its bottom edge,
-  covering `overlap` points of it), **undocked** (inside the window but detached
-  from the bottom edge — a floating or split keyboard), or **away** (an empty
-  frame). Docked with zero overlap is both a dismissal and a window floating
-  clear above the keyboard: geometrically the same thing, and treated the same.
+  hop. The old `UIApplication.connectedScenes` key-window walk is gone; it
+  guessed at a window in a world where the app may own several.
+- `Geometry.coverage` classifies the result as **docked** (as wide as the window
+  *and* reaching its bottom edge, covering `overlap` points of it), **undocked**
+  (inside the window but detached from the bottom edge — a floating or split
+  keyboard), or **away**. Docked with zero overlap is both a dismissal and a
+  window floating clear above the keyboard: geometrically the same thing, and
+  treated the same. Docking is judged on the keyboard being as *wide as* the
+  window rather than covering it corner to corner, because under iPadOS 26 free
+  placement a window can hang off a display edge — the display-wide keyboard
+  still covers every visible point of its bottom band without ever reaching that
+  edge.
 - The lift is the docked overlap beyond the bottom safe area. An undocked
   keyboard lifts nothing and **releases** rather than holds, so undocking a
   keyboard that had lifted the bar drops it back to the window bottom.
-- `softwareKeyboardThreshold` is re-expressed as `isSoftwareKeyboard(height:)`,
+- `softwareKeyboardThreshold` is re-expressed as `Geometry.isSoftwareKeyboard`,
   read from the keyboard's **own** height rather than its window overlap. Its
   one job is now the hide rule: only a software keyboard's disappearance holds
   the inset (the context-menu case, issue #58); an accessory bar leaving
@@ -65,18 +70,28 @@ the policy consumes rects rather than a pre-computed scalar.**
 - A docked keyboard of *any* height lifts the bar by what it covers, so a
   hardware keyboard's shortcuts bar produces the accessory bar's lift — and can
   never leave a full keyboard's inset stranded beneath it.
-- Notifications carrying `keyboardIsLocalUserInfoKey == false` are dropped: side
-  by side on iPad, the other app's keyboard posts here too, and though it may
-  well cover our window, nothing of ours is focused.
+- The notification's `keyboardIsLocalUserInfoKey` is a **parameter of the
+  policy**, not a filter in the App: side by side on iPad, the other app's
+  keyboard posts here too, and though it may well cover our window, nothing of
+  ours is focused, so it holds. Making it an argument keeps the rule inside the
+  `swift test` gate with the rest of the policy.
+- The live channel gains a second reason to act. `KeyboardBarLift.live` tracks a
+  sample when a list drag is in flight (the interactive swipe-dismiss, unchanged)
+  **or when the window itself changed shape** — a Split View divider drag, a
+  Stage Manager or iPadOS 26 resize, a rotation. A reshaped window sits over a
+  different band of a keyboard that has not moved, and the keyboard posts no
+  notification for it, so the layout pass is the only notice; without it the bar
+  keeps the inset it had at the window's old size. Both are the user's finger on
+  something, so both apply immediately and unanimated.
 
 ## Consequences
 
 - Every windowing configuration is one code path: the conversion normalises full
   screen, Split View, Slide Over, and Stage Manager into the same question —
   "how much of *this window's* bottom edge is covered?"
-- The live channel needed no change. `UIView.keyboardLayoutGuide` was already
-  window-relative, and with `followsUndockedKeyboard` off it reports zero
-  overlap for a floating or split keyboard — the same answer `coverage` gives.
+- The bar now re-seats itself *during* a window resize rather than only at the
+  keyboard's next move — the behaviour a windowed launcher needs, and the reason
+  the live channel had to learn a second cause.
 - A hardware keyboard now lifts the bar onto its shortcuts bar instead of
   leaving the bar underneath it. This is a visible change on iPhone too, and the
   intended one: the bar should never sit behind the keyboard's own chrome.
@@ -84,6 +99,9 @@ the policy consumes rects rather than a pre-computed scalar.**
   screen and undocked-keyboard geometries are expressible in `swift test` now,
   where before the only input was a scalar that had already lost the
   information.
+- `UIView.keyboardLayoutGuide` keeps `followsUndockedKeyboard` off, so a floating
+  or split keyboard reports zero overlap on the live channel — the same answer
+  `coverage` gives it. The two channels agree by construction.
 
 ## Considered options
 
@@ -93,10 +111,10 @@ the policy consumes rects rather than a pre-computed scalar.**
   the bar riding the keyboard's own timing (rather than trailing it) is the
   behaviour issue #58 exists to get. The guide stays the live-drag channel.
 - **Keep the scalar overlap and convert in the App.** Rejected: the docked /
-  undocked classification and the software-keyboard test are policy, not
-  plumbing, and pre-flattening to a scalar is what hid the bug — a single number
-  cannot say whether it came from a keyboard that was detached, clipped, or
-  simply short.
+  undocked classification, the software-keyboard test, and the is-it-even-our-
+  keyboard question are policy, not plumbing, and pre-flattening to a scalar is
+  what hid the bug — a single number cannot say whether it came from a keyboard
+  that was detached, clipped, or simply short.
 - **Use `window.screen.coordinateSpace` for the conversion.** Rejected: it works,
   but it re-introduces a screen reference into the keyboard path for no gain
   over the window-to-window overload, which says what it means.

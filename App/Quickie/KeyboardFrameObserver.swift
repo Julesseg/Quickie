@@ -1,43 +1,39 @@
+import QuickieCore
 import SwiftUI
 import UIKit
-
-/// Where the keyboard is, **relative to the window the app actually occupies** —
-/// the one coordinate space in which the bottom bar's lift is meaningful. On
-/// iPad the window is only sometimes the whole display (Split View, Slide Over,
-/// Stage Manager, iPadOS 26 free resizing), so every rect here is converted into
-/// the host window's own space before it leaves this file (issue #261, ADR 0036).
-struct KeyboardWindowFrame {
-    /// The keyboard's end-frame in the window's coordinate space. May sit
-    /// partly or wholly outside the window — that is exactly what
-    /// `KeyboardBarLift.coverage` reads.
-    var keyboardFrame: CGRect
-    /// The host window's bounds.
-    var windowBounds: CGRect
-    /// The host window's bottom safe-area inset — the band the bar already sits
-    /// in, and so the part of the keyboard's coverage it need not clear.
-    var bottomSafeArea: CGFloat
-}
 
 /// Reports the keyboard to `RootView` on both of `KeyboardBarLift`'s channels,
 /// from inside UIKit where the host window — and therefore the only correct
 /// coordinate space — is in hand:
 ///
 /// - **notified**: each `keyboardWillChangeFrame` end-frame, converted from
-///   screen coordinates into the window's. Fires at animation start, so the bar
-///   can ride the keyboard's own timing.
+///   screen coordinates into the window's and paired with that window's bounds
+///   and bottom inset (issue #261, ADR 0036). Fires at animation start, so the
+///   bar can ride the keyboard's own timing.
 /// - **live**: the keyboard's current overlap of the window bottom per layout
 ///   pass, via `UIView.keyboardLayoutGuide` — the one API that follows the
 ///   keyboard *during* an interactive swipe-dismiss, where
-///   `keyboardWillChangeFrame` only fires once the gesture commits.
+///   `keyboardWillChangeFrame` only fires once the gesture commits. It is also
+///   the only signal that the **window** changed shape under a stationary
+///   keyboard (a Split View divider drag, a Stage Manager resize, a rotation),
+///   which the keyboard itself never posts, so each sample says whether it
+///   arrived for that reason.
 ///
 /// Zero-sized and hittest-transparent: install it in a `.background`.
 struct KeyboardFrameObserver: UIViewRepresentable {
-    /// Called with each keyboard end-frame, resolved against the host window.
-    var onKeyboardFrame: (KeyboardWindowFrame) -> Void
+    /// Called with each keyboard end-frame, resolved against the host window,
+    /// and whether the keyboard is this app's own (side by side on iPad, the
+    /// other app's keyboard posts here too).
+    var onKeyboardFrame: (KeyboardBarLift.Geometry, _ isLocalKeyboard: Bool) -> Void
     /// Called with the keyboard's current overlap of the *window* bottom, in
-    /// points, whenever a layout pass moves the keyboard layout guide — paired
-    /// with the window's bottom safe-area inset.
-    var onLiveOverlap: (_ overlap: CGFloat, _ bottomSafeArea: CGFloat) -> Void
+    /// points, whenever a layout pass moves the keyboard layout guide relative
+    /// to the window — paired with the window's bottom safe-area inset, and with
+    /// whether this pass is one where the *window* itself changed shape.
+    var onLiveOverlap: (
+        _ overlap: CGFloat,
+        _ bottomSafeArea: CGFloat,
+        _ windowChangedShape: Bool
+    ) -> Void
 
     func makeUIView(context: Context) -> TrackingView {
         TrackingView()
@@ -49,9 +45,10 @@ struct KeyboardFrameObserver: UIViewRepresentable {
     }
 
     final class TrackingView: UIView {
-        var onKeyboardFrame: ((KeyboardWindowFrame) -> Void)?
-        var onLiveOverlap: ((CGFloat, CGFloat) -> Void)?
+        var onKeyboardFrame: ((KeyboardBarLift.Geometry, Bool) -> Void)?
+        var onLiveOverlap: ((CGFloat, CGFloat, Bool) -> Void)?
         private var lastOverlap: CGFloat?
+        private var lastWindowBounds: CGRect?
 
         override init(frame: CGRect) {
             super.init(frame: frame)
@@ -81,32 +78,39 @@ struct KeyboardFrameObserver: UIViewRepresentable {
 
         @objc private func keyboardWillChangeFrame(_ note: Notification) {
             guard let window,
-                  // Side-by-side on iPad, the *other* app's keyboard posts here
-                  // too. It may well cover our window, but nothing of ours is
-                  // focused, so it must not move our bar.
-                  note.userInfo?[UIResponder.keyboardIsLocalUserInfoKey] as? Bool ?? true,
                   let screenFrame = note.userInfo?[UIResponder.keyboardFrameEndUserInfoKey] as? CGRect
             else { return }
             // The notification reports the keyboard in **screen** coordinates.
             // `UIWindow.convert(_:from:)` with a nil window is the documented
             // screen → window hop; the explicit `UIWindow?` disambiguates it from
             // `UIView.convert(_:from:)`, which would mean something else entirely.
-            let keyboardFrame = window.convert(screenFrame, from: nil as UIWindow?)
-            onKeyboardFrame?(KeyboardWindowFrame(
-                keyboardFrame: keyboardFrame,
+            let geometry = KeyboardBarLift.Geometry(
+                keyboardFrame: window.convert(screenFrame, from: nil as UIWindow?),
                 windowBounds: window.bounds,
                 bottomSafeArea: window.safeAreaInsets.bottom
-            ))
+            )
+            let isLocal = note.userInfo?[UIResponder.keyboardIsLocalUserInfoKey] as? Bool ?? true
+            onKeyboardFrame?(geometry, isLocal)
         }
 
         override func layoutSubviews() {
             super.layoutSubviews()
             guard let window else { return }
+            let bounds = window.bounds
+            let bottomSafeArea = window.safeAreaInsets.bottom
             let guideTop = convert(keyboardLayoutGuide.layoutFrame, to: window).minY
-            let overlap = max(0, window.bounds.height - guideTop)
-            guard overlap != lastOverlap else { return }
+            let overlap = max(0, bounds.height - guideTop)
+            // A window reshaped under a stationary keyboard covers a different
+            // band of it, and the keyboard posts nothing to say so — this pass is
+            // the only notice. A window's shape is its **bounds** alone: the
+            // bottom safe-area inset can move for reasons that are not a reshape
+            // at all, and re-seating the bar unanimated on those would fight the
+            // notified channel that owns them. The first layout is not a reshape.
+            let changedShape = lastWindowBounds.map { $0 != bounds } ?? false
+            lastWindowBounds = bounds
+            guard changedShape || overlap != lastOverlap else { return }
             lastOverlap = overlap
-            onLiveOverlap?(overlap, window.safeAreaInsets.bottom)
+            onLiveOverlap?(overlap, bottomSafeArea, changedShape)
         }
     }
 }

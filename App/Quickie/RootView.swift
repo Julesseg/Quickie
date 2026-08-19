@@ -860,28 +860,31 @@ struct RootView: View {
             //    resigned first responder — **hold** the inset so the long-press
             //    doesn't reflow the list. This is the whole point of driving the
             //    lift ourselves.
+            //  • **Another app's keyboard**, side by side on iPad: it may cover
+            //    our window, but nothing of ours is focused — hold.
             //
-            // The **live** channel carries per-frame keyboard positions during an
-            // interactive swipe-dismiss, so the bar follows the finger instead of
-            // waiting for the commit notification. `dragged` drops every sample
-            // taken while the list is still, so ordinary show/hide (and the held
-            // context-menu inset) stay owned by the notified channel.
+            // The **live** channel carries the two moves the keyboard never posts
+            // for: an interactive swipe-dismiss (the bar follows the finger
+            // instead of waiting for the commit notification) and the window
+            // itself being reshaped under a stationary keyboard. `live` drops
+            // every other sample, so ordinary show/hide — and the held
+            // context-menu inset — stay owned by the notified channel.
             .background {
                 KeyboardFrameObserver(
-                    onKeyboardFrame: { frame in
+                    onKeyboardFrame: { geometry, isLocalKeyboard in
                         apply(KeyboardBarLift.notified(
-                            keyboardFrame: frame.keyboardFrame,
-                            windowBounds: frame.windowBounds,
-                            bottomSafeArea: frame.bottomSafeArea,
+                            geometry,
+                            isLocalKeyboard: isLocalKeyboard,
                             isListScrolling: listScrolling,
                             usesKeyboardlessControl: capture.usesKeyboardlessControl
                         ))
                     },
-                    onLiveOverlap: { overlap, bottomSafeArea in
-                        apply(KeyboardBarLift.dragged(
+                    onLiveOverlap: { overlap, bottomSafeArea, windowChangedShape in
+                        apply(KeyboardBarLift.live(
                             overlap: overlap,
                             bottomSafeArea: bottomSafeArea,
-                            isListScrolling: listScrolling
+                            isListScrolling: listScrolling,
+                            windowChangedShape: windowChangedShape
                         ))
                     }
                 )
