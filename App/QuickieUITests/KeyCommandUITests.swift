@@ -38,6 +38,26 @@ final class KeyCommandUITests: XCTestCase {
         return input
     }
 
+    /// A **harness canary**, not a product behaviour. Every other test here is
+    /// driven by `typeKey`, so if the simulator ever stops delivering synthesized
+    /// hardware key events, all six fail for a reason that has nothing to do with
+    /// the launcher. This types an ordinary letter through the very same call and
+    /// asserts it lands in the focused input — so the log distinguishes "the key
+    /// never arrived" from "the key arrived and the binding didn't fire".
+    @MainActor
+    func testSynthesizedHardwareKeysReachTheApp() throws {
+        let app = launchApp()
+        let input = searchInput(app)
+        input.tap()
+
+        app.typeKey("s", modifierFlags: [])
+
+        XCTAssertTrue(
+            app.buttons["builtin.settings"].waitForExistence(timeout: 10),
+            "a hardware key sent with typeKey should land in the focused input"
+        )
+    }
+
     /// The Settings hub's top-level page, recognized by an app-level control that
     /// exists only there and not on any provider panel (the same marker
     /// `AppSettingsUITests` uses).
