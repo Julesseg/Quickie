@@ -23,11 +23,15 @@ struct QuickieApp: App {
         return QuickieStore.container
     }()
 
-    /// The scene-to-launcher bridge for the hardware-keyboard commands (issue
-    /// #262). Owned here because `.commands` is a *Scene* modifier: the menu bar
-    /// is declared beside the `WindowGroup`, outside any view, so it posts here
-    /// and `RootView` observes it.
-    @State private var keyCommands = KeyCommandRouter()
+    /// Carries the hardware-keyboard commands on the responder chain (issue #262).
+    /// The app delegate exists for nothing else — see `QuickieKeyCommandDelegate`
+    /// for why the binding lives there rather than in the SwiftUI declaration.
+    @UIApplicationDelegateAdaptor(QuickieKeyCommandDelegate.self) private var keyCommandDelegate
+
+    /// The bridge both key-command declarations post to, and `RootView` observes.
+    /// Shared rather than owned, because the app delegate is created by UIKit and
+    /// has no other way to reach it.
+    private let keyCommands = KeyCommandRouter.shared
 
     init() {
         // Honor the same UI-test reset flag as SignalsStore/FallbacksStore for the
@@ -113,10 +117,10 @@ struct QuickieApp: App {
                 .tint(.accentColor)
         }
         .modelContainer(container)
-        // Declare the hardware-keyboard commands the system way (CONTEXT.md → Key
-        // command; issue #262): the iPadOS 26 menu bar lists them and holding ⌘
-        // shows them in the system shortcut HUD. The set is Core's — this only
-        // renders it.
+        // List the hardware-keyboard commands in the iPadOS 26 menu bar (CONTEXT.md
+        // → Key command; issue #262) — the discoverability half. The binding half
+        // rides the responder chain on the delegate above. The set is Core's; both
+        // only render it.
         .commands { LauncherCommands(router: keyCommands) }
     }
 }

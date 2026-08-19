@@ -1,26 +1,26 @@
 import SwiftUI
+import UIKit
 import QuickieCore
 
 /// The one place a fired **key command** lands (CONTEXT.md → Key command; issue
-/// #262), whichever of its two declarations delivered it.
+/// #262), whichever of its declarations delivered it.
 ///
-/// A `Commands` builder lives in the *Scene*, outside any view, so it cannot
-/// reach `RootView`'s state directly. It posts here instead, and `RootView`
-/// observes `latest` and handles it from a **fresh body pass** — which matters:
-/// handing the menu a closure captured at registration time would freeze the
+/// Neither declaration can reach `RootView`'s state directly — one lives in the
+/// *Scene*, outside any view, the other on the app delegate — so both post here,
+/// and `RootView` observes and handles from a **fresh body pass**. That matters:
+/// handing either a closure captured at registration time would freeze the
 /// `@Query` snapshots (Custom Actions, Snippets, the Pile) the search engine is
 /// rebuilt from, so ⌘1 would run the Favorite as it stood when the app launched.
 /// An observed value re-reads everything at the moment the key lands.
 ///
-/// The launcher's own in-view shortcuts post here too rather than calling the
-/// handler directly, so *both* declarations of a command share one arrival point
-/// — and therefore one duplicate guard (see `send`).
-///
-/// `token` rides alongside the intent so pressing the *same* command twice still
-/// registers as a change: `⌘1 ⌘1` is two runs, not one.
+/// A single shared instance, because the app delegate is created by UIKit and has
+/// no other way to reach the launcher's bus. `RootView` still takes it as a
+/// parameter rather than reaching for the singleton, so the view stays explicit.
 @MainActor
 @Observable
 final class KeyCommandRouter {
+
+    static let shared = KeyCommandRouter()
 
     struct Dispatch: Equatable {
         var intent: KeyCommand.Intent
@@ -28,46 +28,103 @@ final class KeyCommandRouter {
     }
 
     private(set) var latest: Dispatch?
+    /// Bumped by each `esc` press. `esc` is not a `KeyCommand` (it is never
+    /// declared to the menu bar — see `QuickieKeyCommandDelegate`), so it rides
+    /// its own channel rather than being smuggled into the declared set.
+    private(set) var escapes = 0
+
+    /// Whether the launcher itself is frontmost, published by `RootView`. The
+    /// delegate reads it to decide whether to offer `esc` at all: unoffered, the
+    /// key falls straight through to whatever the system would otherwise do with
+    /// it on a pushed page or in a sheet.
+    var isLauncherFrontmost = false
+
     private var counter = 0
     /// The intent already delivered this runloop turn, cleared on the next one.
     private var deliveredThisTurn: KeyCommand.Intent?
 
     func send(_ intent: KeyCommand.Intent) {
-        // Each command is declared twice — in the menu bar (`LauncherCommands`) and
-        // on the launcher itself (`LauncherKeyShortcuts`, which binds it where there
-        // is no menu bar). UIKit resolves a key press to a single responder, so a
-        // double delivery should never happen; if a platform ever does deliver both,
-        // ⌘1 must still run the Favorite **once**. Collapsing repeats within one
-        // runloop turn is safe — no human presses the same key twice inside one.
+        // Each command is declared twice — to the menu bar (`LauncherCommands`) and
+        // to the responder chain (`QuickieKeyCommandDelegate`). UIKit resolves a key
+        // press to a single responder, so a double delivery should never happen; if
+        // one ever does, ⌘1 must still run the Favorite **once**. Collapsing repeats
+        // within one runloop turn is safe — no human presses a key twice inside one.
         guard intent != deliveredThisTurn else { return }
         deliveredThisTurn = intent
         Task { @MainActor in deliveredThisTurn = nil }
         counter += 1
         latest = Dispatch(intent: intent, token: counter)
     }
+
+    func sendEscape() {
+        escapes += 1
+    }
 }
 
-/// The buttons that carry the declared set's key equivalents. Shared by both
-/// declarations below so the menu bar and the launcher can never bind different
-/// keys to the same command.
-private struct KeyCommandButtons: View {
-    let menu: KeyCommand.Menu
-    let send: (KeyCommand.Intent) -> Void
+/// The app delegate, which exists **only** to carry the key commands (issue #262).
+///
+/// This is what actually binds them. SwiftUI's `.commands` and `.keyboardShortcut`
+/// are realized through the *menu* system, which exists on iPadOS and not on
+/// iPhone, and which CI's synthesized key events did not reach on either. A
+/// `UIResponder.keyCommands` array is the older, more direct path: UIKit resolves a
+/// hardware key press against the responder chain and invokes the matching command's
+/// action. The app delegate is a `UIResponder` sitting at the *end* of that chain,
+/// which is exactly right here — it needs no wrapper around the launcher's delicate
+/// bottom-bar layout to get into the chain, and anything closer to the first
+/// responder (a presented sheet, a navigation controller) still gets first refusal.
+///
+/// `esc` is offered only while the launcher is frontmost, so everywhere else the key
+/// is not claimed at all and the system keeps its own behaviour.
+final class QuickieKeyCommandDelegate: UIResponder, UIApplicationDelegate {
 
-    var body: some View {
-        ForEach(KeyCommand.commands(in: menu)) { command in
-            Button(command.title) { send(command.intent) }
-                // Every declared command is ⌘-modified (Core asserts the set never
-                // collides with a system shortcut), so the modifier is uniform here.
-                .keyboardShortcut(KeyEquivalent(command.key), modifiers: .command)
+    /// Where a fired command's index into `KeyCommand.declared` rides, so the
+    /// selector can map the sender back to its intent.
+    private static let intentIndexKey = "quickie.keyCommandIndex"
+
+    override var keyCommands: [UIKeyCommand]? {
+        var commands = KeyCommand.declared.enumerated().map { index, command in
+            let key = UIKeyCommand(
+                title: command.title,
+                action: #selector(runKeyCommand(_:)),
+                input: String(command.key),
+                modifierFlags: .command,
+                propertyList: [Self.intentIndexKey: index]
+            )
+            // Surface it in the hold-⌘ HUD beside the menu bar's own listing.
+            key.discoverabilityTitle = command.title
+            return key
         }
+        if KeyCommandRouter.shared.isLauncherFrontmost {
+            commands.append(
+                UIKeyCommand(
+                    title: "Dismiss",
+                    action: #selector(runEscape(_:)),
+                    input: UIKeyCommand.inputEscape,
+                    modifierFlags: []
+                )
+            )
+        }
+        return commands
+    }
+
+    @objc private func runKeyCommand(_ sender: UIKeyCommand) {
+        guard let plist = sender.propertyList as? [String: Any],
+              let index = plist[Self.intentIndexKey] as? Int,
+              KeyCommand.declared.indices.contains(index)
+        else { return }
+        let intent = KeyCommand.declared[index].intent
+        MainActor.assumeIsolated { KeyCommandRouter.shared.send(intent) }
+    }
+
+    @objc private func runEscape(_ sender: UIKeyCommand) {
+        MainActor.assumeIsolated { KeyCommandRouter.shared.sendEscape() }
     }
 }
 
 /// Quickie's **menu-bar** commands, declared through the SwiftUI scene `.commands`
-/// API so iPadOS 26 lists them in the menu bar and holding ⌘ shows them in the
-/// system shortcut HUD — rather than a private `UIKeyCommand` set the system could
-/// describe to no one.
+/// API so iPadOS 26 lists them in the menu bar — the discoverability half. The
+/// binding half is `QuickieKeyCommandDelegate`; a command reaching us by either
+/// route runs exactly once (see `KeyCommandRouter.send`).
 ///
 /// The set itself is Core's (`KeyCommand.declared`): this only renders it, so
 /// adding a command is a Core edit with a Core test behind it and the "never
@@ -77,58 +134,27 @@ struct LauncherCommands: Commands {
 
     var body: some Commands {
         CommandMenu(KeyCommand.Menu.launcher.title) {
-            KeyCommandButtons(menu: .launcher, send: router.send)
+            menuItems(in: .launcher)
         }
         CommandMenu(KeyCommand.Menu.favorites.title) {
-            KeyCommandButtons(menu: .favorites, send: router.send)
+            menuItems(in: .favorites)
+        }
+    }
+
+    @ViewBuilder
+    private func menuItems(in menu: KeyCommand.Menu) -> some View {
+        ForEach(KeyCommand.commands(in: menu)) { command in
+            Button(command.title) { router.send(command.intent) }
+                // Every declared command is ⌘-modified (Core asserts the set never
+                // collides with a system shortcut), so the modifier is uniform here.
+                .keyboardShortcut(KeyEquivalent(command.key), modifiers: .command)
         }
     }
 }
 
-/// The launcher's own copy of the key commands, as **in-view shortcuts**.
-///
-/// `LauncherCommands` alone is not enough. A scene's `.commands` are realized as a
-/// *menu*, and a menu exists only where the system has one — the iPadOS 26 menu
-/// bar. On iPhone, and anywhere else with no menu system, the declaration draws
-/// nothing and binds nothing, so an attached keyboard would be dead. A
-/// `.keyboardShortcut` on a Button *in the view hierarchy* is the other half: it
-/// becomes a `UIKeyCommand` on the responder chain, which fires on every idiom and
-/// takes precedence over the focused text field's own key handling. Between the
-/// two, the commands are both listed (iPad) and live (everywhere).
-///
-/// `esc` rides here **only** — never in the menu. An unmodified key declared to the
-/// menu is claimed app-wide, which would swallow the system's own escape on every
-/// pushed Management page and every sheet; carried by a button that exists only
-/// while the launcher is frontmost, it reaches nothing else.
-///
-/// The buttons are invisible, untappable, and hidden from accessibility: they are a
-/// key-binding surface, not UI. Rendered in a `.background` so they add no layout.
-struct LauncherKeyShortcuts: View {
-    let router: KeyCommandRouter
-    /// Whether the launcher itself is frontmost — the gate on `esc`'s button, so
-    /// the key falls back to the system everywhere else.
-    let isLauncherFrontmost: Bool
-    let onEscape: () -> Void
-
-    var body: some View {
-        ZStack {
-            ForEach(KeyCommand.Menu.allCases, id: \.self) { menu in
-                KeyCommandButtons(menu: menu, send: router.send)
-            }
-            if isLauncherFrontmost {
-                Button("Dismiss", action: onEscape)
-                    .keyboardShortcut(.escape, modifiers: [])
-            }
-        }
-        .opacity(0)
-        .allowsHitTesting(false)
-        .accessibilityHidden(true)
-    }
-}
-
-/// The launcher's half of the keyboard loop, bundled into one modifier: the
-/// commands arriving off the router, the in-view shortcuts that bind the same set
-/// where no menu bar exists, and `esc`.
+/// The launcher's half of the keyboard loop: the commands and `esc` arriving off
+/// the router, and the frontmost flag the delegate reads back to decide whether to
+/// claim `esc` at all.
 ///
 /// One modifier rather than three because `RootView`'s chain sits near the
 /// compiler's type-checking budget.
@@ -144,12 +170,9 @@ struct KeyCommandHandling: ViewModifier {
                 guard let dispatch else { return }
                 onCommand(dispatch.intent)
             }
-            .background {
-                LauncherKeyShortcuts(
-                    router: router,
-                    isLauncherFrontmost: isLauncherFrontmost,
-                    onEscape: onEscape
-                )
+            .onChange(of: router.escapes) { _, _ in onEscape() }
+            .onChange(of: isLauncherFrontmost, initial: true) { _, frontmost in
+                router.isLauncherFrontmost = frontmost
             }
     }
 }

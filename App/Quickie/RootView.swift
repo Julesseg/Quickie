@@ -779,12 +779,12 @@ struct RootView: View {
             // the system edge-swipe back.
             .toolbar(.hidden, for: .navigationBar)
             // The hardware-keyboard loop (CONTEXT.md → Key command; issue #262): the
-            // menu bar's ⌘ commands land through the router, the launcher carries the
-            // same set as in-view shortcuts (the only ones that bind where there is no
-            // menu bar), and `esc` — never declared app-wide, so the system keeps it on
-            // pushed pages and sheets — unwinds one layer of the launcher at a time.
-            // All of it rides one modifier because this chain sits near the compiler's
-            // type-checking budget (see `OutwardProjections`).
+            // ⌘ commands land through the router from whichever declaration fired —
+            // the menu bar or the responder chain — and `esc` unwinds one layer of the
+            // launcher at a time. `isLauncherFrontmost` goes back the other way, so the
+            // responder-chain delegate stops claiming `esc` the moment a page or sheet
+            // is on top. All of it rides one modifier because this chain sits near the
+            // compiler's type-checking budget (see `OutwardProjections`).
             .modifier(KeyCommandHandling(
                 router: keyCommands,
                 isLauncherFrontmost: isLauncherFrontmost,
