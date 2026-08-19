@@ -94,4 +94,47 @@ final class CommandColumnUITests: XCTestCase {
             )
         }
     }
+
+    /// Home's Recent rows share the column with the Result list that replaces them
+    /// on the first keystroke.
+    ///
+    /// Home is the launcher's default screen and the one surface where the mismatch
+    /// is visible without typing anything: a centred input bar over edge-to-edge
+    /// Recents. The two lists render the *same* `ActionRow`, so "they line up" is
+    /// the honest assertion — a Recent row and a result row on the same two edges.
+    @MainActor
+    func testHomeRecentRowsShareTheResultListColumn() throws {
+        let app = launchApp()
+
+        let input = app.textFields["search-input"]
+        XCTAssertTrue(input.waitForExistence(timeout: 30), "bottom input should exist on launch")
+
+        // A launch with `-uitest-reset-signals` has no Recents, so earn one: run the
+        // Settings row and pop back. Frecency then puts it on Home.
+        input.tap()
+        input.typeText("settings")
+        let resultRow = app.buttons["builtin.settings"]
+        XCTAssertTrue(resultRow.waitForExistence(timeout: 10), "typing 'settings' surfaces its command row")
+        let resultRowWidth = resultRow.frame.width
+        let resultRowMidX = resultRow.frame.midX
+        resultRow.tap()
+
+        let back = app.navigationBars.buttons.firstMatch
+        XCTAssertTrue(back.waitForExistence(timeout: 10), "the pushed Settings page shows a back button")
+        back.tap()
+
+        // Back on Home with an empty query (the push cleared it), Settings is now a
+        // Recent — the same id, so this is the same Action rendered by the other list.
+        let recentRow = app.buttons["builtin.settings"]
+        XCTAssertTrue(recentRow.waitForExistence(timeout: 10), "the run action should appear under Recent")
+
+        XCTAssertEqual(
+            recentRow.frame.width, resultRowWidth, accuracy: 1,
+            "a Recent row and a result row should be the same width"
+        )
+        XCTAssertEqual(
+            recentRow.frame.midX, resultRowMidX, accuracy: 1,
+            "a Recent row and a result row should sit on the same centre line"
+        )
+    }
 }

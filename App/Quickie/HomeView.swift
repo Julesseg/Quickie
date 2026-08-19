@@ -42,6 +42,12 @@ struct HomeView: View {
                         }
                     }
                     .frame(maxWidth: .infinity, alignment: .leading)
+                    // The readable command column (ADR 0039). Applied to the whole
+                    // section so the "Recent" header rides the column with its rows
+                    // instead of staying pinned to the window's leading edge — and
+                    // so a Recent row and a Result-list row, the same `ActionRow`,
+                    // land on the same two edges when the query flips between them.
+                    .commandColumn()
                     // Top padding only — the bottom edge stays flush with the
                     // scroll view, exactly like the Result list, so the lowest
                     // Recent row sits the same distance above the input bar as
@@ -108,7 +114,11 @@ struct HomeView: View {
             .padding(.horizontal, 16)
         }
         .padding(.bottom, 16)
-        .frame(maxWidth: .infinity)
+        // The readable command column (ADR 0039): the grid and its header clamp so
+        // Home's two surfaces line up with each other and with the Result list that
+        // replaces them on the first keystroke. The *column count* is not this
+        // decision's — a regular-width grid still lays out 2×2 until #265 adapts it.
+        .commandColumn()
         // The progressive-blur band: a soft material that fades out at its lower
         // edge so the Recent list dissolves under it rather than meeting a hard
         // line (CONTEXT.md → Home; ADR 0010). It bleeds into the status bar as one

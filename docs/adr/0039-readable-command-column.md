@@ -29,9 +29,9 @@ no phone ever produced.
 
 **The launcher's command surfaces lay out inside one centred, readable-width
 column on a regular-width window.** The surfaces are the input bar, the Shelf,
-the paste chip, the Result list's rows, the Search Files context's rows and
-breadcrumb, and a capture's breadcrumb crumbs and bottom bar. The column is
-**680pt**, tracking UIKit's readable-content guide, which tops out in the same
+the paste chip, the Result list's rows, [[Home]]'s Favorites grid and Recent
+list, the Search Files context's rows and breadcrumb, and a capture's
+breadcrumb crumbs and bottom bar. The column is **680pt**, tracking UIKit's readable-content guide, which tops out in the same
 neighbourhood for the same reason a line of text does.
 
 **The switch is the horizontal size class, never the device idiom.** A
@@ -62,6 +62,12 @@ breadcrumb's crumbs 16pt — exactly the insets they keep off an iPhone's screen
 edge, so the relationships between the surfaces are carried over rather than
 renegotiated. In practice that means the clamp is applied *outside* a surface's
 own horizontal padding.
+
+Home is included for the reason the column exists at all: it is the launcher's
+*default* screen, and it is the one place the mismatch shows without typing
+anything — a centred input bar over an edge-to-edge Recent list. Its Favorites
+grid clamps as a container here; how many columns that grid lays out at regular
+width is a separate decision (#265), not this one.
 
 **Only content clamps.** The [[Living backdrop]] and the progressive-blur bands
 still span the whole window: the clamp's outer frame stays full-width, so a
