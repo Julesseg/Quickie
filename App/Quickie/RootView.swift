@@ -839,7 +839,7 @@ struct RootView: View {
             .ignoresSafeArea(.keyboard, edges: .bottom)
             // Both keyboard channels, fed from UIKit where the host window — and
             // so the only coordinate space in which "how much does the keyboard
-            // cover?" has an answer — is in hand (issue #261, ADR 0036).
+            // cover?" has an answer — is in hand (issue #261, ADR 0040).
             //
             // The **notified** channel reconciles the held inset with every way
             // the keyboard arrives and leaves:

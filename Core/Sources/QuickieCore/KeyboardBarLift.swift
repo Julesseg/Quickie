@@ -25,7 +25,7 @@ import CoreGraphics
 /// Slide Over, Stage Manager, iPadOS 26 free resizing), so screen-space math
 /// lifts the bar by an amount that has nothing to do with what the keyboard
 /// actually covers. The App converts the notification's end-frame with
-/// `UIWindow.convert(_:from:)` before calling in (ADR 0036).
+/// `UIWindow.convert(_:from:)` before calling in (ADR 0040).
 public enum KeyboardBarLift {
     /// The height separating a real software keyboard from a hardware keyboard's
     /// thin shortcuts bar. Compared against the keyboard's **own** height — see
@@ -68,7 +68,7 @@ public enum KeyboardBarLift {
 
     /// Where the keyboard is relative to the window it must not cover, all in
     /// the window's own coordinate space — the only space in which "how much of
-    /// the bar does the keyboard cover?" has an answer (ADR 0036). The App
+    /// the bar does the keyboard cover?" has an answer (ADR 0040). The App
     /// converts the notification's screen-space end-frame and reads the bounds
     /// and inset off the same window at the same moment, so the three can never
     /// disagree about which window they describe.

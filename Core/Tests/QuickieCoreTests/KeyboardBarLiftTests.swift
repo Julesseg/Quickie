@@ -362,6 +362,28 @@ final class KeyboardBarLiftTests: XCTestCase {
         )
     }
 
+    // MARK: - Capture step changes
+
+    /// Committing a text step into a keyboard-less one (the date picker)
+    /// releases the inset at the step change itself — immediately, unanimated —
+    /// so the picker lays out in its final position behind the dismissing
+    /// keyboard instead of appearing keyboard-high and sliding down with it.
+    func testEnteringKeyboardlessStepDropsInsetInstantly() {
+        XCTAssertEqual(
+            KeyboardBarLift.stepChanged(usesKeyboardlessControl: true),
+            .track(inset: 0)
+        )
+    }
+
+    /// A step change back to a keyboard-full control decides nothing — the
+    /// keyboard-show notification owns the lift, riding the keyboard's rise.
+    func testEnteringKeyboardFullStepHoldsForTheKeyboardShow() {
+        XCTAssertEqual(
+            KeyboardBarLift.stepChanged(usesKeyboardlessControl: false),
+            .hold
+        )
+    }
+
     // MARK: - The live channel
 
     /// A live sample during a list drag is the finger moving the keyboard (the

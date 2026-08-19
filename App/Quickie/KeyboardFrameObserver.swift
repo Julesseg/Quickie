@@ -8,7 +8,7 @@ import UIKit
 ///
 /// - **notified**: each `keyboardWillChangeFrame` end-frame, converted from
 ///   screen coordinates into the window's and paired with that window's bounds
-///   and bottom inset (issue #261, ADR 0036). Fires at animation start, so the
+///   and bottom inset (issue #261, ADR 0040). Fires at animation start, so the
 ///   bar can ride the keyboard's own timing.
 /// - **live**: the keyboard's current overlap of the window bottom per layout
 ///   pass, via `UIView.keyboardLayoutGuide` — the one API that follows the
