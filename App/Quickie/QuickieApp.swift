@@ -23,6 +23,12 @@ struct QuickieApp: App {
         return QuickieStore.container
     }()
 
+    /// The scene-to-launcher bridge for the hardware-keyboard commands (issue
+    /// #262). Owned here because `.commands` is a *Scene* modifier: the menu bar
+    /// is declared beside the `WindowGroup`, outside any view, so it posts here
+    /// and `RootView` observes it.
+    @State private var keyCommands = KeyCommandRouter()
+
     init() {
         // Honor the same UI-test reset flag as SignalsStore/FallbacksStore for the
         // app-level toggles (issue #65): they persist in the App Group defaults,
@@ -103,9 +109,14 @@ struct QuickieApp: App {
             // purple. Setting it once here is what makes the accent unforgettable
             // — a control that names no color inherits it rather than each Toggle
             // having to remember `.tint`.
-            RootView()
+            RootView(keyCommands: keyCommands)
                 .tint(.accentColor)
         }
         .modelContainer(container)
+        // Declare the hardware-keyboard commands the system way (CONTEXT.md → Key
+        // command; issue #262): the iPadOS 26 menu bar lists them and holding ⌘
+        // shows them in the system shortcut HUD. The set is Core's — this only
+        // renders it.
+        .commands { LauncherCommands(router: keyCommands) }
     }
 }
