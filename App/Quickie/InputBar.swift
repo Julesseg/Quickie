@@ -164,6 +164,12 @@ struct InputBar: View {
         }
         // Plain, so nothing tints or platters the glyph over the glass.
         .buttonStyle(.plain)
+        // The pointer highlight (CONTEXT.md → Pointer hover). A `Circle`, not the
+        // `Rectangle` the hit area claims: the target is deliberately wider and taller
+        // than the ⊗ it wraps, and a highlight drawn at that size would look like a
+        // second, squared-off surface inside the input's capsule. The circle inscribes
+        // in the frame, so it lands on the glyph.
+        .pointerHover(in: Circle())
         .accessibilityIdentifier("clear-input")
         .accessibilityLabel("Clear text")
         .transition(clearMotion.inPlaceTransition)

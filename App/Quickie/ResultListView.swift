@@ -68,6 +68,9 @@ struct ResultListView: View {
                                 ActionRow(action: action, isHighlighted: rank == 0, match: row.match)
                             }
                             .buttonStyle(.plain)
+                            // A pointer crossing the list lights each row in the row's
+                            // own pill shape (CONTEXT.md → Pointer hover).
+                            .pointerHover(in: ActionRow.shape)
                             .accessibilityIdentifier(action.id)
                             .resultContextMenu(
                                 secondaryActions: secondaryActions(for: action.content, includeDeeplink: !action.isSilentQueryCapture),
@@ -171,9 +174,13 @@ struct ActionRow: View {
     /// keeps the one-line pill look while giving tall rows the *same* rounding, so
     /// the stack reads consistently. `QuickieRadius.row` is tuned to a single-line
     /// row's half-height (badge 30 + vertical padding 2×10 = 50).
-    private var rowShape: RoundedRectangle {
-        RoundedRectangle(cornerRadius: QuickieRadius.row, style: .continuous)
-    }
+    ///
+    /// Static, so the surfaces that wrap a row in a button can hover the pointer in the
+    /// row's *own* face (`pointerHover(in:)`) instead of restating the radius and
+    /// drifting from it.
+    static let shape = RoundedRectangle(cornerRadius: QuickieRadius.row, style: .continuous)
+
+    private var rowShape: RoundedRectangle { Self.shape }
 
     /// Whether this row is a Computed result (the Calculator's answer / conversion
     /// or a Detected value — ADR 0032): the rows whose text is a *value*, rendered

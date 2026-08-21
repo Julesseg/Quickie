@@ -61,6 +61,11 @@ struct ClipboardPasteButton: View {
             }
             .glassEffect(.regular.interactive(), in: Circle())
             .glassEffectID(Self.glassID, in: glassNamespace)
+            // The pointer highlight (CONTEXT.md → Pointer hover), on the chip as the
+            // user sees it — our glass circle — not on the invisible `UIPasteControl`
+            // beneath it, whose own pointer interaction is drawn at alpha 0.02 and so
+            // shows nothing.
+            .pointerHover(in: Circle())
     }
 }
 

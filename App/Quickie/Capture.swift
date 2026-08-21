@@ -451,6 +451,10 @@ private struct ChoiceList: View {
                             )
                         }
                         .buttonStyle(.plain)
+                        // A choice row is a result row by another name, so the pointer
+                        // treats it as one (CONTEXT.md → Pointer hover) — in its own
+                        // capsule, which is the shape `ChoiceRow` actually draws.
+                        .pointerHover(in: Capsule())
                         .accessibilityIdentifier("choice-\(choice.id)")
                     }
                 }
@@ -767,6 +771,7 @@ struct CaptureBar: View {
                         .glassEffect(.regular.interactive(), in: Capsule())
                 }
                 .buttonStyle(.plain)
+                .pointerHover(in: Capsule())
                 .accessibilityIdentifier("capture-set-date")
             default:
                 BackspaceTextField(
@@ -844,6 +849,9 @@ private struct CancelButton: View {
         }
         .buttonStyle(.plain)
         .contentShape(Circle())
+        // The pointer highlight (CONTEXT.md → Pointer hover): the get-me-out control
+        // is the one crumb-adjacent thing that must never read as decoration.
+        .pointerHover(in: Circle())
         .accessibilityLabel("Cancel")
         .accessibilityIdentifier("capture-cancel")
     }
@@ -891,7 +899,7 @@ private struct BreadcrumbSteps: View {
                             width: width(for: step, in: steps),
                             displayText: display.text,
                             isPlaceholder: display.isPlaceholder,
-                            onTap: tapHandler(for: step, currentIndex: currentIndex)
+                            onTap: tapHandler(for: step, in: steps)
                         )
                         // The scroll target for auto-centring the active crumb.
                         .id(step.index)
@@ -937,20 +945,16 @@ private struct BreadcrumbSteps: View {
         }
     }
 
-    /// A crumb's tap action, or `nil` when it isn't tappable. A filled pill that
-    /// isn't the current step **re-edits** it. The immediate next (empty) step
-    /// **advances** — the same as pressing Enter (its empty-guard means an empty
-    /// current step stays put, so tapping ahead never commits nothing). Every other
-    /// crumb — the current one, or a not-yet-reached empty step further ahead — is
-    /// inert.
-    private func tapHandler(for step: BreadcrumbStep, currentIndex: Int?) -> (() -> Void)? {
-        if step.value != nil && !step.isCurrent {
-            return { model.editPill(at: step.index) }
+    /// A crumb's tap action, or `nil` when it isn't tappable — the App-side half of
+    /// Core's `CrumbTap`, which decides *which* crumbs act (`[BreadcrumbStep].tap`).
+    /// Kept as a closure so `StepCrumb` still has one thing to switch on: it is a
+    /// button, glass-interactive and pointer-hovering, exactly when this is non-nil.
+    private func tapHandler(for step: BreadcrumbStep, in steps: [BreadcrumbStep]) -> (() -> Void)? {
+        switch steps.tap(step) {
+        case .reEdit(let index): return { model.editPill(at: index) }
+        case .advance: return { model.submitCurrent() }
+        case .inert: return nil
         }
-        if let currentIndex, step.value == nil, step.index == currentIndex + 1 {
-            return { model.submitCurrent() }
-        }
-        return nil
     }
 
     /// What a crumb shows: the **live** input for the current step — the typed
@@ -1032,6 +1036,12 @@ private struct StepCrumb: View {
         if let onTap {
             Button(action: onTap) { content }
                 .buttonStyle(.plain)
+                // The pointer highlight, in the crumb's own rounded shape (CONTEXT.md
+                // → Pointer hover). It rides the same `onTap != nil` branch the glass's
+                // `interactive()` does, so the crumbs that light up under the pointer
+                // are exactly the crumbs a tap acts on — an inert crumb below stays a
+                // label to the pointer as well as to the finger.
+                .pointerHover(in: shape)
                 // A filled pill keeps its `pill-N` identity; a tappable empty step
                 // keeps `step-N` so the next-empty advance target is addressable too.
                 .accessibilityIdentifier(step.value != nil ? "pill-\(step.index)" : "step-\(step.index)")
@@ -1110,6 +1120,7 @@ private struct PrimerAffordance: View {
                     .foregroundStyle(.secondary)
             }
             .buttonStyle(.plain)
+            .pointerHover(in: Circle())
             .accessibilityLabel("Cancel")
         }
         .padding(.horizontal, 16)
@@ -1147,6 +1158,7 @@ private struct DeniedAffordance: View {
                     .foregroundStyle(.secondary)
             }
             .buttonStyle(.plain)
+            .pointerHover(in: Circle())
             .accessibilityLabel("Dismiss")
         }
         .padding(.horizontal, 16)

@@ -105,6 +105,11 @@ struct FallbackShelfRow: View {
         // Plain, like every other Action surface's button: the glass circle *is* the
         // control's appearance, and a bordered style would draw a second one around it.
         .buttonStyle(.plain)
+        // The pointer highlight, circular like the button (CONTEXT.md → Pointer
+        // hover). On the button rather than on `glyphCircle`, which is also the
+        // long-press menu's lifted preview — a detached, floating card must not
+        // light up as though it were still a target.
+        .pointerHover(in: Circle())
         // The one long-press menu every Action carries (CONTEXT.md → Secondary action;
         // ADR 0017), with the action's **title** as its non-action first row: an
         // icon-only button has nowhere else to say what it is, which is what the old
