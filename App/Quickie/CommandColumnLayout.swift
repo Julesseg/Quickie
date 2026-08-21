@@ -17,11 +17,7 @@ private struct CommandColumnClamp: ViewModifier {
     /// rather than staying a column because the hardware never changed.
     @Environment(\.horizontalSizeClass) private var horizontalSizeClass
 
-    /// `nil` (a size class SwiftUI hasn't resolved yet) reads as compact: the layout
-    /// that ships today is the safe answer for a frame we can't classify.
-    private var sizeClass: CommandColumn.SizeClass {
-        horizontalSizeClass == .regular ? .regular : .compact
-    }
+    private var sizeClass: CommandColumn.SizeClass { .init(horizontalSizeClass) }
 
     func body(content: Content) -> some View {
         content
@@ -45,4 +41,18 @@ extension View {
     /// the screen edge on an iPhone (12pt for a result row's or the input bar's glass,
     /// 16pt for a breadcrumb's crumbs) and the relationship between them is unchanged.
     func commandColumn() -> some View { modifier(CommandColumnClamp()) }
+}
+
+extension CommandColumn.SizeClass {
+    /// SwiftUI's horizontal size class, as the layout policy takes it. One mapping,
+    /// shared by the clamp and by every surface that shapes itself differently inside
+    /// the column (Home's Favorites grid picks its column count from it), because two
+    /// views reading the environment through two different conditions is how the same
+    /// window ends up regular for one surface and compact for the one beside it.
+    ///
+    /// `nil` — a class SwiftUI hasn't resolved yet — reads as **compact**: the layout
+    /// that ships today is the safe answer for a frame we can't classify.
+    init(_ horizontalSizeClass: UserInterfaceSizeClass?) {
+        self = horizontalSizeClass == .regular ? .regular : .compact
+    }
 }

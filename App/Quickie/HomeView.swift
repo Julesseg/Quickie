@@ -2,10 +2,11 @@ import SwiftUI
 import UIKit
 import QuickieCore
 
-/// The empty-query Home state (CONTEXT.md → Home): a 2×2 **Favorites grid** (at
-/// most four) pinned at the top over a progressive-blur band, with the **Recent**
-/// (Frecency) list scrolling *under* that band. Before the user has pinned or
-/// used anything it falls back to the minimal "start typing" placeholder.
+/// The empty-query Home state (CONTEXT.md → Home): the **Favorites grid** (at most
+/// four cards, 2×2 at compact width and one four-across row at regular) pinned at
+/// the top over a progressive-blur band, with the **Recent** (Frecency) list
+/// scrolling *under* that band. Before the user has pinned or used anything it
+/// falls back to the minimal "start typing" placeholder.
 struct HomeView: View {
     let content: SearchEngine.HomeContent
     let onRun: (Action) -> Void
@@ -19,9 +20,28 @@ struct HomeView: View {
     /// swipe-dismiss (issue #64) from a context-menu dismissal (issue #58).
     var onScrollActive: (Bool) -> Void = { _ in }
 
-    /// At most four Favorites fill the 2×2 grid (CONTEXT.md → Favorites grid);
-    /// extras (which the cap should already prevent) are never shown.
-    private var gridFavorites: [Action] { Array(content.favorites.prefix(4)) }
+    /// The window's width class, which decides how many cards lay out across a row —
+    /// **not** the device idiom, so an iPad dragged into Split View gets the iPhone's
+    /// 2×2 back mid-drag (ADR 0039).
+    @Environment(\.horizontalSizeClass) private var horizontalSizeClass
+
+    /// At most four Favorites fill the grid (CONTEXT.md → Favorites grid); extras
+    /// (which the cap should already prevent) are never shown.
+    private var gridFavorites: [Action] {
+        Array(content.favorites.prefix(CommandColumn.FavoritesGrid.capacity))
+    }
+
+    /// The grid's columns, from the Core layout policy (issue #265): four across
+    /// inside the readable column at regular width, the 2×2 that always shipped at
+    /// compact. Equal flexible columns, so the row's shape is the same whether one
+    /// Favorite is pinned or four — the cards fill it left to right rather than
+    /// stretching to swallow the empty slots.
+    private var favoriteColumns: [GridItem] {
+        Array(
+            repeating: GridItem(.flexible(), spacing: CommandColumn.FavoritesGrid.spacing),
+            count: CommandColumn.FavoritesGrid.columnCount(for: .init(horizontalSizeClass))
+        )
+    }
 
     private var isEmpty: Bool {
         content.favorites.isEmpty && content.frecent.isEmpty
@@ -81,16 +101,13 @@ struct HomeView: View {
         }
     }
 
-    /// The 2×2 Favorites grid, pinned at the top over a progressive-blur band so
-    /// the Recent list refracts through it as it scrolls under (ADR 0010).
+    /// The Favorites grid, pinned at the top over a progressive-blur band so the
+    /// Recent list refracts through it as it scrolls under (ADR 0010).
     private var favoritesGrid: some View {
         VStack(alignment: .leading, spacing: 8) {
             sectionHeader("Favorites")
                 .padding(.horizontal, 20)
-            LazyVGrid(
-                columns: [GridItem(.flexible(), spacing: 10), GridItem(.flexible(), spacing: 10)],
-                spacing: 10
-            ) {
+            LazyVGrid(columns: favoriteColumns, spacing: CommandColumn.FavoritesGrid.spacing) {
                 ForEach(gridFavorites) { action in
                     Button {
                         onRun(action)
@@ -111,13 +128,13 @@ struct HomeView: View {
                     }
                 }
             }
-            .padding(.horizontal, 16)
+            .padding(.horizontal, CommandColumn.FavoritesGrid.horizontalInset)
         }
         .padding(.bottom, 16)
         // The readable command column (ADR 0039): the grid and its header clamp so
         // Home's two surfaces line up with each other and with the Result list that
-        // replaces them on the first keystroke. The *column count* is not this
-        // decision's — a regular-width grid still lays out 2×2 until #265 adapts it.
+        // replaces them on the first keystroke. Inside it, `favoriteColumns` decides
+        // how many cards share a row (issue #265).
         .commandColumn()
         // The progressive-blur band: a soft material that fades out at its lower
         // edge so the Recent list dissolves under it rather than meeting a hard
@@ -187,7 +204,7 @@ struct HomeView: View {
     }
 }
 
-/// One small Favorite card in the 2×2 grid: a glass tile with the Action's
+/// One small Favorite card in the Favorites grid: a glass tile with the Action's
 /// provider badge, title, and main-action glyph — the launch-time, tap-without-
 /// typing surface.
 struct FavoriteCard: View {

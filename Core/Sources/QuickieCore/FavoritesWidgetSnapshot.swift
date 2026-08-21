@@ -14,7 +14,8 @@ import Foundation
 public enum FavoritesWidgetSnapshot {
     /// The grid's cap (CONTEXT.md → Favorites grid): at most four Favorites, so
     /// the codec clamps both sides and a malformed over-long snapshot can never
-    /// draw a fifth cell.
+    /// draw a fifth cell. `CommandColumnTests` pins it equal to the in-app grid's own
+    /// capacity, since the widget *mirrors* that grid (ADR 0025).
     public static let capacity = 4
 
     /// Encodes the snapshot as JSON, clamped to the grid's four in pin order.

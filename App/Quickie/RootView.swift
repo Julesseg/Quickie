@@ -8,7 +8,7 @@ import QuickieStoreKit
 
 /// The whole screen, and the whole loop made visible: a bottom auto-focused
 /// input, a reversed Result list above it, and tap-to-run. The empty-query state
-/// shows Home — a 2×2 Favorites grid over the Recent list (ADR 0008 / issue #36).
+/// shows Home — the Favorites grid over the Recent list (ADR 0008 / issue #36).
 ///
 /// Management surfaces (Settings, Custom Actions, Fallbacks, the Pile, All Snippets)
 /// are no longer chrome: each is reached by typing to surface a command row and

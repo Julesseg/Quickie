@@ -91,4 +91,73 @@ final class CommandColumnTests: XCTestCase {
         )
         XCTAssertEqual(diameter, layout.preferredDiameter)
     }
+
+    // MARK: - The Favorites grid inside the column (issue #265)
+
+    /// Compact width is the 2×2 grid that has always shipped — the "pixel-identical
+    /// to today" half of the policy, for the grid this time.
+    func testCompactFavoritesGridIsTwoColumns() {
+        XCTAssertEqual(CommandColumn.FavoritesGrid.columnCount(for: .compact), 2)
+    }
+
+    /// Regular width lays the whole grid out as **one row**: a column count equal to
+    /// the Favorites cap is what "4-across" means, and stating it as that equality
+    /// rather than as a second `4` is what keeps the two from drifting apart if the
+    /// cap ever moves.
+    func testRegularFavoritesGridIsOneRowOfTheWholeCap() {
+        XCTAssertEqual(
+            CommandColumn.FavoritesGrid.columnCount(for: .regular),
+            CommandColumn.FavoritesGrid.capacity
+        )
+    }
+
+    /// The grid holds as many cards as the widgets draw cells. Neither reads the
+    /// other — the Favorites widget *mirrors* the grid (ADR 0025), so what matters is
+    /// that the two numbers agree, not that one is defined in terms of the other.
+    func testTheGridHoldsAsManyCardsAsTheWidgetDrawsCells() {
+        XCTAssertEqual(CommandColumn.FavoritesGrid.capacity, FavoritesWidgetSnapshot.capacity)
+    }
+
+    /// A card is a quarter of the column at regular width — the four-across row,
+    /// resolved against a full-screen 13" iPad.
+    func testRegularCardIsAQuarterOfTheColumn() {
+        // (680 − 2×16 inset − 3×10 spacing) ÷ 4
+        XCTAssertEqual(
+            CommandColumn.FavoritesGrid.cardWidth(inWindowOf: 1376, for: .regular),
+            154.5, accuracy: 0.01
+        )
+    }
+
+    /// The finding this ticket exists for (audit F2): a single pinned Favorite used
+    /// to draw a card half the *window* wide — a ~670pt slab for one word and a
+    /// glyph. The column count is a function of the size class **alone**, never of
+    /// how many Favorites are pinned, so one pin and four pins draw the same card:
+    /// the row fills up left to right instead of the cards growing to fill the row.
+    func testALoneFavoriteDrawsTheSameCardAsAFullGrid() {
+        let card = CommandColumn.FavoritesGrid.cardWidth(inWindowOf: 1376, for: .regular)
+        XCTAssertLessThan(
+            card, CommandColumn.readableWidth / 3,
+            "one Favorite should be a card in a four-across row, not a slab"
+        )
+    }
+
+    /// Compact card sizing is untouched at every iPhone width: half the window, less
+    /// the grid's own inset and the gutter between the two cards.
+    func testCompactCardIsHalfTheWindowAsItAlwaysWas() {
+        for window in [320, 375, 393, 430] as [CGFloat] {
+            XCTAssertEqual(
+                CommandColumn.FavoritesGrid.cardWidth(inWindowOf: window, for: .compact),
+                (window - 32 - 10) / 2, accuracy: 0.01
+            )
+        }
+    }
+
+    /// The grid is capped by the column like every other command surface: a card on
+    /// a 13" iPad is narrower than one on an iPhone, not wider — four cards inside
+    /// 680pt rather than four cards spread over 1,376.
+    func testTheGridIsCappedByTheColumnNotTheWindow() {
+        let iPad = CommandColumn.FavoritesGrid.cardWidth(inWindowOf: 1376, for: .regular)
+        let iPhone = CommandColumn.FavoritesGrid.cardWidth(inWindowOf: 393, for: .compact)
+        XCTAssertLessThan(iPad, iPhone)
+    }
 }

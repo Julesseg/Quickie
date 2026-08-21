@@ -24,18 +24,27 @@ final class CommandColumnUITests: XCTestCase {
     /// own test pins the value, so a change to it fails there first, loudly.
     private let readableWidth: CGFloat = 680
 
+    /// The Favorites grid's inset off the column's edge and the gutter between its
+    /// cards, mirroring `CommandColumn.FavoritesGrid.horizontalInset` / `.spacing`
+    /// for the same reason as `readableWidth` above: the UI test target can't see
+    /// QuickieCore, and Core's own test pins both values so a change fails there
+    /// first. Named rather than inlined so the expectations below read as the
+    /// policy's arithmetic instead of as bare numbers.
+    private let gridInset: CGFloat = 16
+    private let gridSpacing: CGFloat = 10
+
     override func setUpWithError() throws {
         continueAfterFailure = false
     }
 
     @MainActor
-    private func launchApp() -> XCUIApplication {
+    private func launchApp(extraArguments: [String] = []) -> XCUIApplication {
         // An empty clipboard, so the paste chip is not offered and the input bar is
         // the bar's only occupant — otherwise the field sits off-centre beside the
         // chip, and *which* is true depends on whichever suite ran before this one.
         UIPasteboard.general.items = []
         let app = XCUIApplication()
-        app.launchArguments = ["--uitesting", "-uitest-reset-signals", "-uitest-instant-motion"]
+        app.launchArguments = ["--uitesting", "-uitest-reset-signals", "-uitest-instant-motion"] + extraArguments
         app.launch()
         return app
     }
@@ -135,6 +144,95 @@ final class CommandColumnUITests: XCTestCase {
         XCTAssertEqual(
             recentRow.frame.midX, resultRowMidX, accuracy: 1,
             "a Recent row and a result row should sit on the same centre line"
+        )
+    }
+
+    // MARK: - The Favorites grid inside the column (issue #265)
+
+    /// The four built-in Actions the grid tests pin, in pin order. Built-ins rather
+    /// than seeds: they exist before the first render, need no permission, and are
+    /// never pruned by the launch-time reconciliation, so the grid is full on the
+    /// first frame and there is no seeding race to wait out.
+    private let fourFavorites = [
+        "builtin.settings", "builtin.new-reminder", "builtin.new-event", "builtin.new-snippet",
+    ]
+
+    @MainActor
+    private func favoriteCards(_ app: XCUIApplication, _ ids: [String]) -> [XCUIElement] {
+        ids.map { app.buttons["favorite.\($0)"] }
+    }
+
+    /// A full grid is **one four-across row** at regular width and the **2×2** that
+    /// always shipped at compact — the column count `CommandColumnTests` pins, seen
+    /// as the geometry the user actually gets.
+    ///
+    /// Frames, not counts: four cards exist either way, and the whole finding (audit
+    /// F2) is about where they land.
+    @MainActor
+    func testFullFavoritesGridIsOneRowAtRegularWidthAndTwoByTwoAtCompact() throws {
+        let app = launchApp(extraArguments: fourFavorites.flatMap { ["-uitest-pin-favorite", $0] })
+
+        let cards = favoriteCards(app, fourFavorites)
+        XCTAssertTrue(cards[0].waitForExistence(timeout: 30), "the pinned Favorites render on Home")
+        let frames = cards.map { card -> CGRect in
+            XCTAssertTrue(card.exists, "every pinned Favorite should draw a card")
+            return card.frame
+        }
+
+        if UIDevice.current.userInterfaceIdiom == .pad {
+            for (index, frame) in frames.enumerated().dropFirst() {
+                XCTAssertEqual(
+                    frame.midY, frames[0].midY, accuracy: 1,
+                    "at regular width all four Favorites should share one row (card \(index) fell off it)"
+                )
+                XCTAssertGreaterThan(
+                    frame.minX, frames[index - 1].maxX,
+                    "the cards should run left to right across that row"
+                )
+            }
+            // The row lays out inside the column, not the window: four cards and their
+            // three gutters, inside the grid's own 16pt inset off the column's edges.
+            let row = frames[3].maxX - frames[0].minX
+            XCTAssertEqual(
+                row, readableWidth - 2 * gridInset, accuracy: 1,
+                "the row should span the column, inset by \(gridInset)pt"
+            )
+        } else {
+            XCTAssertEqual(frames[1].midY, frames[0].midY, accuracy: 1, "compact: the first two share a row")
+            XCTAssertEqual(frames[3].midY, frames[2].midY, accuracy: 1, "compact: the last two share a row")
+            XCTAssertGreaterThan(frames[2].midY, frames[0].midY, "compact: the grid is 2×2, second row below the first")
+            XCTAssertEqual(
+                frames[0].width, (app.frame.width - 2 * gridInset - gridSpacing) / 2, accuracy: 1,
+                "compact card sizing must be unchanged: half the window, less the insets and the gutter"
+            )
+        }
+    }
+
+    /// The finding itself (audit F2): **one** pinned Favorite draws the same card as
+    /// one of four, rather than a slab stretched across the empty slots beside it.
+    ///
+    /// Asserted as the equality between the two launches instead of a number, because
+    /// what was wrong was not the card's width but that the width depended on how
+    /// many Actions the user had pinned.
+    @MainActor
+    func testALoneFavoriteDrawsTheSameCardAsOneOfFour() throws {
+        let full = launchApp(extraArguments: fourFavorites.flatMap { ["-uitest-pin-favorite", $0] })
+        let firstOfFour = favoriteCards(full, fourFavorites)[0]
+        XCTAssertTrue(firstOfFour.waitForExistence(timeout: 30), "the pinned Favorites render on Home")
+        let cardInAFullGrid = firstOfFour.frame
+        full.terminate()
+
+        let lone = launchApp(extraArguments: ["-uitest-pin-favorite", fourFavorites[0]])
+        let onlyCard = favoriteCards(lone, fourFavorites)[0]
+        XCTAssertTrue(onlyCard.waitForExistence(timeout: 30), "the single pinned Favorite renders on Home")
+
+        XCTAssertEqual(
+            onlyCard.frame.width, cardInAFullGrid.width, accuracy: 1,
+            "a lone Favorite should be a card in the row, not a slab that swallows the empty slots"
+        )
+        XCTAssertEqual(
+            onlyCard.frame.minX, cardInAFullGrid.minX, accuracy: 1,
+            "and it should sit in the row's first slot, where the first of four sits"
         )
     }
 }
