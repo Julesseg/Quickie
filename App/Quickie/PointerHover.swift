@@ -17,14 +17,27 @@ import SwiftUI
 /// also used as the lifted preview of a long-press menu (`resultContextMenu`), and a
 /// detached, floating preview card must not light up under the pointer as though it
 /// were still a target.
+///
+/// It is **not** a moment in the animation budget (ADR 0010) and takes no
+/// `MotionPolicy` degradation, unlike every animation the app authors. The highlight is
+/// the system's, drawn by UIKit's pointer machinery in response to hardware the app
+/// never sees; there is no curve here to tune, and Reduce Motion is honoured upstream
+/// by the same machinery. The budget governs what Quickie animates, and Quickie does
+/// not animate this.
 extension View {
     /// Gives this tappable element the system pointer-hover highlight, in `shape`.
-    func pointerHover(in shape: some Shape) -> some View {
+    ///
+    /// `isEnabled: false` leaves the element inert to the pointer — for a control that
+    /// is only *sometimes* a control (the confirmation toast, which is tappable only
+    /// when it has somewhere to go). It is a parameter rather than an `if` around the
+    /// modifier so the view keeps one identity across the switch and an in-flight
+    /// transition isn't cut short by SwiftUI rebuilding it.
+    func pointerHover(in shape: some Shape, isEnabled: Bool = true) -> some View {
         // `contentShape(.hoverEffect,)` sets the geometry the highlight morphs into;
         // `.highlight` is the effect that slides the pointer under the element rather
         // than lifting the element off the surface (`.lift`), which is the right one
         // for chrome that is already floating on glass.
         contentShape(.hoverEffect, shape)
-            .hoverEffect(.highlight)
+            .hoverEffect(.highlight, isEnabled: isEnabled)
     }
 }

@@ -3,11 +3,12 @@ import Testing
 @testable import QuickieCore
 
 // What a tap on a breadcrumb crumb does (CONTEXT.md → Pointer hover; issue #263).
-// Three of a capture's crumbs are controls — the filled pills behind the cursor,
-// and the one empty step directly ahead of it — and the rest are read-only labels.
-// The rule lives here rather than in the breadcrumb view because it now answers two
-// questions at once: what a tap *runs*, and whether the crumb is a control at all,
-// which is what decides whether a pointer hovering it lights up.
+// Two kinds of crumb are controls — a filled pill behind the cursor, and the one
+// empty step directly ahead of it — and every other crumb is a read-only label that
+// happens to look like the pills beside it. The rule lives here rather than in the
+// breadcrumb view because it now answers two questions at once: what a tap *runs*,
+// and whether the crumb is a control at all, which is what decides whether a pointer
+// hovering it lights up.
 struct CrumbTapTests {
 
     /// A run of crumbs: `values` gives each step's committed value (`nil` = unfilled)
@@ -31,8 +32,8 @@ struct CrumbTapTests {
     @Test("a filled pill that isn't the current step re-edits that step")
     func filledPillReEdits() {
         let run = steps(["a", "b", nil], cursor: 2)
-        #expect(run.tap(run[0]) == .reEdit(index: 0))
-        #expect(run.tap(run[1]) == .reEdit(index: 1))
+        #expect(run.crumbTap(for: run[0]) == .reEdit(index: 0))
+        #expect(run.crumbTap(for: run[1]) == .reEdit(index: 1))
     }
 
     /// The next empty step advances — the same thing Enter does, so tapping ahead
@@ -40,7 +41,7 @@ struct CrumbTapTests {
     @Test("the empty step directly after the cursor advances, exactly like Enter")
     func nextEmptyStepAdvances() {
         let run = steps(["a", nil, nil], cursor: 1)
-        #expect(run.tap(run[2]) == .advance)
+        #expect(run.crumbTap(for: run[2]) == .advance)
     }
 
     // MARK: - The labels
@@ -49,10 +50,10 @@ struct CrumbTapTests {
     @Test("the current step is inert, filled or not")
     func currentStepIsInert() {
         let collecting = steps(["a", nil, nil], cursor: 1)
-        #expect(collecting.tap(collecting[1]) == .inert)
+        #expect(collecting.crumbTap(for: collecting[1]) == .inert)
         // Re-editing puts the cursor back on a *filled* step; it is still the cursor.
         let reEditing = steps(["a", "b", nil], cursor: 0)
-        #expect(reEditing.tap(reEditing[0]) == .inert)
+        #expect(reEditing.crumbTap(for: reEditing[0]) == .inert)
     }
 
     /// A step two or more ahead of the cursor is not reachable in one tap — advancing
@@ -60,7 +61,7 @@ struct CrumbTapTests {
     @Test("an empty step beyond the next one is inert")
     func stepsFurtherAheadAreInert() {
         let run = steps(["a", nil, nil, nil], cursor: 1)
-        #expect(run.tap(run[3]) == .inert)
+        #expect(run.crumbTap(for: run[3]) == .inert)
     }
 
     /// A finished run — the cursor past the last step — has no current crumb at all.
@@ -68,16 +69,23 @@ struct CrumbTapTests {
     @Test("with no cursor on any step, filled pills still re-edit and nothing advances")
     func noCursorLeavesOnlyReEdits() {
         let run = steps(["a", "b"], cursor: 99)
-        #expect(run.tap(run[0]) == .reEdit(index: 0))
-        #expect(run.tap(run[1]) == .reEdit(index: 1))
+        #expect(run.crumbTap(for: run[0]) == .reEdit(index: 0))
+        #expect(run.crumbTap(for: run[1]) == .reEdit(index: 1))
     }
 
-    // MARK: - Tappability
+    // MARK: - A whole run at once
 
-    /// The signal the breadcrumb view hovers on: exactly the crumbs that do something.
-    @Test("isControl marks exactly the crumbs a tap acts on")
-    func isControlMatchesTheActingCrumbs() {
+    /// The shape the breadcrumb view reads: every crumb of one run, verdict by verdict.
+    /// This is what decides which crumbs are buttons — and so which ones light up under
+    /// a pointer — so it is asserted as a whole rather than a case at a time.
+    @Test("a run resolves to its two acting crumbs and its labels")
+    func aWholeRunResolves() {
         let run = steps(["a", "b", nil, nil], cursor: 2)
-        #expect(run.map { run.tap($0).isControl } == [true, true, false, true])
+        #expect(run.map { run.crumbTap(for: $0) } == [
+            .reEdit(index: 0),   // filled, behind the cursor
+            .reEdit(index: 1),   // filled, behind the cursor
+            .inert,              // the cursor itself
+            .advance,            // the one empty step ahead
+        ])
     }
 }

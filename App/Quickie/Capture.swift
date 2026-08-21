@@ -950,7 +950,7 @@ private struct BreadcrumbSteps: View {
     /// Kept as a closure so `StepCrumb` still has one thing to switch on: it is a
     /// button, glass-interactive and pointer-hovering, exactly when this is non-nil.
     private func tapHandler(for step: BreadcrumbStep, in steps: [BreadcrumbStep]) -> (() -> Void)? {
-        switch steps.tap(step) {
+        switch steps.crumbTap(for: step) {
         case .reEdit(let index): return { model.editPill(at: index) }
         case .advance: return { model.submitCurrent() }
         case .inert: return nil

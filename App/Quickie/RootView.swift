@@ -2606,6 +2606,11 @@ private struct ConfirmationToast: View {
             .padding(.vertical, 10)
             .glassEffect(isTappable ? .regular.interactive() : .regular, in: Capsule())
             .contentShape(Capsule())
+            // The pointer highlight (CONTEXT.md → Pointer hover), gated on the same
+            // `isTappable` the interactive glass and the hit testing are: a plain copy
+            // toast is a passing notice, not a control, and lighting it up under the
+            // pointer would promise an action it doesn't have.
+            .pointerHover(in: Capsule(), isEnabled: isTappable)
             .onTapGesture { onTap() }
             // Only the tappable reminder toast grabs touches; a plain copy toast
             // stays transparent to taps so it never blocks the input beneath it.

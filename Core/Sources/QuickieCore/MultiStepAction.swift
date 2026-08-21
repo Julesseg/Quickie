@@ -182,19 +182,16 @@ public enum CrumbTap: Equatable, Sendable {
     case advance
     /// Nothing. This crumb is a label, not a control.
     case inert
-
-    /// Whether this crumb is a control at all — what the view hangs both its button
-    /// and its hover effect on.
-    public var isControl: Bool { self != .inert }
 }
 
 extension Collection where Element == BreadcrumbStep {
-    /// What tapping `step` does, resolved against this run's cursor.
+    /// What tapping `step` would do, resolved against this run's cursor. A verdict,
+    /// not an action: nothing is tapped by asking.
     ///
     /// Asked of the whole run rather than of one crumb because "the next empty step"
     /// only means something relative to where the cursor is; a per-crumb version would
     /// need the caller to pass the cursor in and could be handed the wrong one.
-    public func tap(_ step: BreadcrumbStep) -> CrumbTap {
+    public func crumbTap(for step: BreadcrumbStep) -> CrumbTap {
         // A filled pill the cursor has moved off: tap it to come back and correct it.
         if step.value != nil && !step.isCurrent {
             return .reEdit(index: step.index)

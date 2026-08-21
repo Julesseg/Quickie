@@ -180,8 +180,6 @@ struct ActionRow: View {
     /// drifting from it.
     static let shape = RoundedRectangle(cornerRadius: QuickieRadius.row, style: .continuous)
 
-    private var rowShape: RoundedRectangle { Self.shape }
-
     /// Whether this row is a Computed result (the Calculator's answer / conversion
     /// or a Detected value — ADR 0032): the rows whose text is a *value*, rendered
     /// with monospaced (tabular) digits so it reads as an answer, not prose
@@ -295,12 +293,12 @@ struct ActionRow: View {
         // glass rather than a wash painted on top of it.
         .overlay {
             if isHighlighted {
-                HeroGlow(shape: rowShape, heroID: action.id)
+                HeroGlow(shape: Self.shape, heroID: action.id)
             }
         }
-        .glassEffect(.regular.interactive(), in: rowShape)
+        .glassEffect(.regular.interactive(), in: Self.shape)
         .padding(.horizontal, 12)
-        .contentShape(rowShape)
+        .contentShape(Self.shape)
         .accessibilityAddTraits(isHighlighted ? .isSelected : [])
     }
 }
