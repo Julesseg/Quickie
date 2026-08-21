@@ -23,6 +23,16 @@ struct QuickieApp: App {
         return QuickieStore.container
     }()
 
+    /// Carries the hardware-keyboard commands on the responder chain (issue #262).
+    /// The app delegate exists for nothing else — see `QuickieKeyCommandDelegate`
+    /// for why the binding lives there rather than in the SwiftUI declaration.
+    @UIApplicationDelegateAdaptor(QuickieKeyCommandDelegate.self) private var keyCommandDelegate
+
+    /// The bridge both key-command declarations post to, and `RootView` observes.
+    /// Shared rather than owned, because the app delegate is created by UIKit and
+    /// has no other way to reach it.
+    private let keyCommands = KeyCommandRouter.shared
+
     init() {
         // Honor the same UI-test reset flag as SignalsStore/FallbacksStore for the
         // app-level toggles (issue #65): they persist in the App Group defaults,
@@ -103,9 +113,14 @@ struct QuickieApp: App {
             // purple. Setting it once here is what makes the accent unforgettable
             // — a control that names no color inherits it rather than each Toggle
             // having to remember `.tint`.
-            RootView()
+            RootView(keyCommands: keyCommands)
                 .tint(.accentColor)
         }
         .modelContainer(container)
+        // List the hardware-keyboard commands in the iPadOS 26 menu bar (CONTEXT.md
+        // → Key command; issue #262) — the discoverability half. The binding half
+        // rides the responder chain on the delegate above. The set is Core's; both
+        // only render it.
+        .commands { LauncherCommands(router: keyCommands) }
     }
 }

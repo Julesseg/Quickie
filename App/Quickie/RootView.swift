@@ -15,6 +15,12 @@ import QuickieStoreKit
 /// presents **full-screen** (ADR 0013 / CONTEXT.md → Management page). The old
 /// top-right gear button and combined manage sheet are gone.
 struct RootView: View {
+    /// The scene's hardware-keyboard commands, posted here by the menu-bar
+    /// `.commands` declaration (CONTEXT.md → Key command; issue #262). Observed —
+    /// not registered as a callback — so each command is handled from a fresh body
+    /// pass with live `@Query` snapshots behind it (see `KeyCommandRouter`).
+    let keyCommands: KeyCommandRouter
+
     @Environment(\.openURL) private var openURL
     @Environment(\.modelContext) private var modelContext
 
@@ -889,6 +895,19 @@ struct RootView: View {
             // management pages push *on top* of it, sliding in from the right with
             // the system edge-swipe back.
             .toolbar(.hidden, for: .navigationBar)
+            // The hardware-keyboard loop (CONTEXT.md → Key command; issue #262): the
+            // ⌘ commands land through the router from whichever declaration fired —
+            // the menu bar or the responder chain — and `esc` unwinds one layer of the
+            // launcher at a time. `isLauncherFrontmost` goes back the other way, so the
+            // responder-chain delegate stops claiming `esc` the moment a page or sheet
+            // is on top. All of it rides one modifier because this chain sits near the
+            // compiler's type-checking budget (see `OutwardProjections`).
+            .modifier(KeyCommandHandling(
+                router: keyCommands,
+                isLauncherFrontmost: isLauncherFrontmost,
+                onCommand: handleKeyCommand,
+                onEscape: handleEscape
+            ))
             // Clear the search query the moment a capture takes over the screen —
             // for the authorized path this coincides with the session starting, so
             // the browse list slides straight out into the capture rather than
@@ -1878,6 +1897,89 @@ struct RootView: View {
         query = ""
     }
 
+    /// Whether the launcher itself is the frontmost surface — nothing pushed and
+    /// nothing presented over it. A menu-bar command is app-wide, so this is what
+    /// keeps ⌘1 from pushing a page *behind* the Custom Action editor, and what
+    /// leaves `esc` to the system (which dismisses the presentation) while a sheet
+    /// is up.
+    private var isLauncherFrontmost: Bool {
+        path.isEmpty
+            && activeSheet == nil
+            && eventEditor.request == nil
+            && filePreview == nil
+            && shareRequest == nil
+    }
+
+    /// Applies a menu-bar **key command** (CONTEXT.md → Key command; issue #262).
+    /// Each maps to the affordance it mirrors, so a keyboard-driven iPad and a
+    /// touch-driven one take the same code path:
+    ///
+    /// - `⌘K` re-arms the search input's focus, exactly as returning from a pushed
+    ///   page does. While a capture owns the bottom bar there is no search field to
+    ///   return to — its own breadcrumb input self-focuses — so it is a no-op.
+    /// - `⌘,` pushes the Settings hub, and *only* that. It deliberately does not go
+    ///   through `run` the way the typed Settings command row does: a run records
+    ///   frecency and fires the tactile beat, and a key press has no touch behind it
+    ///   and should not quietly reorder tomorrow's ranking.
+    /// - `⌘1–⌘4` run the Favorites-grid card in that slot **tap-equivalently**: the
+    ///   Action opens verb-first, with the typed query cleared rather than seeded as
+    ///   a fallback, exactly as its card's tap does. An empty slot resolves to
+    ///   nothing rather than wrapping.
+    ///
+    /// Both `⌘K` and the ⌘-digits follow their affordance rather than overriding it:
+    /// while a capture or the [[Search Files context]] owns the launcher there is no
+    /// search field to return to and no Favorites grid on screen, so they are no-ops
+    /// there instead of tearing down a breadcrumb the user is part-way through.
+    ///
+    /// Every command acts on the launcher, so a pushed Management page or a
+    /// presented sheet swallows them all rather than letting one fire behind it.
+    private func handleKeyCommand(_ intent: KeyCommand.Intent) {
+        guard isLauncherFrontmost else { return }
+        switch intent {
+        case .focusSearch:
+            guard !capture.isActive else { return }
+            refocusInput()
+        case .openSettings:
+            perform(.openPage(.settings(panel: nil)))
+        case .runFavorite(let slot):
+            guard !capture.isActive, !inFileSearch else { return }
+            guard let action = KeyCommand.favorite(at: slot, in: pinnedFavorites) else { return }
+            // Verb-first, like the card's tap: the typed query is not a fallback
+            // seed, and running an Action resolves it anyway (CONTEXT.md → Main
+            // action), so it clears before the run rather than leaking into it.
+            query = ""
+            run(action)
+        }
+    }
+
+    /// Applies `esc` against the launcher's live state (CONTEXT.md → Key command;
+    /// issue #262). The decision is Core's (`EscapeKey`) — it unwinds one
+    /// layer at a time — and this only supplies the state and performs the outcome,
+    /// routing each exit through the *same* call its × affordance uses so the key
+    /// and the tap can never drift apart.
+    ///
+    /// The text it clears is whichever input owns the bottom bar: the capture step's
+    /// during a capture, the search query otherwise. `.ignored` does nothing at all —
+    /// esc on a clean Home is never a destructive key with no visible effect to undo.
+    private func handleEscape() {
+        guard isLauncherFrontmost else { return }
+        let capturing = capture.isActive
+        switch EscapeKey.outcome(
+            hasInputText: capturing ? !capture.stepText.isEmpty : !query.isEmpty,
+            isCapturing: capturing,
+            inFileSearch: inFileSearch
+        ) {
+        case .clearInput:
+            if capturing { capture.stepText = "" } else { query = "" }
+        case .exitCapture:
+            capture.cancel()
+        case .exitFileSearch:
+            exitFileSearch()
+        case .ignored:
+            break
+        }
+    }
+
     /// Dispatches an inbound `quickie://` **deeplink** (issue #120; ADR 0024) — the
     /// door the App Intents bridge (#121) and epic #16's open-focused entry surfaces
     /// (#124, #125) ride. Both routes first **drop any scoped context** — a
@@ -1945,6 +2047,14 @@ struct RootView: View {
         )
     }
 
+    /// The pinned [[Favorites grid]] as the engine resolves it — the same list Home
+    /// renders, so a pin that no longer resolves (disabled, deleted) is already gone
+    /// from every surface reading this. Both the widget projection and the ⌘-digit
+    /// key commands address exactly this list, so neither can drift from the grid.
+    private var pinnedFavorites: [Action] {
+        engine.home(showRecents: false).favorites
+    }
+
     /// The **Favorites widget** projection (ADR 0025; issue #126): the pinned grid
     /// exactly as Home renders it — `home()`'s favorites, so a disabled pin drops
     /// out here the moment it drops from the grid — denormalized per Favorite into
@@ -1953,7 +2063,7 @@ struct RootView: View {
     /// along (the copy intent reads it fresh at run time — a stale snapshot must
     /// never copy stale text).
     private var widgetFavoritesProjection: [WidgetAction] {
-        engine.home(showRecents: false).favorites.map { action in
+        pinnedFavorites.map { action in
             // A Custom Action's chosen glyph (issue #163) rides the snapshot so the
             // widget draws it from the projection alone; `nil` denormalizes the
             // kind-derived glyph, unchanged. Its chosen colour (issue #243) rides too,
