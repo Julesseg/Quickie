@@ -61,6 +61,11 @@ struct ClipboardPasteButton: View {
             }
             .glassEffect(.regular.interactive(), in: Circle())
             .glassEffectID(Self.glassID, in: glassNamespace)
+            // The pointer highlight (CONTEXT.md → Pointer hover), on the chip as the
+            // user sees it — our glass circle — not on the invisible `UIPasteControl`
+            // beneath it, whose own pointer interaction is drawn at alpha 0.02 and so
+            // shows nothing.
+            .pointerHover(in: Circle())
     }
 }
 
@@ -91,6 +96,13 @@ private struct SystemPasteControl: UIViewRepresentable {
         // our own icon/glass show instead. 0.02 is just above UIKit's hit-test alpha
         // floor (0.01), so the control is invisible yet still receives the tap.
         control.alpha = 0.02
+        // The same reasoning as the hidden platter, applied to the pointer: a system
+        // control styles itself under a pointer, and *this* one is invisible, so its
+        // highlight would be drawn on nothing while shadowing the visible one the host
+        // puts on its own glass circle (CONTEXT.md → Pointer hover). Clearing the
+        // control's hover style leaves the host's as the only one, so what reacts to the
+        // pointer is the circle the user can actually see.
+        control.hoverStyle = nil
         // Without an explicit target the paste action is sent to the *first
         // responder* — the search field, here — so it never reaches us and nothing
         // pastes. Point it at the host so `paste(itemProviders:)` below is called.

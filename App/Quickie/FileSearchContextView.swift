@@ -42,6 +42,9 @@ struct FileSearchBreadcrumbBar: View {
                 }
                 .buttonStyle(.plain)
                 .contentShape(Circle())
+                // The pointer highlight (CONTEXT.md → Pointer hover), same as the
+                // capture breadcrumb's × this one mirrors.
+                .pointerHover(in: Circle())
                 .accessibilityLabel("Close Search Files")
                 .accessibilityIdentifier("file-search-cancel")
             }
@@ -148,6 +151,9 @@ struct FileSearchResultList: View {
                                 ActionRow(action: action, isHighlighted: rank == 0, match: row.match)
                             }
                             .buttonStyle(.plain)
+                            // Same rows, same pointer treatment as the root list
+                            // (CONTEXT.md → Pointer hover).
+                            .pointerHover(in: ActionRow.shape)
                             .accessibilityIdentifier(action.id)
                             .transition(rowMotion.insertionTransition)
                         }

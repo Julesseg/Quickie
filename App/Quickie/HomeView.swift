@@ -115,6 +115,9 @@ struct HomeView: View {
                         FavoriteCard(action: action)
                     }
                     .buttonStyle(.plain)
+                    // The pointer lights the card in the card's own shape
+                    // (CONTEXT.md → Pointer hover).
+                    .pointerHover(in: FavoriteCard.shape)
                     .accessibilityIdentifier("favorite.\(action.id)")
                     .resultContextMenu(
                         secondaryActions: secondaryActions(for: action.content, includeDeeplink: !action.isSilentQueryCapture),
@@ -175,6 +178,9 @@ struct HomeView: View {
                             ActionRow(action: action)
                         }
                         .buttonStyle(.plain)
+                        // A Recent row is the same `ActionRow` a result is, so it
+                        // hovers identically (CONTEXT.md → Pointer hover).
+                        .pointerHover(in: ActionRow.shape)
                         .accessibilityIdentifier(action.id)
                         .resultContextMenu(
                             secondaryActions: secondaryActions(for: action.content, includeDeeplink: !action.isSilentQueryCapture),
@@ -208,6 +214,10 @@ struct HomeView: View {
 /// provider badge, title, and main-action glyph — the launch-time, tap-without-
 /// typing surface.
 struct FavoriteCard: View {
+    /// The card's face — shared with the button that wraps it so the pointer hovers in
+    /// the shape actually being drawn (`pointerHover(in:)`), not a restated radius.
+    static let shape = RoundedRectangle(cornerRadius: QuickieRadius.card, style: .continuous)
+
     let action: Action
 
     var body: some View {
@@ -226,8 +236,8 @@ struct FavoriteCard: View {
         .padding(.horizontal, 12)
         .padding(.vertical, 12)
         .frame(maxWidth: .infinity, alignment: .leading)
-        .glassEffect(.regular.interactive(), in: RoundedRectangle(cornerRadius: QuickieRadius.card, style: .continuous))
-        .contentShape(RoundedRectangle(cornerRadius: QuickieRadius.card, style: .continuous))
+        .glassEffect(.regular.interactive(), in: Self.shape)
+        .contentShape(Self.shape)
     }
 }
 

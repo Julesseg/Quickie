@@ -164,6 +164,48 @@ public struct BreadcrumbStep: Identifiable, Equatable, Sendable {
     }
 }
 
+/// What tapping a crumb does (issue #37; issue #263). Only two of a breadcrumb's
+/// crumbs act on a tap — a filled pill behind the cursor, and the one empty step
+/// directly ahead of it — and the rest are read-only labels that happen to look like
+/// the pills beside them.
+///
+/// It is an answer, not a flag, because the same question has two consumers that must
+/// not drift: the breadcrumb runs `reEdit`/`advance` on tap, and the *pointer* lights
+/// up exactly the crumbs that aren't `inert` (CONTEXT.md → Pointer hover). A crumb
+/// that highlights under the cursor and then does nothing is worse than one that never
+/// highlighted, so the two read the one rule.
+public enum CrumbTap: Equatable, Sendable {
+    /// Move the cursor back onto a filled step so the next commit corrects it.
+    case reEdit(index: Int)
+    /// Commit the current step and move on — precisely what pressing Enter does,
+    /// empty-guard included, so tapping ahead can never seal something Enter wouldn't.
+    case advance
+    /// Nothing. This crumb is a label, not a control.
+    case inert
+}
+
+extension Collection where Element == BreadcrumbStep {
+    /// What tapping `step` would do, resolved against this run's cursor. A verdict,
+    /// not an action: nothing is tapped by asking.
+    ///
+    /// Asked of the whole run rather than of one crumb because "the next empty step"
+    /// only means something relative to where the cursor is; a per-crumb version would
+    /// need the caller to pass the cursor in and could be handed the wrong one.
+    public func crumbTap(for step: BreadcrumbStep) -> CrumbTap {
+        // A filled pill the cursor has moved off: tap it to come back and correct it.
+        if step.value != nil && !step.isCurrent {
+            return .reEdit(index: step.index)
+        }
+        // The single empty step ahead of the cursor. Anything further would have to
+        // commit the untouched steps in between, so it stays inert.
+        if let cursor = first(where: \.isCurrent)?.index,
+           step.value == nil, step.index == cursor + 1 {
+            return .advance
+        }
+        return .inert
+    }
+}
+
 /// What a breadcrumb transition produced (issue #37): the capture is still
 /// `collecting` the next Argument, has `completed` with the Action's outcome (the
 /// final-commit auto-create), or was `abandoned` back to normal search.
