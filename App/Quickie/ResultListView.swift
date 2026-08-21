@@ -555,7 +555,13 @@ extension View {
                 }
             }
         } preview: {
+            // The preview exists exactly as long as the menu does, which makes it
+            // the app's only public signal that a menu is up — and the bottom
+            // bar's keyboard lift needs that signal to tell a menu-driven keyboard
+            // drop from a real dismissal (see `ContextMenuPresence`).
             preview()
+                .onAppear { ContextMenuPresence.shared.menuAppeared() }
+                .onDisappear { ContextMenuPresence.shared.menuDisappeared() }
         }
     }
 }

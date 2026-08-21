@@ -1,11 +1,24 @@
 import XCTest
 
-/// The swipe-down keyboard dismissal (issue #64): swiping down on a scrolling
-/// list interactively dismisses the keyboard the native iOS way
-/// (`.scrollDismissesKeyboard(.interactively)`), the input bar drops to the
-/// bottom without clearing the query or results, and tapping the field brings the
-/// keyboard back. Only verifiable by driving the real app on a simulator, so it
-/// runs on the macOS XCUITest CI job.
+/// Every way the keyboard leaves, and where the input bar ends up (issues #64,
+/// #58, #261). The lift is driven by hand rather than by SwiftUI's keyboard
+/// avoidance, so each departure has to be told apart and answered:
+///
+/// - **Swipe down on a scrolling list** (#64): the native interactive dismissal
+///   (`.scrollDismissesKeyboard(.interactively)`) — the bar drops and nothing
+///   clears.
+/// - **iPad's dedicated dismiss key** (#261): the bar drops too. It used to
+///   freeze a keyboard's height above the bottom, because the notification is
+///   indistinguishable from the one a context menu sends.
+/// - **A long-press context menu** (#58): the bar must **not** move, or the
+///   reversed list reflows out from under the open menu.
+///
+/// The last two are the same notification, told apart only because the app
+/// reports the menu (`ContextMenuPresence`) — so they belong in one class, where
+/// breaking either shows up immediately.
+///
+/// Only verifiable by driving the real app on a simulator, so it runs on the
+/// XCUITest CI jobs.
 final class KeyboardDismissUITests: XCTestCase {
 
     override func setUpWithError() throws {
@@ -168,5 +181,108 @@ final class KeyboardDismissUITests: XCTestCase {
         // The bar drops and nothing clears: the Recent rows stay put.
         XCTAssertTrue(row.exists, "the Recent rows are preserved after dismissing the keyboard")
         XCTAssertTrue(otherRow.exists, "every seeded Recent row survives the dismissal")
+    }
+
+    /// iPad's software keyboard carries a dedicated dismiss key. Pressing it puts
+    /// the keyboard away for good — unlike a context menu, nothing is coming back
+    /// — so the bar must drop to the window bottom instead of hanging a
+    /// keyboard's height above it (issue #261).
+    ///
+    /// Skipped where there is no software keyboard with a dismiss key to press:
+    /// iPhone's keyboard has none, and a simulator with a hardware keyboard
+    /// attached shows only the shortcuts bar, whose dismissal reports a
+    /// zero-height frame that never held the inset in the first place. Asserting
+    /// against that would pass for free.
+    @MainActor
+    func testDismissKeyDropsTheBarToTheBottom() throws {
+        let app = launchApp()
+
+        let input = app.textFields["search-input"]
+        XCTAssertTrue(input.waitForExistence(timeout: 10), "bottom input should exist on launch")
+        input.tap()
+        XCTAssertTrue(
+            app.keyboards.firstMatch.waitForExistence(timeout: 10),
+            "tapping the input brings the keyboard up"
+        )
+        // Let it finish rising: mid-animation its keys report a hit point of
+        // {-1, -1} and the tap silently no-ops.
+        RunLoop.current.run(until: Date().addingTimeInterval(1))
+
+        let keyboard = app.keyboards.firstMatch
+        try XCTSkipIf(
+            keyboard.keys.count < 10,
+            "no full software keyboard here — a hardware keyboard leaves only the shortcuts bar"
+        )
+        let dismissKey = keyboard.buttons["Hide keyboard"]
+        try XCTSkipUnless(dismissKey.exists, "only the iPad keyboard carries a dismiss key")
+
+        let lifted = input.frame.maxY
+        dismissKey.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5)).tap()
+        XCTAssertTrue(
+            app.keyboards.firstMatch.waitForNonExistence(timeout: 10),
+            "the dismiss key puts the keyboard away"
+        )
+        RunLoop.current.run(until: Date().addingTimeInterval(1))
+
+        let dropped = input.frame.maxY
+        XCTAssertGreaterThan(
+            dropped, lifted,
+            "the bar must move down when the keyboard goes — it sat at \(lifted)pt before and after"
+        )
+        // It rests in the bottom safe area, not a keyboard's height above it.
+        let bottomGap = app.frame.maxY - dropped
+        XCTAssertLessThan(
+            bottomGap, 120,
+            "the bar sat \(bottomGap)pt above the bottom after the dismiss key — the held inset was not released (issue #261)"
+        )
+    }
+
+    /// The counterweight, and the behaviour issue #58 exists for: a long-press
+    /// menu drops the keyboard too, and there the bar must **not** move. The two
+    /// notifications are identical, so this passing while the test above also
+    /// passes is the only proof the menu signal is read at all.
+    @MainActor
+    func testLongPressMenuLeavesTheBarWhereItIs() throws {
+        let app = launchApp()
+
+        let input = app.textFields["search-input"]
+        XCTAssertTrue(input.waitForExistence(timeout: 30), "bottom input should exist on launch")
+        input.tap()
+        let thought = "Buy milk and eggs"
+        input.typeText(thought)
+
+        // Stage it through the always-present "Save for later" Fallback, then
+        // search it back up: a Pile entry is the content-bearing row whose menu
+        // the suite already drives (SecondaryActionUITests).
+        let saveForLater = app.buttons["builtin.save-for-later"]
+        XCTAssertTrue(saveForLater.waitForExistence(timeout: 10))
+        saveForLater.tap()
+
+        XCTAssertTrue(input.waitForExistence(timeout: 10))
+        input.tap()
+        input.typeText(thought)
+        XCTAssertTrue(
+            app.keyboards.firstMatch.waitForExistence(timeout: 10),
+            "typing keeps the keyboard up"
+        )
+        let row = app.buttons.matching(
+            NSPredicate(format: "label CONTAINS[c] %@", thought)
+        ).firstMatch
+        XCTAssertTrue(row.waitForExistence(timeout: 10))
+
+        RunLoop.current.run(until: Date().addingTimeInterval(1))
+        let lifted = input.frame.maxY
+        row.press(forDuration: 1.3)
+
+        // Prove the menu opened before asserting anything about it — a long-press
+        // that missed would make this test pass for free.
+        XCTAssertTrue(
+            app.buttons["Copy"].waitForExistence(timeout: 10),
+            "the long-press opens the row's menu"
+        )
+        XCTAssertEqual(
+            input.frame.maxY, lifted, accuracy: 2,
+            "the long-press must not move the input bar — the list has to stay still under the menu (issue #58)"
+        )
     }
 }

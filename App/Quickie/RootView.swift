@@ -472,18 +472,6 @@ struct RootView: View {
         )?.text
     }
 
-    /// The bottom safe-area (home-indicator) inset, read from the active window. The
-    /// keyboard's reported overlap is measured from the screen bottom, but the bar
-    /// already sits above the home indicator, so we subtract this to avoid lifting it
-    /// one home-indicator's-worth too high.
-    private var bottomSafeAreaInset: CGFloat {
-        UIApplication.shared.connectedScenes
-            .compactMap { $0 as? UIWindowScene }
-            .flatMap { $0.windows }
-            .first { $0.isKeyWindow }?
-            .safeAreaInsets.bottom ?? 0
-    }
-
     /// Applies a `KeyboardBarLift` decision to the held inset. A notified change
     /// rides the keyboard's own motion: UIKit animates the keyboard with a stock
     /// spring (mass 3, stiffness 1000, damping 500 — the curve behind every
@@ -604,15 +592,17 @@ struct RootView: View {
                 // pushed page, mirroring the bar's lift (issue #181 gives pages their
                 // own backdrop).
                 //
-                // This is the bar's inset *exactly*, not the keyboard's overlap of the
-                // screen bottom: the two differ by the bottom safe area, and reading
-                // that (`bottomSafeAreaInset`, a `UIApplication` walk) from `body`
-                // silently broke the result list — SwiftUI dropped the update that
-                // renders the rows, so typing produced nothing, with no crash and no
-                // slowdown to point at. Never read UIKit view state from `body`. The
-                // omitted term is 34pt against a 140pt falloff, which is why the glow
-                // still lands on the bar: it centers on the bar's safe-area line
-                // rather than its top edge, a difference nothing can see.
+                // This is the bar's inset *exactly*, not the keyboard's coverage of
+                // the window bottom: the two differ by the bottom safe area, and
+                // reading that from `body` (it used to be a `UIApplication` window
+                // walk right here) silently broke the result list — SwiftUI dropped
+                // the update that renders the rows, so typing produced nothing, with
+                // no crash and no slowdown to point at. Never read UIKit view state
+                // from `body`; the safe-area inset now rides along with each
+                // `KeyboardFrameObserver` sample instead. The omitted term is 34pt
+                // against a 140pt falloff, which is why the glow still lands on the
+                // bar: it centers on the bar's safe-area line rather than its top
+                // edge, a difference nothing can see.
                 LivingBackdrop(
                     glowLift: path.isEmpty ? lockedKeyboardInset : 0,
                     driftPeriod: backdropDriftPeriod
@@ -853,9 +843,17 @@ struct RootView: View {
             // (the pushed pages set this on themselves; this covers the root + its
             // bottom inset). `lockedKeyboardInset` supplies the lift instead.
             .ignoresSafeArea(.keyboard, edges: .bottom)
-            // Reconcile the held inset with the ways the keyboard leaves:
-            //  • **Showing** (a real keyboard, overlap over the threshold — not a
-            //    hardware-keyboard accessory bar): lift the bar to sit on it.
+            // Both keyboard channels, fed from UIKit where the host window — and
+            // so the only coordinate space in which "how much does the keyboard
+            // cover?" has an answer — is in hand (issue #261, ADR 0040).
+            //
+            // The **notified** channel reconciles the held inset with every way
+            // the keyboard arrives and leaves:
+            //  • **Covering the window's bottom** (a software keyboard, or a
+            //    hardware keyboard's accessory bar): lift the bar to sit on it,
+            //    by exactly the band that is covered.
+            //  • **Floating or split**: detached from the window's bottom edge,
+            //    covering nothing there — the bar rests at the bottom.
             //  • **Hiding while the list is being dragged**: an intentional
             //    swipe-dismiss (issue #64) — release the inset so the bar drops and
             //    more results show.
@@ -864,32 +862,42 @@ struct RootView: View {
             //    text field was *removed* for the whole step, so the keyboard is
             //    structurally gone — release the inset so the control takes the
             //    keyboard's space rather than floating above a dead band.
-            //  • **Hiding while *not* scrolling** otherwise: the context menu
-            //    resigned first responder — **hold** the inset so the long-press
-            //    doesn't reflow the list. This is the whole point of driving the
-            //    lift ourselves.
-            .onReceive(NotificationCenter.default.publisher(for: UIResponder.keyboardWillChangeFrameNotification)) { note in
-                guard let endFrame = note.userInfo?[UIResponder.keyboardFrameEndUserInfoKey] as? CGRect else { return }
-                apply(KeyboardBarLift.notified(
-                    overlap: UIScreen.main.bounds.height - endFrame.minY,
-                    bottomSafeArea: bottomSafeAreaInset,
-                    isListScrolling: listScrolling,
-                    usesKeyboardlessControl: capture.usesKeyboardlessControl
-                ))
-            }
-            // The live channel: per-frame keyboard positions during an interactive
-            // swipe-dismiss, so the bar follows the finger instead of waiting for
-            // the commit notification. `dragged` drops every sample taken while
-            // the list is still, so ordinary show/hide (and the held context-menu
-            // inset) stay owned by the notified channel above.
+            //  • **Hiding with no menu on screen**: the user put the keyboard
+            //    away — iPad's dedicated dismiss key, a tap outside — so the bar
+            //    drops to the window bottom. Nothing is coming back to sit under
+            //    it (issue #261).
+            //  • **Hiding under an open long-press menu**: **hold** the inset so
+            //    the menu doesn't reflow the list it sits over. This is the whole
+            //    point of driving the lift ourselves.
+            //  • **Another app's keyboard**, side by side on iPad: it may cover
+            //    our window, but nothing of ours is focused — hold.
+            //
+            // The **live** channel carries the two moves the keyboard never posts
+            // for: an interactive swipe-dismiss (the bar follows the finger
+            // instead of waiting for the commit notification) and the window
+            // itself being reshaped under a stationary keyboard. `live` drops
+            // every other sample, so ordinary show/hide — and the held
+            // context-menu inset — stay owned by the notified channel.
             .background {
-                KeyboardFrameObserver { overlap in
-                    apply(KeyboardBarLift.dragged(
-                        overlap: overlap,
-                        bottomSafeArea: bottomSafeAreaInset,
-                        isListScrolling: listScrolling
-                    ))
-                }
+                KeyboardFrameObserver(
+                    onKeyboardFrame: { geometry, isLocalKeyboard, contextMenuOpen in
+                        apply(KeyboardBarLift.notified(
+                            geometry,
+                            isLocalKeyboard: isLocalKeyboard,
+                            contextMenuOpen: contextMenuOpen,
+                            isListScrolling: listScrolling,
+                            usesKeyboardlessControl: capture.usesKeyboardlessControl
+                        ))
+                    },
+                    onLiveOverlap: { overlap, bottomSafeArea, windowChangedShape in
+                        apply(KeyboardBarLift.live(
+                            overlap: overlap,
+                            bottomSafeArea: bottomSafeArea,
+                            isListScrolling: listScrolling,
+                            windowChangedShape: windowChangedShape
+                        ))
+                    }
+                )
             }
             // The launcher itself wears no navigation bar — it is the root; the
             // management pages push *on top* of it, sliding in from the right with

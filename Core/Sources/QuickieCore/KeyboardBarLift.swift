@@ -1,11 +1,17 @@
 import Foundation
+#if canImport(CoreGraphics)
+// Darwin puts CGRect's geometry accessors (minX, maxY, width …) in CoreGraphics;
+// swift-corelibs-foundation defines them inside Foundation itself, so the Linux
+// `swift test` run needs no import at all.
+import CoreGraphics
+#endif
 
-/// The bottom bar's keyboard lift as a pure decision (issues #58 × #64). The bar
-/// is lifted manually — SwiftUI's automatic avoidance is off — and must track the
-/// keyboard *exactly*: riding the keyboard's own show/hide animation instead of
-/// settling after it, and following the finger during an interactive
-/// swipe-dismiss, while still **holding** its inset when a context menu
-/// transiently resigns first responder.
+/// The bottom bar's keyboard lift as a pure decision (issues #58 × #64, extended
+/// to windowed geometry by #261). The bar is lifted manually — SwiftUI's
+/// automatic avoidance is off — and must track the keyboard *exactly*: riding
+/// the keyboard's own show/hide animation instead of settling after it, and
+/// following the finger during an interactive swipe-dismiss, while still
+/// **holding** its inset when a context menu transiently resigns first responder.
 ///
 /// Two input channels feed it, and the split is what tells the cases apart:
 /// - `notified` — a `keyboardWillChangeFrame` end-frame. Fires at animation
@@ -13,10 +19,22 @@ import Foundation
 /// - `dragged` — a live keyboard-frame sample (the App's keyboard layout guide)
 ///   while a list drag is interactively moving the keyboard. Applied
 ///   immediately, unanimated: the finger is the animation.
+///
+/// All geometry here is in the **window's** coordinate space, never the
+/// screen's: on iPad the app's window is only sometimes the display (Split View,
+/// Slide Over, Stage Manager, iPadOS 26 free resizing), so screen-space math
+/// lifts the bar by an amount that has nothing to do with what the keyboard
+/// actually covers. The App converts the notification's end-frame with
+/// `UIWindow.convert(_:from:)` before calling in (ADR 0040).
 public enum KeyboardBarLift {
-    /// The threshold separating a real software keyboard from a hardware
-    /// keyboard's thin accessory bar: overlaps at or below it never lift the bar.
+    /// The height separating a real software keyboard from a hardware keyboard's
+    /// thin shortcuts bar. Compared against the keyboard's **own** height — see
+    /// `Geometry.isSoftwareKeyboard`.
     public static let softwareKeyboardThreshold: CGFloat = 120
+
+    /// How far a keyboard edge may fall short of a window edge and still count
+    /// as meeting it — absorbs the sub-point rounding of a converted frame.
+    private static let edgeTolerance: CGFloat = 1
 
     public enum Change: Equatable, Sendable {
         /// Move the bar to `inset`, animated in step with the keyboard's own
@@ -30,22 +48,160 @@ public enum KeyboardBarLift {
         case hold
     }
 
-    /// Decide from a `keyboardWillChangeFrame` end-frame. `overlap` is the
-    /// keyboard's coverage of the screen bottom; the bar already sits in the
-    /// bottom safe area, so the lift is the overlap beyond it.
+    /// How a keyboard end-frame relates to the window it must not cover. Naming
+    /// the three cases once keeps the lift rules below reading as policy rather
+    /// than as rect arithmetic.
+    public enum Coverage: Equatable, Sendable {
+        /// Docked against the window's bottom edge — as wide as the window and
+        /// running to (or past) its bottom — covering `overlap` points of it.
+        /// `overlap` is zero when the keyboard has dropped clean below the
+        /// window: a dismissal, or a window floating above a keyboard that
+        /// belongs to the display, not to it.
+        case docked(overlap: CGFloat)
+        /// A floating or split keyboard: inside the window but detached from its
+        /// bottom edge, so it covers no band the bar has to clear.
+        case undocked
+        /// No keyboard to speak of — an empty frame, or one clean outside the
+        /// window.
+        case away
+    }
+
+    /// Where the keyboard is relative to the window it must not cover, all in
+    /// the window's own coordinate space — the only space in which "how much of
+    /// the bar does the keyboard cover?" has an answer (ADR 0040). The App
+    /// converts the notification's screen-space end-frame and reads the bounds
+    /// and inset off the same window at the same moment, so the three can never
+    /// disagree about which window they describe.
+    public struct Geometry: Equatable, Sendable {
+        /// The keyboard's end-frame. May sit partly or wholly outside the
+        /// window — that is exactly what `coverage` reads.
+        public var keyboardFrame: CGRect
+        /// The host window's bounds.
+        public var windowBounds: CGRect
+        /// The host window's bottom safe-area inset: the band the bar already
+        /// sits in, and so the part of any coverage it need not clear.
+        public var bottomSafeArea: CGFloat
+
+        public init(keyboardFrame: CGRect, windowBounds: CGRect, bottomSafeArea: CGFloat) {
+            self.keyboardFrame = keyboardFrame
+            self.windowBounds = windowBounds
+            self.bottomSafeArea = bottomSafeArea
+        }
+
+        /// Docked means the keyboard is **as wide as the window** and reaches
+        /// its bottom edge — true at full screen, in Split View and Slide Over
+        /// (where a display-wide keyboard overhangs a narrow window on both
+        /// sides), and for a Stage Manager window whose bottom sits over the
+        /// keyboard. Width rather than edge-to-edge coverage, because under
+        /// iPadOS 26 free placement a window can hang off a display edge: the
+        /// display-wide keyboard still covers every visible point of its bottom
+        /// band without ever reaching the window's off-screen edge.
+        ///
+        /// Anything else that still falls inside the window is a floating or
+        /// split keyboard, which leaves the window's bottom edge free.
+        public var coverage: Coverage {
+            guard keyboardFrame.width > 0, keyboardFrame.height > 0 else { return .away }
+
+            let spansWindowWidth = keyboardFrame.width >= windowBounds.width - edgeTolerance
+                && keyboardFrame.minX < windowBounds.maxX
+                && keyboardFrame.maxX > windowBounds.minX
+            let reachesWindowBottom = keyboardFrame.maxY >= windowBounds.maxY - edgeTolerance
+            if spansWindowWidth, reachesWindowBottom {
+                let coveredTop = max(keyboardFrame.minY, windowBounds.minY)
+                return .docked(overlap: max(0, windowBounds.maxY - coveredTop))
+            }
+
+            return keyboardFrame.intersects(windowBounds) ? .undocked : .away
+        }
+
+        /// Whether this is a real software keyboard rather than a hardware
+        /// keyboard's shortcuts bar. Read from the keyboard's **own** height,
+        /// never its window overlap: a window shorter than the keyboard (Stage
+        /// Manager) sees only a sliver of it, and classifying on that clipped
+        /// value would read a full keyboard as an accessory bar.
+        public var isSoftwareKeyboard: Bool {
+            keyboardFrame.height > softwareKeyboardThreshold
+        }
+
+        /// The bar's inset for a given coverage of the window's bottom: what is
+        /// covered, less the safe area the bar already sits in.
+        func inset(clearing overlap: CGFloat) -> CGFloat {
+            max(0, overlap - bottomSafeArea)
+        }
+    }
+
+    /// Decide from a `keyboardWillChangeFrame` end-frame, resolved against the
+    /// window it arrived in.
+    ///
+    /// `isLocalKeyboard` is the notification's own `keyboardIsLocalUserInfoKey`:
+    /// side by side on iPad, the *other* app's keyboard posts here too, and
+    /// though it may well cover our window, nothing of ours is focused — so it
+    /// must leave our bar exactly where it is.
+    /// `contextMenuOpen` is whether a row's long-press menu is on screen, and it
+    /// is what tells the two kinds of keyboard departure apart. Nothing in the
+    /// notification can: a menu-driven drop and an explicit dismissal post the
+    /// *same* end frame, duration, curve and `isLocal`, the text field keeps
+    /// first responder through both, and the window count and key window don't
+    /// move either. So the App reports the menu instead of the policy guessing
+    /// (`ContextMenuPresence`):
+    /// - **menu open** — the keyboard comes straight back when the menu closes,
+    ///   so **hold** and let the menu sit over a still list (issue #58).
+    ///   Releasing here would reflow the reversed list out from under the menu
+    ///   the user is reading.
+    /// - **no menu** — the user put the keyboard away: iPad's dedicated dismiss
+    ///   key, a tap outside, anything that ends editing. Nothing is coming back,
+    ///   so the bar drops to the window bottom rather than hover over a dead
+    ///   band (issue #261).
     public static func notified(
-        overlap: CGFloat,
-        bottomSafeArea: CGFloat,
+        _ geometry: Geometry,
+        isLocalKeyboard: Bool,
+        contextMenuOpen: Bool,
         isListScrolling: Bool,
         usesKeyboardlessControl: Bool
     ) -> Change {
-        if overlap > softwareKeyboardThreshold {
-            return .animateWithKeyboard(inset: max(0, overlap - bottomSafeArea))
-        }
-        if isListScrolling || usesKeyboardlessControl {
+        guard isLocalKeyboard else { return .hold }
+
+        switch geometry.coverage {
+        case .docked(let overlap) where overlap > 0:
+            // A docked keyboard of any height — a software keyboard or a hardware
+            // keyboard's shortcuts bar — lifts the bar by exactly what it covers,
+            // so the accessory bar gets the accessory bar's lift and can never
+            // leave a full keyboard's inset stranded beneath it.
+            return .animateWithKeyboard(inset: geometry.inset(clearing: overlap))
+
+        case .undocked:
+            // A floating or split keyboard covers nothing at the window's bottom:
+            // the bar rests there. Released rather than held, so undocking a
+            // keyboard that *had* lifted the bar drops it back down.
             return .animateWithKeyboard(inset: 0)
+
+        case .docked, .away:
+            // Nothing covers the window's bottom edge. *Which* way the keyboard
+            // left decides whether the held inset survives:
+            //  • **while the list is being dragged**: an intentional
+            //    swipe-dismiss (issue #64) — release, so more results show.
+            //  • **into a keyboard-less capture control** (the date step's
+            //    picker, the primer/denial affordances): the text field was
+            //    removed for the whole step, so the keyboard is structurally
+            //    gone — release, and let the control take its space.
+            //  • **no context menu on screen**: the user put the keyboard away —
+            //    iPad's dismiss key, a tap outside, anything that ends editing.
+            //    Release: nothing is coming back to sit under the bar (#261).
+            //  • **a software keyboard dropped under an open menu, list still**:
+            //    the long-press did it (issue #58) — **hold**, so the menu never
+            //    reflows the list it is sitting over. This is the whole point of
+            //    driving the lift ourselves.
+            //  • **a hardware keyboard's accessory bar**: there is no software
+            //    keyboard whose inset is worth preserving, so release rather than
+            //    freeze the bar above a dead band.
+            if isListScrolling || usesKeyboardlessControl {
+                return .animateWithKeyboard(inset: 0)
+            }
+            guard contextMenuOpen, geometry.isSoftwareKeyboard else {
+                return .animateWithKeyboard(inset: 0)
+            }
+            return .hold
         }
-        return .hold
     }
 
     /// Decide at the moment a capture's current step changes. Entering a
@@ -59,16 +215,35 @@ public enum KeyboardBarLift {
     }
 
     /// Decide from a live keyboard-frame sample (the App's keyboard layout
-    /// guide). Only a sample taken *while a list drag is in flight* is the
-    /// interactive swipe-dismiss moving the keyboard under the finger — track it
-    /// exactly. Samples while still are the keyboard's own animation (or a
-    /// context-menu resignation) and are ignored: the notified channel owns those.
-    public static func dragged(
+    /// guide, whose overlap is always measured against the window it lives in).
+    ///
+    /// The notified channel owns ordinary show/hide, so a live sample only acts
+    /// when it carries something that channel cannot have:
+    /// - **a list drag in flight** — the interactive swipe-dismiss moving the
+    ///   keyboard under the finger (issue #64), where
+    ///   `keyboardWillChangeFrame` fires only once the gesture commits;
+    /// - **the window changing shape** under a keyboard that has not moved — a
+    ///   Split View divider drag, a Stage Manager or iPadOS 26 resize, a
+    ///   rotation. The keyboard's own frame is unchanged, so it posts nothing at
+    ///   all; without this the bar would keep the inset it had at the window's
+    ///   *old* size (issue #261).
+    ///
+    /// Both are the user's finger on something, so both are applied
+    /// immediately, unanimated: the finger is the animation. Every other sample
+    /// is the keyboard's own animation playing out (or a context-menu
+    /// resignation) and is ignored, so it can never fight the notified channel
+    /// or a held inset.
+    ///
+    /// The guide does not follow an undocked keyboard (`followsUndockedKeyboard`
+    /// stays off), so a floating or split keyboard reports zero overlap here —
+    /// the same answer `Geometry.coverage` gives it.
+    public static func live(
         overlap: CGFloat,
         bottomSafeArea: CGFloat,
-        isListScrolling: Bool
+        isListScrolling: Bool,
+        windowChangedShape: Bool
     ) -> Change {
-        guard isListScrolling else { return .hold }
+        guard isListScrolling || windowChangedShape else { return .hold }
         return .track(inset: max(0, overlap - bottomSafeArea))
     }
 }
