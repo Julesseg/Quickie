@@ -41,8 +41,10 @@ final class SignalsStore {
     static let uitestResetArgument = "-uitest-reset-signals"
 
     /// The launch argument that pre-pins a Favorite under UI testing — the Action
-    /// id to pin follows the flag. It exists because XCUITest cannot fire a SwiftUI
-    /// **context-menu** item's action in the iOS simulator (the menu is a separate
+    /// id to pin follows the flag, and the flag may repeat to pin several — up to the
+    /// cap, which the real toggle enforces here as it does anywhere else, so a test
+    /// can fill the grid and assert its shape. It exists because XCUITest cannot fire
+    /// a SwiftUI **context-menu** item's action in the iOS simulator (the menu is a separate
     /// remote view; the tap is synthesized but the action never runs), even though
     /// the long-press pin works on device. This seeds a pinned Favorite through the
     /// real `toggleFavorite` path so a test can verify Home renders it, without
@@ -80,11 +82,14 @@ final class SignalsStore {
             defaults.removeObject(forKey: frecencyKey)
         }
         let store = SignalsStore()
-        // UI-test hook: pre-pin the Favorite whose Action id follows the flag (see
-        // `uitestPinArgument`), through the real toggle path, so a test can assert
-        // Home renders a pinned Favorite without the undrivable context menu.
-        if let flag = arguments.firstIndex(of: uitestPinArgument), flag + 1 < arguments.count {
-            store.toggleFavorite(arguments[flag + 1])
+        // UI-test hook: pre-pin the Favorite whose Action id follows each occurrence
+        // of the flag (see `uitestPinArgument`), through the real toggle path, so a
+        // test can assert Home renders pinned Favorites without the undrivable
+        // context menu. Pin order is argument order, which is what the grid renders.
+        for flag in arguments.indices where arguments[flag] == uitestPinArgument {
+            if flag + 1 < arguments.count {
+                store.toggleFavorite(arguments[flag + 1])
+            }
         }
         // UI-test hook: seed a Frecency entry per occurrence of the flag (see
         // `uitestSeedFrecentArgument`), through the real record path, so a test
@@ -102,9 +107,12 @@ final class SignalsStore {
         favorites.contains(id)
     }
 
-    /// The Favorites cap (CONTEXT.md → Favorite): the 2×2 grid holds at most four,
-    /// so a fifth pin is refused until one is unpinned.
-    static let maxFavorites = 4
+    /// The Favorites cap (CONTEXT.md → Favorite): the grid holds at most four, so a
+    /// fifth pin is refused until one is unpinned. The number is the grid's own
+    /// (`CommandColumn.FavoritesGrid.capacity`) rather than a second 4 beside it —
+    /// at regular width the grid lays that cap out as one four-across row, so the two
+    /// cannot be allowed to disagree.
+    static let maxFavorites = CommandColumn.FavoritesGrid.capacity
 
     /// Pins an unpinned Action (appending to the end) or unpins a pinned one
     /// (issue #9 AC #1), then persists. Pinning a fifth Favorite is **refused** —

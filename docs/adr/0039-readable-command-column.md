@@ -67,7 +67,10 @@ Home is included for the reason the column exists at all: it is the launcher's
 *default* screen, and it is the one place the mismatch shows without typing
 anything — a centred input bar over an edge-to-edge Recent list. Its Favorites
 grid clamps as a container here; how many columns that grid lays out at regular
-width is a separate decision (#265), not this one.
+width is a separate decision (#265), not this one. *(#265 has since answered it
+inside this policy rather than beside it: `CommandColumn.FavoritesGrid` — four
+across at regular width, the 2×2 at compact, keyed off the same size class and
+never off the number of pinned Favorites. CONTEXT.md → Favorites grid.)*
 
 **Only content clamps.** The [[Living backdrop]] and the progressive-blur bands
 still span the whole window: the clamp's outer frame stays full-width, so a

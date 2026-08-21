@@ -69,3 +69,69 @@ public enum CommandColumn {
         return min(windowWidth, cap)
     }
 }
+
+extension CommandColumn {
+    /// How [[Home]]'s **Favorites grid** lays its cards out inside the column
+    /// (CONTEXT.md → Favorites grid; issue #265, audit finding F2). ADR 0039 clamped
+    /// the grid as a *container* and deliberately left this open: a grid can sit
+    /// inside the column and still be laid out wrong within it.
+    ///
+    /// It was wrong in exactly that way. The grid was two flexible columns at every
+    /// width, so on a full-screen iPad four cards took two rows of ~330pt slabs —
+    /// each one a badge at the far left and a glyph at the far right with a word
+    /// between them, the same eye-travel the column exists to end — and a *single*
+    /// pinned Favorite drew one card half the grid wide, a shape nothing else in the
+    /// app has.
+    ///
+    /// The decision is that the **column count** is a function of the window's size
+    /// class and of nothing else — least of all of how many Favorites are pinned. A
+    /// grid whose columns tracked its item count would make one pin a slab all over
+    /// again; instead the row is fixed and fills left to right, so one card and four
+    /// cards are the same card. At regular width the count is the Favorites cap
+    /// itself, which is what makes the whole grid a single row: four across, one row
+    /// of the launcher's pinned Actions above the Recent list, no second row of air.
+    public enum FavoritesGrid {
+        /// How many Favorites the grid holds (CONTEXT.md → Favorite): four, which a
+        /// fifth pin is refused for. It is the same number as the regular-width
+        /// column count *by construction* — "the whole grid is one row" is the
+        /// decision, so the cap moving moves the row with it.
+        ///
+        /// This is the app's one Favorites cap: the pin toggle (`SignalsStore`) and
+        /// the widgets' four cells (`FavoritesWidgetSnapshot.capacity`, which the
+        /// widget grid chains from) both read it here, since a widget that mirrors
+        /// the grid (ADR 0025) must not merely happen to agree with it.
+        public static let capacity = 4
+
+        /// The gutter between cards, both between columns and between rows.
+        public static let spacing: CGFloat = 10
+
+        /// The grid's own inset off the edge it lays out against — the window's at
+        /// compact width, the column's at regular (ADR 0039: the column edge stands
+        /// in for the window edge, and each surface keeps the inset it always had).
+        public static let horizontalInset: CGFloat = 16
+
+        /// How many cards lay out across one row.
+        public static func columnCount(for sizeClass: SizeClass) -> Int {
+            switch sizeClass {
+            case .compact: return 2
+            case .regular: return capacity
+            }
+        }
+
+        /// How wide one Favorite card comes out in a window `windowWidth` across.
+        ///
+        /// Like `columnWidth(inWindowOf:for:)`, this models what SwiftUI's `LazyVGrid`
+        /// does with the flexible columns the App hands it rather than being a
+        /// second implementation of it — the App passes the count, the spacing and
+        /// the inset from here, so the arithmetic is the same arithmetic. What it
+        /// buys is a card *size* `swift test` can hold: that a lone pin is a card
+        /// and not a slab is a number, and this is the number.
+        public static func cardWidth(inWindowOf windowWidth: CGFloat, for sizeClass: SizeClass) -> CGFloat {
+            let columns = CGFloat(columnCount(for: sizeClass))
+            let content = columnWidth(inWindowOf: windowWidth, for: sizeClass)
+                - 2 * horizontalInset
+                - (columns - 1) * spacing
+            return content / columns
+        }
+    }
+}
