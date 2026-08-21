@@ -70,12 +70,13 @@ final class KeyboardBarLiftTests: XCTestCase {
         )
     }
 
-    /// The ordinary notified decision: a local keyboard, list still, no
-    /// keyboard-less control. The cases that vary those say so.
+    /// The ordinary notified decision: our own keyboard, no menu on screen, list
+    /// still, no keyboard-less control. The cases that vary those say so.
     private static func lift(_ geometry: KeyboardBarLift.Geometry) -> KeyboardBarLift.Change {
         KeyboardBarLift.notified(
             geometry,
             isLocalKeyboard: true,
+            contextMenuOpen: false,
             isListScrolling: false,
             usesKeyboardlessControl: false
         )
@@ -107,23 +108,46 @@ final class KeyboardBarLiftTests: XCTestCase {
                 bottomSafeArea: 20
             ),
             isLocalKeyboard: true,
+            contextMenuOpen: false,
             isListScrolling: true,
             usesKeyboardlessControl: false
         )
         XCTAssertEqual(change, .animateWithKeyboard(inset: 0))
     }
 
-    /// A dismissal while the list is still and a software keyboard was up is the
-    /// context menu resigning first responder (issue #58): hold the inset so the
-    /// long-press never reflows the list.
-    func testDismissalWhileStillHoldsInset() {
+    /// A software keyboard dropped **under an open long-press menu** is the menu
+    /// doing it (issue #58): hold the inset so the list stays still under the
+    /// menu the user is reading, and so the keyboard's return when the menu
+    /// closes costs no reflow at all.
+    func testDismissalUnderAnOpenMenuHoldsInset() {
+        let change = KeyboardBarLift.notified(
+            Self.geometry(
+                Self.dismissed(height: 364, under: Self.fullScreen),
+                in: Self.fullScreen,
+                bottomSafeArea: 20
+            ),
+            isLocalKeyboard: true,
+            contextMenuOpen: true,
+            isListScrolling: false,
+            usesKeyboardlessControl: false
+        )
+        XCTAssertEqual(change, .hold)
+    }
+
+    /// The same keyboard frame with **no menu on screen** is the user putting the
+    /// keyboard away — iPad's dedicated dismiss key, a tap outside, anything that
+    /// ends editing. The two notifications are indistinguishable (same end frame,
+    /// duration, curve, `isLocal`, and the field keeps first responder through
+    /// both), which is exactly why the menu has to be reported rather than
+    /// inferred: nothing is coming back, so the bar drops (issue #261).
+    func testDismissalWithNoMenuDropsBarToTheBottom() {
         XCTAssertEqual(
             Self.lift(Self.geometry(
                 Self.dismissed(height: 364, under: Self.fullScreen),
                 in: Self.fullScreen,
                 bottomSafeArea: 20
             )),
-            .hold
+            .animateWithKeyboard(inset: 0)
         )
     }
 
@@ -139,6 +163,7 @@ final class KeyboardBarLiftTests: XCTestCase {
                 bottomSafeArea: 20
             ),
             isLocalKeyboard: true,
+            contextMenuOpen: false,
             isListScrolling: false,
             usesKeyboardlessControl: true
         )
@@ -321,6 +346,7 @@ final class KeyboardBarLiftTests: XCTestCase {
                 bottomSafeArea: 20
             ),
             isLocalKeyboard: false,
+            contextMenuOpen: false,
             isListScrolling: false,
             usesKeyboardlessControl: false
         )

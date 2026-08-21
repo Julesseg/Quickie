@@ -137,9 +137,25 @@ public enum KeyboardBarLift {
     /// side by side on iPad, the *other* app's keyboard posts here too, and
     /// though it may well cover our window, nothing of ours is focused — so it
     /// must leave our bar exactly where it is.
+    /// `contextMenuOpen` is whether a row's long-press menu is on screen, and it
+    /// is what tells the two kinds of keyboard departure apart. Nothing in the
+    /// notification can: a menu-driven drop and an explicit dismissal post the
+    /// *same* end frame, duration, curve and `isLocal`, the text field keeps
+    /// first responder through both, and the window count and key window don't
+    /// move either. So the App reports the menu instead of the policy guessing
+    /// (`ContextMenuPresence`):
+    /// - **menu open** — the keyboard comes straight back when the menu closes,
+    ///   so **hold** and let the menu sit over a still list (issue #58).
+    ///   Releasing here would reflow the reversed list out from under the menu
+    ///   the user is reading.
+    /// - **no menu** — the user put the keyboard away: iPad's dedicated dismiss
+    ///   key, a tap outside, anything that ends editing. Nothing is coming back,
+    ///   so the bar drops to the window bottom rather than hover over a dead
+    ///   band (issue #261).
     public static func notified(
         _ geometry: Geometry,
         isLocalKeyboard: Bool,
+        contextMenuOpen: Bool,
         isListScrolling: Bool,
         usesKeyboardlessControl: Bool
     ) -> Change {
@@ -168,17 +184,23 @@ public enum KeyboardBarLift {
             //    picker, the primer/denial affordances): the text field was
             //    removed for the whole step, so the keyboard is structurally
             //    gone — release, and let the control take its space.
-            //  • **a software keyboard, list still**: a context menu resigned
-            //    first responder (issue #58) — **hold**, so the long-press never
-            //    reflows the list. This is the whole point of driving the lift
-            //    ourselves.
-            //  • **a hardware keyboard's accessory bar, list still**: there is no
-            //    software keyboard whose inset is worth preserving, so release
-            //    rather than freeze the bar above a dead band.
+            //  • **no context menu on screen**: the user put the keyboard away —
+            //    iPad's dismiss key, a tap outside, anything that ends editing.
+            //    Release: nothing is coming back to sit under the bar (#261).
+            //  • **a software keyboard dropped under an open menu, list still**:
+            //    the long-press did it (issue #58) — **hold**, so the menu never
+            //    reflows the list it is sitting over. This is the whole point of
+            //    driving the lift ourselves.
+            //  • **a hardware keyboard's accessory bar**: there is no software
+            //    keyboard whose inset is worth preserving, so release rather than
+            //    freeze the bar above a dead band.
             if isListScrolling || usesKeyboardlessControl {
                 return .animateWithKeyboard(inset: 0)
             }
-            return geometry.isSoftwareKeyboard ? .hold : .animateWithKeyboard(inset: 0)
+            guard contextMenuOpen, geometry.isSoftwareKeyboard else {
+                return .animateWithKeyboard(inset: 0)
+            }
+            return .hold
         }
     }
 

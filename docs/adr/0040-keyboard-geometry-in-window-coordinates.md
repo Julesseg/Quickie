@@ -84,8 +84,34 @@ the policy consumes rects rather than a pre-computed scalar.**
   keeps the inset it had at the window's old size. Both are the user's finger on
   something, so both apply immediately and unanimated.
 
+- **A keyboard that leaves is not self-describing, so the App reports the menu.**
+  The held inset of issue #58 exists so a long-press context menu can open over
+  a still list: the menu drops the keyboard, and releasing the lift would reflow
+  the reversed list out from under the menu the user is reading. But iPad's
+  dedicated dismiss key drops the keyboard too, and there the bar must fall to
+  the window bottom rather than hang a keyboard's height above nothing.
+
+  The two are indistinguishable at the notification. Traced on iPhone 17 Pro and
+  iPad Pro 11" (iOS 26.3), a menu-driven drop and a dismiss-key drop post the
+  same end frame, the same duration (0.3833) and curve (7), the same
+  `isLocal`, and both fire `willHide`/`didHide`. The text field keeps first
+  responder through **both** — the long-standing comment that the menu "resigns
+  first responder" is not what happens. Window count, key window, and window
+  levels are identical either side.
+
+  So the menu is reported rather than inferred: `ContextMenuPresence` counts the
+  menu's own **preview** view appearing and disappearing — SwiftUI builds it when
+  the menu displays and tears it down when it dismisses — and
+  `View.resultContextMenu`, the single place every menu in the app is built,
+  feeds it. `notified` takes `contextMenuOpen` and holds only for that.
+
 ## Consequences
 
+- The `KeyboardDismissUITests` class now carries both halves — the dismiss key
+  must drop the bar, the long-press must not move it — because they are the same
+  notification and only pass together if the menu signal is really being read.
+  Each was checked against its own negation: forcing `contextMenuOpen` true
+  reproduces the frozen bar exactly (846.0pt before and after).
 - Every windowing configuration is one code path: the conversion normalises full
   screen, Split View, Slide Over, and Stage Manager into the same question —
   "how much of *this window's* bottom edge is covered?"

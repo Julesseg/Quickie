@@ -22,9 +22,15 @@ import UIKit
 /// Zero-sized and hittest-transparent: install it in a `.background`.
 struct KeyboardFrameObserver: UIViewRepresentable {
     /// Called with each keyboard end-frame, resolved against the host window,
-    /// and whether the keyboard is this app's own (side by side on iPad, the
-    /// other app's keyboard posts here too).
-    var onKeyboardFrame: (KeyboardBarLift.Geometry, _ isLocalKeyboard: Bool) -> Void
+    /// plus the two pieces of state that only mean anything read at the
+    /// notification's own instant: whether the keyboard is this app's own (side
+    /// by side on iPad, the other app's posts here too), and whether a row's
+    /// long-press menu is what put it away.
+    var onKeyboardFrame: (
+        KeyboardBarLift.Geometry,
+        _ isLocalKeyboard: Bool,
+        _ contextMenuOpen: Bool
+    ) -> Void
     /// Called with the keyboard's current overlap of the *window* bottom, in
     /// points, whenever a layout pass moves the keyboard layout guide relative
     /// to the window — paired with the window's bottom safe-area inset, and with
@@ -45,7 +51,7 @@ struct KeyboardFrameObserver: UIViewRepresentable {
     }
 
     final class TrackingView: UIView {
-        var onKeyboardFrame: ((KeyboardBarLift.Geometry, Bool) -> Void)?
+        var onKeyboardFrame: ((KeyboardBarLift.Geometry, Bool, Bool) -> Void)?
         var onLiveOverlap: ((CGFloat, CGFloat, Bool) -> Void)?
         private var lastOverlap: CGFloat?
         private var lastWindowBounds: CGRect?
@@ -90,7 +96,10 @@ struct KeyboardFrameObserver: UIViewRepresentable {
                 bottomSafeArea: window.safeAreaInsets.bottom
             )
             let isLocal = note.userInfo?[UIResponder.keyboardIsLocalUserInfoKey] as? Bool ?? true
-            onKeyboardFrame?(geometry, isLocal)
+            // Read *now*: by a later runloop turn the menu that caused this drop
+            // may already have closed. Nothing in the notification itself tells a
+            // menu-driven drop from a real dismissal — see `ContextMenuPresence`.
+            onKeyboardFrame?(geometry, isLocal, ContextMenuPresence.shared.isOpen)
         }
 
         override func layoutSubviews() {

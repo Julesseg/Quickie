@@ -856,10 +856,13 @@ struct RootView: View {
             //    text field was *removed* for the whole step, so the keyboard is
             //    structurally gone — release the inset so the control takes the
             //    keyboard's space rather than floating above a dead band.
-            //  • **Hiding while *not* scrolling** otherwise: the context menu
-            //    resigned first responder — **hold** the inset so the long-press
-            //    doesn't reflow the list. This is the whole point of driving the
-            //    lift ourselves.
+            //  • **Hiding with no menu on screen**: the user put the keyboard
+            //    away — iPad's dedicated dismiss key, a tap outside — so the bar
+            //    drops to the window bottom. Nothing is coming back to sit under
+            //    it (issue #261).
+            //  • **Hiding under an open long-press menu**: **hold** the inset so
+            //    the menu doesn't reflow the list it sits over. This is the whole
+            //    point of driving the lift ourselves.
             //  • **Another app's keyboard**, side by side on iPad: it may cover
             //    our window, but nothing of ours is focused — hold.
             //
@@ -871,10 +874,11 @@ struct RootView: View {
             // context-menu inset — stay owned by the notified channel.
             .background {
                 KeyboardFrameObserver(
-                    onKeyboardFrame: { geometry, isLocalKeyboard in
+                    onKeyboardFrame: { geometry, isLocalKeyboard, contextMenuOpen in
                         apply(KeyboardBarLift.notified(
                             geometry,
                             isLocalKeyboard: isLocalKeyboard,
+                            contextMenuOpen: contextMenuOpen,
                             isListScrolling: listScrolling,
                             usesKeyboardlessControl: capture.usesKeyboardlessControl
                         ))
