@@ -111,6 +111,13 @@ final class CommandColumnTests: XCTestCase {
         )
     }
 
+    /// The grid holds as many cards as the widgets draw cells. Neither reads the
+    /// other — the Favorites widget *mirrors* the grid (ADR 0025), so what matters is
+    /// that the two numbers agree, not that one is defined in terms of the other.
+    func testTheGridHoldsAsManyCardsAsTheWidgetDrawsCells() {
+        XCTAssertEqual(CommandColumn.FavoritesGrid.capacity, FavoritesWidgetSnapshot.capacity)
+    }
+
     /// A card is a quarter of the column at regular width — the four-across row,
     /// resolved against a full-screen 13" iPad.
     func testRegularCardIsAQuarterOfTheColumn() {

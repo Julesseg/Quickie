@@ -24,6 +24,15 @@ final class CommandColumnUITests: XCTestCase {
     /// own test pins the value, so a change to it fails there first, loudly.
     private let readableWidth: CGFloat = 680
 
+    /// The Favorites grid's inset off the column's edge and the gutter between its
+    /// cards, mirroring `CommandColumn.FavoritesGrid.horizontalInset` / `.spacing`
+    /// for the same reason as `readableWidth` above: the UI test target can't see
+    /// QuickieCore, and Core's own test pins both values so a change fails there
+    /// first. Named rather than inlined so the expectations below read as the
+    /// policy's arithmetic instead of as bare numbers.
+    private let gridInset: CGFloat = 16
+    private let gridSpacing: CGFloat = 10
+
     override func setUpWithError() throws {
         continueAfterFailure = false
     }
@@ -184,14 +193,17 @@ final class CommandColumnUITests: XCTestCase {
             // The row lays out inside the column, not the window: four cards and their
             // three gutters, inside the grid's own 16pt inset off the column's edges.
             let row = frames[3].maxX - frames[0].minX
-            XCTAssertEqual(row, readableWidth - 32, accuracy: 1, "the row should span the column, inset by 16pt")
+            XCTAssertEqual(
+                row, readableWidth - 2 * gridInset, accuracy: 1,
+                "the row should span the column, inset by \(gridInset)pt"
+            )
         } else {
             XCTAssertEqual(frames[1].midY, frames[0].midY, accuracy: 1, "compact: the first two share a row")
             XCTAssertEqual(frames[3].midY, frames[2].midY, accuracy: 1, "compact: the last two share a row")
             XCTAssertGreaterThan(frames[2].midY, frames[0].midY, "compact: the grid is 2×2, second row below the first")
             XCTAssertEqual(
-                frames[0].width, (app.frame.width - 42) / 2, accuracy: 1,
-                "compact card sizing must be unchanged: half the window, less the 16pt insets and the 10pt gutter"
+                frames[0].width, (app.frame.width - 2 * gridInset - gridSpacing) / 2, accuracy: 1,
+                "compact card sizing must be unchanged: half the window, less the insets and the gutter"
             )
         }
     }

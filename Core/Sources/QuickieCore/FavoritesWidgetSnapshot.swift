@@ -14,10 +14,9 @@ import Foundation
 public enum FavoritesWidgetSnapshot {
     /// The grid's cap (CONTEXT.md → Favorites grid): at most four Favorites, so
     /// the codec clamps both sides and a malformed over-long snapshot can never
-    /// draw a fifth cell. It is the in-app grid's own capacity, not a second four
-    /// beside it — the widget *mirrors* that grid (ADR 0025), so the number has to
-    /// come from it rather than agree with it by coincidence.
-    public static let capacity = CommandColumn.FavoritesGrid.capacity
+    /// draw a fifth cell. `CommandColumnTests` pins it equal to the in-app grid's own
+    /// capacity, since the widget *mirrors* that grid (ADR 0025).
+    public static let capacity = 4
 
     /// Encodes the snapshot as JSON, clamped to the grid's four in pin order.
     public static func encode(_ favorites: [WidgetAction]) -> Data? {

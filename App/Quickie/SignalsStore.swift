@@ -108,11 +108,8 @@ final class SignalsStore {
     }
 
     /// The Favorites cap (CONTEXT.md → Favorite): the grid holds at most four, so a
-    /// fifth pin is refused until one is unpinned. The number is the grid's own
-    /// (`CommandColumn.FavoritesGrid.capacity`) rather than a second 4 beside it —
-    /// at regular width the grid lays that cap out as one four-across row, so the two
-    /// cannot be allowed to disagree.
-    static let maxFavorites = CommandColumn.FavoritesGrid.capacity
+    /// fifth pin is refused until one is unpinned.
+    static let maxFavorites = 4
 
     /// Pins an unpinned Action (appending to the end) or unpins a pinned one
     /// (issue #9 AC #1), then persists. Pinning a fifth Favorite is **refused** —

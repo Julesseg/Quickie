@@ -96,10 +96,11 @@ extension CommandColumn {
         /// column count *by construction* — "the whole grid is one row" is the
         /// decision, so the cap moving moves the row with it.
         ///
-        /// This is the app's one Favorites cap: the pin toggle (`SignalsStore`) and
-        /// the widgets' four cells (`FavoritesWidgetSnapshot.capacity`, which the
-        /// widget grid chains from) both read it here, since a widget that mirrors
-        /// the grid (ADR 0025) must not merely happen to agree with it.
+        /// This is the *grid's* shape, not the domain's pin rule: the cap that refuses
+        /// a fifth pin lives with the pinning (`SignalsStore.maxFavorites`) and the
+        /// widget's cell count with the widget's codec, each stated where its own rule
+        /// is enforced. A test pins them equal rather than one importing another,
+        /// because a layout policy is the wrong place to look up what a pin does.
         public static let capacity = 4
 
         /// The gutter between cards, both between columns and between rows.
@@ -120,12 +121,14 @@ extension CommandColumn {
 
         /// How wide one Favorite card comes out in a window `windowWidth` across.
         ///
-        /// Like `columnWidth(inWindowOf:for:)`, this models what SwiftUI's `LazyVGrid`
-        /// does with the flexible columns the App hands it rather than being a
-        /// second implementation of it — the App passes the count, the spacing and
-        /// the inset from here, so the arithmetic is the same arithmetic. What it
-        /// buys is a card *size* `swift test` can hold: that a lone pin is a card
-        /// and not a slab is a number, and this is the number.
+        /// Like `columnWidth(inWindowOf:for:)`, this is a *model* of what SwiftUI's
+        /// `LazyVGrid` resolves the flexible columns to, not the call the App makes —
+        /// the App hands the count, the spacing and the inset to the grid and lets it
+        /// divide. So the arithmetic here is restated rather than shared, and what
+        /// keeps the two honest is that all three inputs come from this type. What it
+        /// buys is a card *size* `swift test` can hold: that a lone pin is a card and
+        /// not a slab is a number, and this is the number. `CommandColumnUITests`
+        /// closes the loop on a real device, where the cards measure themselves.
         public static func cardWidth(inWindowOf windowWidth: CGFloat, for sizeClass: SizeClass) -> CGFloat {
             let columns = CGFloat(columnCount(for: sizeClass))
             let content = columnWidth(inWindowOf: windowWidth, for: sizeClass)
