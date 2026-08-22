@@ -546,6 +546,11 @@ private struct ResultContextMenu<Preview: View>: ViewModifier {
     @ViewBuilder let preview: () -> Preview
 
     @Environment(SharePresenter.self) private var sharePresenter
+    /// The window's width class, mapped through the launcher's single mapping so this
+    /// and the readable command column can never disagree about the same window. Read
+    /// here, where the verb runs, because the shape a share wears is settled against
+    /// the window it *opened* in and held from there (`SharePresenter.style`).
+    @Environment(\.horizontalSizeClass) private var horizontalSizeClass
 
     /// This row's anchor, stable for as long as the row's slot lives.
     @State private var anchor = UUID()
@@ -571,7 +576,7 @@ private struct ResultContextMenu<Preview: View>: ViewModifier {
                         // Claim the popover's anchor before the launcher resolves the
                         // row's content: whichever row's menu ran the verb is the row
                         // the share presents on.
-                        sharePresenter.claimAnchor(anchor)
+                        sharePresenter.claimAnchor(anchor, in: .init(horizontalSizeClass))
                         onSecondaryAction(kind)
                     } label: {
                         Label(kind.menuTitle, systemImage: kind.menuSymbol)

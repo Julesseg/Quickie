@@ -49,12 +49,31 @@ final class SharePresenter {
     /// twice on screen (a Favorite card and a Recent row) still presents once.
     private(set) var anchor: UUID?
 
+    /// The shape this share takes, **fixed when the row claimed it** and held for the
+    /// life of the presentation.
+    ///
+    /// Deciding it live is a trap the fallback walks straight into: presenting the
+    /// sheet dismisses the keyboard, which grows `roomForPopover` past the threshold,
+    /// which re-answers "popover" — so the sheet's own binding goes false and SwiftUI
+    /// takes it away again, mid-present. Nothing appears at all. Which shape a share
+    /// wears is a property of *that share*, settled against the window it opened in.
+    private(set) var style: SharePresentation.Style = .sheet
+
     /// Whether the surface is on its way out: presented no longer, gone not yet.
     private var isDismissing = false
 
     /// How many shares have finished. The launcher's cue to release a file share's
     /// access and re-arm the input's focus — bumped once the surface has actually left.
     private(set) var dismissals = 0
+
+    /// How tall the launcher's own content area is — the window less what the keyboard
+    /// and the bottom bar have taken. It is what decides whether a share can be a
+    /// popover at all (`SharePresentation.style(for:roomFor:)`): squeezed into a short
+    /// landscape window or a floating tile, the iOS share sheet drops its action list
+    /// rather than scrolling it, so a popover with nowhere to go is worse than the
+    /// sheet. Zero until the launcher has laid out, which reads as "no room" and takes
+    /// the sheet — the answer that is never wrong.
+    var roomForPopover: CGFloat = 0
 
     /// The security-scoped access of the share that just ended, parked here for the
     /// launcher to release. The presentation's own teardown can't do it — the access
@@ -72,12 +91,17 @@ final class SharePresenter {
         isPresenting && self.anchor == anchor
     }
 
-    /// Claims the anchor for a row that is about to run a secondary verb. Called for
-    /// every verb, not just Share: the claim is "this is the row the user pressed",
-    /// which is true whichever item the menu ended on, and cheaper than teaching the
-    /// menu which verbs present something.
-    func claimAnchor(_ anchor: UUID) {
+    /// Claims the anchor for a row that is about to run a secondary verb, and settles
+    /// the shape a share from it would wear. Called for every verb, not just Share: the
+    /// claim is "this is the row the user pressed", which is true whichever item the
+    /// menu ended on, and cheaper than teaching the menu which verbs present something.
+    ///
+    /// The shape is resolved here rather than in `present(_:)` because only the row
+    /// knows the window's width class — and the two calls are a moment apart in one
+    /// synchronous pass, so there is no opening for the window to change in between.
+    func claimAnchor(_ anchor: UUID, in sizeClass: CommandColumn.SizeClass) {
         self.anchor = anchor
+        self.style = SharePresentation.style(for: sizeClass, roomFor: roomForPopover)
     }
 
     /// Deposits the resolved share. The anchor claimed a moment earlier decides which
@@ -139,13 +163,6 @@ private struct RowSharePresentation: ViewModifier {
     let anchor: UUID
 
     @Environment(SharePresenter.self) private var presenter
-    /// The window's width class, mapped through the launcher's single mapping so this
-    /// and the readable command column can never disagree about the same window.
-    @Environment(\.horizontalSizeClass) private var horizontalSizeClass
-
-    private var style: SharePresentation.Style {
-        SharePresentation.style(for: .init(horizontalSizeClass))
-    }
 
     func body(content: Content) -> some View {
         content
@@ -157,11 +174,20 @@ private struct RowSharePresentation: ViewModifier {
                 attachmentAnchor: .rect(.bounds)
             ) {
                 shareSurface
-                    // A `UIActivityViewController` has no SwiftUI ideal size, so an
-                    // unsized popover collapses to nothing.
+                    // An **ideal** size, not a fixed one. A `UIActivityViewController`
+                    // has no SwiftUI ideal size of its own, so an unsized popover
+                    // collapses to nothing — but a *fixed* frame is worse than either:
+                    // the system shrinks the popover to fit the window (a short Stage
+                    // Manager tile, a landscape iPad), the content keeps the size it was
+                    // told, and the overflow is **clipped** — with the activity
+                    // controller's own scrolling stranded outside the visible box, so
+                    // the rows past the fold cannot be reached at all. Stated as an
+                    // ideal, it is the size the popover *asks* for: honoured where there
+                    // is room, compressed where there isn't, and the controller scrolls
+                    // inside whatever it gets.
                     .frame(
-                        width: SharePresentation.popoverSize.width,
-                        height: SharePresentation.popoverSize.height
+                        idealWidth: SharePresentation.popoverSize.width,
+                        idealHeight: SharePresentation.popoverSize.height
                     )
                     // A popover has no `onDismiss`; its content leaving the hierarchy
                     // is the nearest thing to one — and it *is* the right moment,
@@ -193,7 +219,7 @@ private struct RowSharePresentation: ViewModifier {
     /// the flip, not the departure, so it only stops the presentation.
     private func presented(as wanted: SharePresentation.Style) -> Binding<Bool> {
         Binding(
-            get: { style == wanted && presenter.isPresenting(from: anchor) },
+            get: { presenter.style == wanted && presenter.isPresenting(from: anchor) },
             set: { presented in if !presented { presenter.beginDismissal() } }
         )
     }

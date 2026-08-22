@@ -99,7 +99,13 @@ which is exactly the chrome ADR 0010 keeps out — depth is the glass's job.
   rather than by the view. #264 also put the **Share** secondary action's
   popover on the same size class through `SharePresentation`, which reads
   `CommandColumn.SizeClass` rather than defining a second regular/compact
-  split — the one thing this policy asks of anything reusing it.)*
+  split — the one thing this policy asks of anything reusing it. It found the
+  limit of that, too: a **popover** needs a size class *and* room, because the
+  iOS share sheet squeezed below its asked-for height drops its action list
+  instead of scrolling it. So `SharePresentation` takes the launcher's measured
+  content height alongside the class and falls back to the sheet when it cannot
+  fit the popover whole. The size class stays the shared vocabulary; what a
+  surface needs on top of it is that surface's own business.)*
 
 ## Considered options
 

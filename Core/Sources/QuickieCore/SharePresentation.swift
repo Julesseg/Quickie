@@ -30,7 +30,18 @@ public enum SharePresentation {
         case popoverAnchoredToRow
     }
 
-    /// Which shape Share takes.
+    /// Which shape Share takes, given the width class and how much **room** the
+    /// launcher has to put a popover in — the height of its own content area, which is
+    /// the window less whatever the keyboard and the bottom bar have taken.
+    ///
+    /// Width alone is not enough, and the reason is a property of the thing being
+    /// presented. Squeezed below the height it asks for, the iOS share sheet does not
+    /// scroll: it **drops** its action list and renders a link preview and an app row,
+    /// with no way to reach what is missing. A landscape iPad with the keyboard up, or
+    /// a short floating window, leaves exactly that much room. So a popover is offered
+    /// only where it fits whole; anywhere else Share falls back to the sheet, which the
+    /// system always makes usable — and which is what regular width presented before
+    /// the popover existed, so the fallback cannot be a regression on that case.
     ///
     /// The App branches on this to pick the *modifier*, rather than always presenting a
     /// popover and letting `presentationCompactAdaptation` fold it into a sheet. The
@@ -38,12 +49,29 @@ public enum SharePresentation {
     /// and `onDismiss` — the one hook that fires after the surface has actually left —
     /// is what re-arms the input's focus on the way out. "Compact is unchanged" has to
     /// mean the presentation itself, not a lookalike of it.
-    public static func style(for sizeClass: CommandColumn.SizeClass) -> Style {
+    public static func style(
+        for sizeClass: CommandColumn.SizeClass,
+        roomFor availableHeight: CGFloat
+    ) -> Style {
         switch sizeClass {
-        case .compact: return .sheet
-        case .regular: return .popoverAnchoredToRow
+        case .compact:
+            return .sheet
+        case .regular:
+            return availableHeight >= minimumPopoverRoom ? .popoverAnchoredToRow : .sheet
         }
     }
+
+    /// The least room a popover may be offered: the height it asks for, plus the
+    /// margins the system keeps between a popover and the edges it is placed against.
+    ///
+    /// Stated as a sum rather than a bare number so the two move together — raising
+    /// `popoverSize.height` without raising this would quietly re-admit the squeeze.
+    /// An unmeasured area (zero, before the launcher has laid out) falls below it and
+    /// takes the sheet, which is the answer that is never wrong.
+    public static let minimumPopoverRoom = popoverSize.height + 2 * popoverMargin
+
+    /// The gap the system leaves between a popover and the edge it is placed against.
+    private static let popoverMargin: CGFloat = 12
 
     /// The popover's content size.
     ///

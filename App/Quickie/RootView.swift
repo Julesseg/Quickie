@@ -669,6 +669,23 @@ struct RootView: View {
                     }
                 }
 
+                .onGeometryChange(for: CGFloat.self) { $0.size.height } action: { height in
+                    // How much room a **Share** popover would have (issue #264). This
+                    // Group is the launcher's content area, so its height is the window
+                    // less whatever the keyboard and the bottom bar have taken — the
+                    // space a popover is actually placed in. Measured rather than
+                    // guessed from the window, because the keyboard is most of what
+                    // makes a landscape iPad or a short floating tile too small for one,
+                    // and a popover that doesn't fit doesn't scroll: the iOS share sheet
+                    // drops its action list instead. `SharePresentation` turns the
+                    // number into the choice; below its threshold Share stays a sheet.
+                    //
+                    // Attached here, inside the stack, for the same reason the backdrop's
+                    // `onChange` is: the root's own modifier chain is at the
+                    // type-checker's expression-complexity limit.
+                    sharePresenter.roomForPopover = height
+                }
+
                 if let toast {
                     ConfirmationToast(toast: toast) { openToast(toast) }
                 }

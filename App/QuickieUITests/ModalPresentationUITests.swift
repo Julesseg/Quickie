@@ -5,7 +5,9 @@ import XCTest
 ///
 /// - **Share** — a transient action on one specific row — is a popover with its arrow
 ///   in that row, not a sheet rising from the bottom of the window with nothing left on
-///   screen to say which result is about to be shared. Compact width keeps the sheet.
+///   screen to say which result is about to be shared. Compact width keeps the sheet,
+///   and so does a regular-width window with no **room** for one: squeezed, the iOS
+///   share sheet drops its action list rather than scrolling it.
 /// - The **Snippet** and **Custom Action** editors are form sheets: a centered card,
 ///   not a slab the width of an iPad. On an iPhone they stay the full-height sheet they
 ///   have always been.
@@ -40,12 +42,22 @@ final class ModalPresentationUITests: XCTestCase {
 
     override func tearDown() {
         // Best effort, and deliberately unasserted: whatever the test proved or failed
-        // to prove, the next one must open on the launcher and not on a share sheet.
-        MainActor.assumeIsolated { _ = Self.dismissShare(in: XCUIApplication()) }
+        // to prove, the next one must open on the launcher — not on a share sheet, and
+        // not on its side.
+        MainActor.assumeIsolated {
+            _ = Self.dismissShare(in: XCUIApplication())
+            XCUIDevice.shared.orientation = .portrait
+        }
     }
 
+    /// Launches in a stated orientation rather than whatever the last test left behind.
+    /// One test here deliberately rotates — a short window is the point of it — and a
+    /// device left on its side turns every later test into a different, unasserted case
+    /// (rows scrolled off, a Fallback out of reach). Stating it per launch makes the
+    /// class order-independent.
     @MainActor
-    private func launchApp() -> XCUIApplication {
+    private func launchApp(_ orientation: UIDeviceOrientation = .portrait) -> XCUIApplication {
+        XCUIDevice.shared.orientation = orientation
         let app = XCUIApplication()
         app.launchArguments = ["--uitesting", "-uitest-reset-signals", "-uitest-instant-motion"]
         app.launch()
@@ -291,5 +303,33 @@ final class ModalPresentationUITests: XCTestCase {
             "the Custom Action editor opens"
         )
         assertFormSheet(titled: "New Custom Action", in: app)
+    }
+
+    /// A regular-width window with no room for a popover falls back to the sheet.
+    ///
+    /// Landscape with the keyboard up is the case a user meets without trying: it
+    /// leaves the launcher a few hundred points of content area, and a popover squeezed
+    /// into that does not become scrollable — the iOS share sheet **drops** its action
+    /// list and renders a link preview and an app row, with no way to reach what is
+    /// gone. (Measured: a 244pt popover, its content flush to the box, a drag inside it
+    /// rubber-banding 9pt and springing back.) A sheet is always usable, and it is what
+    /// regular width presented before the popover existed.
+    ///
+    /// Portrait is the roomy case the test above covers, so this one only runs where
+    /// the two can differ: an iPhone is compact in both orientations and has nothing
+    /// extra to prove here.
+    @MainActor
+    func testAShortWindowFallsBackToTheSheet() throws {
+        try XCTSkipUnless(isRegularWidth, "compact width is always a sheet — nothing to fall back from")
+
+        let app = launchApp(.landscapeLeft)
+        let row = detectedURLRow(in: app)
+        share(from: row, in: app)
+
+        XCTAssertEqual(
+            app.popovers.count, 0,
+            "a window too short to host the popover whole must present the sheet instead"
+        )
+        XCTAssertTrue(Self.dismissShare(in: app), "the share should dismiss")
     }
 }
