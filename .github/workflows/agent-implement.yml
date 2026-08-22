@@ -73,8 +73,10 @@ jobs:
           echo "Spawning session for issue #${ISSUE} on ${MODEL} at ${THINKING} reasoning effort in ${MODE} mode"
 
           # --detach: the session runs under the Paseo daemon, so it outlives
-          # this job; progress is visible in the Paseo apps. The /implement
-          # skill in the repo config carries the full workflow instructions.
+          # this job; progress is visible in the Paseo apps. The
+          # /label-and-implement-with-pr skill in the repo config carries the
+          # full workflow instructions: claim the issue with the
+          # agent-dispatched label, run /implement, then open the pull request.
           paseo run --detach \
             --provider claude \
             --model "$MODEL" \
@@ -82,4 +84,4 @@ jobs:
             --mode "$MODE" \
             --cwd "$PROJECT_DIR" \
             --worktree "claude/issue-${ISSUE}" \
-            "/implement issue #${ISSUE}"
+            "/label-and-implement-with-pr issue #${ISSUE}"

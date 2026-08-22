@@ -1,0 +1,5 @@
+interface:
+  display_name: "Label and Implement with PR"
+  short_description: "Claim an issue, build it, open the PR"
+policy:
+  allow_implicit_invocation: false

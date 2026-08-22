@@ -21,10 +21,13 @@ Two workflows split detection from execution:
    `agent-implement.yml` with the issue number.
 2. **`agent-implement.yml`** (self-hosted Mac runner) runs
    `paseo run --detach --model <model> --thinking <effort> --worktree
-   claude/issue-<N> "/implement issue #<N>"` — the repo's `/implement` skill
-   carries the full workflow instructions. `--detach` means the session runs
-   under the Paseo daemon and outlives the (short) runner job; `--worktree`
-   keeps parallel sessions from clobbering one checkout.
+   claude/issue-<N> "/label-and-implement-with-pr issue #<N>"` — the repo's
+   `/label-and-implement-with-pr` skill carries the full workflow
+   instructions: claim the issue with the `agent-dispatched` label, run
+   `/implement` to build it, then open the pull request that closes it.
+   `--detach` means the session runs under the Paseo daemon and outlives the
+   (short) runner job; `--worktree` keeps parallel sessions from clobbering
+   one checkout.
 
    Sessions run on **Opus 4.8 at high reasoning effort** by default, pinned
    rather than inherited from the daemon. Both are overridable — see
@@ -99,5 +102,5 @@ labeling new issues `ready-for-agent`.
 
 `agent-implement.yml` also accepts a manual run from the Actions tab with any
 issue number — handy for forcing a specific issue through the pipeline out of
-order. Add the `agent-dispatched` label yourself if you want it counted
-against the in-flight cap.
+order. The session labels the issue `agent-dispatched` itself as its first
+step, so a manually forced issue still counts against the in-flight cap.
