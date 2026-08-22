@@ -197,8 +197,14 @@ struct RootView: View {
     @State private var activeSheet: ActiveSheet?
     /// A pending **Share** secondary action (CONTEXT.md → Secondary action; ADR
     /// 0017): the resolved item(s) handed to the iOS share sheet, plus — for a file
-    /// — the live security-scoped access held open until the sheet dismisses.
-    @State private var shareRequest: ShareRequest?
+    /// — the live security-scoped access held open until the share dismisses.
+    ///
+    /// Held by a presenter rather than a plain `@State` because the *row* presents it,
+    /// not the launcher: at regular width a share is a popover with its arrow in the
+    /// row that spawned it (issue #264), and a popover takes its anchor from the view
+    /// it hangs off. The launcher still resolves the content; the presenter carries it
+    /// down to the claiming row (`SharePresenter.swift`).
+    @State private var sharePresenter = SharePresenter()
     /// The navigation stack of pushed management pages (CONTEXT.md → Management
     /// page): each is *pushed* from the launcher so it slides in from the right
     /// and supports the system edge-swipe back, rather than rising as a sheet.
@@ -1297,19 +1303,27 @@ struct RootView: View {
                     // fires after SwiftUI has already cleared the `item` binding.
                     .onDisappear { indexedFolders.endFileAccess(request.access) }
             }
-            // The iOS share sheet for a **Share** secondary action (ADR 0017). A
-            // file share holds the security-scoped access open while sharing and
-            // releases it when the sheet goes away — the same start/stop bracket as
-            // the QuickLook preview; a text/url/note share carries no access.
-            .sheet(item: $shareRequest, onDismiss: { refocusInput() }) { request in
-                ShareSheet(items: request.items)
-                    .ignoresSafeArea()
-                    .onDisappear {
-                        if let access = request.fileAccess { indexedFolders.endFileAccess(access) }
-                    }
+            // A **Share** secondary action presents on its own row, not here (ADR
+            // 0017; issue #264) — but its *teardown* is the launcher's: a file share
+            // holds the security-scoped access open while sharing and releases it when
+            // the share goes away, the same start/stop bracket as the QuickLook
+            // preview, and dismissing re-arms the input's focus exactly as the sheet's
+            // `onDismiss` always did. `dismissals` is that event, reported by whichever
+            // surface presented — deliberately *not* the binding flipping, which lands
+            // while the surface is still on screen and a focus asserted there is
+            // dropped.
+            .onChange(of: sharePresenter.dismissals) { _, _ in
+                if let access = sharePresenter.takeFinishedFileAccess() {
+                    indexedFolders.endFileAccess(access)
+                }
+                refocusInput()
             }
         }
         .preferredColorScheme(Appearance(stored: appearanceRaw).colorScheme)
+        // Every row that carries the long-press menu presents its own Share (issue
+        // #264), and the rows sit in three different views — root injection is what
+        // reaches all of them without a binding threaded through each.
+        .environment(sharePresenter)
         // Every provider page's Options section reads and writes the same
         // kind-level Enabled switches the engine filters by (issue #67) — the
         // pages are pushed inside this stack, so root injection reaches them all.
@@ -1810,12 +1824,16 @@ struct RootView: View {
     /// Hands a row's content to the iOS **Share** sheet (ADR 0017): a URL is shared
     /// as a `URL` (so the sheet offers link actions), text/number/Pile-entry text
     /// as a string, and a file as its resolved URL — holding the security-scoped
-    /// access open until the sheet dismisses (`shareRequest.fileAccess`).
+    /// access open until the share dismisses (`ShareRequest.fileAccess`).
+    ///
+    /// Resolving is all the launcher does. *Where* the share appears — a popover in
+    /// the row at regular width, a sheet at compact — belongs to the row that ran the
+    /// verb, which claimed the presenter's anchor on its way here (issue #264).
     private func presentShare(for action: Action) {
         switch action.content {
         case .text, .number, .date, .snippet:
             switch action.run(input: query) {
-            case .copyText(let text), .copyAndStage(let text): shareRequest = ShareRequest(items: [text])
+            case .copyText(let text), .copyAndStage(let text): sharePresenter.present(ShareRequest(items: [text]))
             default: break
             }
         case .url:
@@ -1825,24 +1843,24 @@ struct RootView: View {
             // the user typed (CONTEXT.md → Detected result); a web URL shares as a URL.
             if case .openURL(let url) = action.run(input: query) {
                 if let bare = TypedContentDetector.bareValue(forDetectedURL: url) {
-                    shareRequest = ShareRequest(items: [bare])
+                    sharePresenter.present(ShareRequest(items: [bare]))
                 } else {
-                    shareRequest = ShareRequest(items: [url])
+                    sharePresenter.present(ShareRequest(items: [url]))
                 }
             }
         case .quicklink:
             // A Quicklink shares the static URL its open outcome carries; its
             // `.quicklink` identity only adds Edit.
-            if case .openURL(let url) = action.run(input: query) { shareRequest = ShareRequest(items: [url]) }
+            if case .openURL(let url) = action.run(input: query) { sharePresenter.present(ShareRequest(items: [url])) }
         case .pileEntry(let id):
             if let text = livePileEntries.first(where: { $0.actionID == id })?.text {
-                shareRequest = ShareRequest(items: [text])
+                sharePresenter.present(ShareRequest(items: [text]))
             } else {
                 flashConfirmation("Not in the Pile")
             }
         case .file(let bookmarkID, let relativePath):
             if let access = indexedFolders.beginFileAccess(bookmarkID: bookmarkID, relativePath: relativePath) {
-                shareRequest = ShareRequest(items: [access.fileURL], fileAccess: access)
+                sharePresenter.present(ShareRequest(items: [access.fileURL], fileAccess: access))
             } else {
                 flashConfirmation("File not found")
             }
@@ -1915,7 +1933,7 @@ struct RootView: View {
             && activeSheet == nil
             && eventEditor.request == nil
             && filePreview == nil
-            && shareRequest == nil
+            && !sharePresenter.isPresenting
     }
 
     /// Applies a menu-bar **key command** (CONTEXT.md → Key command; issue #262).
@@ -2291,30 +2309,6 @@ struct RootView: View {
 private struct ComposeSeed: Identifiable {
     let id = UUID()
     let text: String
-}
-
-/// A pending **Share** secondary action (CONTEXT.md → Secondary action; ADR 0017):
-/// the resolved activity items handed to `UIActivityViewController`, plus a fresh
-/// identity so each share drives a distinct `.sheet(item:)`. A file share also
-/// carries the live `FileAccess`, held open while sharing and released when the
-/// sheet dismisses; a text/url/Pile share leaves it `nil`.
-private struct ShareRequest: Identifiable {
-    let id = UUID()
-    let items: [Any]
-    var fileAccess: FileAccess?
-}
-
-/// Presents the iOS share sheet (`UIActivityViewController`) for a **Share**
-/// secondary action — the App edge that performs the verb Core only declared
-/// eligible (ADR 0017).
-private struct ShareSheet: UIViewControllerRepresentable {
-    let items: [Any]
-
-    func makeUIViewController(context: Context) -> UIActivityViewController {
-        UIActivityViewController(activityItems: items, applicationActivities: nil)
-    }
-
-    func updateUIViewController(_ controller: UIActivityViewController, context: Context) {}
 }
 
 /// The Snippet editor sheets, as an Identifiable enum so the one `.sheet(item:)`

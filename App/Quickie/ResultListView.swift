@@ -513,56 +513,100 @@ extension View {
         pinnable: Bool = true,
         canPin: Bool = true,
         toggle: @escaping () -> Void,
-        @ViewBuilder preview: () -> Preview
+        @ViewBuilder preview: @escaping () -> Preview
     ) -> some View {
-        contextMenu {
-            if let title {
-                Text(title)
-                // Separated from the verbs below only when there are verbs: a menu
-                // that is nothing but the title (a shelved "Save for later", whose
-                // deeplink is withheld and which offers no pin) must not open with a
-                // rule under a single line.
-                if !secondaryActions.isEmpty || pinnable {
-                    Divider()
+        modifier(
+            ResultContextMenu(
+                title: title,
+                secondaryActions: secondaryActions,
+                onSecondaryAction: onSecondaryAction,
+                isFavorite: isFavorite,
+                pinnable: pinnable,
+                canPin: canPin,
+                toggle: toggle,
+                preview: preview
+            )
+        )
+    }
+}
+
+/// `resultContextMenu` as a modifier, because the menu needs one piece of state of its
+/// own: the **anchor id** of the row it is attached to. A **Share** run from this menu
+/// presents on this row (a popover pointing at it at regular width — `SharePresenter`),
+/// so the row has to be identifiable to the launcher, and a fresh `UUID` per menu is
+/// the identity that survives the same Action appearing on two surfaces at once.
+private struct ResultContextMenu<Preview: View>: ViewModifier {
+    let title: String?
+    let secondaryActions: [SecondaryActionKind]
+    let onSecondaryAction: (SecondaryActionKind) -> Void
+    let isFavorite: Bool
+    let pinnable: Bool
+    let canPin: Bool
+    let toggle: () -> Void
+    @ViewBuilder let preview: () -> Preview
+
+    @Environment(SharePresenter.self) private var sharePresenter
+
+    /// This row's anchor, stable for as long as the row's slot lives.
+    @State private var anchor = UUID()
+
+    func body(content: Content) -> some View {
+        content
+            // The row is where a Share presents from, so the popover hangs here rather
+            // than on the launcher: `.rect(.bounds)` then resolves to *this* row.
+            .sharePresentation(anchoredTo: anchor)
+            .contextMenu {
+                if let title {
+                    Text(title)
+                    // Separated from the verbs below only when there are verbs: a menu
+                    // that is nothing but the title (a shelved "Save for later", whose
+                    // deeplink is withheld and which offers no pin) must not open with a
+                    // rule under a single line.
+                    if !secondaryActions.isEmpty || pinnable {
+                        Divider()
+                    }
                 }
+                ForEach(secondaryActions, id: \.self) { kind in
+                    Button {
+                        // Claim the popover's anchor before the launcher resolves the
+                        // row's content: whichever row's menu ran the verb is the row
+                        // the share presents on.
+                        sharePresenter.claimAnchor(anchor)
+                        onSecondaryAction(kind)
+                    } label: {
+                        Label(kind.menuTitle, systemImage: kind.menuSymbol)
+                    }
+                    // No explicit accessibilityIdentifier: it would override the
+                    // label-based lookup XCUITest uses (`app.buttons["Copy"]`), just as
+                    // the Pin item is found by its "Pin as Favorite" label. The verb's
+                    // menu title *is* its stable identifier.
+                }
+                if pinnable {
+                    // A visual break between the content verbs and the pin affordance,
+                    // only when there are content verbs to separate.
+                    if !secondaryActions.isEmpty {
+                        Divider()
+                    }
+                    Button {
+                        toggle()
+                    } label: {
+                        Label(isFavorite ? "Unpin Favorite" : "Pin as Favorite",
+                              systemImage: isFavorite ? "star.slash" : "star")
+                    }
+                    .disabled(!isFavorite && !canPin)
+                    if !isFavorite && !canPin {
+                        Text("Favorites are full (max \(SignalsStore.maxFavorites)). Unpin one first.")
+                    }
+                }
+            } preview: {
+                // The preview exists exactly as long as the menu does, which makes it
+                // the app's only public signal that a menu is up — and the bottom
+                // bar's keyboard lift needs that signal to tell a menu-driven keyboard
+                // drop from a real dismissal (see `ContextMenuPresence`).
+                preview()
+                    .onAppear { ContextMenuPresence.shared.menuAppeared() }
+                    .onDisappear { ContextMenuPresence.shared.menuDisappeared() }
             }
-            ForEach(secondaryActions, id: \.self) { kind in
-                Button {
-                    onSecondaryAction(kind)
-                } label: {
-                    Label(kind.menuTitle, systemImage: kind.menuSymbol)
-                }
-                // No explicit accessibilityIdentifier: it would override the
-                // label-based lookup XCUITest uses (`app.buttons["Copy"]`), just as
-                // the Pin item is found by its "Pin as Favorite" label. The verb's
-                // menu title *is* its stable identifier.
-            }
-            if pinnable {
-                // A visual break between the content verbs and the pin affordance,
-                // only when there are content verbs to separate.
-                if !secondaryActions.isEmpty {
-                    Divider()
-                }
-                Button {
-                    toggle()
-                } label: {
-                    Label(isFavorite ? "Unpin Favorite" : "Pin as Favorite",
-                          systemImage: isFavorite ? "star.slash" : "star")
-                }
-                .disabled(!isFavorite && !canPin)
-                if !isFavorite && !canPin {
-                    Text("Favorites are full (max \(SignalsStore.maxFavorites)). Unpin one first.")
-                }
-            }
-        } preview: {
-            // The preview exists exactly as long as the menu does, which makes it
-            // the app's only public signal that a menu is up — and the bottom
-            // bar's keyboard lift needs that signal to tell a menu-driven keyboard
-            // drop from a real dismissal (see `ContextMenuPresence`).
-            preview()
-                .onAppear { ContextMenuPresence.shared.menuAppeared() }
-                .onDisappear { ContextMenuPresence.shared.menuDisappeared() }
-        }
     }
 }
 

@@ -129,6 +129,7 @@ struct CustomActionEditorView: View {
                 }
             }
         }
+        .formSheetSizing()
     }
 
     /// The URL field's footer: a scheme warning when the URL won't parse, and the

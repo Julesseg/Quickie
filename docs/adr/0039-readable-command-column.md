@@ -92,7 +92,14 @@ which is exactly the chrome ADR 0010 keeps out — depth is the glass's job.
   branch, and `CommandColumnUITests` asserts the shared centre line on both.
 - Surfaces outside the launcher — the pushed [[Management page]]s, the editor
   sheets — are not covered here. They reuse this policy in their own tickets
-  (#266, #264) rather than growing a second width constant.
+  (#266, #264) rather than growing a second width constant. *(#264 has since
+  answered the editor sheets, and the answer was not a clamp: a Snippet or
+  Custom Action editor is a **form sheet** (`.presentationSizing(.form)`), so
+  the system sizes the card and the size class is read by the presentation
+  rather than by the view. #264 also put the **Share** secondary action's
+  popover on the same size class through `SharePresentation`, which reads
+  `CommandColumn.SizeClass` rather than defining a second regular/compact
+  split — the one thing this policy asks of anything reusing it.)*
 
 ## Considered options
 

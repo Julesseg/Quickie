@@ -12,9 +12,9 @@ import XCTest
 /// Eligibility itself is a pure function of `ResultContent`, covered
 /// deterministically by QuickieCore's SecondaryActionTests / ResultContentTests;
 /// these prove the menu is wired to it. We assert the menu *items exist* rather
-/// than firing them: XCUITest can surface a SwiftUI context-menu item in the
-/// simulator but cannot run its action (the menu is a separate remote view), so
-/// the item's execution is exercised at the App edge and verified on device.
+/// than firing them, because the shape of the menu is what this suite is about.
+/// Firing one is possible — `ModalPresentationUITests` taps **Share** and drives
+/// the surface it opens — so nothing here is blocked on that.
 final class SecondaryActionUITests: XCTestCase {
 
     override func setUpWithError() throws {

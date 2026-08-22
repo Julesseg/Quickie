@@ -62,6 +62,7 @@ struct SnippetEditorView: View {
                 }
             }
         }
+        .formSheetSizing()
     }
 
     private func save() {
