@@ -50,6 +50,22 @@ in the queue holds nothing, so the issue goes back in the pool and is dispatched
 again on the next run. (Because the runs list is the guard, the dispatcher waits
 for each run it fires to become visible before moving on.)
 
+### The spawn-time re-check
+
+A spawn job can sit queued for hours, so what was true when the dispatcher
+fired it may not be true when the Mac finally picks it up. Before spawning
+anything, `agent-implement.yml` fetches the issue again and does nothing if:
+
+- **the issue is closed** — you finished it by hand while the Mac was asleep,
+  and a session for it now would redo settled work; or
+- **the issue already carries `agent-dispatched`** — a session is already on
+  it, so this run is a duplicate that queued behind the first.
+
+Both leave a notice on the run rather than failing it: nothing went wrong, the
+work simply no longer needs doing. A manual run can override either check by
+ticking **force**, which is how you re-dispatch an issue whose session died
+holding the label.
+
 ### Scope rules
 
 - Only issues labeled `ready-for-agent` are dispatched.
@@ -124,4 +140,6 @@ labeling new issues `ready-for-agent`.
 `agent-implement.yml` also accepts a manual run from the Actions tab with any
 issue number — handy for forcing a specific issue through the pipeline out of
 order. It still counts against the in-flight cap: the run holds the issue
-while it is live, and the session it spawns labels it.
+while it is live, and the session it spawns labels it. Tick **force** to get
+past the [spawn-time re-check](#the-spawn-time-re-check) — the way to
+re-dispatch an issue whose session died still holding the label.
