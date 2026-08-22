@@ -76,7 +76,8 @@ jobs:
           # this job; progress is visible in the Paseo apps. The
           # /label-and-implement-with-pr skill in the repo config carries the
           # full workflow instructions: claim the issue with the
-          # agent-dispatched label, run /implement, then open the pull request.
+          # agent-dispatched label — which nothing else applies, see
+          # docs/agents/auto-dispatch.md — run /implement, then open the PR.
           paseo run --detach \
             --provider claude \
             --model "$MODEL" \
