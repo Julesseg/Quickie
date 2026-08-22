@@ -16,19 +16,55 @@ Two workflows split detection from execution:
    manual `workflow_dispatch`, which performs the same scan). It scans open
    `ready-for-agent` issues, parses each body's `## Blocked by` section
    (`- #N` bullets), and keeps issues whose blockers are all closed —
-   including issues that never had blockers. For each, it applies the
-   `agent-dispatched` label (the idempotency guard) and fires
-   `agent-implement.yml` with the issue number.
+   including issues that never had blockers. For each, it fires
+   `agent-implement.yml` with the issue number and comments on the issue.
 2. **`agent-implement.yml`** (self-hosted Mac runner) runs
    `paseo run --detach --model <model> --thinking <effort> --worktree
-   claude/issue-<N> "/implement issue #<N>"` — the repo's `/implement` skill
-   carries the full workflow instructions. `--detach` means the session runs
-   under the Paseo daemon and outlives the (short) runner job; `--worktree`
-   keeps parallel sessions from clobbering one checkout.
+   claude/issue-<N> "/label-and-implement-with-pr issue #<N>"` — the repo's
+   `/label-and-implement-with-pr` skill carries the full workflow
+   instructions: claim the issue with the `agent-dispatched` label, run
+   `/implement` to build it, then open the pull request that closes it.
+   `--detach` means the session runs under the Paseo daemon and outlives the
+   (short) runner job; `--worktree` keeps parallel sessions from clobbering
+   one checkout.
 
    Sessions run on **Opus 4.8 at high reasoning effort** by default, pinned
    rather than inherited from the daemon. Both are overridable — see
    [Model and reasoning effort](#model-and-reasoning-effort).
+
+### Who applies `agent-dispatched`
+
+The session does, as its first act — never the dispatcher. The label therefore
+means *a session really started on this issue*, not *a session was asked for*.
+That distinction matters when the Mac runner is offline: `agent-implement.yml`
+then sits queued for up to 24 h and may never run at all. A label applied at
+dispatch time would leave that issue looking claimed forever, holding an
+in-flight slot with nothing working it.
+
+Between dispatch and the session's first move nothing is labeled, so the
+dispatcher reads the spawn runs themselves to fill the gap. A run of
+`agent-implement.yml` holds its issue while it is queued or in progress, and
+for a 30-minute grace period after it succeeds — long enough for the session to
+boot and label the issue. A run that failed, was cancelled, or expired unclaimed
+in the queue holds nothing, so the issue goes back in the pool and is dispatched
+again on the next run. (Because the runs list is the guard, the dispatcher waits
+for each run it fires to become visible before moving on.)
+
+### The spawn-time re-check
+
+A spawn job can sit queued for hours, so what was true when the dispatcher
+fired it may not be true when the Mac finally picks it up. Before spawning
+anything, `agent-implement.yml` fetches the issue again and does nothing if:
+
+- **the issue is closed** — you finished it by hand while the Mac was asleep,
+  and a session for it now would redo settled work; or
+- **the issue already carries `agent-dispatched`** — a session is already on
+  it, so this run is a duplicate that queued behind the first.
+
+Both leave a notice on the run rather than failing it: nothing went wrong, the
+work simply no longer needs doing. A manual run can override either check by
+ticking **force**, which is how you re-dispatch an issue whose session died
+holding the label.
 
 ### Scope rules
 
@@ -36,11 +72,13 @@ Two workflows split detection from execution:
 - Any such issue with **no open blockers** qualifies — whether its
   `## Blocked by` list (`- #N` bullets) is now fully closed or it never had
   blockers at all. Epics (`[Epic]` title prefix) are always skipped.
-- Each run spawns at most **2** new sessions, and at most **3** issues carry
-  the `agent-dispatched` label at once. Startable issues beyond either cap are
-  deferred; because every dispatcher run re-scans all open ready issues,
-  they're picked up automatically the next time any issue closes (or the
-  dispatcher is run manually).
+- Each run spawns at most **2** new sessions, and at most **3** issues are in
+  flight at once — counting both issues that carry the `agent-dispatched`
+  label and issues whose spawn run is still live. Startable issues beyond
+  either cap are deferred; because every dispatcher run re-scans all open
+  ready issues, they're picked up automatically the next time any issue closes
+  (or the dispatcher is run manually). While the Mac is offline the cap
+  applies to the queue, so at most 3 sessions pile up waiting for it.
 - If a session gives up, it removes the issue's `agent-dispatched` label and
   comments — which frees a slot and makes the issue eligible again.
 
@@ -89,7 +127,9 @@ values — instead of dispatching.
    the Claude CLI's subscription login, so both must be authenticated for the
    account the daemon runs under.
 
-The `agent-dispatched` label is created automatically on first dispatch.
+The `agent-dispatched` label is created by the dispatcher on its first run —
+ahead of the session that applies it, because `gh issue edit --add-label` fails
+on a label that does not exist yet.
 
 ## Manual dispatch
 
@@ -99,5 +139,7 @@ labeling new issues `ready-for-agent`.
 
 `agent-implement.yml` also accepts a manual run from the Actions tab with any
 issue number — handy for forcing a specific issue through the pipeline out of
-order. Add the `agent-dispatched` label yourself if you want it counted
-against the in-flight cap.
+order. It still counts against the in-flight cap: the run holds the issue
+while it is live, and the session it spawns labels it. Tick **force** to get
+past the [spawn-time re-check](#the-spawn-time-re-check) — the way to
+re-dispatch an issue whose session died still holding the label.

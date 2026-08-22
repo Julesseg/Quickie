@@ -7,6 +7,10 @@ name: Unblock dispatch
 # in-flight cap. Issues deferred by the caps are picked up automatically on the
 # next close event, because every run re-scans all open ready issues. A manual
 # run (workflow_dispatch) performs the same scan without a close event.
+#
+# This workflow never labels an issue: the `agent-dispatched` label is applied
+# by the session itself, so it always means a session really started. Until
+# then the spawn run it fires stands in for the label — see stillHolds() below.
 # See docs/agents/auto-dispatch.md.
 
 on:
@@ -38,6 +42,10 @@ jobs:
             const DISPATCH_LABEL = 'agent-dispatched';
             const READY_LABEL = 'ready-for-agent';
             const WORKFLOW_FILE = 'agent-implement.yml';
+            // How long a successful spawn run keeps holding its issue: the gap
+            // between the runner spawning the session and the session getting
+            // far enough to label the issue itself.
+            const HANDOFF_GRACE_MS = 30 * 60 * 1000;
 
             const { owner, repo } = context.repo;
             // Absent on workflow_dispatch, which runs the same scan manually.
@@ -48,6 +56,9 @@ jobs:
               return;
             }
 
+            // The session applies this label, but `gh issue edit --add-label`
+            // fails on a label that does not exist, so create it here — ahead
+            // of the session that will need it.
             try {
               await github.rest.issues.getLabel({ owner, repo, name: DISPATCH_LABEL });
             } catch (e) {
@@ -75,6 +86,49 @@ jobs:
               return stateCache.get(num) === 'closed';
             }
 
+            // agent-implement names its runs "Agent implement: issue #N".
+            function issueOfRun(run) {
+              const match = /issue #(\d+)/.exec(run.display_title || '');
+              return match ? Number(match[1]) : null;
+            }
+
+            async function spawnRuns() {
+              try {
+                const { data } = await github.rest.actions.listWorkflowRuns({
+                  owner, repo, workflow_id: WORKFLOW_FILE, per_page: 50,
+                });
+                return data.workflow_runs;
+              } catch (e) {
+                if (e.status !== 404) throw e; // never dispatched before
+                return [];
+              }
+            }
+
+            // A spawn run holds its issue while a session may still come out
+            // of it: queued (the Mac runner is asleep or busy) or in progress,
+            // and for a grace period after it succeeds, which covers the gap
+            // until the session labels the issue itself. A run that failed,
+            // was cancelled, or expired unclaimed in the queue holds nothing —
+            // no session started, so the issue is simply dispatched again.
+            function stillHolds(run) {
+              if (run.status !== 'completed') return true;
+              if (run.conclusion !== 'success') return false;
+              return Date.now() - Date.parse(run.updated_at) < HANDOFF_GRACE_MS;
+            }
+
+            // In flight = a session is working the issue (it carries the
+            // label) or one is on its way (a spawn run still holds it).
+            const inFlight = new Set();
+            for (const issue of await github.paginate(github.rest.issues.listForRepo, {
+              owner, repo, state: 'open', labels: DISPATCH_LABEL, per_page: 100,
+            })) {
+              inFlight.add(issue.number);
+            }
+            for (const run of await spawnRuns()) {
+              const number = issueOfRun(run);
+              if (number !== null && stillHolds(run)) inFlight.add(number);
+            }
+
             const open = await github.paginate(github.rest.issues.listForRepo, {
               owner, repo, state: 'open', labels: READY_LABEL, per_page: 100,
             });
@@ -84,7 +138,7 @@ jobs:
             const startable = [];
             for (const issue of open) {
               if (issue.pull_request) continue;
-              if (issue.labels.some(l => l.name === DISPATCH_LABEL)) continue;
+              if (inFlight.has(issue.number)) continue;
               // Epics get sliced by a human before any agent grabs them.
               if (/^\[epic\]/i.test(issue.title)) continue;
               const blockers = blockersOf(issue.body);
@@ -101,17 +155,26 @@ jobs:
               return;
             }
 
-            const inFlight = await github.paginate(github.rest.issues.listForRepo, {
-              owner, repo, state: 'open', labels: DISPATCH_LABEL, per_page: 100,
-            });
-            const slots = Math.min(MAX_NEW_PER_RUN, Math.max(0, MAX_IN_FLIGHT - inFlight.length));
+            const slots = Math.min(MAX_NEW_PER_RUN, Math.max(0, MAX_IN_FLIGHT - inFlight.size));
             const toDispatch = startable.slice(0, slots);
             const deferred = startable.slice(slots);
 
+            // createWorkflowDispatch returns no run id, and the run it creates
+            // takes a moment to show up in the list. Wait for it: the next
+            // dispatcher run reads those runs as its in-flight guard, and a
+            // run it cannot see yet is an issue it would dispatch twice.
+            const dispatchedAfter = Date.now() - 60 * 1000;
+            async function waitForRun(number) {
+              for (let attempt = 0; attempt < 10; attempt++) {
+                await new Promise(resolve => setTimeout(resolve, 2000));
+                const runs = await spawnRuns();
+                if (runs.some(run => issueOfRun(run) === number
+                                     && Date.parse(run.created_at) >= dispatchedAfter)) return;
+              }
+              core.warning(`No spawn run visible for #${number} yet; a re-scan in the next moments could dispatch it twice.`);
+            }
+
             for (const { issue, blockers } of toDispatch) {
-              await github.rest.issues.addLabels({
-                owner, repo, issue_number: issue.number, labels: [DISPATCH_LABEL],
-              });
               await github.rest.actions.createWorkflowDispatch({
                 owner, repo, workflow_id: WORKFLOW_FILE,
                 ref: context.payload.repository.default_branch,
@@ -124,6 +187,7 @@ jobs:
                 owner, repo, issue_number: issue.number,
                 body: `🤖 ${reason} — dispatched an agent session to implement this issue.`,
               });
+              await waitForRun(issue.number);
               core.notice(`Dispatched #${issue.number}: ${issue.title}`);
             }
             for (const { issue } of deferred) {
