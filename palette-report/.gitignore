@@ -1,0 +1,6 @@
+# The raw 90-frame flip burst is derived data, not a primary source: it is
+# hundreds of megabytes and it is reproducible by re-running the driver
+# (`PalettePrototypeCaptureTests.testCaptureFlipTimeLapse`). What is committed
+# is the contact sheet, the frames the ADR actually argues from
+# (`img/flip-key/`), and the measurements in `analysis.txt`.
+img/flip/

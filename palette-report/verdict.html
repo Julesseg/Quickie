@@ -1,0 +1,25 @@
+<div class="verdict">
+<h2 style="margin-top:.2em;border:0">Verdict: <b>reject</b></h2>
+<p>The palette <em>layout</em> is better than today's in the state it was designed for —
+with a hardware keyboard the query, its answer and the ranked rows sit at eye level instead of
+huddled in the bottom third under an empty canvas, and <b>rank-0 adjacency survives the
+inversion</b> (the highlighted result sits directly under the field instead of directly over it).</p>
+<p>The <em>mode</em> is what fails, on three counts:</p>
+<ol>
+<li><b>The flip has no interpolable intermediate.</b> Docked renders rank 0 last, palette renders it
+first — every row is reversed, not shifted, so there is nothing for an animation to travel along.
+Filmed at the real motion budget, the transition is the input bar moving <em>through</em> the result
+list while two differently-ordered copies of it crossfade: several rows on screen twice, ~26% of the
+screen in motion. No choice of spring fixes that; the layouts share no geometry.</li>
+<li><b>The trigger cannot be tested anywhere we build.</b> With a hardware keyboard attached iPadOS
+posts no keyboard notification at all, so the obvious signal is silent — the absence of a keyboard is
+not a keyboard event. The signal that works, <code>GCKeyboard.coalesced</code>, is unavailable in the
+simulator; and XCUITest raises the software keyboard to type, which is the condition the mode is
+defined by the absence of.</li>
+<li><b>Home gets worse.</b> The Favorites band is pinned to the top, so the field lands under it with
+the rest of the window empty — the first thing a hardware-keyboard user sees.</li>
+</ol>
+<p>Recorded as <b>ADR 0041 — No palette mode: the launcher does not change shape under you</b>.
+The empty-canvas problem the audit found is real and stays open; this rejects inverting the layout as
+the answer to it, not the observation.</p>
+</div>

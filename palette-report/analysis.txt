@@ -1,0 +1,145 @@
+== endpoints: docked vs palette (light) ==
+  [10-home] mean diff   2.20/255   pixels moved   7.2%
+  [11-results-ranked] mean diff  13.22/255   pixels moved  25.3%
+  [12-results-calc] mean diff  15.94/255   pixels moved  49.8%
+  [13-results-long] mean diff  13.24/255   pixels moved  25.3%
+
+== endpoints: docked vs palette (dark) ==
+  [10-home] mean diff   0.99/255   pixels moved   2.0%
+  [11-results-ranked] mean diff   7.39/255   pixels moved  10.7%
+  [12-results-calc] mean diff   5.35/255   pixels moved   7.0%
+  [13-results-long] mean diff   7.49/255   pixels moved  10.8%
+
+== the flip, frame by frame ==
+  [continuous burst across several flips] 91 frames
+        flip-001.png  d=  0.00  moved=  0.0%  
+        flip-002.png  d= 13.51  moved= 25.7%  ############
+        flip-003.png  d=  0.01  moved=  0.0%  
+        flip-004.png  d= 10.23  moved= 17.8%  ########
+        flip-005.png  d= 10.71  moved= 20.2%  ##########
+        flip-006.png  d=  0.00  moved=  0.0%  
+        flip-007.png  d=  0.00  moved=  0.0%  
+        flip-008.png  d=  0.00  moved=  0.0%  
+        flip-009.png  d= 13.36  moved= 25.6%  ############
+        flip-010.png  d=  2.58  moved=  3.6%  #
+        flip-011.png  d=  0.00  moved=  0.0%  
+        flip-012.png  d= 13.35  moved= 25.2%  ############
+        flip-013.png  d=  4.88  moved=  6.7%  ###
+        flip-014.png  d=  0.00  moved=  0.0%  
+        flip-015.png  d=  0.00  moved=  0.0%  
+        flip-016.png  d=  0.00  moved=  0.0%  
+        flip-017.png  d= 11.30  moved= 22.7%  ###########
+        flip-018.png  d= 10.97  moved= 22.3%  ###########
+        flip-019.png  d=  0.00  moved=  0.0%  
+        flip-020.png  d=  1.45  moved=  3.5%  #
+        flip-021.png  d= 13.64  moved= 27.2%  #############
+        flip-022.png  d=  0.00  moved=  0.0%  
+        flip-023.png  d=  0.00  moved=  0.0%  
+        flip-024.png  d=  0.00  moved=  0.0%  
+        flip-025.png  d= 10.27  moved= 18.2%  #########
+        flip-026.png  d= 11.58  moved= 24.2%  ############
+        flip-027.png  d=  0.00  moved=  0.0%  
+        flip-028.png  d= 13.51  moved= 25.8%  ############
+        flip-029.png  d=  0.03  moved=  0.0%  
+        flip-030.png  d=  0.00  moved=  0.0%  
+        flip-031.png  d=  0.00  moved=  0.0%  
+        flip-032.png  d=  0.00  moved=  0.0%  
+        flip-033.png  d= 13.50  moved= 25.8%  ############
+        flip-034.png  d=  0.00  moved=  0.0%  
+        flip-035.png  d=  0.00  moved=  0.0%  
+        flip-036.png  d= 13.50  moved= 25.8%  ############
+        flip-037.png  d=  0.00  moved=  0.0%  
+        flip-038.png  d=  0.00  moved=  0.0%  
+        flip-039.png  d=  0.00  moved=  0.0%  
+        flip-040.png  d=  0.00  moved=  0.0%  
+        flip-041.png  d=  0.06  moved=  0.0%  
+        flip-042.png  d=  0.00  moved=  0.0%  
+        flip-043.png  d=  0.00  moved=  0.0%  
+        flip-044.png  d=  0.00  moved=  0.0%  
+        flip-045.png  d= 11.22  moved= 21.6%  ##########
+        flip-046.png  d= 11.10  moved= 22.7%  ###########
+        flip-047.png  d=  0.00  moved=  0.0%  
+        flip-048.png  d= 13.50  moved= 25.8%  ############
+        flip-049.png  d=  0.02  moved=  0.0%  
+        flip-050.png  d=  0.00  moved=  0.0%  
+        flip-051.png  d=  0.00  moved=  0.0%  
+        flip-052.png  d=  0.00  moved=  0.0%  
+        flip-053.png  d= 13.54  moved= 25.8%  ############
+        flip-054.png  d=  0.20  moved=  0.2%  
+        flip-055.png  d= 13.51  moved= 25.8%  ############
+        flip-056.png  d=  0.00  moved=  0.0%  
+        flip-057.png  d=  0.00  moved=  0.0%  
+        flip-058.png  d= 13.51  moved= 25.8%  ############
+        flip-059.png  d= 13.50  moved= 25.8%  ############
+        flip-060.png  d=  0.02  moved=  0.0%  
+        flip-061.png  d=  0.00  moved=  0.0%  
+        flip-062.png  d= 13.09  moved= 25.0%  ############
+        flip-063.png  d=  6.56  moved= 11.1%  #####
+        flip-064.png  d= 13.64  moved= 27.2%  #############
+        flip-065.png  d=  0.00  moved=  0.0%  
+        flip-066.png  d=  0.00  moved=  0.0%  
+        flip-067.png  d= 13.63  moved= 27.2%  #############
+        flip-068.png  d= 13.63  moved= 27.2%  #############
+        flip-069.png  d=  0.00  moved=  0.0%  
+        flip-070.png  d=  0.00  moved=  0.0%  
+        flip-071.png  d= 13.52  moved= 25.7%  ############
+        flip-072.png  d= 13.52  moved= 25.7%  ############
+        flip-073.png  d=  0.00  moved=  0.0%  
+        flip-074.png  d=  0.00  moved=  0.0%  
+        flip-075.png  d= 13.48  moved= 25.7%  ############
+        flip-076.png  d= 10.64  moved= 21.1%  ##########
+        flip-077.png  d= 12.25  moved= 27.0%  #############
+        flip-078.png  d=  0.00  moved=  0.0%  
+        flip-079.png  d=  0.00  moved=  0.0%  
+        flip-080.png  d=  0.00  moved=  0.0%  
+        flip-081.png  d= 13.50  moved= 25.8%  ############
+        flip-082.png  d=  0.00  moved=  0.0%  
+        flip-083.png  d= 13.50  moved= 25.8%  ############
+        flip-084.png  d=  0.00  moved=  0.0%  
+        flip-085.png  d=  0.00  moved=  0.0%  
+        flip-086.png  d=  0.00  moved=  0.0%  
+        flip-087.png  d= 13.51  moved= 25.8%  ############
+        flip-088.png  d=  0.00  moved=  0.0%  
+        flip-089.png  d= 13.53  moved= 25.8%  ############
+        flip-090.png  d=  0.22  moved=  0.2%  
+    settles at frame 0 of 90
+  contact sheet -> palette-report/img/flip-contact-sheet.png (91 frames)
+
+== the trigger ==
+  [GCKeyboard absent vs forced attached] mean diff   2.74/255   pixels moved   0.5%
+frames analysed:        91
+endpoint separation:    27.3% of pixels
+frames matching an endpoint: 61
+frames matching NEITHER:     30
+
+mid-flight frames (distance to each endpoint):
+  flip-002.png  docked= 25.7%  palette=  5.1%
+  flip-003.png  docked= 25.8%  palette=  5.1%
+  flip-004.png  docked= 20.2%  palette= 19.8%
+  flip-009.png  docked= 25.6%  palette=  6.8%
+  flip-010.png  docked= 25.8%  palette=  5.1%
+  flip-011.png  docked= 25.8%  palette=  5.1%
+  flip-012.png  docked=  6.7%  palette= 26.9%
+  flip-017.png  docked= 22.7%  palette= 24.8%
+  flip-018.png  docked= 25.8%  palette=  5.1%
+  flip-019.png  docked= 25.8%  palette=  5.1%
+  flip-025.png  docked= 18.2%  palette= 26.7%
+  flip-026.png  docked= 25.8%  palette=  5.1%
+  flip-027.png  docked= 25.8%  palette=  5.1%
+  flip-033.png  docked= 25.8%  palette=  3.6%
+  flip-034.png  docked= 25.8%  palette=  3.6%
+  flip-035.png  docked= 25.8%  palette=  3.6%
+  flip-045.png  docked= 21.6%  palette= 25.1%
+  flip-046.png  docked= 25.8%  palette=  5.1%
+  flip-047.png  docked= 25.8%  palette=  5.1%
+  flip-053.png  docked= 25.8%  palette=  5.2%
+  flip-054.png  docked= 25.8%  palette=  5.1%
+  flip-058.png  docked= 25.8%  palette=  3.7%
+  flip-062.png  docked= 25.0%  palette= 11.1%
+  flip-071.png  docked= 25.8%  palette=  5.1%
+  flip-075.png  docked= 25.8%  palette=  6.3%
+  flip-076.png  docked= 27.1%  palette= 18.0%
+  flip-081.png  docked= 25.8%  palette=  3.5%
+  flip-082.png  docked= 25.8%  palette=  3.5%
+  flip-087.png  docked= 25.8%  palette=  5.1%
+  flip-088.png  docked= 25.8%  palette=  5.1%
