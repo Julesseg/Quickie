@@ -107,6 +107,13 @@ the policy consumes rects rather than a pre-computed scalar.**
 
 ## Consequences
 
+*(#268 has since walked this rule across every window the system's tiling can
+produce — halves, thirds, quadrants and Slide Over, on three iPads in both
+orientations, each placed where the system puts it. The binding case it adds is
+an iPad mini's landscape quadrant: 372pt tall under a ~353pt keyboard, so the
+window is very nearly all keyboard and a lift computed in any space but the
+window's own comes out wrong there first. `LauncherWindowTests` holds it.)*
+
 - The `KeyboardDismissUITests` class now carries both halves — the dismiss key
   must drop the bar, the long-press must not move it — because they are the same
   notification and only pass together if the menu signal is really being read.

@@ -30,7 +30,6 @@ final class IPadWindowSweepUITests: XCTestCase {
 
         let springboard = XCUIApplication(bundleIdentifier: "com.apple.springboard")
         let display = springboard.frame.size
-        var window = app.frame.size
         Thread.sleep(forTimeInterval: hold)
 
         // The tiles the sweep walks, as window sizes. A window is a free rectangle under
@@ -46,18 +45,33 @@ final class IPadWindowSweepUITests: XCTestCase {
             CGSize(width: display.width, height: 480),
             CGSize(width: 200, height: 200),
         ]
+        let floor = CGSize(width: 320, height: 320)
 
         for size in sizes {
-            let from = springboard.coordinate(withNormalizedOffset: .zero)
-                .withOffset(CGVector(dx: window.width - handleInset.dx,
-                                     dy: window.height - handleInset.dy))
-            let to = springboard.coordinate(withNormalizedOffset: .zero)
-                .withOffset(CGVector(dx: size.width - handleInset.dx,
-                                     dy: size.height - handleInset.dy))
-            from.press(forDuration: 0.8, thenDragTo: to)
+            // Both ends of the drag are measured from the *window*, not the display: a
+            // window under iPadOS 26 is not anchored at the display's origin, so a grab
+            // computed from the screen misses the handle entirely and the sweep would
+            // green-run having resized nothing.
+            let window = app.frame
+            let handle = springboard.coordinate(withNormalizedOffset: .zero)
+                .withOffset(CGVector(dx: window.maxX - handleInset.dx,
+                                     dy: window.maxY - handleInset.dy))
+            let target = springboard.coordinate(withNormalizedOffset: .zero)
+                .withOffset(CGVector(dx: window.minX + size.width - handleInset.dx,
+                                     dy: window.minY + size.height - handleInset.dy))
+            handle.press(forDuration: 0.8, thenDragTo: target)
             Thread.sleep(forTimeInterval: hold)
-            window = app.frame.size
-            XCTContext.runActivity(named: "window is now \(window)") { _ in }
+
+            // The window should have landed at the asked-for size, or — for the last,
+            // deliberately-too-small one — at the declared floor and no smaller. Loose
+            // tolerances: the system snaps and rounds, and this is a driver for the eye
+            // rather than a gate. What it must *not* do is silently resize nothing.
+            let got = app.frame.size
+            XCTAssertEqual(got.width, max(size.width, floor.width), accuracy: 24,
+                           "the window should have resized to \(size), and is \(got)")
+            XCTAssertEqual(got.height, max(size.height, floor.height), accuracy: 24,
+                           "the window should have resized to \(size), and is \(got)")
+            XCTContext.runActivity(named: "window is now \(got)") { _ in }
         }
     }
 }

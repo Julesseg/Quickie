@@ -43,19 +43,21 @@ public enum LauncherWindow {
     /// a window at the floor is not a degraded launcher but a familiar one, and nothing
     /// downstream needs a special case to survive it.
     ///
-    /// **320 tall** is the shortest window that still holds the three things that make
-    /// this a launcher: the input bar, the [[Shelf]] above it, and the highlighted row
-    /// above that, with the safe areas the system adds around them. It comes out the
-    /// same number as the width, which is a coincidence and not a rule.
+    /// **320 tall** is chosen from *above*, not from below: the system's own tiling
+    /// produces a quadrant only 372pt tall on an iPad mini, and a floor that refused
+    /// one would break the sweep this policy exists to pass. So the height is set
+    /// comfortably under the shortest window the system can hand the app, and it comes
+    /// out the same number as the width, which is a coincidence and not a rule.
+    /// `LauncherWindowTests` pins that ceiling against the tile table; it deliberately
+    /// does *not* derive the floor from the bar, the [[Shelf]] and the
+    /// [[Highlighted result]] it has to hold, because those heights are App chrome that
+    /// Core does not know and should not restate (`FallbackShelf.Layout` draws the same
+    /// line for the same reason).
     ///
     /// Declared rather than left to the system because the system's floor is about
-    /// *windows*, not about this app: it has no way to know which of the launcher's
-    /// parts stop fitting together and when. iPadOS still applies its own floor on top
-    /// of this one, so the effective minimum is the larger of the two — declaring ours
-    /// can only ever raise it, never talk the system into a window it would otherwise
-    /// refuse. Deliberately not raised any further than the content needs: every size
-    /// the system's tiling produces has to stay reachable (audit finding F8's sweep),
-    /// and a roomier floor would buy nothing and cost a quadrant.
+    /// *windows*, not about this app. iPadOS still applies its own floor on top of this
+    /// one, so the effective minimum is the larger of the two — declaring ours can only
+    /// ever raise it, never talk the system into a window it would otherwise refuse.
     public static let minimumSize = CGSize(width: 320, height: 320)
 
     /// The size a fresh window opens at: the readable column plus a 100pt margin on
@@ -65,6 +67,12 @@ public enum LauncherWindow {
     /// Wider than `CommandColumn.readableWidth` on purpose — a default that landed
     /// compact would open every new window in the iPhone layout, which is the audit
     /// finding this policy exists to answer, arrived at from the other direction.
+    ///
+    /// It is a *preference*, not a promise: on a display too small to grant it — an
+    /// iPad mini is 744pt across in portrait — the system clamps it to what fits, and
+    /// the window opens compact there. That is the right outcome and not a shortfall:
+    /// the point of the number is that a window is never *needlessly* narrower than the
+    /// column, not that every display can show one.
     public static let defaultSize = CGSize(
         width: CommandColumn.readableWidth + 2 * defaultSideMargin,
         height: 1000

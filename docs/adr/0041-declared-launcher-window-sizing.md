@@ -30,14 +30,18 @@ the same 40pt is 3%, which is why this only ever read as an iPad defect.
 column they bracket** (`LauncherWindow`), not in the scene declaration:
 
 - **`minimumSize` — 320×320.** 320 wide is the narrowest canvas iOS has ever
-  handed the compact layout: the 4" iPhone's, and Slide Over's. 320 tall is the
-  shortest window that still holds the three things that make this a launcher —
-  the input bar, the Shelf above it, and the highlighted row above that — with
-  the safe areas around them. The scene applies it with
-  `.frame(minWidth:minHeight:)` plus `.windowResizability(.contentMinSize)`,
-  which is what turns a declaration into a limit the drag stops at.
+  handed the compact layout: the 4" iPhone's, and Slide Over's. The height is
+  chosen from *above* rather than from below — see the next paragraph — and comes
+  out the same number, which is a coincidence and not a rule. The scene applies
+  it with `.frame(minWidth:minHeight:)` plus
+  `.windowResizability(.contentMinSize)`, which is what turns a declaration into
+  a limit the drag stops at.
 - **`defaultSize` — 880×1000.** The readable column plus a 100pt margin on each
   side, tall enough for the [[Favorites grid]], a screen of Recents and the bar.
+  A preference, not a promise: an iPad mini is 744pt across in portrait, so the
+  system clamps there and the window opens compact. That is the right outcome —
+  the number says a window is never *needlessly* narrower than the column, not
+  that every display can show one.
 
 **The floor is deliberately not roomier.** The two acceptance criteria pull
 against each other: "the window cannot shrink below a usable launcher" wants a
@@ -49,6 +53,14 @@ the one a roomy floor would prevent. `LauncherWindowTests` walks every tile on
 three displays in both orientations and asserts none of them is below the floor,
 so the constraint is checked rather than remembered.
 
+The floor is deliberately **not derived** from the parts it has to hold, either.
+It would read better if it were — "the bar, plus the Shelf, plus the highlighted
+row" — but the bar's and the row's heights are App chrome, and Core does not know
+them. `FallbackShelf.Layout` draws exactly that line already, taking the bar's
+height from the caller rather than restating it. A derivation here would be three
+hand-copied numbers that nothing keeps in step, dressed up as arithmetic; the
+honest statement is a chosen number with a checked ceiling over it.
+
 **The floor sits under the column and the default sits over it.** That is the
 whole relationship between this policy and ADR 0039: a window can be dragged
 across its entire legal range and only ever land in one of the two layouts that
@@ -58,10 +70,13 @@ in between needs a third case.
 **Non-destructive resizing is a property, not a feature.** Every layout decision
 downstream is a pure function of the window's size class, so a window dragged
 narrow and back wide returns to the layout it left with nothing torn down in
-between (the WWDC25 208 requirement). It is asserted the way the property is
-stated: replay a resize forwards and backwards and demand the same answer at
-each width on the way back. A policy that remembered anything about the widths
-it had been through would disagree with itself there.
+between (the WWDC25 208 requirement). Being a property, it is not something a
+test can falsify by replaying a drag: mapping a pure function over a width list
+forwards and backwards and comparing the two passes by construction and proves
+nothing. So the test states the *path* instead — the column width and the
+Favorites column count at every stop a resize makes, out to the floor and back,
+as a table. A change that gave either a memory, or made it depend on anything
+but the window, is a table that stops matching.
 
 **The pre-anything Home is *placed*, not spaced.** The block's centre goes at
 the centre of the band the placeholder is drawn in, read from that band's own

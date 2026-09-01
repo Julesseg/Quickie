@@ -149,33 +149,44 @@ final class LauncherWindowTests: XCTestCase {
         }
     }
 
-    // MARK: - Non-destructive resizing
+    // MARK: - The layout along a resize
 
-    /// **Resizing is non-destructive**: dragging a window narrow and back wide returns
-    /// the layout it left, rather than a rebuilt approximation of it.
+    /// **The layout at every width a resize passes through**, out to the floor and back.
     ///
-    /// Asserted as the property that makes it true — every layout decision is a pure
-    /// function of the window, with no state carried between sizes — by replaying one
-    /// resize forwards and then backwards and demanding the same answer at each width
-    /// on the way back. A policy that remembered anything about the widths it had been
-    /// through would disagree with itself here.
-    func testResizingBackToAWidthRestoresTheLayoutItLeft() {
-        let drag: [CGFloat] = [1376, 1032, 880, 686, 507, 320]
-        let sizeClass: (CGFloat) -> CommandColumn.SizeClass = { $0 >= 680 ? .regular : .compact }
+    /// "Non-destructive" is a property of the policy being a *pure function* of the
+    /// window — there is no state kept between sizes, so there is nothing for a replayed
+    /// drag to catch out. A test that mapped the same function over a width list forwards
+    /// and backwards and compared the two would pass by construction and prove nothing.
+    ///
+    /// What a test *can* do is pin the whole path as a table: the column width and the
+    /// grid's column count at each stop the drag makes. A change that gave either a
+    /// memory, or made it depend on anything but the window's width and size class,
+    /// shows up here as a table that no longer matches. The size class is listed rather
+    /// than derived, because deriving it would invent a width threshold this codebase
+    /// deliberately does not have — SwiftUI reports the class, and the policy switches
+    /// on it (ADR 0039).
+    func testTheLayoutAtEveryWidthAResizePassesThrough() {
+        let path: [(width: CGFloat, sizeClass: CommandColumn.SizeClass, column: CGFloat, cards: Int)] = [
+            (1376, .regular, 680, 4),   // 13" iPad, landscape, full screen
+            (1032, .regular, 680, 4),   // …portrait
+            (880, .regular, 680, 4),    // the default window
+            (686, .regular, 680, 4),    // a half, still regular on a 13" display
+            (507, .compact, 507, 2),    // a half on an 11" display: compact, uncapped
+            (320, .compact, 320, 2),    // Slide Over, and the declared floor
+        ]
 
-        let outbound = drag.map { width in
-            (CommandColumn.columnWidth(inWindowOf: width, for: sizeClass(width)),
-             CommandColumn.FavoritesGrid.columnCount(for: sizeClass(width)))
-        }
-        let inbound = drag.reversed().map { width in
-            (CommandColumn.columnWidth(inWindowOf: width, for: sizeClass(width)),
-             CommandColumn.FavoritesGrid.columnCount(for: sizeClass(width)))
-        }
-
-        for (index, expected) in outbound.enumerated() {
-            let restored = inbound[inbound.count - 1 - index]
-            XCTAssertEqual(restored.0, expected.0, "column width at \(drag[index])pt was not restored")
-            XCTAssertEqual(restored.1, expected.1, "Favorites column count at \(drag[index])pt was not restored")
+        // Out to the floor and back again. Each stop is checked on the way down and on
+        // the way up; the round trip is what the criterion is about, and the table is
+        // what makes each half of it a statement rather than a tautology.
+        for stop in path + path.reversed() {
+            XCTAssertEqual(
+                CommandColumn.columnWidth(inWindowOf: stop.width, for: stop.sizeClass), stop.column,
+                "a \(stop.width)pt \(stop.sizeClass) window should lay out in a \(stop.column)pt column"
+            )
+            XCTAssertEqual(
+                CommandColumn.FavoritesGrid.columnCount(for: stop.sizeClass), stop.cards,
+                "a \(stop.width)pt \(stop.sizeClass) window should put \(stop.cards) Favorites across"
+            )
         }
     }
 
@@ -187,33 +198,46 @@ final class LauncherWindowTests: XCTestCase {
     /// both sides, and at a quadrant it may not reach the window at all.
     ///
     /// This is the sweep's one behavioural leg — the tiles above only check geometry.
-    /// It walks each tile placed at the display's bottom-left corner (where the system
-    /// puts a left-hand tile) and asserts the bar clears exactly the band the keyboard
-    /// covers *of that window*, which is the whole of ADR 0040 seen at every size the
-    /// system can produce.
-    func testTheBarClearsExactlyWhatTheKeyboardCoversOfEachTile() {
-        // The 13" display, landscape, with a docked keyboard across its bottom.
-        let display = CGSize(width: Self.thirteenInch.height, height: Self.thirteenInch.width)
-        let keyboardHeight: CGFloat = 353
+    /// It runs over every display and both orientations, because the binding case is
+    /// the *smallest* window with the *tallest* keyboard: an iPad mini's landscape
+    /// quadrant is 372pt tall and a docked keyboard is ~353pt, so the window is very
+    /// nearly all keyboard, and a lift computed in anything but the window's own space
+    /// comes out wrong there first (ADR 0040).
+    func testTheBarClearsExactlyWhatTheKeyboardCoversOfEveryTile() {
+        for canvas in [Self.thirteenInch, Self.elevenInch, Self.mini] {
+            for display in [canvas, CGSize(width: canvas.height, height: canvas.width)] {
+                assertTheBarClearsTheKeyboard(on: display)
+            }
+        }
+    }
+
+    /// One display's worth of the sweep above.
+    ///
+    /// The keyboard's height is the one number here that is measured rather than
+    /// derived — iOS sizes it from the display, and a landscape keyboard is the taller
+    /// of the two — so it is stated as a fraction of the display's shorter edge, which
+    /// tracks the real thing closely enough for the three cases that matter: covering
+    /// the whole of a window, part of it, and none of it.
+    private func assertTheBarClearsTheKeyboard(on display: CGSize) {
+        let keyboardHeight = min(display.width, display.height) * 0.42
         let keyboard = CGRect(
             x: 0, y: display.height - keyboardHeight, width: display.width, height: keyboardHeight
         )
         let safeArea: CGFloat = 20
 
-        // Each tile as the system places it: the bottom-anchored ones sit on the
-        // display's bottom edge, over the keyboard; the top quadrant does not reach it
-        // at all, which is the case a window-space lift exists to get right.
-        let placements: [(name: String, bounds: CGRect)] = [
-            ("full screen", CGRect(origin: .zero, size: display)),
-            ("half", CGRect(x: 0, y: 0, width: display.width / 2, height: display.height)),
-            ("third", CGRect(x: 0, y: 0, width: display.width / 3, height: display.height)),
-            ("two thirds", CGRect(x: 0, y: 0, width: display.width * 2 / 3, height: display.height)),
-            ("Slide Over", CGRect(x: display.width - 320, y: 0, width: 320, height: display.height)),
-            ("bottom quadrant", CGRect(
-                x: 0, y: display.height / 2, width: display.width / 2, height: display.height / 2
-            )),
-            ("top quadrant", CGRect(x: 0, y: 0, width: display.width / 2, height: display.height / 2)),
-        ]
+        // The same tiles as the sweep above, placed where the system puts them: against
+        // the display's bottom edge, over the keyboard. Plus a top quadrant, which the
+        // keyboard never reaches at all — the case a window-space lift exists to get
+        // right, and the one no bottom-anchored tile can show.
+        var placements = tiles(on: display).filter { $0.size.width <= display.width }.map { tile in
+            (name: tile.name,
+             bounds: CGRect(x: 0, y: display.height - tile.size.height,
+                            width: tile.size.width, height: tile.size.height))
+        }
+        placements.append((
+            name: "top quadrant",
+            bounds: CGRect(x: 0, y: 0, width: display.width / 2, height: display.height / 2)
+        ))
 
         for placement in placements {
             let geometry = KeyboardBarLift.Geometry(
@@ -231,7 +255,8 @@ final class LauncherWindowTests: XCTestCase {
             )
             XCTAssertEqual(
                 change, .animateWithKeyboard(inset: max(0, covered - safeArea)),
-                "\(placement.name): the bar should clear exactly the band the keyboard covers of the window"
+                "\(Int(display.width))x\(Int(display.height)) \(placement.name): the bar should "
+                    + "clear exactly the band the keyboard covers of the window"
             )
         }
     }
