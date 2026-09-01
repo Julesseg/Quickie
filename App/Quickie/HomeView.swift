@@ -253,8 +253,18 @@ struct FavoriteCard: View {
 /// the placeholder is the instruction and never changes; only the hint rotates.
 struct HomePlaceholder: View {
     var body: some View {
-        VStack {
-            Spacer()
+        // Composed by *placing* the block, not by pushing it around with two `Spacer`s
+        // (issue #268, audit finding F12). A Spacer sandwich centres the block in the
+        // height SwiftUI proposes to the stack, which on a short window is not the band
+        // the placeholder is drawn in: on a landscape iPad, where the docked keyboard
+        // leaves ~460pt above the input bar, the block came out ~40pt high — a tenth of
+        // the band, and plainly off-balance. The same 40pt is invisible in the ~1,300pt
+        // band of a portrait window, which is why this only ever read as an iPad defect.
+        //
+        // Positioning against the band's own resolved height is exact at every window
+        // shape, and it is the rectangle the eye measures the block against: from the
+        // top of the window to the top of the input bar the block introduces.
+        GeometryReader { proxy in
             VStack(spacing: 20) {
                 brandMark
                 VStack(spacing: 8) {
@@ -265,9 +275,9 @@ struct HomePlaceholder: View {
                     HintLineView()
                 }
             }
-            Spacer()
+            .frame(maxWidth: .infinity)
+            .position(x: proxy.size.width / 2, y: proxy.size.height / 2)
         }
-        .frame(maxWidth: .infinity)
     }
 
     /// The app icon's orbital Q, in the brand's trail ramp — the same symbol the
