@@ -89,6 +89,7 @@ struct CustomActionsView: View {
                 Text("Custom Actions")
             }
         }
+        .managementColumn()
         .navigationTitle("Custom Actions")
         .toolbar {
             ToolbarItem(placement: .topBarTrailing) {

@@ -91,6 +91,11 @@ struct AppearancePickerView: View {
             .padding(.horizontal)
             .padding(.top, 12)
             .padding(.bottom, 40)
+            // The gallery is an adaptive grid, so an unclamped 1,376pt window laid
+            // it out ~24 cells across (issue #266). Inside the column it is the
+            // eleven-ish the picker was designed around, on the same centre line
+            // as the header above it.
+            .commandColumn()
 
             if results.isEmpty {
                 Text("No symbols match “\(query)”.")
@@ -161,7 +166,13 @@ struct AppearancePickerView: View {
         .animation(.snappy(duration: 0.18), value: normalizedGlyph)
         .padding(.top, isCompact ? 8 : 12)
         .padding(.bottom, isCompact ? 10 : 14)
-        .frame(maxWidth: .infinity)
+        // The header's *content* lays out in the column — the swatch row and the
+        // search field would otherwise stretch the width of a 13" iPad — while the
+        // `.bar` band below still spans the window. Same division as the launcher's
+        // progressive-blur bands (ADR 0039): a band that stopped at the column would
+        // draw the column's two edges as hard lines. At compact width this is the
+        // `.frame(maxWidth: .infinity)` it replaces, unchanged.
+        .commandColumn()
         // An opaque backdrop so the gallery scrolls *under* the pinned header rather
         // than showing through it.
         .background(.bar)

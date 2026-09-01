@@ -115,6 +115,7 @@ struct SettingsView: View {
                 BuildStamp()
             }
         }
+        .managementColumn()
         .navigationTitle("Settings")
     }
 }

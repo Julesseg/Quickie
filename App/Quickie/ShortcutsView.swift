@@ -128,6 +128,7 @@ struct ShortcutsView: View {
                 }
             }
         }
+        .managementColumn()
         .navigationTitle("Shortcuts")
     }
 
@@ -283,6 +284,7 @@ struct ShortcutDetailView: View {
                 Text("Alias")
             }
         }
+        .managementColumn()
         .navigationTitle(name)
     }
 }

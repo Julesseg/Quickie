@@ -99,6 +99,11 @@ struct PileView: View {
                         }
                     }
                 }
+                // The clamp rides the list, not the `Group`: the empty state is a
+                // `ContentUnavailableView`, which already centres and bounds its own
+                // text, and it is not a grouped list — clamping it would swap its
+                // background for the list's on an iPhone too.
+                .managementColumn()
             }
         }
         .navigationTitle("Pile")
