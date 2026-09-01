@@ -20,6 +20,13 @@ struct HomeView: View {
     /// swipe-dismiss (issue #64) from a context-menu dismissal (issue #58).
     var onScrollActive: (Bool) -> Void = { _ in }
 
+    /// PROTOTYPE (#269) — THROWAWAY. Which end [[Home]] grows from, mirroring
+    /// `ResultListView.anchor`. Docked, the Recent list is bottom-anchored so the
+    /// most relevant rows sit nearest the thumb; in palette mode the input has
+    /// left the bottom, so anchoring there would strand Recents at the foot of the
+    /// window with a screen of air between them and the field that filters them.
+    var anchor: PalettePrototype.Mode = .docked
+
     /// The window's width class, which decides how many cards lay out across a row —
     /// **not** the device idiom, so an iPad dragged into Split View gets the iPhone's
     /// 2×2 back mid-drag (ADR 0039).
@@ -77,7 +84,7 @@ struct HomeView: View {
                     // beneath the pinned grid.
                     .padding(.top, gridFavorites.isEmpty ? 0 : 168)
                 }
-                .defaultScrollAnchor(.bottom)
+                .defaultScrollAnchor(anchor == .docked ? .bottom : .top)
                 // Swiping down the Recent list dismisses the keyboard interactively
                 // (issue #64), the same native scroll-dismiss as the Result list —
                 // the bar drops and nothing clears.

@@ -227,6 +227,31 @@ struct RootView: View {
     /// (a system behaviour with no public override), the layout stays frozen instead
     /// of collapsing the safe area and jerking the reversed result list downward.
     @State private var lockedKeyboardInset: CGFloat = 0
+    // ─────────────────────────────────────────────────────────────────────────
+    // PROTOTYPE (#269) — THROWAWAY state, unreachable without `-palette-prototype`.
+    // ─────────────────────────────────────────────────────────────────────────
+
+    /// The window's width class — the *same* switch the readable command column
+    /// uses (ADR 0039), read once here so the palette trigger and the column can
+    /// never disagree about what this window is.
+    @Environment(\.horizontalSizeClass) private var horizontalSizeClass
+
+    /// Whether the keyboard last seen was a **software** keyboard rather than a
+    /// hardware keyboard's shortcuts bar, from `Geometry.isSoftwareKeyboard` — the
+    /// keyboard's own height, never its window overlap (ADR 0040).
+    ///
+    /// Starts `true` (software), so the launcher opens in today's docked layout and
+    /// flips *into* the palette once a hardware keyboard actually announces itself.
+    /// The other default would put every cold launch in palette mode for the split
+    /// second before the first keyboard notification, and flip a soft-keyboard iPad
+    /// out of it on screen.
+    @State private var hasSoftwareKeyboard = true
+
+    /// The host window's height, for placing the palette's input a fraction of the
+    /// way down it. Measured off the launcher rather than read from `UIScreen`: on
+    /// iPad the window is only sometimes the display (ADR 0040).
+    @State private var windowHeight: CGFloat = 0
+
     /// Whether a result/Recent list is mid-drag (issue #58 × #64): the signal that
     /// tells a keyboard dismissal apart. A dismissal *while* scrolling is the
     /// intentional swipe (#64) — let the bar drop; one while still is the context
@@ -544,6 +569,16 @@ struct RootView: View {
     /// The File Search inline cap, clamped through the declared stepper (ADR 0020;
     /// issue #69) so a stale or out-of-bounds store never drives the provider past
     /// its bounds — the same `clamped` the renderer reads through.
+    /// PROTOTYPE (#269): which way the launcher is laid out. Always `.docked` —
+    /// today's shipping layout, untouched — unless the prototype is switched on.
+    private var launcherMode: PalettePrototype.Mode {
+        guard PalettePrototype.isEnabled else { return .docked }
+        return PalettePrototype.mode(
+            sizeClass: .init(horizontalSizeClass),
+            hasSoftwareKeyboard: hasSoftwareKeyboard
+        )
+    }
+
     private var resolvedInlineCap: Int {
         guard case .stepper(let stepper)? = ProviderID.fileSearch.settingsSchema
             .first(where: { $0.key == SettingsKey.fileSearchInlineCap })?.kind
@@ -604,7 +639,11 @@ struct RootView: View {
                 // bar: it centers on the bar's safe-area line rather than its top
                 // edge, a difference nothing can see.
                 LivingBackdrop(
-                    glowLift: path.isEmpty ? lockedKeyboardInset : 0,
+                    // PROTOTYPE (#269): the glow rides the *bar*, so in palette mode
+                    // — where the bar has left the bottom entirely — it has nothing to
+                    // ride and rests unlifted. That the backdrop's one moving part is
+                    // defined relative to the bottom bar is itself a finding.
+                    glowLift: (path.isEmpty && launcherMode == .docked) ? lockedKeyboardInset : 0,
                     driftPeriod: backdropDriftPeriod
                 )
                 // Entering a keyboard-less step (the date picker) releases the
@@ -646,7 +685,10 @@ struct RootView: View {
                             canFavorite: { signals.canFavorite($0.id) },
                             onToggleFavorite: toggleFavorite,
                             onSecondaryAction: performSecondary,
-                            onScrollActive: { listScrolling = $0 }
+                            onScrollActive: { listScrolling = $0 },
+                            // PROTOTYPE (#269): Home follows the mode too — see
+                            // `HomeView.anchor`.
+                            anchor: launcherMode
                         )
                         .transition(captureMotion.edgeTransition(from: .bottom))
                     } else {
@@ -657,16 +699,36 @@ struct RootView: View {
                             canFavorite: { signals.canFavorite($0.id) },
                             onToggleFavorite: toggleFavorite,
                             onSecondaryAction: performSecondary,
-                            onScrollActive: { listScrolling = $0 }
+                            onScrollActive: { listScrolling = $0 },
+                            // PROTOTYPE (#269): rank 0 stays against the input — under
+                            // it in palette mode instead of over it (ADR 0008).
+                            anchor: launcherMode
                         )
                         .transition(captureMotion.edgeTransition(from: .bottom))
                     }
+                }
+
+                if PalettePrototype.showsBadge {
+                    PalettePrototypeBadge(
+                        sizeClass: .init(horizontalSizeClass),
+                        hasSoftwareKeyboard: hasSoftwareKeyboard,
+                        mode: launcherMode
+                    )
+                    .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottomTrailing)
+                    .padding(16)
                 }
 
                 if let toast {
                     ConfirmationToast(toast: toast) { openToast(toast) }
                 }
             }
+            // PROTOTYPE (#269): the window's own height, for the palette's top-third
+            // placement, and the flip's animation.
+            .onGeometryChange(for: CGFloat.self) { $0.size.height } action: { windowHeight = $0 }
+            // The flip is a whole-screen rearrangement, so it draws on the most
+            // deliberate animation the budget has — the capture transition (ADR
+            // 0010) — rather than inventing a new one for it.
+            .animation(captureMotion.animation, value: launcherMode)
             // The capture breadcrumb rides the top with a progressive blur, the
             // content sliding under it (issue #37). Shown only at the root and only
             // while a session is collecting — the primer/denial affordances have no
@@ -715,128 +777,51 @@ struct RootView: View {
             // `refocusInput` off the popped page's `onDisappear`. Launch and
             // capture-end appearances focus immediately — same-screen swaps,
             // where the focus sticks.
+            // PROTOTYPE (#269) — the bar's *edge* is the mode. A `.safeAreaInset`
+            // cannot switch edges in place, so both insets exist and exactly one of
+            // them renders the bar. That the flip therefore rebuilds the bar rather
+            // than moving it is not an implementation detail to hide: it is the
+            // motion-budget question (ADR 0010) this prototype exists to answer.
             .safeAreaInset(edge: .bottom, spacing: 0) {
-                // Lift the bar by the *held* keyboard height rather than letting the
-                // system track the live keyboard, so a transient dismissal (a
-                // context menu) doesn't reflow the content. Only at the root — a
-                // pushed page removes the bar, so it must reserve no phantom inset.
-                Group {
-                if path.isEmpty {
-                    if capture.isActive {
-                        // A capture (or its denial affordance) owns the bottom
-                        // region: the breadcrumb + the morphing input replace the
-                        // search field and paste chip (issue #37).
-                        GlassEffectContainer(spacing: 8) {
-                            CaptureBar(model: capture)
-                        }
-                    } else {
-                        // Spacing 0: the input's own 10pt top padding is the gap, so the
-                        // Shelf sits the same distance off the bar as the bar's contents
-                        // sit off its glass.
-                        VStack(spacing: 0) {
-                            // The Shelf rides directly above the input (CONTEXT.md →
-                            // Shelf; issue #242): the shelved fallbacks as circular
-                            // glass buttons, each seeding-and-committing the typed
-                            // query. Shown only while there *is* a query to seed — it
-                            // means "ways to use *this* query", so it is hidden on
-                            // Home — and not inside the Search Files context, which the
-                            // bottom fallback region vacates too (the filename index
-                            // alone answers there, ADR 0014).
-                            //
-                            // Deliberately un-animated, like the Home↔Results swap it
-                            // rides with: the first keystroke already re-lays the whole
-                            // list, and a row sliding in on top of that reads as jitter.
-                            if !inFileSearch, !shelf.isEmpty, FallbackShelf.isVisible(for: query) {
-                                FallbackShelfRow(
-                                    members: shelf,
-                                    onRun: { action in
-                                        // The same run path a tapped fallback row
-                                        // takes, region and all — so a Shelf tap *is*
-                                        // a fallback selection, not a lookalike of one.
-                                        run(action, region: .fallback)
-                                    },
-                                    // The same handlers the Result list is given, for
-                                    // the same reason the run path is shared: a Shelf
-                                    // button's long-press menu is the *same* menu its
-                                    // row would show, so the two can't disagree about
-                                    // what pinning or a secondary verb does.
-                                    isFavorite: { signals.isFavorite($0.id) },
-                                    canFavorite: { signals.canFavorite($0.id) },
-                                    onToggleFavorite: toggleFavorite,
-                                    onSecondaryAction: performSecondary
-                                )
-                                // Clear the last result row: the inset's top edge is
-                                // where the list stops, so without this the buttons
-                                // sit flush against the nearest fallback and read as
-                                // part of it. The bar's own vertical padding, so the
-                                // Shelf is spaced off the list exactly as it is off
-                                // the input below it.
-                                .padding(.top, 10)
-                            }
-                            GlassEffectContainer(spacing: 8) {
-                                // Bottom-align so the paste chip stays pinned to the
-                                // input's bottom edge as the field grows upward (issue #63).
-                                HStack(alignment: .bottom, spacing: 8) {
-                                    InputBar(
-                                        query: $query,
-                                        focused: $inputFocused,
-                                        placeholder: inFileSearch ? "Search files…" : "Type to search…",
-                                        returnKey: highlighted?.returnKeyLabel ?? ReturnKeyLabel.none,
-                                        onSubmit: { if let highlightedRow { run(highlightedRow) } },
-                                        glassNamespace: glassNamespace
-                                    )
-                                    // The clipboard paste chip belongs to Home, not the
-                                    // scoped file filter — hide it in the context.
-                                    if !inFileSearch && clipboardPrefill.isChipOffered {
-                                        ClipboardPasteButton(glassNamespace: glassNamespace) { text in
-                                            // The hand-off decision (QuickieCore): `hasStrings` metadata
-                                            // can offer the chip over an empty/expired clipboard, so the
-                                            // tapped content decides. A real paste seeds and retires the
-                                            // offer; a dud withdraws the chip without burning it, so a
-                                            // later real copy can re-offer.
-                                            if let seeded = ClipboardPrefill.seededQuery(fromPasted: text) {
-                                                query = seeded
-                                                clipboard.markUsed()
-                                            } else {
-                                                clipboard.noteEmptyPaste()
-                                            }
-                                        }
-                                    }
-                                }
-                                .padding(.horizontal, 12)
-                                .padding(.vertical, 10)
-                            }
-                            // Morph the button in/out as the offer changes — degraded to a
-                            // snap under Reduce Motion (ADR 0010 motion budget).
-                            .animation(reduceMotion ? nil : .smooth, value: clipboardPrefill.isChipOffered)
-                            // Auto-focus on launch and capture-end (the zero-wall
-                            // promise, ADR 0012). Never on a pop re-appearance: that
-                            // fires mid-transition, where the focus (and the keyboard
-                            // it visibly raised) gets cancelled at completion — the
-                            // return-trip flicker. The popped page's `onDisappear`
-                            // re-arms focus instead (see the navigationDestination
-                            // below) — a real event at pop completion, not a guessed
-                            // delay.
-                            .onAppear { if !popRefocusPending { inputFocused = true } }
-                        }
-                    }
+                if launcherMode == .docked {
+                    // Lift the bar by the *held* keyboard height rather than letting
+                    // the system track the live keyboard, so a transient dismissal (a
+                    // context menu) doesn't reflow the content. Only at the root — a
+                    // pushed page removes the bar, so it must reserve no phantom inset.
+                    launcherBar(mode: .docked, shelf: shelf, highlightedRow: highlightedRow)
+                        // The readable command column (ADR 0039): at regular width the bar
+                        // reads as a command palette rather than a full-bleed toolbar, and
+                        // the Shelf above it gets a row it can size a peek against again.
+                        // Everything inside keeps its own 12pt inset off the column's edge.
+                        .commandColumn()
+                        // Reserve the held keyboard height so the bar floats where the
+                        // keyboard's top is — and stays there when the keyboard drops. Zero
+                        // when a page is pushed (the bar is gone), so no phantom inset.
+                        .padding(.bottom, path.isEmpty ? lockedKeyboardInset : 0)
+                        // Kill keyboard avoidance on the bar *itself*: the outer
+                        // `.ignoresSafeArea(.keyboard)` leaves a small residual lift on
+                        // `.safeAreaInset` content, which released on a context-menu dismiss
+                        // and dropped the list by ~half a row. Our held inset is the only
+                        // thing that should position the bar.
+                        .ignoresSafeArea(.keyboard, edges: .bottom)
                 }
+            }
+            // PROTOTYPE (#269) — palette mode: the same bar, in the top third.
+            .safeAreaInset(edge: .top, spacing: 0) {
+                if launcherMode == .palette {
+                    launcherBar(mode: .palette, shelf: shelf, highlightedRow: highlightedRow)
+                        .commandColumn()
+                        // The eye-line the flip is *for*: the field a fixed fraction
+                        // down the window rather than centred or a constant, so a 13"
+                        // iPad and a half-height Stage Manager tile put it in the same
+                        // place relative to their own canvas.
+                        .padding(.top, windowHeight * PalettePrototype.inputTopFraction)
+                        // No software keyboard is the *precondition* of this mode, so
+                        // there is nothing at the window's bottom to clear — but the
+                        // hardware shortcuts bar still posts frames, and the bar must
+                        // not drift with them.
+                        .ignoresSafeArea(.keyboard, edges: .bottom)
                 }
-                // The readable command column (ADR 0039): at regular width the bar
-                // reads as a command palette rather than a full-bleed toolbar, and
-                // the Shelf above it gets a row it can size a peek against again.
-                // Everything inside keeps its own 12pt inset off the column's edge.
-                .commandColumn()
-                // Reserve the held keyboard height so the bar floats where the
-                // keyboard's top is — and stays there when the keyboard drops. Zero
-                // when a page is pushed (the bar is gone), so no phantom inset.
-                .padding(.bottom, path.isEmpty ? lockedKeyboardInset : 0)
-                // Kill keyboard avoidance on the bar *itself*: the outer
-                // `.ignoresSafeArea(.keyboard)` leaves a small residual lift on
-                // `.safeAreaInset` content, which released on a context-menu dismiss
-                // and dropped the list by ~half a row. Our held inset is the only
-                // thing that should position the bar.
-                .ignoresSafeArea(.keyboard, edges: .bottom)
             }
             // Drive the bar lift ourselves: turn off SwiftUI's automatic keyboard
             // avoidance for the launcher so the live keyboard never moves the layout
@@ -881,6 +866,14 @@ struct RootView: View {
             .background {
                 KeyboardFrameObserver(
                     onKeyboardFrame: { geometry, isLocalKeyboard, contextMenuOpen in
+                        // PROTOTYPE (#269): the palette trigger's second condition,
+                        // taken off the same notification the lift already reads and
+                        // only for a *local* keyboard — the other app's keyboard, side
+                        // by side on iPad, says nothing about ours. `isSoftwareKeyboard`
+                        // reads the keyboard's own height, so a dismissed software
+                        // keyboard (reported at full height, off-screen below) stays
+                        // "software" and the layout does not flip on every dismissal.
+                        if isLocalKeyboard { hasSoftwareKeyboard = geometry.isSoftwareKeyboard }
                         apply(KeyboardBarLift.notified(
                             geometry,
                             isLocalKeyboard: isLocalKeyboard,
@@ -1427,6 +1420,145 @@ struct RootView: View {
     /// verb-first. Keying off the region carried on the row replaces re-deriving "is
     /// this an enabled fallback?" from the Action — behavior identical, since a row is
     /// `.fallback` exactly when the old check held.
+
+    // ─────────────────────────────────────────────────────────────────────────
+    // PROTOTYPE (#269) — THROWAWAY. The launcher bar, lifted out of `body` so the
+    // *same* bar can be handed to either safe-area edge. On main this is one
+    // inline `Group` inside `.safeAreaInset(edge: .bottom)`; the split exists
+    // only because palette mode needs it at the top.
+    // ─────────────────────────────────────────────────────────────────────────
+
+    /// The bar's contents: a capture's morphing bar, or the Shelf + input + paste
+    /// chip. `mode` decides which side of the input the Shelf sits on.
+    @ViewBuilder
+    private func launcherBar(mode: PalettePrototype.Mode, shelf: [Action], highlightedRow: ResultRow?) -> some View {
+        if path.isEmpty {
+            if capture.isActive {
+                // A capture (or its denial affordance) owns the bottom region: the
+                // breadcrumb + the morphing input replace the search field and
+                // paste chip (issue #37).
+                GlassEffectContainer(spacing: 8) {
+                    CaptureBar(model: capture)
+                }
+            } else {
+                // Spacing 0: the input's own 10pt padding is the gap, so the Shelf
+                // sits the same distance off the bar as the bar's contents sit off
+                // its glass.
+                VStack(spacing: 0) {
+                    // PROTOTYPE (#269): the Shelf keeps its *relationship* to the
+                    // results across the flip rather than its direction. Docked, the
+                    // results are above, so the Shelf rides above the input and
+                    // clears the last row; in palette mode they drop below, so it
+                    // goes under the input and clears the first. Left above the
+                    // field in palette mode it would strand itself in the empty band
+                    // over the palette, pointing at nothing.
+                    if mode == .docked { shelfRow(mode: mode, shelf: shelf) }
+                    inputRow(highlightedRow: highlightedRow)
+                    if mode == .palette { shelfRow(mode: mode, shelf: shelf) }
+                }
+                // Auto-focus on launch and capture-end (the zero-wall promise, ADR
+                // 0012). Never on a pop re-appearance: that fires mid-transition,
+                // where the focus (and the keyboard it visibly raised) gets
+                // cancelled at completion — the return-trip flicker. The popped
+                // page's `onDisappear` re-arms focus instead (see the
+                // navigationDestination below) — a real event at pop completion,
+                // not a guessed delay.
+                //
+                // PROTOTYPE (#269): this also fires on every *mode flip*, because
+                // moving the bar between safe-area edges destroys and rebuilds it.
+                // The re-assertion is what carries focus across the flip — and is
+                // itself one of the things the prototype is here to measure.
+                .onAppear { if !popRefocusPending { inputFocused = true } }
+            }
+        }
+    }
+
+    /// The [[Shelf]] row, on whichever side of the input the mode puts it.
+    @ViewBuilder
+    private func shelfRow(mode: PalettePrototype.Mode, shelf: [Action]) -> some View {
+        // The Shelf rides directly above the input (CONTEXT.md →
+        // Shelf; issue #242): the shelved fallbacks as circular
+        // glass buttons, each seeding-and-committing the typed
+        // query. Shown only while there *is* a query to seed — it
+        // means "ways to use *this* query", so it is hidden on
+        // Home — and not inside the Search Files context, which the
+        // bottom fallback region vacates too (the filename index
+        // alone answers there, ADR 0014).
+        //
+        // Deliberately un-animated, like the Home↔Results swap it
+        // rides with: the first keystroke already re-lays the whole
+        // list, and a row sliding in on top of that reads as jitter.
+        if !inFileSearch, !shelf.isEmpty, FallbackShelf.isVisible(for: query) {
+            FallbackShelfRow(
+                members: shelf,
+                onRun: { action in
+                    // The same run path a tapped fallback row
+                    // takes, region and all — so a Shelf tap *is*
+                    // a fallback selection, not a lookalike of one.
+                    run(action, region: .fallback)
+                },
+                // The same handlers the Result list is given, for
+                // the same reason the run path is shared: a Shelf
+                // button's long-press menu is the *same* menu its
+                // row would show, so the two can't disagree about
+                // what pinning or a secondary verb does.
+                isFavorite: { signals.isFavorite($0.id) },
+                canFavorite: { signals.canFavorite($0.id) },
+                onToggleFavorite: toggleFavorite,
+                onSecondaryAction: performSecondary
+            )
+            // Clear the last result row: the inset's top edge is
+            // where the list stops, so without this the buttons
+            // sit flush against the nearest fallback and read as
+            // part of it. The bar's own vertical padding, so the
+            // Shelf is spaced off the list exactly as it is off
+            // the input below it.
+            .padding(mode == .docked ? .top : .bottom, 10)
+        }
+    }
+
+    /// The input field and the clipboard paste chip, in one glass body.
+    @ViewBuilder
+    private func inputRow(highlightedRow: ResultRow?) -> some View {
+        let highlighted = highlightedRow?.action
+        GlassEffectContainer(spacing: 8) {
+            // Bottom-align so the paste chip stays pinned to the
+            // input's bottom edge as the field grows upward (issue #63).
+            HStack(alignment: .bottom, spacing: 8) {
+                InputBar(
+                    query: $query,
+                    focused: $inputFocused,
+                    placeholder: inFileSearch ? "Search files…" : "Type to search…",
+                    returnKey: highlighted?.returnKeyLabel ?? ReturnKeyLabel.none,
+                    onSubmit: { if let highlightedRow { run(highlightedRow) } },
+                    glassNamespace: glassNamespace
+                )
+                // The clipboard paste chip belongs to Home, not the
+                // scoped file filter — hide it in the context.
+                if !inFileSearch && clipboardPrefill.isChipOffered {
+                    ClipboardPasteButton(glassNamespace: glassNamespace) { text in
+                        // The hand-off decision (QuickieCore): `hasStrings` metadata
+                        // can offer the chip over an empty/expired clipboard, so the
+                        // tapped content decides. A real paste seeds and retires the
+                        // offer; a dud withdraws the chip without burning it, so a
+                        // later real copy can re-offer.
+                        if let seeded = ClipboardPrefill.seededQuery(fromPasted: text) {
+                            query = seeded
+                            clipboard.markUsed()
+                        } else {
+                            clipboard.noteEmptyPaste()
+                        }
+                    }
+                }
+            }
+            .padding(.horizontal, 12)
+            .padding(.vertical, 10)
+        }
+        // Morph the button in/out as the offer changes — degraded to a
+        // snap under Reduce Motion (ADR 0010 motion budget).
+        .animation(reduceMotion ? nil : .smooth, value: clipboardPrefill.isChipOffered)
+    }
+
     private func run(_ row: ResultRow) {
         run(row.action, region: row.region)
     }

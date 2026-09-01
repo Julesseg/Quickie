@@ -30,6 +30,20 @@ struct ResultListView: View {
     /// dismissal (issue #58 — hold the layout in place).
     var onScrollActive: (Bool) -> Void = { _ in }
 
+    /// PROTOTYPE (#269) — THROWAWAY. Which end of the viewport the list grows from.
+    ///
+    /// `.docked` is ADR 0008 as it ships: rank 0 renders **last**, at the bottom,
+    /// against the input, with weaker matches stacking upward and scrolling away.
+    /// `.palette` renders the same array the other way up — rank 0 **first**, at the
+    /// top, against a palette input above it, weaker matches dropping downward.
+    ///
+    /// The thing worth noticing is how little is here: ADR 0008's real guarantee is
+    /// *adjacency to the input*, not "bottom", so honouring it upside-down is a
+    /// reversal, an alignment and a scroll anchor. Row identity is still the rank,
+    /// so a keystroke that re-ranks still swaps each slot's content in place and the
+    /// highlighted slot still never moves.
+    var anchor: PalettePrototype.Mode = .docked
+
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     /// The tight animation budget (ADR 0010): a subtle spring as row slots appear
@@ -59,7 +73,7 @@ struct ResultListView: View {
                         // slot, and only that slot animates: its transition carries
                         // its own animation (Motion.swift), so the layout around it
                         // applies instantly.
-                        ForEach(results.indices.reversed(), id: \.self) { rank in
+                        ForEach(anchor == .docked ? Array(results.indices.reversed()) : Array(results.indices), id: \.self) { rank in
                             let row = results[rank]
                             let action = row.action
                             Button {
@@ -95,9 +109,13 @@ struct ResultListView: View {
                     // as they keep it off an iPhone's screen edge.
                     .commandColumn()
                 }
-                .frame(maxWidth: .infinity, minHeight: viewport.size.height, alignment: .bottom)
+                .frame(
+                    maxWidth: .infinity,
+                    minHeight: viewport.size.height,
+                    alignment: anchor == .docked ? .bottom : .top
+                )
             }
-            .defaultScrollAnchor(.bottom)
+            .defaultScrollAnchor(anchor == .docked ? .bottom : .top)
             // Swiping down the list dismisses the keyboard the native iOS way (issue
             // #64): the keyboard tracks the drag off-screen, the input bar drops to
             // the bottom, and the query + results are preserved — no custom gesture,
