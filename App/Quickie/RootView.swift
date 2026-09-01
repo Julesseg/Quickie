@@ -181,7 +181,11 @@ struct RootView: View {
     /// see one inbox.
     @State private var deeplinkInbox = DeeplinkInbox.shared
 
-    @State private var query = ""
+    // PROTOTYPE (#269): `-palette-seed-query <text>` starts the launcher with a
+    // query already typed, so a state can be photographed by a plain
+    // `simctl launch` instead of a UI test that raises the software keyboard to
+    // type it — the very keyboard palette mode is defined by the absence of.
+    @State private var query = PalettePrototype.seededQuery ?? ""
     /// Whether the **Search Files context** is active (CONTEXT.md → Search Files
     /// context; ADR 0014): entered by selecting the "Search Files" command row, it
     /// scopes the input to the filename index alone — a `[Search Files] ▸ …`
@@ -240,17 +244,27 @@ struct RootView: View {
     /// hardware keyboard's shortcuts bar, from `Geometry.isSoftwareKeyboard` — the
     /// keyboard's own height, never its window overlap (ADR 0040).
     ///
-    /// Starts `true` (software), so the launcher opens in today's docked layout and
-    /// flips *into* the palette once a hardware keyboard actually announces itself.
-    /// The other default would put every cold launch in palette mode for the split
-    /// second before the first keyboard notification, and flip a soft-keyboard iPad
-    /// out of it on screen.
-    @State private var hasSoftwareKeyboard = true
+    /// Starts **false**, and this is a correction the prototype had to make: the
+    /// first version started it `true` to keep a cold launch out of palette mode.
+    /// But with a hardware keyboard attached no keyboard notification ever
+    /// arrives, so the flag never left `true` and the `!hasSoftwareKeyboard` term
+    /// was permanently unsatisfiable — palette mode could not have activated even
+    /// with the hardware term correct. Nothing on screen is the honest starting
+    /// value; keeping the cold launch docked is the *hardware* term's job.
+    @State private var hasSoftwareKeyboard = false
 
     /// The host window's height, for placing the palette's input a fraction of the
     /// way down it. Measured off the launcher rather than read from `UIScreen`: on
     /// iPad the window is only sometimes the display (ADR 0040).
     @State private var windowHeight: CGFloat = 0
+
+    /// PROTOTYPE (#269): whether a hardware keyboard is attached — the trigger's
+    /// real first condition. See `PalettePrototype.mode` for why this cannot come
+    /// off the keyboard-frame notifications the bar lift already reads.
+    @State private var hardwareKeyboard = HardwareKeyboardMonitor()
+
+    /// PROTOTYPE (#269): a `⌘⇧P` override of the trigger, for filming the flip.
+    @State private var flipOverride: PalettePrototype.Mode?
 
     /// Whether a result/Recent list is mid-drag (issue #58 × #64): the signal that
     /// tells a keyboard dismissal apart. A dismissal *while* scrolling is the
@@ -573,10 +587,41 @@ struct RootView: View {
     /// today's shipping layout, untouched — unless the prototype is switched on.
     private var launcherMode: PalettePrototype.Mode {
         guard PalettePrototype.isEnabled else { return .docked }
+        if let flipOverride { return flipOverride }
         return PalettePrototype.mode(
             sizeClass: .init(horizontalSizeClass),
+            hasHardwareKeyboard: hardwareKeyboard.isAttached,
             hasSoftwareKeyboard: hasSoftwareKeyboard
         )
+    }
+
+    /// PROTOTYPE (#269): the handle that causes the flip a keyboard being plugged
+    /// in would cause, so it can be filmed.
+    ///
+    /// **A tap target, not a key.** The first version was a zero-size hidden
+    /// `Button` carrying `⌘⇧P`, and it silently did nothing — a SwiftUI keyboard
+    /// shortcut on a view with no size and no opacity is never installed. Worse,
+    /// pressing the key made XCUITest raise the **software keyboard** to send it,
+    /// so the run filmed a keyboard sliding up and not a mode change at all. A tap
+    /// raises nothing, which is the only way to film this mode honestly.
+    @ViewBuilder
+    private var manualFlipKey: some View {
+        if PalettePrototype.isEnabled && PalettePrototype.allowsManualFlip {
+            Button("Flip launcher mode") {
+                flipOverride = launcherMode == .docked ? .palette : .docked
+            }
+            .buttonStyle(.plain)
+            .frame(width: 60, height: 60)
+            // Present to hit-testing and to XCUITest, invisible to the shot.
+            .opacity(0.01)
+            .accessibilityIdentifier("palette-flip")
+            // Mid-leading: outside the 680pt column, so it is clear of the
+            // command surfaces in *both* modes. At top-trailing the palette's
+            // own top safe-area inset swallowed the tap and the flip silently
+            // never happened — a run of 51 identical frames.
+            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .leading)
+            .padding(.leading, 20)
+        }
     }
 
     private var resolvedInlineCap: Int {
@@ -708,9 +753,12 @@ struct RootView: View {
                     }
                 }
 
+                manualFlipKey
+
                 if PalettePrototype.showsBadge {
                     PalettePrototypeBadge(
                         sizeClass: .init(horizontalSizeClass),
+                        hasHardwareKeyboard: hardwareKeyboard.isAttached,
                         hasSoftwareKeyboard: hasSoftwareKeyboard,
                         mode: launcherMode
                     )
@@ -720,6 +768,16 @@ struct RootView: View {
 
                 if let toast {
                     ConfirmationToast(toast: toast) { openToast(toast) }
+                }
+            }
+            // PROTOTYPE (#269): flip modes on a timer, so the transition can be
+            // filmed without a tap or a key press — neither of which survives
+            // contact with the layout being measured (see `autoFlipInterval`).
+            .task {
+                guard PalettePrototype.isEnabled, let interval = PalettePrototype.autoFlipInterval else { return }
+                while !Task.isCancelled {
+                    try? await Task.sleep(for: .seconds(interval))
+                    flipOverride = launcherMode == .docked ? .palette : .docked
                 }
             }
             // PROTOTYPE (#269): the window's own height, for the palette's top-third
@@ -873,7 +931,18 @@ struct RootView: View {
                         // reads the keyboard's own height, so a dismissed software
                         // keyboard (reported at full height, off-screen below) stays
                         // "software" and the layout does not flip on every dismissal.
-                        if isLocalKeyboard { hasSoftwareKeyboard = geometry.isSoftwareKeyboard }
+                        if isLocalKeyboard {
+                            // "A software keyboard is *currently covering* the
+                            // window's bottom" — not merely "the keyboard that
+                            // announced itself was a software one". A dismissal
+                            // posts the same full height with zero overlap, and
+                            // that must read as nothing on screen.
+                            if case .docked(let overlap) = geometry.coverage {
+                                hasSoftwareKeyboard = geometry.isSoftwareKeyboard && overlap > 0
+                            } else {
+                                hasSoftwareKeyboard = false
+                            }
+                        }
                         apply(KeyboardBarLift.notified(
                             geometry,
                             isLocalKeyboard: isLocalKeyboard,
