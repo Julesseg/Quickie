@@ -255,15 +255,16 @@ struct HomePlaceholder: View {
     var body: some View {
         // Composed by *placing* the block, not by pushing it around with two `Spacer`s
         // (issue #268, audit finding F12). A Spacer sandwich centres the block in the
-        // height SwiftUI proposes to the stack, which on a short window is not the band
-        // the placeholder is drawn in: on a landscape iPad, where the docked keyboard
-        // leaves ~460pt above the input bar, the block came out ~40pt high — a tenth of
-        // the band, and plainly off-balance. The same 40pt is invisible in the ~1,300pt
-        // band of a portrait window, which is why this only ever read as an iPad defect.
+        // region the *stack* is laid out in, which is not the rectangle the placeholder
+        // is drawn in — the two differ by whatever safe area the container has already
+        // spent, and on a short window that difference is a tenth of the band.
         //
-        // Positioning against the band's own resolved height is exact at every window
-        // shape, and it is the rectangle the eye measures the block against: from the
-        // top of the window to the top of the input bar the block introduces.
+        // Measured on a 13" iPad in landscape with the keyboard docked, where the band
+        // from the top of the window to the input bar's glass is 471pt: the block's ink
+        // centred at 200.5pt against a band centre of 235.5pt — 35pt high. Positioning
+        // it against the band's own resolved height puts it at 237pt, 1.5pt off centre.
+        // The same 35pt is invisible in the ~1,300pt band of a portrait window, which is
+        // why this only ever read as an iPad defect, and portrait is unmoved by the fix.
         GeometryReader { proxy in
             VStack(spacing: 20) {
                 brandMark

@@ -19,10 +19,15 @@ landscape with the keyboard docked, or a Stage Manager half-height — the
 [[pre-anything Home]]'s block (the [[Brand mark]], "Start typing", the
 [[Hint line]]) sat visibly high in the band above the input bar (F12). It was
 composed as `VStack { Spacer(); block; Spacer() }`, which centres the block in
-the height SwiftUI *proposes to the stack*. Measured on a 13" iPad in landscape
-that put the block ~40pt above the middle of the ~460pt band the placeholder is
-actually drawn in — a tenth of the band. In a portrait window's ~1,300pt band
-the same 40pt is 3%, which is why this only ever read as an iPad defect.
+the region the *stack* is laid out in — and that is not the rectangle the
+placeholder is drawn in, the two differing by whatever safe area the container
+has already spent.
+
+Measured on a 13" iPad in landscape with the keyboard docked, where the band
+from the top of the window to the input bar's glass is 471pt: the block's ink
+centred at 200.5pt against a band centre of 235.5pt, 35pt high — a thirteenth of
+the band. In a portrait window's ~1,300pt band the same 35pt is under 3%, which
+is why this only ever read as an iPad defect.
 
 ## Decision
 
@@ -81,9 +86,10 @@ but the window, is a table that stops matching.
 **The pre-anything Home is *placed*, not spaced.** The block's centre goes at
 the centre of the band the placeholder is drawn in, read from that band's own
 resolved height (`GeometryReader` + `.position`) instead of emerging from two
-`Spacer`s. This is exact at every window shape, because the rectangle it
-measures against is the rectangle the block is drawn in — which is the one
-thing the Spacer sandwich could not guarantee.
+`Spacer`s. The rectangle it measures against is then the rectangle the block is
+drawn in, which is the one thing the Spacer sandwich could not guarantee. On the
+window measured above the block lands at 237pt against a band centre of 235.5 —
+1.5pt off — and a portrait window, which was already right, does not move.
 
 ## Consequences
 
@@ -95,8 +101,15 @@ thing the Spacer sandwich could not guarantee.
   Favorite card never collapsing — and, because a keyboard on iPad belongs to
   the *display* rather than to the window, it re-runs ADR 0040's lift at each
   tile placed where the system puts it, including a top quadrant the keyboard
-  never reaches. The rest is a screenshot sweep on the simulator, attached to
-  the PR: a QA pass is evidence, not a test.
+  never reaches. The rest is a screenshot sweep on the simulator
+  (`docs/qa/268-window-sweep/`): a QA pass is evidence, not a test. It walks the
+  width axis end to end — full screen, the declared default, and down to Slide
+  Over's neighbourhood — and reaches the height axis through the
+  landscape-with-keyboard case, which is the short band F12 is about. It does
+  *not* include a quadrant: iPadOS snaps a dragged window to sizes of its own
+  choosing and would not take the height drags repeatably, which is also why no
+  scripted driver for it ships — a QA tool that works on one run in two is worse
+  than none. Quadrants are covered by the Core tile table instead.
 - F12's fix is App-side and has no Core rule, because there is no arithmetic in
   it worth pinning — "centre it in the band it is in" is one line. What *is*
   pinned is the acceptance statement, as a UI test that measures the block
