@@ -58,6 +58,7 @@ struct SystemView: View {
                 Text("Actions")
             }
         }
+        .managementColumn()
         .navigationTitle("System")
     }
 }

@@ -54,6 +54,7 @@ struct IndexedFoldersView: View {
                 Text("Indexed Folders")
             }
         }
+        .managementColumn()
         .navigationTitle("File Search")
         .toolbar {
             ToolbarItem(placement: .topBarTrailing) {

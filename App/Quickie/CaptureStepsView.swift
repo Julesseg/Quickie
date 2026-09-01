@@ -21,6 +21,7 @@ struct CaptureStepsPage<Step: CaptureStepKind>: View {
             CaptureStepsSection<Step>(store: store)
         }
         .environment(\.editMode, .constant(.active))
+        .managementColumn()
         .navigationTitle(provider.displayName)
     }
 }

@@ -27,6 +27,17 @@ import Foundation
 /// progressive-blur bands under the breadcrumb and the Favorites band — still span the
 /// whole window, because a blur band that stopped at the column would draw the column's
 /// edges as two hard lines (ADR 0010: depth is the glass's job, not an outline's).
+///
+/// The pushed [[Management page]]s reuse this same cap rather than growing a second
+/// one (issue #266, audit finding F6): a `Form` row on a full-screen iPad put its
+/// label at one end of the window and its toggle at the other — the same eye-travel
+/// the column exists to end, on a surface where the two ends are a control and the
+/// word that says what it does. Nothing about those pages is decided here, because
+/// nothing about them is different: same width, same size-class switch, applied to
+/// the list rather than to the launcher's glass. What *is* different is where the
+/// full-bleed layer comes from — a management page has no backdrop behind it, so the
+/// App restates the list's own grouped background outside the clamp
+/// (`View.managementColumn()`).
 public enum CommandColumn {
     /// The window's horizontal size class, as this policy needs it — the App maps
     /// SwiftUI's `horizontalSizeClass` onto it, and an *unknown* class maps to
