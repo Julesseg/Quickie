@@ -23,6 +23,14 @@ import XCTest
 /// removed rather than left red — a test that can only ever fail measures the
 /// harness, not the launcher.
 ///
+/// The one exception, found by issue #267: **unmodified ↑/↓ do arrive**, because
+/// they are text-editing keys and so travel the text-input path that works. Bound
+/// on the focused search field (`InputBar.onKeyPress`) rather than app-wide, they
+/// drive the [[Highlighted result]] under XCUITest exactly as they do on a real
+/// keyboard — see `HighlightNavigationUITests`. That is consistent with everything
+/// below rather than a correction to it: the synthesized press reaches text input,
+/// and only text input.
+///
 /// What covers the feature instead:
 ///
 /// - **QuickieCore's `KeyCommandTests`** own every decision — which keys are

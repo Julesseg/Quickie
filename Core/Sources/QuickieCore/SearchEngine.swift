@@ -222,17 +222,22 @@ public struct SearchEngine {
         rows(for: query).map(\.action)
     }
 
-    /// The highlighted result row for `query` — the single best row, `rows[0]`,
-    /// rendered nearest the input and the thumb (CONTEXT.md → Highlighted result).
-    /// Pressing Enter runs exactly this row's main action, and its region drives the
-    /// app's seed-and-commit; an empty/whitespace query returns `nil`, the no-op
-    /// signal — on Home, Enter does nothing. A thin read over `rows(for:)` so the
-    /// selection rule lives in one place and can't drift from the list.
+    /// Where the **Highlighted result** starts for `query` — the single best row,
+    /// `rows[0]`, rendered nearest the input and the thumb (CONTEXT.md → Highlighted
+    /// result). Pressing Enter runs exactly this row's main action, and its region
+    /// drives the app's seed-and-commit; an empty/whitespace query returns `nil`, the
+    /// no-op signal — on Home, Enter does nothing. A thin read over `rows(for:)` so
+    /// the rule lives in one place and can't drift from the list.
+    ///
+    /// Only *starts*: a hardware ↑/↓ walks the highlight off rank 0 (issue #267), and
+    /// where it has walked to is `ResultSelection`'s, applied by the App over the
+    /// rows it is already rendering — the engine ranks, it does not select. Every
+    /// keystroke re-primes the best match, which is this row again.
     public func highlightedRow(for query: String) -> ResultRow? {
-        rows(for: query).first
+        ResultSelection.primed.highlightedRow(in: rows(for: query))
     }
 
-    /// The highlighted result's Action — the `action`-only projection of
+    /// The best row's Action — the `action`-only projection of
     /// `highlightedRow(for:)`, kept for callers that only need what Enter runs.
     public func highlighted(for query: String) -> Action? {
         highlightedRow(for: query)?.action

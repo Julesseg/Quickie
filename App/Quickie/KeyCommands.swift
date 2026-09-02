@@ -153,16 +153,26 @@ struct LauncherCommands: Commands {
 }
 
 /// The launcher's half of the keyboard loop: the commands and `esc` arriving off
-/// the router, and the frontmost flag the delegate reads back to decide whether to
-/// claim `esc` at all.
+/// the router, the frontmost flag the delegate reads back to decide whether to
+/// claim `esc` at all, and the keystroke that re-primes the [[Highlighted result]].
 ///
-/// One modifier rather than three because `RootView`'s chain sits near the
-/// compiler's type-checking budget.
+/// One modifier rather than four because `RootView`'s chain sits near the
+/// compiler's type-checking budget. ↑/↓ are the one part of the loop that is *not*
+/// here: they are bound on the input field itself (`InputBar`), where they arrive
+/// ahead of the text system rather than having to be taken back from it.
 struct KeyCommandHandling: ViewModifier {
     let router: KeyCommandRouter
     let isLauncherFrontmost: Bool
+    /// The live query. A keystroke re-ranks the results, so it re-arms the
+    /// [[Highlighted result]] on the best match (CONTEXT.md → Highlighted result):
+    /// the modifier watches the text and calls `onPrimeHighlight` when it moves.
+    /// It rides here, with the rest of the keyboard loop, rather than as one more
+    /// `onChange` on `RootView`'s chain — which sits *at* the compiler's
+    /// type-checking budget, close enough that adding one tips it over.
+    let primeHighlightOn: String
     let onCommand: (KeyCommand.Intent) -> Void
     let onEscape: () -> Void
+    let onPrimeHighlight: () -> Void
 
     func body(content: Content) -> some View {
         content
@@ -174,5 +184,6 @@ struct KeyCommandHandling: ViewModifier {
             .onChange(of: isLauncherFrontmost, initial: true) { _, frontmost in
                 router.isLauncherFrontmost = frontmost
             }
+            .onChange(of: primeHighlightOn) { _, _ in onPrimeHighlight() }
     }
 }

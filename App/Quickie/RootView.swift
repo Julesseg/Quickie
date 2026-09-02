@@ -182,6 +182,12 @@ struct RootView: View {
     @State private var deeplinkInbox = DeeplinkInbox.shared
 
     @State private var query = ""
+    /// Where the hardware arrow keys have walked the **Highlighted result**
+    /// (CONTEXT.md → Highlighted result; issue #267). `.primed` is the best match,
+    /// and every keystroke puts it back there — typing re-ranks the results, so it
+    /// re-arms rank 0 (the keyboard-loop modifier watches the query for it) — so a
+    /// touch-driven session never leaves this value.
+    @State private var highlight: ResultSelection = .primed
     /// Whether the **Search Files context** is active (CONTEXT.md → Search Files
     /// context; ADR 0014): entered by selecting the "Search Files" command row, it
     /// scopes the input to the filename index alone — a `[Search Files] ▸ …`
@@ -578,12 +584,18 @@ struct RootView: View {
                 disabledFolders: indexedFolders.disabledFolderIDs
             ).contextRows(for: query)
             : []
-        // The highlighted row (CONTEXT.md → Highlighted result): the file context's
-        // best row when scoped, else the engine's top row. Carried as a `ResultRow`
-        // so Enter's seed-and-commit keys off its region like a tap does.
-        let highlightedRow: ResultRow? = inFileSearch
-            ? fileResults.first
-            : (isHome ? nil : engine.highlightedRow(for: query))
+        // The rows on screen, built once: the file context's when scoped, the
+        // engine's otherwise, and none at all on Home. The highlight and the list
+        // read the *same* array, so the row Enter runs can never be a different row
+        // from the one drawn with the highlight's emphasis.
+        let resultRows: [ResultRow] = inFileSearch
+            ? fileResults
+            : (isHome ? [] : engine.rows(for: query))
+        // The highlighted row (CONTEXT.md → Highlighted result): rank 0 unless the
+        // arrow keys have walked the highlight elsewhere (issue #267). Carried as a
+        // `ResultRow` so Enter's seed-and-commit keys off its region like a tap does.
+        let highlightedRank: Int? = highlight.highlightedRank(in: resultRows.count)
+        let highlightedRow: ResultRow? = highlightedRank.map { resultRows[$0] }
         let highlighted = highlightedRow?.action
 
         NavigationStack(path: $path) {
@@ -634,7 +646,11 @@ struct RootView: View {
                         // A file row never rides the fallback region (a file is
                         // self-contained, not query-consuming), so it always opens
                         // verb-first — no region to thread through.
-                        FileSearchResultList(results: fileResults, onRun: { run($0) })
+                        FileSearchResultList(
+                            results: resultRows,
+                            highlightedRank: highlightedRank,
+                            onRun: { run($0) }
+                        )
                             .transition(captureMotion.edgeTransition(from: .bottom))
                     } else if isHome {
                         HomeView(
@@ -651,7 +667,8 @@ struct RootView: View {
                         .transition(captureMotion.edgeTransition(from: .bottom))
                     } else {
                         ResultListView(
-                            results: engine.rows(for: query),
+                            results: resultRows,
+                            highlightedRank: highlightedRank,
                             onRun: run,
                             isFavorite: { signals.isFavorite($0.id) },
                             canFavorite: { signals.canFavorite($0.id) },
@@ -783,6 +800,7 @@ struct RootView: View {
                                         placeholder: inFileSearch ? "Search files…" : "Type to search…",
                                         returnKey: highlighted?.returnKeyLabel ?? ReturnKeyLabel.none,
                                         onSubmit: { if let highlightedRow { run(highlightedRow) } },
+                                        onArrowKey: { moveHighlight($0, resultCount: resultRows.count) },
                                         glassNamespace: glassNamespace
                                     )
                                     // The clipboard paste chip belongs to Home, not the
@@ -913,8 +931,10 @@ struct RootView: View {
             .modifier(KeyCommandHandling(
                 router: keyCommands,
                 isLauncherFrontmost: isLauncherFrontmost,
+                primeHighlightOn: query,
                 onCommand: handleKeyCommand,
-                onEscape: handleEscape
+                onEscape: handleEscape,
+                onPrimeHighlight: { highlight = .primed }
             ))
             // Clear the search query the moment a capture takes over the screen —
             // for the authorized path this coincides with the session starting, so
@@ -1986,6 +2006,30 @@ struct RootView: View {
         case .ignored:
             break
         }
+    }
+
+    /// Walks the **Highlighted result** with ↑/↓ (CONTEXT.md → Highlighted result;
+    /// issue #267), returning whether the launcher **claimed** the key.
+    ///
+    /// Claiming and moving are one decision, taken here and nowhere else: a `false`
+    /// hands the key straight back to the field, where an arrow means what it always
+    /// means — move the caret through a wrapped query — and a second guard anywhere
+    /// else could report a key handled while doing nothing, which is a swallowed
+    /// keystroke. Whether there is anywhere to walk is Core's call
+    /// (`ResultSelection.claimsArrowKeys`); the launcher adds only the condition it
+    /// alone can answer, that it is the frontmost surface. Which way each arrow moves
+    /// through the *reversed* list, and that it stops at either end rather than
+    /// wrapping, is Core's too.
+    ///
+    /// Nothing else happens: moving the highlight is not running anything, so it
+    /// records no [[Frecency]] and fires no tactile beat. Return runs the row it
+    /// lands on, through the very same `run` a tap takes.
+    private func moveHighlight(_ key: ResultSelection.ArrowKey, resultCount: Int) -> Bool {
+        guard isLauncherFrontmost,
+              ResultSelection.claimsArrowKeys(resultCount: resultCount, isCapturing: capture.isActive)
+        else { return false }
+        highlight = highlight.moved(key, resultCount: resultCount)
+        return true
     }
 
     /// Dispatches an inbound `quickie://` **deeplink** (issue #120; ADR 0024) — the

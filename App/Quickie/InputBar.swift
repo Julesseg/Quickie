@@ -41,6 +41,11 @@ struct InputBar: View {
     var returnKey: ReturnKeyLabel = .none
     /// Runs the highlighted result's main action; a no-op when there is none.
     var onSubmit: () -> Void = {}
+    /// Walks the [[Highlighted result]] with ↑/↓ (CONTEXT.md → Highlighted result;
+    /// issue #267), returning whether the launcher **claimed** the key. `false`
+    /// hands it straight back to the field, where an arrow means what it always
+    /// means: move the caret through a wrapped query.
+    var onArrowKey: (ResultSelection.ArrowKey) -> Bool = { _ in false }
     /// The shared namespace the bottom glass surfaces morph within.
     var glassNamespace: Namespace.ID
 
@@ -192,6 +197,14 @@ struct InputBar: View {
             .focused(focused)
             .submitLabel(returnKey.submitLabel)
             .onSubmit(onSubmit)
+            // ↑/↓ walk the highlight (issue #267). Bound *on the field* rather than
+            // app-wide, because the field is the first responder the whole time the
+            // launcher is up: a key claimed anywhere else has to be taken back from
+            // the text input system, while here it arrives first and `.ignored`
+            // returns it. That is also what makes the claim conditional for free —
+            // with nowhere to walk, the key falls through to the caret untouched.
+            .onKeyPress(.upArrow) { onArrowKey(.up) ? .handled : .ignored }
+            .onKeyPress(.downArrow) { onArrowKey(.down) ? .handled : .ignored }
             .accessibilityIdentifier("search-input")
             // Autocorrect stays on: the field doubles as a thought-capture surface
             // ("Buy milk"), where system autocorrect helps more than it hurts, and

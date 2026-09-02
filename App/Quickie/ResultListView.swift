@@ -6,14 +6,20 @@ import QuickieCore
 /// scrolling away. We reverse the ranked array so rank 0 renders last (lowest),
 /// and anchor the scroll view to the bottom so it opens at the best match.
 ///
-/// `results[0]` is the **highlighted result** (CONTEXT.md → Highlighted result):
+/// One row is the **highlighted result** (CONTEXT.md → Highlighted result):
 /// rendered with distinct emphasis and a `⏎` + main-action-glyph hint so it reads
-/// as the default, since pressing Return runs exactly its main action.
+/// as the default, since pressing Return runs exactly its main action. It is rank 0
+/// until a hardware ↑/↓ walks it elsewhere (issue #267).
 struct ResultListView: View {
     /// The ranked rows to render (CONTEXT.md → Result list; issue #195): each an
     /// Action plus its region and Match highlight, so a row bolds why it surfaced and
     /// a tap knows whether it rides the fallback region.
     let results: [ResultRow]
+    /// Which rank wears the highlight — rank 0 unless the arrow keys have moved it,
+    /// `nil` when there is nothing to highlight. The launcher resolves it through
+    /// Core's `ResultSelection`, so the row drawn as the default and the row Return
+    /// runs are decided in one place.
+    var highlightedRank: Int? = 0
     let onRun: (ResultRow) -> Void
     /// Whether a row's Action is pinned — drives its Pin/Unpin menu label.
     let isFavorite: (Action) -> Bool
@@ -54,9 +60,10 @@ struct ResultListView: View {
                         // Rows are keyed by **rank**, not by the Action they show,
                         // so a keystroke that re-ranks the results swaps each slot's
                         // content in place instead of flying rows across the screen
-                        // — the highlighted slot (rank 0) never moves, its text just
-                        // changes. Only a change in *count* inserts or removes a
-                        // slot, and only that slot animates: its transition carries
+                        // — the bottom slot never moves, its text just changes (and
+                        // a keystroke re-arms the highlight there, so the highlight
+                        // does not move either). Only a change in *count* inserts or
+                        // removes a slot, and only that slot animates: its transition carries
                         // its own animation (Motion.swift), so the layout around it
                         // applies instantly.
                         ForEach(results.indices.reversed(), id: \.self) { rank in
@@ -65,7 +72,7 @@ struct ResultListView: View {
                             Button {
                                 onRun(row)
                             } label: {
-                                ActionRow(action: action, isHighlighted: rank == 0, match: row.match)
+                                ActionRow(action: action, isHighlighted: rank == highlightedRank, match: row.match)
                             }
                             .buttonStyle(.plain)
                             // A pointer crossing the list lights each row in the row's
@@ -111,6 +118,9 @@ struct ResultListView: View {
             .onScrollPhaseChange { _, phase in
                 onScrollActive(phase == .interacting || phase == .decelerating)
             }
+            // Keep a walked highlight visible (issue #267) — nothing at all while it
+            // sits on rank 0 at the bottom, which is every touch-driven change.
+            .keepsHighlightVisible(at: highlightedRank)
         }
         // Weak matches scroll up under the status bar; without a band the status
         // bar sits directly on row text and both turn unreadable. Anchored inside
@@ -118,6 +128,43 @@ struct ResultListView: View {
         // transition (`statusBarBleed`), like the Home Favorites band.
         .overlay(alignment: .top) {
             StatusBarBlurBand()
+        }
+    }
+}
+
+extension View {
+    /// Keeps the walked **Highlighted result** on screen (CONTEXT.md → Highlighted
+    /// result; issue #267). Applied to a result list's `ScrollView`, which it wraps
+    /// in the `ScrollViewReader` the scroll needs.
+    ///
+    /// Both reversed lists — the root Result list and the [[Search Files context]]'s
+    /// — key their rows by **rank**, so the rank *is* the scroll target, and both
+    /// need exactly this: one modifier rather than the same `ScrollViewReader` twice.
+    ///
+    /// `scrollTo` moves the minimum distance to bring the row into view, so it does
+    /// nothing at all while the highlighted row is already on screen — which is every
+    /// touch-driven change, where the highlight sits on rank 0 at the bottom. The
+    /// motion borrows `.inputFocus` from the budget (ADR 0010), the moment closest to
+    /// a keystroke, because that is what an arrow key is: the list must not lag the
+    /// hand holding the key down.
+    func keepsHighlightVisible(at rank: Int?) -> some View {
+        modifier(KeepsHighlightVisible(rank: rank))
+    }
+}
+
+private struct KeepsHighlightVisible: ViewModifier {
+    let rank: Int?
+
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+
+    func body(content: Content) -> some View {
+        ScrollViewReader { scroller in
+            content
+                .onChange(of: rank) { _, rank in
+                    guard let rank else { return }
+                    let motion = MotionPolicy(reduceMotion: reduceMotion).style(for: .inputFocus)
+                    withAnimation(motion.animation) { scroller.scrollTo(rank) }
+                }
         }
     }
 }
