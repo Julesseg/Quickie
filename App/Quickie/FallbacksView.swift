@@ -159,6 +159,7 @@ struct FallbacksView: View {
         // toggles stay interactive (they carry explicit button/toggle styles, not
         // row-selection taps).
         .environment(\.editMode, .constant(.active))
+        .managementColumn()
         .navigationTitle("Fallbacks")
     }
 

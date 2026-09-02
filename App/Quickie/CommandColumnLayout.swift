@@ -1,4 +1,5 @@
 import SwiftUI
+import UIKit
 import QuickieCore
 
 /// The launcher's **readable command column** (CONTEXT.md → Readable command column;
@@ -41,6 +42,35 @@ extension View {
     /// the screen edge on an iPhone (12pt for a result row's or the input bar's glass,
     /// 16pt for a breadcrumb's crumbs) and the relationship between them is unchanged.
     func commandColumn() -> some View { modifier(CommandColumnClamp()) }
+
+    /// Lays a pushed [[Management page]]'s `List`/`Form` out in the same readable
+    /// column (CONTEXT.md → Management page, Readable command column; ADR 0039;
+    /// issue #266) at regular width; a no-op at compact width.
+    ///
+    /// Apply it to the whole scroll view, not to a row: a grouped list owns the
+    /// margins between its rows and the edge it is handed, so narrowing the *list*
+    /// carries every row, header, footer and separator in with it and keeps them
+    /// related exactly as they are on an iPhone. Narrowing the rows instead would
+    /// leave the section insets measured against the window.
+    func managementColumn() -> some View { modifier(ManagementColumnClamp()) }
+}
+
+/// The [[Management page]] flavour of the clamp (issue #266, audit finding F6): the
+/// same column, plus the page's own background put back across the window.
+///
+/// A management page has no [[Living backdrop]] behind it — the list *is* the page's
+/// background, so clamping it alone would leave the two margins beside the column
+/// showing whatever the navigation container happens to paint. Restating the grouped
+/// background outside the clamp is the same division ADR 0039 already draws for the
+/// launcher: content clamps, the full-bleed layer behind it does not. It is the
+/// system colour a grouped `List` paints for itself, so at compact width the list
+/// covers it completely and the page is unchanged.
+private struct ManagementColumnClamp: ViewModifier {
+    func body(content: Content) -> some View {
+        content
+            .commandColumn()
+            .background(Color(uiColor: .systemGroupedBackground))
+    }
 }
 
 extension CommandColumn.SizeClass {

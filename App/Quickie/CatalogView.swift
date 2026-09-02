@@ -42,6 +42,7 @@ struct CatalogView: View {
                 }
             }
         }
+        .managementColumn()
         .navigationTitle("Browse catalog")
         .navigationBarTitleDisplayMode(.inline)
     }

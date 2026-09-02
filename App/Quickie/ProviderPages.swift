@@ -192,6 +192,7 @@ struct ProviderOptionsPage: View {
         Form {
             ProviderOptionsSection(provider: provider)
         }
+        .managementColumn()
         .navigationTitle(provider.displayName)
     }
 }

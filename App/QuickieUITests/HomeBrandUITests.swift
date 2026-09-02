@@ -76,4 +76,46 @@ final class HomeBrandUITests: XCTestCase {
         Thread.sleep(forTimeInterval: 9)
         XCTAssertEqual(hint.label, "Try 2+2", "the frozen line must never advance under test")
     }
+
+    /// The mark / instruction / hint block sits **centred in the band it is drawn in**
+    /// — from the top of the window to the top of the input bar it introduces (issue
+    /// #268, audit finding F12).
+    ///
+    /// The composition used to emerge from two `Spacer`s, which centre the block in the
+    /// height SwiftUI proposes rather than in the band it lands in; on a landscape iPad,
+    /// where a docked keyboard leaves only ~460pt above the bar, that put the block
+    /// ~40pt high — a tenth of the band. Asserted as the relationship rather than as a
+    /// coordinate, because the band is a different height on every device, in every
+    /// orientation, and with the keyboard up or down.
+    ///
+    /// The tolerance is real slack, not a fudge: the band's bottom is measured from the
+    /// input *field*, which sits inside the bar's own 10pt padding, and the block's ink
+    /// sits a few points off its layout box's centre because a 56pt symbol's box
+    /// carries descender space the glyph never uses. Both are small and fixed; the
+    /// drift this guards against is several times either.
+    @MainActor
+    func testThePlaceholderBlockIsCentredInTheBandAboveTheInputBar() throws {
+        let app = launchApp()
+
+        let placeholder = app.staticTexts["home-placeholder"]
+        XCTAssertTrue(placeholder.waitForExistence(timeout: 10), "the pre-anything Home should be showing")
+        let mark = app.descendants(matching: .any)["home-brand-mark"]
+        XCTAssertTrue(mark.waitForExistence(timeout: 5), "the brand mark should render above the placeholder")
+        let hint = app.staticTexts["home-hint"]
+        XCTAssertTrue(hint.waitForExistence(timeout: 5), "the Hint line should render below it")
+        let input = app.textFields["search-input"]
+        XCTAssertTrue(input.waitForExistence(timeout: 10), "the input bar the block introduces")
+
+        // The band: the top of the window down to the top of the input bar.
+        let band = app.frame.minY...input.frame.minY
+        let bandCentre = (band.lowerBound + band.upperBound) / 2
+        // The block: everything the eye reads as one group, mark through hint.
+        let blockCentre = (mark.frame.minY + hint.frame.maxY) / 2
+
+        XCTAssertEqual(
+            blockCentre, bandCentre, accuracy: 28,
+            "the pre-anything Home's block should sit centred between the window's top "
+                + "and the input bar, not drift toward one of them"
+        )
+    }
 }

@@ -253,8 +253,19 @@ struct FavoriteCard: View {
 /// the placeholder is the instruction and never changes; only the hint rotates.
 struct HomePlaceholder: View {
     var body: some View {
-        VStack {
-            Spacer()
+        // Composed by *placing* the block, not by pushing it around with two `Spacer`s
+        // (issue #268, audit finding F12). A Spacer sandwich centres the block in the
+        // region the *stack* is laid out in, which is not the rectangle the placeholder
+        // is drawn in — the two differ by whatever safe area the container has already
+        // spent, and on a short window that difference is a tenth of the band.
+        //
+        // Measured on a 13" iPad in landscape with the keyboard docked, where the band
+        // from the top of the window to the input bar's glass is 471pt: the block's ink
+        // centred at 200.5pt against a band centre of 235.5pt — 35pt high. Positioning
+        // it against the band's own resolved height puts it at 237pt, 1.5pt off centre.
+        // The same 35pt is invisible in the ~1,300pt band of a portrait window, which is
+        // why this only ever read as an iPad defect, and portrait is unmoved by the fix.
+        GeometryReader { proxy in
             VStack(spacing: 20) {
                 brandMark
                 VStack(spacing: 8) {
@@ -265,9 +276,9 @@ struct HomePlaceholder: View {
                     HintLineView()
                 }
             }
-            Spacer()
+            .frame(maxWidth: .infinity)
+            .position(x: proxy.size.width / 2, y: proxy.size.height / 2)
         }
-        .frame(maxWidth: .infinity)
     }
 
     /// The app icon's orbital Q, in the brand's trail ramp — the same symbol the

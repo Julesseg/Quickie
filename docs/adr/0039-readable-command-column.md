@@ -90,9 +90,24 @@ which is exactly the chrome ADR 0010 keeps out — depth is the glass's job.
 - Compact width is untouched, so the iPhone suite is the regression gate it
   always was; the iPad leg of the matrix (ADR 0038) is what covers the new
   branch, and `CommandColumnUITests` asserts the shared centre line on both.
+- The column is only half of what a window needs said about it: how *wide* a
+  surface lays out, but not how small or large the window may get. ADR 0041
+  supplies the other half and brackets this one — the declared floor sits under
+  the column and the declared default sits over it, so a window dragged across
+  its whole legal range only ever lands in one of the two layouts tested here.
 - Surfaces outside the launcher — the pushed [[Management page]]s, the editor
   sheets — are not covered here. They reuse this policy in their own tickets
-  (#266, #264) rather than growing a second width constant.
+  (#266, #264) rather than growing a second width constant. *(#266 has since
+  done exactly that for every pushed management page — the Settings hub, the
+  provider pages, Custom Actions, Fallbacks, Snippets, Shortcuts and a
+  shortcut's detail page, File Search, the Pile, the Catalog, and the Symbol &
+  Color page. The clamp rides the page's `List`/`Form`, not its rows, so the
+  grouped style's own margins are measured against the column instead of the
+  window; the one thing added is the full-bleed layer, which a management page
+  does not have a backdrop to supply — the App restates the list's grouped
+  background outside the clamp, exactly the "only content clamps" split above.
+  The editor sheets stay out: they present ~540pt wide, which is compact, and a
+  cap can only subtract.)*
 
 ## Considered options
 

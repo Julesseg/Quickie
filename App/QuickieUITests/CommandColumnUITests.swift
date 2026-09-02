@@ -208,6 +208,109 @@ final class CommandColumnUITests: XCTestCase {
         }
     }
 
+    // MARK: - The pushed Management pages inside the column (issue #266)
+
+    /// Asserts one management-page row lies in the readable column at regular width,
+    /// and still runs the width of the window at compact.
+    ///
+    /// A grouped `List`/`Form` keeps its own margins between a row and the edge it is
+    /// handed, and how wide those are is the platform's business, not this policy's —
+    /// so the assertion is **containment plus the centre line**, never an exact width.
+    /// What the finding was about (audit F6) is where a row's two ends are: containment
+    /// in the column is exactly the statement that a toggle can no longer sit a window
+    /// away from the words that name it.
+    @MainActor
+    private func assertLaysOutInTheColumn(
+        _ row: XCUIElement,
+        in window: CGRect,
+        _ what: String,
+        line: UInt = #line
+    ) {
+        XCTAssertEqual(
+            row.frame.midX, window.midX, accuracy: 1,
+            "\(what) should be centred in the window", line: line
+        )
+        if UIDevice.current.userInterfaceIdiom == .pad {
+            XCTAssertGreaterThanOrEqual(
+                row.frame.minX, window.midX - readableWidth / 2 - 1,
+                "\(what) should start inside the \(readableWidth)pt column", line: line
+            )
+            XCTAssertLessThanOrEqual(
+                row.frame.maxX, window.midX + readableWidth / 2 + 1,
+                "\(what) should end inside the \(readableWidth)pt column — a toggle "
+                    + "at the window's edge is the finding this ticket exists for",
+                line: line
+            )
+        } else {
+            // Compact width is unchanged: the row still runs the width of the window,
+            // less the grouped style's own margins, exactly as it always has.
+            XCTAssertGreaterThan(
+                row.frame.width, window.width - 64,
+                "at compact width \(what) must still span the window", line: line
+            )
+        }
+    }
+
+    /// The pushed [[Management page]]s share the launcher's column (audit finding F6):
+    /// a `Form` row on the Settings hub and a `List` row on the Custom Actions page
+    /// both lay out inside it, on the same centre line as the result row that got
+    /// there.
+    ///
+    /// Both page shapes are covered because both exist: the hub and a shortcut's
+    /// detail page are `Form`s, every provider page below them is a `List`. They go
+    /// through one modifier, so this is a check that the modifier is *applied*, which
+    /// is the only way this can regress.
+    @MainActor
+    func testManagementPageRowsLayOutInsideTheLauncherColumn() throws {
+        let app = launchApp()
+        let window = app.frame
+
+        let input = app.textFields["search-input"]
+        XCTAssertTrue(input.waitForExistence(timeout: 30), "bottom input should exist on launch")
+        input.tap()
+        input.typeText("settings")
+
+        let commandRow = app.buttons["builtin.settings"]
+        XCTAssertTrue(commandRow.waitForExistence(timeout: 10), "typing 'settings' surfaces its command row")
+        let launcherColumn = commandRow.frame
+        commandRow.tap()
+
+        // The hub is a `Form`. Its Clipboard prefill toggle is the finding in one
+        // element: SwiftUI exposes the whole row as the switch, so the row's frame is
+        // the distance between the label and the control the user has to connect.
+        let toggle = app.switches["settings-clipboard-prefill"]
+        XCTAssertTrue(toggle.waitForExistence(timeout: 10), "the Settings hub shows its Clipboard prefill toggle")
+        assertLaysOutInTheColumn(toggle, in: window, "a Settings toggle row")
+        XCTAssertEqual(
+            toggle.frame.midX, launcherColumn.midX, accuracy: 1,
+            "a management row and a result row should sit on the same centre line"
+        )
+        XCTAssertLessThanOrEqual(
+            toggle.frame.width, launcherColumn.width + 1,
+            "a management row must not run wider than the column the launcher lays out in"
+        )
+
+        // A navigation row on the same page: the chevron is the other end the finding
+        // is about. Type-agnostic, as `SettingsHubUITests` does — a `NavigationLink`
+        // row surfaces differently across OS versions.
+        let providerRow = app.descendants(matching: .any)["settings-provider-custom-actions"].firstMatch
+        XCTAssertTrue(providerRow.waitForExistence(timeout: 10), "the hub lists the Custom Actions provider")
+        // The Providers section sits below the app-level one, so on the shortest
+        // phone the row may need scrolling into reach before it can be tapped.
+        var swipes = 0
+        while !providerRow.isHittable && swipes < 4 {
+            app.swipeUp()
+            swipes += 1
+        }
+        assertLaysOutInTheColumn(providerRow, in: window, "a Settings navigation row")
+        providerRow.tap()
+
+        // …and the `List`-based provider page it pushes.
+        let catalogRow = app.descendants(matching: .any)["browse-catalog"].firstMatch
+        XCTAssertTrue(catalogRow.waitForExistence(timeout: 10), "the Custom Actions page shows the Browse catalog row")
+        assertLaysOutInTheColumn(catalogRow, in: window, "a Custom Actions row")
+    }
+
     /// The finding itself (audit F2): **one** pinned Favorite draws the same card as
     /// one of four, rather than a slab stretched across the empty slots beside it.
     ///

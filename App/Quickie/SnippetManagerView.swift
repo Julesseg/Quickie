@@ -71,6 +71,7 @@ struct SnippetManagerView: View {
                 }
             }
         }
+        .managementColumn()
         .navigationTitle("Snippets")
         .toolbar {
             ToolbarItem(placement: .topBarTrailing) {
