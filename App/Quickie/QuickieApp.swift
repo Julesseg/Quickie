@@ -1,5 +1,6 @@
 import SwiftUI
 import SwiftData
+import QuickieCore
 import QuickieStoreKit
 
 /// The app shell. Per ADR 0012 (zero-wall launch) there is no onboarding and
@@ -115,8 +116,28 @@ struct QuickieApp: App {
             // having to remember `.tint`.
             RootView(keyCommands: keyCommands)
                 .tint(.accentColor)
+                // The floor the window may not be dragged below (CONTEXT.md → Launcher
+                // window; ADR 0041; issue #268). Under iPadOS 26 every window is freely
+                // resizable — `UIRequiresFullScreen` is deprecated and ignored — so the
+                // smallest usable launcher is something the app has to *say*, and the
+                // scene's `.contentMinSize` resizability below is what turns saying it
+                // into a limit the drag stops at.
+                .frame(
+                    minWidth: LauncherWindow.minimumSize.width,
+                    minHeight: LauncherWindow.minimumSize.height
+                )
         }
         .modelContainer(container)
+        // What a fresh window opens at: the readable command column with a real margin
+        // on each side (ADR 0041). Wide enough to be regular width, so a new window
+        // shows the column rather than the iPhone layout on a 13" canvas.
+        .defaultSize(LauncherWindow.defaultSize)
+        // `.contentMinSize` rather than `.contentSize`: the window takes its *minimum*
+        // from the content above and stays freely resizable upward, which is the whole
+        // point — the launcher lays out at every size the system's tiling produces, and
+        // reverts non-destructively as the window is dragged back (ADR 0039's size-class
+        // switch is what makes the return trip free).
+        .windowResizability(.contentMinSize)
         // List the hardware-keyboard commands in the iPadOS 26 menu bar (CONTEXT.md
         // → Key command; issue #262) — the discoverability half. The binding half
         // rides the responder chain on the delegate above. The set is Core's; both
