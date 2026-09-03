@@ -65,4 +65,46 @@ struct HighlightedResultTests {
         // the outcome — Enter on the highlighted row starts the capture.
         #expect(Action.newReminder().returnKeyLabel == .go)
     }
+
+    // MARK: - The highlight the arrow keys moved (issue #267)
+
+    @Test("the highlight starts on the best row, as it always did")
+    func selectionStartsOnTheBestRow() {
+        // The engine ranks; it does not select. Its `highlightedRow` is where the
+        // highlight *starts* — rank 0 — and a primed selection over the same rows
+        // agrees with it, which is what makes typing's re-prime a no-op for anyone
+        // who never touches an arrow key.
+        let engine = engine()
+        let rows = engine.rows(for: "git")
+        #expect(engine.highlightedRow(for: "git")?.action.id == rows.first?.action.id)
+        #expect(ResultSelection.primed.highlightedRow(in: rows)?.action.id == rows.first?.action.id)
+    }
+
+    @Test("a moved selection highlights that row, and the ranking is untouched")
+    func movedSelectionHighlightsItsRow() {
+        let engine = engine()
+        let rows = engine.rows(for: "git")
+        #expect(rows.count > 1, "the fixture needs a second row to walk onto")
+        let moved = ResultSelection.primed.moved(.up, resultCount: rows.count)
+        #expect(moved.highlightedRow(in: rows)?.action.id == rows[1].action.id)
+        // Selection moves; ranking does not.
+        #expect(engine.rows(for: "git").map(\.action.id) == rows.map(\.action.id))
+    }
+
+    @Test("the Return-key label follows the highlight onto the moved row")
+    func returnKeyLabelFollowsTheMovedHighlight() {
+        // "git" ranks the GitHub link first and the web-search fallback beneath it,
+        // so walking the highlight up one row swaps Enter's meaning from Go to
+        // Search — the label is a property of the *highlighted* row, not of rank 0.
+        let rows = engine().rows(for: "git")
+        let moved = ResultSelection.primed.moved(.up, resultCount: rows.count)
+        #expect(ResultSelection.primed.highlightedRow(in: rows)?.action.returnKeyLabel == .go)
+        #expect(moved.highlightedRow(in: rows)?.action.returnKeyLabel == .search)
+    }
+
+    @Test("an empty query has no highlighted row however far the selection walked")
+    func emptyQueryIgnoresTheSelection() {
+        let moved = ResultSelection.primed.moved(.up, resultCount: 5)
+        #expect(moved.highlightedRow(in: engine().rows(for: "")) == nil)
+    }
 }

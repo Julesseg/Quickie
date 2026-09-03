@@ -115,13 +115,17 @@ private struct FileSearchBlur: View {
 /// The reversed, bottom-anchored list of file matches for the context — the same
 /// shape as the root Result list (best match nearest the thumb) but scoped to file
 /// rows and without the Favorite pin menu, since a dynamic file result isn't a
-/// pinnable catalog entry. The highlighted row (`results[0]`) reads as the default
-/// so Enter opens it.
+/// pinnable catalog entry. The highlighted row reads as the default so Enter opens
+/// it — rank 0 until a hardware ↑/↓ walks it elsewhere (issue #267), exactly as in
+/// the root list: the context borrows the list, so it borrows its keyboard loop.
 struct FileSearchResultList: View {
     /// The context's file rows (CONTEXT.md → Search Files context; issue #195): each
     /// carries its Match highlight so a filename hit bolds identically to the inline
     /// rows the engine returns.
     let results: [ResultRow]
+    /// Which rank wears the highlight, resolved through Core's `ResultSelection` by
+    /// the launcher — `nil` when there is nothing to highlight.
+    var highlightedRank: Int? = 0
     let onRun: (Action) -> Void
 
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
@@ -148,7 +152,7 @@ struct FileSearchResultList: View {
                             Button {
                                 onRun(action)
                             } label: {
-                                ActionRow(action: action, isHighlighted: rank == 0, match: row.match)
+                                ActionRow(action: action, isHighlighted: rank == highlightedRank, match: row.match)
                             }
                             .buttonStyle(.plain)
                             // Same rows, same pointer treatment as the root list
@@ -166,6 +170,8 @@ struct FileSearchResultList: View {
                 .frame(maxWidth: .infinity, minHeight: viewport.size.height, alignment: .bottom)
             }
             .defaultScrollAnchor(.bottom)
+            // Keep a walked highlight visible, exactly as the root list does.
+            .keepsHighlightVisible(at: highlightedRank)
         }
     }
 }
