@@ -121,15 +121,30 @@ cards share, and the launcher reads as one family in two layers: the glass
 floats, the cards sit. Text, the [[Match highlight]] bolding, the alias pill
 and the caption are at full contrast in both appearances.
 
-**Amended during #288:** "one step" is not the same *lightness* step in each
-appearance, and taking it as one shipped a light row that read as a white slab
-on a lavender field. Against the near-black mesh there is a whole range to lift
-into; against the near-white wash there is almost none, so an equal lift lands
-on white and the row leaves the purple axis altogether — half the chroma of its
-own field. What is held equal instead is the **separation** the eye actually
-reads: each row now sits about 1.22:1 off the mesh average behind it, which is
-what the dark row always had. On light that is a much smaller lift, and the row
-stays purple.
+**Amended during #288.** "One step up the axis" turned out to describe dark
+only. Lightness is not evenly available: against the near-black mesh there is a
+whole range to lift into, against the near-white wash there is almost none, so
+an equal lift lands on white — and the light rows shipped as white slabs on a
+lavender field, carrying half their own field's chroma. Two corrections were
+tried on device against the four candidates the prototype's switch could still
+render: re-picking the light colour to match dark's *separation* was measurably
+right and visibly not enough, because the row was still bleaching away from the
+field rather than belonging to it.
+
+What ships instead is that **the two appearances relate to the backdrop
+differently, on purpose**: dark *lifts* (`rgb(40,28,78)`, near-opaque at 0.94),
+light *blends* (`rgb(232,225,252)` at **0.5**, so the wash is half of what a row
+is made of). The tint keeps the row purple; the transparency keeps it part of
+the gradient. The separation lands near 1.11:1 on light against dark's 1.22:1 —
+a pale field needs less to stay legible.
+
+The cost is named rather than hidden: a half-transparent row picks up the mesh's
+**drift**, so on [[Home]] a light Recent row drifts with the backdrop. That is
+what the glass rows did before this ADR took their blur away, and ADR 0034
+freezes the drift the moment a query exists — so no [[Result list]] row is ever
+read over a moving fill. Rejected alongside it: a light row *deeper* than the
+wash, which blended best of all but inverts "a card lifts off the field" and
+made the chrome the brightest thing on screen.
 
 - The **system material** lost because it is two different things: in light it
   is indistinguishable from the flat fill (a blur behind a near-white card

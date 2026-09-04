@@ -8,8 +8,10 @@ import SwiftUI
 /// A row is *content*, not chrome: it scrolls, and it carries text the user reads.
 /// So it is not Liquid Glass — the glass stays on the bars, buttons and chips that
 /// float over content and refract it — and it is not a blurring material either.
-/// It is one opaque-ish colour a step up the brand's purple axis from the [[Living
-/// backdrop]] behind it, so a row reads as a card lifted off the field.
+/// It is one flat colour on the brand's purple axis, near-opaque over the dark
+/// mesh and half-transparent over the light wash, so a row reads as part of the
+/// [[Living backdrop]] rather than as a slab laid over it. `QuickieBrand.rowFill`
+/// carries the values and the reason the two appearances differ.
 ///
 /// A modifier rather than a `.background` at each call site, for the same reason
 /// `pointerHover(in:)` is one: the *value* is what has to be shared. ADR 0042 turns
