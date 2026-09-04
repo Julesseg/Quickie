@@ -105,3 +105,55 @@ already moved onto the row.
   nor the legibility argument applies to it.
 - **Pick the fill in this ADR.** Rejected: every candidate is cheap to build
   and impossible to judge on paper against a purple mesh in two appearances.
+
+## Verdict (prototype #286)
+
+**Rows wear a flat adaptive fill (b); the Highlighted result wears a gold
+edge light (ii).** Judged on a 13" iPad Pro and an iPhone 17 Pro, light and
+dark, across Home, a ranked list, a long list and a calculator result, with
+the hero filmed settling after typing. Evidence: branch
+`prototype/row-material`, `row-material-report/index.html`. Implementation:
+#288.
+
+*Row treatment.* The flat fill is one step up the purple axis in each
+appearance (ADR 0033), so a row keeps the pill the input bar and the Favorites
+cards share, and the launcher reads as one family in two layers: the glass
+floats, the cards sit. Text, the [[Match highlight]] bolding, the alias pill
+and the caption are at full contrast in both appearances.
+
+- The **system material** lost because it is two different things: in light it
+  is indistinguishable from the flat fill (a blur behind a near-white card
+  blurs a near-white wash), and in dark it desaturates every row to neutral
+  grey, taking the purple field off the one surface the eye reads. It also
+  costs a blur per row for a look the fill gives for free.
+- **Bare rows over a hairline** lost in dark: on the near-black mesh the
+  hairline barely registers, the rows lose their shape, the list reads as
+  floating text, and the hero, now the only row with a fill, reads as an
+  orphan pill. The [[Pointer hover]] and the long-press highlight both need a
+  shape to light.
+
+*Hero treatment.* The ring keeps gold at full opacity in a 1.5pt edge with a
+soft halo. It reads as light in both appearances and both families, the hero's
+own fill stays clean so its text contrast equals its neighbours', and ADR
+0034's swing-then-settle survives as a bright point travelling the edge. It
+carries from across the screen because gold is the only warm hue on the
+screen. ADR 0034 records a circling gold border that "never reliably drew over
+the row's Liquid Glass"; over a flat card it draws every time. That failure
+was the glass's.
+
+- The **gold-tinted fill** was the best of the three in light and failed in
+  dark on every row treatment: gold and purple are near-complements, so any
+  partial-alpha gold over the purple card mixes to mauve, and the hero reads
+  as a stained row rather than a lit one, with the slide a brownish smear.
+- The **stronger fill with no shimmer** is the same stain, larger, in both
+  appearances, and drops ADR 0034's motion for nothing, since the ⏎ hint was
+  already on every hero.
+
+*Also found.* With the lifted preview removed, the system's in-place
+long-press highlight lifts the pressed flat row at full width and contrast
+while the rest dims: it reads, so the preview can go. The preview is also
+`ContextMenuPresence`'s only signal, so the implementation must hook the
+menu's presence elsewhere first. Rows leaving the `GlassEffectContainer`
+changed nothing visible on a keystroke. Pointer hover was not exercised
+(nothing in `simctl` or XCUITest drives a pointer); the shape is unchanged,
+so the highlight should be, and #288 checks it on hardware.
