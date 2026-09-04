@@ -92,18 +92,28 @@ enum QuickieBrand {
     /// `accent` itself lives under.
     static var accentWash: Color { accent.opacity(0.12) }
 
-    /// The **row material** (ADR 0042, values chosen by prototype #286): the flat
-    /// adaptive fill every list row draws once Liquid Glass leaves the content
-    /// layer — the [[Result list]]'s rows, Home's Recent rows, the [[Search Files
-    /// context]]'s rows and a capture's choice rows. An opaque-ish rounded rect one
-    /// step *up* the brand's purple axis (ADR 0033) from the [[Living backdrop]]
-    /// behind it: one step lighter than the mesh on dark, one step lighter than the
-    /// wash on light, so a row reads as a card lifted off the field rather than as
-    /// a hole cut in it. No blur — that is the whole point of ADR 0042.
+    /// The **row material** (ADR 0042, chosen by prototype #286): the flat adaptive
+    /// fill every list row draws once Liquid Glass leaves the content layer — the
+    /// [[Result list]]'s rows, Home's Recent rows, the [[Search Files context]]'s
+    /// rows and a capture's choice rows. An opaque-ish rounded rect one step *up*
+    /// the brand's purple axis (ADR 0033) from the [[Living backdrop]] behind it, so
+    /// a row reads as a card lifted off the field rather than as a hole cut in it.
+    /// No blur — that is the whole point of ADR 0042.
     ///
     /// Not quite opaque (alpha 0.94): the backdrop still shows *through* a row
     /// faintly, so the field colour carries across the list and the rows do not
     /// read as a slab pasted over it. Far short of glass, which refracts.
+    ///
+    /// **The step is measured, not eyeballed, and it is not the same step in each
+    /// appearance.** "One step lighter" is a lightness instruction, and lightness is
+    /// not where the eye reads separation: against a near-black mesh there is a
+    /// whole range to lift into, but against a near-white wash there is almost none,
+    /// so the same lift lands on white — the row stops being purple, and a white
+    /// slab on a lavender field is a clash rather than a card. So what is held equal
+    /// across the two is the **separation** between row and field: each row sits
+    /// about 1.22:1 off the mesh average behind it. On dark that is `rgb(40,28,78)`,
+    /// a clear lift; on light it is `rgb(235,229,251)`, a much smaller one that
+    /// keeps twice the chroma the near-white first shipped with (issue #288 review).
     ///
     /// Like the mesh and the bloom, this is a value the icon has no opinion about
     /// — the icon contains no row — so it is built to ADR 0042's rule rather than
@@ -114,7 +124,7 @@ enum QuickieBrand {
         Color(uiColor: UIColor { traits in
             traits.userInterfaceStyle == .dark
                 ? UIColor(red: 40 / 255, green: 28 / 255, blue: 78 / 255, alpha: 0.94)
-                : UIColor(red: 247 / 255, green: 244 / 255, blue: 255 / 255, alpha: 0.94)
+                : UIColor(red: 235 / 255, green: 229 / 255, blue: 251 / 255, alpha: 0.94)
         })
     }
 
