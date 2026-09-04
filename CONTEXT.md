@@ -17,7 +17,7 @@ A one-shot action reached from the row's long-press menu — the *same* menu tha
 _Avoid_: Context action, more actions
 
 **Result list**:
-The single, reversed (bottom-anchored, best match nearest the input/thumb) list shown while typing. Composed of: fuzzy name-matches over Actions, type-triggered results injected with boosted rank by Dynamic Providers (e.g. a math result on top), and Fallback Actions that consume the raw input text as content. All appear as ranked rows; nothing essential is hidden behind a gesture.
+The single, reversed (bottom-anchored, best match nearest the input/thumb) list shown while typing. Composed of: fuzzy name-matches over Actions, type-triggered results injected with boosted rank by Dynamic Providers (e.g. a math result on top), and Fallback Actions that consume the raw input text as content. All appear as ranked rows; nothing essential is hidden behind a gesture. Its rows are **content, not chrome**: things to read and pick from, so they do not wear the Liquid Glass the input bar, the [[Shelf]] and the [[Favorites grid]] float in (ADR 0042) — the same holds for [[Home]]'s Recent rows, the [[Search Files context]]'s rows and a capture's choice rows, which are the same list in other clothes.
 _Avoid_: Results, suggestions, search results
 
 **Settings**:
@@ -205,7 +205,7 @@ The empty-query state shown the instant the app opens: the Clipboard prefill chi
 _Avoid_: Landing, start screen, default view
 
 **Living backdrop**:
-The surface the Liquid Glass chrome refracts (ADR 0010): a subtle purple mesh gradient, adaptive to light/dark, that drifts very slowly on [[Home]] and stands still the moment a query exists — alive at rest, calm in use (ADR 0034). Static under Reduce Motion and Low Power Mode. Also hosts the [[Highlighted result]]'s gold hero glow, since glows are backdrop content the glass refracts, never overlaid blur.
+The field the whole launcher sits on, and the thing its Liquid Glass chrome — the input bar, the [[Shelf]], the Clipboard prefill chip, the [[Favorites grid]] — refracts (ADR 0010): a subtle purple mesh gradient, adaptive to light/dark, that drifts very slowly on [[Home]] and stands still the moment a query exists — alive at rest, calm in use (ADR 0034). Static under Reduce Motion and Low Power Mode. The [[Highlighted result]]'s gold hero glow is **not** backdrop content: it belongs to the highlighted row and is clipped to it, because a glow behind the list bleeds behind the neighbouring rows.
 _Avoid_: Wallpaper, animated background, quiet backdrop (the pre-living static gradient it replaces)
 
 **Readable command column**:
