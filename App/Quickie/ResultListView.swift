@@ -449,53 +449,74 @@ extension View {
         toggle: @escaping () -> Void,
         @ViewBuilder preview: () -> Preview
     ) -> some View {
-        contextMenu {
+        // PROTOTYPE (#286): `-proto-plain-menu` drops the lifted preview so the
+        // system's plain in-place highlight can be judged on a non-glass row.
+        // (The preview is also `ContextMenuPresence`'s signal, so the keyboard
+        // lift is not held under a plain menu — irrelevant to a screenshot.)
+        Group {
+            if RowMaterialPrototype.plainMenu {
+                contextMenu {
+                    prototypeMenuItems(title: title, secondaryActions: secondaryActions, onSecondaryAction: onSecondaryAction, isFavorite: isFavorite, pinnable: pinnable, canPin: canPin, toggle: toggle)
+                }
+            } else {
+                contextMenu {
+                    prototypeMenuItems(title: title, secondaryActions: secondaryActions, onSecondaryAction: onSecondaryAction, isFavorite: isFavorite, pinnable: pinnable, canPin: canPin, toggle: toggle)
+                } preview: {
+                    preview()
+                        .onAppear { ContextMenuPresence.shared.menuAppeared() }
+                        .onDisappear { ContextMenuPresence.shared.menuDisappeared() }
+                }
+            }
+        }
+    }
+
+    @ViewBuilder
+    private func prototypeMenuItems(
+        title: String?,
+        secondaryActions: [SecondaryActionKind],
+        onSecondaryAction: @escaping (SecondaryActionKind) -> Void,
+        isFavorite: Bool,
+        pinnable: Bool,
+        canPin: Bool,
+        toggle: @escaping () -> Void
+    ) -> some View {
             if let title {
-                Text(title)
-                // Separated from the verbs below only when there are verbs: a menu
-                // that is nothing but the title (a shelved "Save for later", whose
-                // deeplink is withheld and which offers no pin) must not open with a
-                // rule under a single line.
-                if !secondaryActions.isEmpty || pinnable {
-                    Divider()
-                }
+            Text(title)
+            // Separated from the verbs below only when there are verbs: a menu
+            // that is nothing but the title (a shelved "Save for later", whose
+            // deeplink is withheld and which offers no pin) must not open with a
+            // rule under a single line.
+            if !secondaryActions.isEmpty || pinnable {
+                Divider()
             }
-            ForEach(secondaryActions, id: \.self) { kind in
-                Button {
-                    onSecondaryAction(kind)
-                } label: {
-                    Label(kind.menuTitle, systemImage: kind.menuSymbol)
-                }
-                // No explicit accessibilityIdentifier: it would override the
-                // label-based lookup XCUITest uses (`app.buttons["Copy"]`), just as
-                // the Pin item is found by its "Pin as Favorite" label. The verb's
-                // menu title *is* its stable identifier.
+        }
+        ForEach(secondaryActions, id: \.self) { kind in
+            Button {
+                onSecondaryAction(kind)
+            } label: {
+                Label(kind.menuTitle, systemImage: kind.menuSymbol)
             }
-            if pinnable {
-                // A visual break between the content verbs and the pin affordance,
-                // only when there are content verbs to separate.
-                if !secondaryActions.isEmpty {
-                    Divider()
-                }
-                Button {
-                    toggle()
-                } label: {
-                    Label(isFavorite ? "Unpin Favorite" : "Pin as Favorite",
-                          systemImage: isFavorite ? "star.slash" : "star")
-                }
-                .disabled(!isFavorite && !canPin)
-                if !isFavorite && !canPin {
-                    Text("Favorites are full (max \(SignalsStore.maxFavorites)). Unpin one first.")
-                }
+            // No explicit accessibilityIdentifier: it would override the
+            // label-based lookup XCUITest uses (`app.buttons["Copy"]`), just as
+            // the Pin item is found by its "Pin as Favorite" label. The verb's
+            // menu title *is* its stable identifier.
+        }
+        if pinnable {
+            // A visual break between the content verbs and the pin affordance,
+            // only when there are content verbs to separate.
+            if !secondaryActions.isEmpty {
+                Divider()
             }
-        } preview: {
-            // The preview exists exactly as long as the menu does, which makes it
-            // the app's only public signal that a menu is up — and the bottom
-            // bar's keyboard lift needs that signal to tell a menu-driven keyboard
-            // drop from a real dismissal (see `ContextMenuPresence`).
-            preview()
-                .onAppear { ContextMenuPresence.shared.menuAppeared() }
-                .onDisappear { ContextMenuPresence.shared.menuDisappeared() }
+            Button {
+                toggle()
+            } label: {
+                Label(isFavorite ? "Unpin Favorite" : "Pin as Favorite",
+                      systemImage: isFavorite ? "star.slash" : "star")
+            }
+            .disabled(!isFavorite && !canPin)
+            if !isFavorite && !canPin {
+                Text("Favorites are full (max \(SignalsStore.maxFavorites)). Unpin one first.")
+            }
         }
     }
 }

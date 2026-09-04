@@ -1,0 +1,22 @@
+<p><strong>Row treatment: (b) flat adaptive fill. Hero treatment: (ii) edge / ring light.</strong> Neither is a compromise pick — each wins on both families and both appearances, and the runners-up lose for reasons that show in the frames below rather than on paper.</p>
+
+<h3>Why (b) flat fill</h3>
+<ul>
+<li><strong>(d) system material</strong> is two different things in the two appearances. In light it is indistinguishable from the flat fill — a blur behind a near-white card blurs a near-white wash, so there is nothing to see through it — and in dark it desaturates every row to neutral grey: the purple field disappears from the one surface the eye actually reads, and the list looks like any other app's. It also costs a blur pass per row (~15 on a long list) for a look the flat fill produces for free.</li>
+<li><strong>(a) bare + hairline</strong> is the quietest option in light and the worst in dark: on the near-black mesh the hairline barely registers, the rows lose their shape entirely, the list reads as floating text, and the hero — now the only row with a fill — reads as an orphan pill rather than one row of a stack singled out. The pointer hover and the long-press highlight both need a shape to light, and bare gives them none.</li>
+<li><strong>(b) flat</strong> is one step up the purple axis in each appearance (ADR 0033), so the rows keep the pill the input bar and the Favorites cards share and the launcher still reads as one family — but as two <em>layers</em> now: the glass floats, the cards sit. Text is at full contrast in both appearances, the Match highlight bolding, alias pill and caption all read, and a Home Recent row and a result row are the same card, so the first keystroke does not flip material.</li>
+</ul>
+
+<h3>Why (ii) ring light</h3>
+<ul>
+<li><strong>(i) gold fill + slide</strong> is the nicest of the three in light — a warm cream band — and fails in dark, on every row treatment: gold and purple are near-complements, so any partial-alpha gold over the purple card mixes to mauve/brown (0.14 gold over the dark fill lands near rgb(70,52,78)). The hero reads as a stained row, not a lit one, and the slide becomes a brownish smear moving across it. The only way to keep gold <em>gold</em> on a purple card is full opacity, which is what a stroke is.</li>
+<li><strong>(iii) strong fill, no shimmer</strong> is the same stain, larger, in both appearances (dusty rose in dark) — and it throws ADR 0034's swing-then-settle away for nothing, since the ⏎ hint was already on every hero.</li>
+<li><strong>(ii) ring</strong> keeps gold at full opacity in a 1.5pt edge with a soft halo. It reads as light in both appearances and both families; the row's own fill stays clean, so the hero's text contrast equals its neighbours'; and the swing survives as a bright point travelling the edge (the clips). It reads from across the screen because gold is the only warm hue on the screen (ADR 0033's budget doing its job). ADR 0034 records that a circling gold border "never reliably drew over the row's Liquid Glass" — over a flat card it draws every time. That failure was the glass's, not the ring's.</li>
+</ul>
+
+<h3>Also found</h3>
+<ul>
+<li><strong>The lifted long-press preview can go.</strong> With <code>-proto-plain-menu</code> (no <code>preview:</code>), the system's in-place highlight lifts the pressed flat row at full width and full contrast while the rest dims — it reads. The preview is currently also <code>ContextMenuPresence</code>'s only signal, so the implementation must find the menu another appear/disappear hook before removing it.</li>
+<li><strong>Keystroke churn</strong>: nothing visible changed once the rows left the <code>GlassEffectContainer</code>; the flag stays for the chrome's morphs, as ADR 0042 already says.</li>
+<li><strong>Not verified here</strong>: pointer hover on iPad (no pointer in <code>simctl</code>/XCUITest) — the shape is unchanged, so the highlight should be too, but the implementation ticket should check it on hardware.</li>
+</ul>

@@ -76,6 +76,7 @@ enum RowMaterialPrototype {
     )
 
     static let showsBadge = !arguments.contains("-proto-no-badge")
+    static let plainMenu = arguments.contains("-proto-plain-menu")
     static let seededQuery = value(after: "-proto-seed-query")
     static let autotypeQuery = value(after: "-proto-autotype")
 

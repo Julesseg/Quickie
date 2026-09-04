@@ -42,7 +42,7 @@ def grid(device, appearance, max_w):
     for row, row_label in ROWS:
         out.append(f"<h4>{html.escape(row_label)}</h4><div class='strip'>")
         for state, state_label in STATES:
-            out.append(fig(f"{IMG}/{device}/{appearance}/{row}-fill-{state}.png", state_label, max_w))
+            out.append(fig(f"{IMG}/{device}/{appearance}/{row}-fill-{state}.jpg", state_label, max_w))
         out.append("</div>")
     return "".join(out)
 
@@ -52,14 +52,14 @@ def hero_grid(device, appearance, max_w):
     for row, row_label in ROWS:
         out.append(f"<h4>{html.escape(row_label)}</h4><div class='strip'>")
         for hero, hero_label in HEROES:
-            out.append(fig(f"{IMG}/{device}/{appearance}/{row}-{hero}-ranked.png", hero_label, max_w))
+            out.append(fig(f"{IMG}/{device}/{appearance}/{row}-{hero}-ranked.jpg", hero_label, max_w))
         out.append("</div>")
     return "".join(out)
 
 
 def strips():
     out = []
-    for path in sorted(glob.glob(f"{VIDEO}/*-strip.png")):
+    for path in sorted(glob.glob(f"{VIDEO}/*-strip.jpg")):
         name = os.path.basename(path)[:-10]
         out.append(fig(path, f"{name}: 6s at 4 fps, left to right, top row then bottom", 1400))
     return "".join(out)
@@ -72,6 +72,7 @@ for device, dev_label, w in [("iphone", "iPhone 17 Pro", 300), ("ipad", "iPad Pr
     for appearance in ("light", "dark"):
         sections.append(f"<section><h2>{dev_label} · {appearance} · row treatments (hero held at i)</h2>{grid(device, appearance, w)}</section>")
         sections.append(f"<section><h2>{dev_label} · {appearance} · hero treatments (ranked list)</h2>{hero_grid(device, appearance, w)}</section>")
+sections.append(f"<section><h2>The long press (iPhone, dark, flat + ring)</h2><p class='note'>Left: today's lifted preview. Right: the plain in-place highlight with the preview removed (<code>-proto-plain-menu</code>).</p><div class='strip'>{fig(f'{IMG}/iphone/long-press/flat-ring-dark.jpg', 'lifted preview (ships today)', 300)}{fig(f'{IMG}/iphone/long-press/flat-ring-dark-plain.jpg', 'plain in-place highlight', 300)}</div></section>")
 sections.append(f"<section><h2>The hero settling after typing</h2><p class='note'>Frame strips from the clips in <code>video/</code>: the launcher autotypes “settings” one character every 220 ms, so the hero slot changes hands several times and the light settles ~2 s after the last keystroke.</p>{strips()}</section>")
 
 page = f"""<!doctype html><meta charset="utf-8"><title>#286 — dressing result rows without Liquid Glass</title>
