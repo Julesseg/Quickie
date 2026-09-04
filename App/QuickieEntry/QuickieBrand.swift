@@ -45,9 +45,9 @@ enum QuickieBrand {
 
     /// The icon's warm mass, the thing the comet orbits (`DOT_COLOR`). ADR 0033
     /// spends it in **exactly one place** — the Highlighted result's hero
-    /// treatment (#177): its soft gold glow that slides side to side while you type
-    /// and settles when you stop. It marks the app's center of gravity, and only
-    /// scarcity lets it keep meaning that.
+    /// treatment (#177): the ring around that row, whose bright point travels along
+    /// the edge while you type and settles when you stop (ADR 0042). It marks the
+    /// app's center of gravity, and only scarcity lets it keep meaning that.
     static let gold = Color(red: 255 / 255, green: 201 / 255, blue: 79 / 255)
 
     /// The icon field's deep purples, top and bottom (`BG_TOP` / `BG_BOTTOM`).
@@ -91,6 +91,32 @@ enum QuickieBrand {
     /// has no such asset, so it names this token — the same asset/token split the
     /// `accent` itself lives under.
     static var accentWash: Color { accent.opacity(0.12) }
+
+    /// The **row material** (ADR 0042, values chosen by prototype #286): the flat
+    /// adaptive fill every list row draws once Liquid Glass leaves the content
+    /// layer — the [[Result list]]'s rows, Home's Recent rows, the [[Search Files
+    /// context]]'s rows and a capture's choice rows. An opaque-ish rounded rect one
+    /// step *up* the brand's purple axis (ADR 0033) from the [[Living backdrop]]
+    /// behind it: one step lighter than the mesh on dark, one step lighter than the
+    /// wash on light, so a row reads as a card lifted off the field rather than as
+    /// a hole cut in it. No blur — that is the whole point of ADR 0042.
+    ///
+    /// Not quite opaque (alpha 0.94): the backdrop still shows *through* a row
+    /// faintly, so the field colour carries across the list and the rows do not
+    /// read as a slab pasted over it. Far short of glass, which refracts.
+    ///
+    /// Like the mesh and the bloom, this is a value the icon has no opinion about
+    /// — the icon contains no row — so it is built to ADR 0042's rule rather than
+    /// derived from the generator, and it lives in a `Color(uiColor:)` closure (not
+    /// the `static let … = Color(red:…)` shape) so `check-brand-assets.py` never
+    /// scans it as a drifted icon literal.
+    static var rowFill: Color {
+        Color(uiColor: UIColor { traits in
+            traits.userInterfaceStyle == .dark
+                ? UIColor(red: 40 / 255, green: 28 / 255, blue: 78 / 255, alpha: 0.94)
+                : UIColor(red: 247 / 255, green: 244 / 255, blue: 255 / 255, alpha: 0.94)
+        })
+    }
 
     /// The icon trail's color ramp — lavender whitening toward the release, top
     /// to bottom, where the arrow departs — for surfaces where SwiftUI styling

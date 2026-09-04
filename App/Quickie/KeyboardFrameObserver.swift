@@ -96,10 +96,11 @@ struct KeyboardFrameObserver: UIViewRepresentable {
                 bottomSafeArea: window.safeAreaInsets.bottom
             )
             let isLocal = note.userInfo?[UIResponder.keyboardIsLocalUserInfoKey] as? Bool ?? true
-            // Read *now*: by a later runloop turn the menu that caused this drop
-            // may already have closed. Nothing in the notification itself tells a
-            // menu-driven drop from a real dismissal — see `ContextMenuPresence`.
-            onKeyboardFrame?(geometry, isLocal, ContextMenuPresence.shared.isOpen)
+            // Ask *now*, inside the notification: nothing in it tells a
+            // menu-driven drop from a real dismissal, and by a later runloop turn
+            // the menu that caused this drop may already have closed. See
+            // `ContextMenuPresence`.
+            onKeyboardFrame?(geometry, isLocal, ContextMenuPresence.isOpen(in: window))
         }
 
         override func layoutSubviews() {

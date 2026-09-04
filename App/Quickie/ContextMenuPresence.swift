@@ -1,4 +1,4 @@
-import SwiftUI
+import UIKit
 
 /// Whether a row's long-press context menu is on screen right now.
 ///
@@ -11,30 +11,47 @@ import SwiftUI
 /// the inset so the list stays still under the menu (issue #58), and every other
 /// drop releases it so the bar returns to the window bottom (issue #261).
 ///
-/// The signal is the menu's own **preview** view, which SwiftUI instantiates
-/// when the menu displays and tears down when it dismisses — see
-/// `View.resultContextMenu`, the single place every menu in the app is built.
-/// A count rather than a flag: two rows can overlap by a frame during the
-/// hand-off from one menu to the next, and a plain bool would land on `false`.
+/// ## Asked of UIKit, not tracked by the app
 ///
-/// A shared instance because there is only ever one menu, and because the
-/// keyboard observer must read it from a UIKit notification rather than from
-/// SwiftUI's view graph — the same reason `refocusInput` asks UIKit directly
-/// instead of trusting `FocusState`.
+/// The signal used to be the menu's own **preview** view, which SwiftUI
+/// instantiated when the menu displayed and tore down when it dismissed. ADR 0042
+/// took the lifted preview away — it only ever existed because the system's
+/// in-place highlight did not read against translucent Liquid Glass rows, and a
+/// row is now a flat opaque material the highlight reads on — and SwiftUI offers
+/// no other callback for a `contextMenu`'s presentation.
+///
+/// So the question is put to UIKit instead, at the instant it is asked: a context
+/// menu is a **presented view controller**, and it is already presented by the
+/// time the keyboard's departure is posted. That ordering is the whole reason
+/// this shape was chosen over watching for the long press that opens the menu —
+/// which was tried, and loses the race: the press is only recognised *after* the
+/// keyboard has gone, often enough to be useless as a warning.
+///
+/// It also needs no state, no arming and no expiry. There is nothing to leak,
+/// nothing to leave stuck on, and nothing to keep in step with a menu that can be
+/// dismissed a dozen ways.
+///
+/// The one price is that the *kind* of presented controller is read from its class
+/// name, which is UIKit's private one. Nothing private is called — this is
+/// `type(of:)` on a value UIKit handed us — and it fails soft in the only
+/// direction that matters: a renamed class makes this answer `false`, which is
+/// the behaviour the app had before issue #58, not a crash. The name is matched
+/// loosely (any `…ContextMenu…`) so a variant spelling still lands.
 @MainActor
-final class ContextMenuPresence {
-    static let shared = ContextMenuPresence()
-
-    private var openCount = 0
-
-    /// Whether a context menu is currently displayed.
-    var isOpen: Bool { openCount > 0 }
-
-    func menuAppeared() {
-        openCount += 1
-    }
-
-    func menuDisappeared() {
-        openCount = max(0, openCount - 1)
+enum ContextMenuPresence {
+    /// Whether a context menu is presented anywhere above `window`'s root.
+    ///
+    /// The whole presentation chain is walked rather than just its first link: the
+    /// launcher presents editor and settings sheets, and a menu opened from inside
+    /// one is presented *on* it.
+    static func isOpen(in window: UIWindow) -> Bool {
+        var controller = window.rootViewController
+        while let presented = controller?.presentedViewController {
+            if String(describing: type(of: presented)).contains("ContextMenu") {
+                return true
+            }
+            controller = presented
+        }
+        return false
     }
 }

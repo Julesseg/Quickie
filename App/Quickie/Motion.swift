@@ -7,16 +7,19 @@ import QuickieCore
 /// tested there (ADR 0010); this file only translates each `MotionStyle` into an
 /// `Animation` and pairs it with the matching transition.
 extension MotionStyle {
-    /// Under UI test, collapse motion to instant (issue #79). The result list's
-    /// animated row insert/remove transitions — move+opacity inside a
-    /// `GlassEffectContainer` — driven at automation speed churn SwiftUI's
-    /// DisplayList view cache fast enough to trip an internal assertion
+    /// Under UI test, collapse motion to instant (issue #79). Animated
+    /// insert/remove transitions — move+opacity inside a `GlassEffectContainer`
+    /// — driven at automation speed churn SwiftUI's DisplayList view cache fast
+    /// enough to trip an internal assertion
     /// (`DisplayList.ViewUpdater.ViewCache.update` → `_assertionFailure`,
     /// `EXC_BREAKPOINT`), which flaked the XCUITest suite. Removing the
     /// transitions at the SwiftUI layer stops the churn without the crash that
     /// globally disabling UIKit animations (`setAnimationsEnabled(false)`) caused
     /// — that broke the very `performWithoutAnimation:` commit path this render
-    /// depends on. Read once; normal launches never pass the flag.
+    /// depends on. The result list's rows left that container when ADR 0042 took
+    /// their glass away, but the flag stays: the input bar and the paste chip still
+    /// morph inside one, and the flag is also what holds the [[Highlighted result]]'s
+    /// hero light static for the suite. Read once; normal launches never pass it.
     static let isInstantForUITesting =
         ProcessInfo.processInfo.arguments.contains("-uitest-instant-motion")
 

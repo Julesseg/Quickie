@@ -140,33 +140,33 @@ struct FileSearchResultList: View {
         // or out at the weak (top) end cannot shift the rows beneath it.
         GeometryReader { viewport in
             ScrollView {
-                GlassEffectContainer(spacing: 6) {
-                    VStack(spacing: 6) {
-                        // Rank-keyed slots, exactly like the root Result list: a
-                        // keystroke that re-filters swaps content in place, and only
-                        // a change in count animates a slot in or out — via the
-                        // transition's own animation, never the surrounding layout.
-                        ForEach(results.indices.reversed(), id: \.self) { rank in
-                            let row = results[rank]
-                            let action = row.action
-                            Button {
-                                onRun(action)
-                            } label: {
-                                ActionRow(action: action, isHighlighted: rank == highlightedRank, match: row.match)
-                            }
-                            .buttonStyle(.plain)
-                            // Same rows, same pointer treatment as the root list
-                            // (CONTEXT.md → Pointer hover).
-                            .pointerHover(in: ActionRow.shape)
-                            .accessibilityIdentifier(action.id)
-                            .transition(rowMotion.insertionTransition)
+                // No `GlassEffectContainer`, exactly like the root Result list:
+                // these rows are content and wear the flat fill (ADR 0042).
+                VStack(spacing: 6) {
+                    // Rank-keyed slots, exactly like the root Result list: a
+                    // keystroke that re-filters swaps content in place, and only
+                    // a change in count animates a slot in or out — via the
+                    // transition's own animation, never the surrounding layout.
+                    ForEach(results.indices.reversed(), id: \.self) { rank in
+                        let row = results[rank]
+                        let action = row.action
+                        Button {
+                            onRun(action)
+                        } label: {
+                            ActionRow(action: action, isHighlighted: rank == highlightedRank, match: row.match)
                         }
+                        .buttonStyle(.plain)
+                        // Same rows, same pointer treatment as the root list
+                        // (CONTEXT.md → Pointer hover).
+                        .pointerHover(in: ActionRow.shape)
+                        .accessibilityIdentifier(action.id)
+                        .transition(rowMotion.insertionTransition)
                     }
-                    // The same readable command column the root Result list uses
-                    // (ADR 0039) — the context borrows the list, so it borrows its
-                    // layout too.
-                    .commandColumn()
                 }
+                // The same readable command column the root Result list uses
+                // (ADR 0039) — the context borrows the list, so it borrows its
+                // layout too.
+                .commandColumn()
                 .frame(maxWidth: .infinity, minHeight: viewport.size.height, alignment: .bottom)
             }
             .defaultScrollAnchor(.bottom)

@@ -266,10 +266,10 @@ def badge_failures(literals):
 def gold_files():
     """The files that name the gold token, outside the module that defines it.
 
-    ADR 0033's budget is *one place*, not one mention: the hero treatment tints
-    the row's glass, draws a resting ring, and lights the moving arcs — three
-    honest references to gold, all in the one view that renders the Highlighted
-    result. So the unit counted is the file, not the line: a second *file* is the
+    ADR 0033's budget is *one place*, not one mention: the hero treatment draws a
+    ring, spills a halo outside it, and lights the point travelling along it —
+    three honest references to gold, all in the one view that renders the
+    Highlighted result. So the unit counted is the file, not the line: a second *file* is the
     second place the ADR forbids, while the treatment is free to spend gold as
     many times as one row needs.
 
