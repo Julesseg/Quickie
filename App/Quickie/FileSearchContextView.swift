@@ -140,7 +140,7 @@ struct FileSearchResultList: View {
         // or out at the weak (top) end cannot shift the rows beneath it.
         GeometryReader { viewport in
             ScrollView {
-                GlassEffectContainer(spacing: 6) {
+                Group { // PROTOTYPE (#286): no glass container
                     VStack(spacing: 6) {
                         // Rank-keyed slots, exactly like the root Result list: a
                         // keystroke that re-filters swaps content in place, and only

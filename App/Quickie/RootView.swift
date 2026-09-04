@@ -181,7 +181,8 @@ struct RootView: View {
     /// see one inbox.
     @State private var deeplinkInbox = DeeplinkInbox.shared
 
-    @State private var query = ""
+    // PROTOTYPE (#286): `-proto-seed-query <text>` starts with a query typed.
+    @State private var query = RowMaterialPrototype.seededQuery ?? ""
     /// Where the hardware arrow keys have walked the **Highlighted result**
     /// (CONTEXT.md → Highlighted result; issue #267). `.primed` is the best match,
     /// and every keystroke puts it back there — typing re-ranks the results, so it
@@ -683,6 +684,9 @@ struct RootView: View {
                 if let toast {
                     ConfirmationToast(toast: toast) { openToast(toast) }
                 }
+
+                // PROTOTYPE (#286): the material switcher and the autotyper.
+                RowMaterialPrototypeDriver(query: $query)
             }
             // The capture breadcrumb rides the top with a progressive blur, the
             // content sliding under it (issue #37). Shown only at the root and only

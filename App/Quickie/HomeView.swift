@@ -169,7 +169,8 @@ struct HomeView: View {
         VStack(alignment: .leading, spacing: 8) {
             sectionHeader("Recent")
                 .padding(.horizontal, 20)
-            GlassEffectContainer(spacing: 6) {
+            // PROTOTYPE (#286): Recent rows leave the glass container with the results.
+            Group {
                 VStack(spacing: 6) {
                     ForEach(content.frecent) { action in
                         Button {

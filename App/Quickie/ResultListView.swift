@@ -55,7 +55,8 @@ struct ResultListView: View {
             ScrollView {
                 // A single container so the neighbouring glass capsules blend and
                 // morph as one Liquid Glass surface rather than stacking flatly.
-                GlassEffectContainer(spacing: 6) {
+                // PROTOTYPE (#286): rows leave the `GlassEffectContainer`.
+                Group {
                     VStack(spacing: 6) {
                         // Rows are keyed by **rank**, not by the Action they show,
                         // so a keystroke that re-ranks the results swaps each slot's
@@ -338,135 +339,16 @@ struct ActionRow: View {
         // The overlay sits *before* `glassEffect`, so the glow is part of the row's
         // content and the glass renders over it — the light reads as lit within the
         // glass rather than a wash painted on top of it.
-        .overlay {
-            if isHighlighted {
-                HeroGlow(shape: Self.shape, heroID: action.id)
-            }
-        }
-        .glassEffect(.regular.interactive(), in: Self.shape)
+        // PROTOTYPE (#286): the glass and the glow it composited under are
+        // replaced by the switchable row dress. Geometry below is untouched.
+        .modifier(PrototypeRowDress(shape: Self.shape, isHighlighted: isHighlighted, heroID: action.id))
         .padding(.horizontal, 12)
         .contentShape(Self.shape)
         .accessibilityAddTraits(isHighlighted ? .isSelected : [])
     }
 }
 
-/// The Highlighted result's gold glow: a soft radial gold, clipped to the row, that
-/// **swings once when a new Action lands in the hero slot** and settles back to
-/// centre about a second later (issue #177). So the glow reads as announcing a new
-/// best match — the "alive at rest / calm in use" budget (ADR 0034) read the other
-/// way round: the one flicker of life is *tied to* the answer changing, and a run
-/// of keystrokes that keeps the same hero leaves the light at rest.
-///
-/// Motion is driven off `heroID`, not the query: a keystroke that *re-ranks* a new
-/// Action into the hero slot restarts the announce cycle from the top, and one that
-/// merely re-confirms the sitting hero does nothing at all. It degrades like the
-/// rest of the budget — under Reduce Motion and UI test the glow is simply static
-/// and centred, no swing, no timer.
-private struct HeroGlow: View {
-    var shape: RoundedRectangle
-    /// The Action this glow sits on; a change of occupant restarts the announce
-    /// cycle so the glow visibly greets the new best match.
-    var heroID: String
-
-    @Environment(\.accessibilityReduceMotion) private var reduceMotion
-    /// The glow's horizontal offset, animated between ∓`amplitude` while swinging.
-    @State private var swing: CGFloat = 0
-    /// The pending settle that ends the cycle, cancelled when a new hero restarts it.
-    @State private var settleTask: Task<Void, Never>?
-    /// The short delay that lets the glow glide to one extreme before the repeating
-    /// swing begins (see `stir`), cancelled if a new hero lands inside that window.
-    @State private var startTask: Task<Void, Never>?
-
-    /// The glow swings only when motion is allowed; otherwise it is a plain centred
-    /// radial with no animation and no timer (Reduce Motion, UI test).
-    private var animates: Bool { !reduceMotion && !MotionStyle.isInstantForUITesting }
-
-    /// How far the glow swings to each side of centre while typing. Tuned on the
-    /// simulator with a frame-by-frame pixel diff: at ±16 the drift of this soft,
-    /// 220-radius gradient changed row pixels by ~1/255 — running, but literally
-    /// imperceptible. The travel has to be a meaningful fraction of the row's width
-    /// for the light to read as *sliding*; at rest `swing == 0` it sits dead centre.
-    private let amplitude: CGFloat = 90
-
-    /// The gold's peak opacity: brighter mid-swing so the moving light is
-    /// unmistakably alive, easing back to the shipped resting wash as it settles.
-    /// Animated explicitly inside `stir`/settle (not via an `.animation(value:)`
-    /// modifier, which would also capture the offset in the same transaction and
-    /// clobber the settle's own 1s ease).
-    @State private var peakOpacity: CGFloat = 0.2
-
-    var body: some View {
-        RadialGradient(
-            colors: [QuickieBrand.gold.opacity(peakOpacity), .clear],
-            center: .center,
-            startRadius: 0,
-            endRadius: 150
-        )
-        // Oversize the gradient by the swing's reach: offset slides the whole view,
-        // and a row-sized one would drag a hard-edged uncovered strip in behind it
-        // (the gradient is still faintly gold at the row's edge, so the cut shows).
-        .padding(.horizontal, -amplitude)
-        .offset(x: swing)
-        // Keep the drifting glow inside the row — its bright centre slides, but the
-        // light never spills past the capsule onto a neighbour.
-        .clipShape(shape)
-        .allowsHitTesting(false)
-        // The first result list of a query *creates* this view (Home swaps to the
-        // result list), so no `onChange` fires for the first hero — the appear is
-        // its announcement.
-        .onAppear { stir() }
-        .onChange(of: heroID) { _, _ in restart() }
-        .onDisappear { settleTask?.cancel(); startTask?.cancel() }
-    }
-
-    /// The hero slot changed hands: kill the cycle in flight and begin a fresh one,
-    /// so the glow visibly re-announces the new best match.
-    private func restart() {
-        guard animates else { return }
-        startTask?.cancel()
-        settleTask?.cancel()
-        // No snap to centre: `stir`'s opening glide animates from wherever the old
-        // cycle left off, so the restart reads as the light changing course.
-        stir()
-    }
-
-    /// One announce cycle: glide to an extreme, swing across, and ease back to
-    /// centre about a second in — a single visible pass, not a loop that runs for
-    /// as long as typing does.
-    private func stir() {
-        guard animates else { return }
-        // `repeatForever(autoreverses:)` oscillates between the value it starts at
-        // and its target, so a *symmetric* swing about centre has to begin at one
-        // extreme. Glide there first (a soft ease from centre, no jump), then —
-        // once arrived — start the repeating leg that carries it across to the far
-        // side and back until the settle lands. Sequenced with a task rather than a
-        // delayed animation because two `withAnimation`s on the same value in one
-        // tick would just clobber each other (only the last target survives).
-        withAnimation(.easeInOut(duration: 0.3)) {
-            swing = -amplitude
-            peakOpacity = 0.32
-        }
-        startTask?.cancel()
-        startTask = Task { @MainActor in
-            try? await Task.sleep(for: .seconds(0.3))
-            if Task.isCancelled { return }
-            withAnimation(.easeInOut(duration: 0.6).repeatForever(autoreverses: true)) {
-                swing = amplitude
-            }
-        }
-        settleTask?.cancel()
-        settleTask = Task { @MainActor in
-            try? await Task.sleep(for: .seconds(1))
-            if Task.isCancelled { return }
-            // Replace the repeating animation with a single ease back to centre —
-            // the announcement takes about a second to come to rest.
-            withAnimation(.easeOut(duration: 1.0)) {
-                swing = 0
-                peakOpacity = 0.2
-            }
-        }
-    }
-}
+// PROTOTYPE (#286): `HeroGlow` moved to `HeroSwing` in RowMaterialPrototype.swift.
 
 /// The **Alias pill** (CONTEXT.md → Alias pill; issue #196): the small, dim,
 /// caption-sized capsule a Custom Action (or an aliased Shortcut) wears right after
