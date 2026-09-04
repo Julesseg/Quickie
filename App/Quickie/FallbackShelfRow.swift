@@ -129,7 +129,9 @@ struct FallbackShelfRow: View {
             toggle: { onToggleFavorite(action) }
         ) {
             // The lifted preview: the pressed circle itself, so the button detaches
-            // as the round card it is rather than a squared-off snapshot of it.
+            // as the round card it is rather than a squared-off snapshot of it. A
+            // Shelf button keeps its Liquid Glass (ADR 0042), so it keeps the
+            // preview the glass is the reason for.
             glyphCircle(for: action)
         }
         // The label is an `Image`, so without this the button would announce its SF

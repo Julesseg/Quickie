@@ -2386,9 +2386,11 @@ private enum ActiveSheet: Identifiable {
 /// still, subtle purple mesh field with two bloom balls — one large, one about
 /// half its size — sweeping slowly up and down it on [[Home]] along the same path
 /// but a third of a period apart, frozen the instant a query exists — alive at
-/// rest, calm in use. The accent glow (here) and the gold hero glow
-/// (`ResultListView`) sit over it unchanged, since a glow is backdrop content
-/// the glass refracts, never overlaid blur.
+/// rest, calm in use. The accent glow lives here, over the mesh, since a glow is
+/// backdrop content the glass refracts, never overlaid blur. The gold hero light
+/// does not: it belongs to the [[Highlighted result]]'s own edge
+/// (`ResultListView`), because a light behind the list bleeds behind the
+/// neighbouring rows.
 private struct LivingBackdrop: View {
     /// How far up from the screen bottom to sit the accent glow's center — the
     /// bar's own held keyboard inset. Zero returns it to the bottom (no keyboard,

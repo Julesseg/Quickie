@@ -437,34 +437,34 @@ private struct ChoiceList: View {
         let bestID = options.first?.id
         let symbol = model.choiceSymbol
         ScrollView {
-            GlassEffectContainer(spacing: 6) {
-                VStack(spacing: 6) {
-                    ForEach(options.reversed()) { choice in
-                        Button {
-                            model.commitChoice(choice.option)
-                        } label: {
-                            ChoiceRow(
-                                label: choice.option.label,
-                                symbol: symbol,
-                                isHighlighted: choice.id == bestID,
-                                match: choice.match
-                            )
-                        }
-                        .buttonStyle(.plain)
-                        // A choice row is a result row by another name, so the pointer
-                        // treats it as one (CONTEXT.md → Pointer hover) — in its own
-                        // capsule, which is the shape `ChoiceRow` actually draws.
-                        .pointerHover(in: Capsule())
-                        .accessibilityIdentifier("choice-\(choice.id)")
+            // No `GlassEffectContainer`: a choice row is a list row, so it is
+            // content and wears the flat fill rather than glass (ADR 0042).
+            VStack(spacing: 6) {
+                ForEach(options.reversed()) { choice in
+                    Button {
+                        model.commitChoice(choice.option)
+                    } label: {
+                        ChoiceRow(
+                            label: choice.option.label,
+                            symbol: symbol,
+                            isHighlighted: choice.id == bestID,
+                            match: choice.match
+                        )
                     }
+                    .buttonStyle(.plain)
+                    // A choice row is a result row by another name, so the pointer
+                    // treats it as one (CONTEXT.md → Pointer hover) — in its own
+                    // capsule, which is the shape `ChoiceRow` actually draws.
+                    .pointerHover(in: Capsule())
+                    .accessibilityIdentifier("choice-\(choice.id)")
                 }
-                .frame(maxWidth: .infinity)
-                // A scrollable top spacer the height of the breadcrumb, so the earliest
-                // options (the top of the reversed list) can scroll out from behind the
-                // breadcrumb overlay. Plain content padding — not a scroll safe-area
-                // inset — so the bottom options stay clear of the input bar and hittable.
-                .padding(.top, topInset)
             }
+            .frame(maxWidth: .infinity)
+            // A scrollable top spacer the height of the breadcrumb, so the earliest
+            // options (the top of the reversed list) can scroll out from behind the
+            // breadcrumb overlay. Plain content padding — not a scroll safe-area
+            // inset — so the bottom options stay clear of the input bar and hittable.
+            .padding(.top, topInset)
         }
         .defaultScrollAnchor(.bottom)
     }
@@ -497,7 +497,10 @@ private struct ChoiceRow: View {
         .padding(.horizontal, 16)
         .padding(.vertical, 10)
         .frame(maxWidth: .infinity)
-        .glassEffect(.regular.interactive(), in: Capsule())
+        // The row material every list row wears (ADR 0042), not glass: a choice row
+        // scrolls and is read, so it is content. In a capsule, which is the shape
+        // this row draws. The highlight's accent wash and ring sit over it, unchanged.
+        .rowMaterial(in: Capsule())
         .overlay {
             if isHighlighted {
                 Capsule()

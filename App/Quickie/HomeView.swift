@@ -126,7 +126,8 @@ struct HomeView: View {
                         toggle: { onToggleFavorite(action) }
                     ) {
                         // Lift a copy of the pressed Favorite card as the detached
-                        // preview.
+                        // preview. The grid keeps its Liquid Glass (ADR 0042), so it
+                        // keeps the preview the glass is the reason for.
                         FavoriteCard(action: action)
                     }
                 }
@@ -162,43 +163,39 @@ struct HomeView: View {
 
     /// The Frecency list: recently/often-used Actions, best-first, each a full
     /// row that runs on tap and can be pinned via long-press. The rows render
-    /// exactly like the Result list's — the same `GlassEffectContainer` blending
-    /// and the same 6pt spacing — so a remembered Action looks identical whether
-    /// it appears here or as a ranked result.
+    /// exactly like the Result list's — the same flat material (ADR 0042) and the
+    /// same 6pt spacing — so a remembered Action looks identical whether it appears
+    /// here or as a ranked result, and the first keystroke, which swaps this list
+    /// for that one in place, never flips material.
     private var frecencySection: some View {
         VStack(alignment: .leading, spacing: 8) {
             sectionHeader("Recent")
                 .padding(.horizontal, 20)
-            GlassEffectContainer(spacing: 6) {
-                VStack(spacing: 6) {
-                    ForEach(content.frecent) { action in
-                        Button {
-                            onRun(action)
-                        } label: {
-                            ActionRow(action: action)
-                        }
-                        .buttonStyle(.plain)
-                        // A Recent row is the same `ActionRow` a result is, so it
-                        // hovers identically (CONTEXT.md → Pointer hover).
-                        .pointerHover(in: ActionRow.shape)
-                        .accessibilityIdentifier(action.id)
-                        .resultContextMenu(
-                            secondaryActions: secondaryActions(for: action.content, includeDeeplink: !action.isSilentQueryCapture),
-                            onSecondaryAction: { onSecondaryAction(action, $0) },
-                            isFavorite: isFavorite(action),
-                            pinnable: action.isFavoriteEligible,
-                            canPin: canFavorite(action),
-                            toggle: { onToggleFavorite(action) }
-                        ) {
-                            // Lift a copy of the pressed Recent row as the detached
-                            // preview.
-                            ActionRow(action: action)
-                                .frame(maxWidth: .infinity)
-                        }
+            // No `GlassEffectContainer`: a Recent row is a list row, so it is
+            // content and wears the flat fill rather than glass (ADR 0042).
+            VStack(spacing: 6) {
+                ForEach(content.frecent) { action in
+                    Button {
+                        onRun(action)
+                    } label: {
+                        ActionRow(action: action)
                     }
+                    .buttonStyle(.plain)
+                    // A Recent row is the same `ActionRow` a result is, so it
+                    // hovers identically (CONTEXT.md → Pointer hover).
+                    .pointerHover(in: ActionRow.shape)
+                    .accessibilityIdentifier(action.id)
+                    .resultContextMenu(
+                        secondaryActions: secondaryActions(for: action.content, includeDeeplink: !action.isSilentQueryCapture),
+                        onSecondaryAction: { onSecondaryAction(action, $0) },
+                        isFavorite: isFavorite(action),
+                        pinnable: action.isFavoriteEligible,
+                        canPin: canFavorite(action),
+                        toggle: { onToggleFavorite(action) }
+                    )
                 }
-                .frame(maxWidth: .infinity)
             }
+            .frame(maxWidth: .infinity)
         }
     }
 
