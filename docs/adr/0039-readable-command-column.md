@@ -58,7 +58,8 @@ applies the same `.infinity` frame that shipped before this policy existed, so
 
 **The column edge stands in for the window edge; every surface keeps its own
 inset off it.** A result row's and the input bar's glass stay 12pt inside it, a
-breadcrumb's crumbs 16pt — exactly the insets they keep off an iPhone's screen
+breadcrumb's crumbs 16pt *(since ADR 0042 a row is no longer glass; the 12pt is
+the row's, whatever material it wears, and does not move)* — exactly the insets they keep off an iPhone's screen
 edge, so the relationships between the surfaces are carried over rather than
 renegotiated. In practice that means the clamp is applied *outside* a surface's
 own horizontal padding.

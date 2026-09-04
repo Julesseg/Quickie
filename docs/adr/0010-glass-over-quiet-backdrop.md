@@ -4,7 +4,7 @@ The Mac-launcher inspiration (Spotlight, Raycast) is a translucent overlay float
 
 So Quickie gives the glass something to refract:
 
-- **Glass on the chrome** — the input bar and result rows are native iOS 26 `glassEffect` capsules. We never hand-roll blur/translucency, so the material matches the system and responds correctly.
+- **Glass on the chrome** — the input bar and result rows are native iOS 26 `glassEffect` capsules. We never hand-roll blur/translucency, so the material matches the system and responds correctly. *(The "result rows" half is **superseded by ADR 0042**: rows are content, not chrome, and no longer wear glass. The input bar and the rest of the chrome keep it, and the never-hand-roll rule stands.)*
 - **A quiet adaptive backdrop** behind them — a calm base (adaptive dark/light, a subtle gradient/tint) that gives the glass depth to refract without competing with text. Not transparent-to-wallpaper, because that is impossible.
 - **Tight animation budget** — subtle springs on row slots appearing/disappearing, breadcrumb step transitions, and input focus; nothing that delays a keystroke or the field appearing. Result rows are keyed by **rank**, so re-ranking on a keystroke swaps each slot's content in place — rows never fly around the screen while typing. **Reduce Motion** degrades to fades.
 
