@@ -22,8 +22,8 @@ for hero in fill ring strong; do
   sleep 8
   kill -INT $REC; wait $REC 2>/dev/null
   # Trim to the typing + settle, halve the size, and pull a frame strip.
-  ffmpeg -y -loglevel error -ss 3 -t 6 -i "$raw" -vf "scale=iw/2:ih/2" -an "$OUT/$dev-$row-$hero.mp4"
-  ffmpeg -y -loglevel error -ss 3 -t 6 -i "$raw" -vf "fps=4,scale=iw/4:ih/4,tile=12x2" "$OUT/$dev-$row-$hero-strip.jpg"
+  ffmpeg -y -loglevel error -ss 3 -t 6 -i "$raw" -vf "scale=trunc(iw/4)*2:trunc(ih/4)*2" -an "$OUT/$dev-$row-$hero.mp4"
+  ffmpeg -y -loglevel error -ss 3 -t 6 -i "$raw" -vf "fps=4,scale=iw/4:ih/4,tile=12x2" -update 1 "$OUT/$dev-$row-$hero-strip.jpg"
   rm -f "$raw"
   echo "--> $dev-$row-$hero.mp4"
 done
