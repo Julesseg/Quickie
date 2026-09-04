@@ -95,36 +95,44 @@ enum QuickieBrand {
     /// The **row material** (ADR 0042, chosen by prototype #286): the flat adaptive
     /// fill every list row draws once Liquid Glass leaves the content layer — the
     /// [[Result list]]'s rows, Home's Recent rows, the [[Search Files context]]'s
-    /// rows and a capture's choice rows. An opaque-ish rounded rect one step *up*
-    /// the brand's purple axis (ADR 0033) from the [[Living backdrop]] behind it, so
-    /// a row reads as a card lifted off the field rather than as a hole cut in it.
-    /// No blur — that is the whole point of ADR 0042.
+    /// rows and a capture's choice rows. A rounded rect on the brand's purple axis
+    /// (ADR 0033), sitting in the [[Living backdrop]] rather than on it, and flat:
+    /// no blur, which is the whole point of ADR 0042.
     ///
-    /// Not quite opaque (alpha 0.94): the backdrop still shows *through* a row
-    /// faintly, so the field colour carries across the list and the rows do not
-    /// read as a slab pasted over it. Far short of glass, which refracts.
+    /// **The two appearances do not reach that the same way, and deliberately so.**
+    /// The instruction "one step lighter than the field" is a lightness one, and
+    /// lightness is not evenly available: against the near-black mesh there is a
+    /// whole range to lift into, but against the near-white wash there is almost
+    /// none, so an equal lift lands on white. That is what shipped first, and a
+    /// white slab on a lavender field reads as a clash — the row leaves the purple
+    /// axis altogether, carrying half its own field's chroma (issue #288 review).
     ///
-    /// **The step is measured, not eyeballed, and it is not the same step in each
-    /// appearance.** "One step lighter" is a lightness instruction, and lightness is
-    /// not where the eye reads separation: against a near-black mesh there is a
-    /// whole range to lift into, but against a near-white wash there is almost none,
-    /// so the same lift lands on white — the row stops being purple, and a white
-    /// slab on a lavender field is a clash rather than a card. So what is held equal
-    /// across the two is the **separation** between row and field: each row sits
-    /// about 1.22:1 off the mesh average behind it. On dark that is `rgb(40,28,78)`,
-    /// a clear lift; on light it is `rgb(235,229,251)`, a much smaller one that
-    /// keeps twice the chroma the near-white first shipped with (issue #288 review).
+    /// - **Dark** lifts, and can afford to be near-opaque (0.94) doing it:
+    ///   `rgb(40,28,78)` over a near-black mesh is unmistakably a card, and the 6%
+    ///   that shows through is only enough to keep the field's colour running under
+    ///   the list.
+    /// - **Light** blends instead of lifting: `rgb(232,225,252)` at **half**
+    ///   opacity, so the wash itself is half of what a row is made of. It is the
+    ///   tint that keeps the row purple and the transparency that keeps it part of
+    ///   the gradient — a row sits about 1.11:1 off the field, softer than dark's
+    ///   1.22:1, because a pale field needs less separation to stay legible.
     ///
-    /// Like the mesh and the bloom, this is a value the icon has no opinion about
-    /// — the icon contains no row — so it is built to ADR 0042's rule rather than
-    /// derived from the generator, and it lives in a `Color(uiColor:)` closure (not
+    /// The asymmetry has one visible consequence, on [[Home]] only: the mesh drifts
+    /// there (ADR 0034), and at half opacity a light Recent row drifts with it. That
+    /// is what the Liquid Glass rows did before ADR 0042 took their blur away, and
+    /// it stops the moment a query exists — the backdrop freezes then, so no
+    /// [[Result list]] row is ever read over a moving fill.
+    ///
+    /// Like the mesh and the bloom, these are values the icon has no opinion about
+    /// — the icon contains no row — so they are built to ADR 0042's rule rather than
+    /// derived from the generator, and they live in a `Color(uiColor:)` closure (not
     /// the `static let … = Color(red:…)` shape) so `check-brand-assets.py` never
-    /// scans it as a drifted icon literal.
+    /// scans them as drifted icon literals.
     static var rowFill: Color {
         Color(uiColor: UIColor { traits in
             traits.userInterfaceStyle == .dark
                 ? UIColor(red: 40 / 255, green: 28 / 255, blue: 78 / 255, alpha: 0.94)
-                : UIColor(red: 235 / 255, green: 229 / 255, blue: 251 / 255, alpha: 0.94)
+                : UIColor(red: 232 / 255, green: 225 / 255, blue: 252 / 255, alpha: 0.5)
         })
     }
 
