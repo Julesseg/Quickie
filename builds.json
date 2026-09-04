@@ -1,0 +1,32 @@
+[
+  {
+    "pr": 290,
+    "title": "feat(rows): dress result rows in a flat purple fill with a gold ring on the hero",
+    "sha": "8552dad",
+    "time": "2026-09-04T14:36:37.901Z"
+  },
+  {
+    "pr": 285,
+    "title": "feat(ipad): walk the result highlight with the arrow keys",
+    "sha": "17a614a",
+    "time": "2026-09-02T21:28:44.902Z"
+  },
+  {
+    "pr": 283,
+    "title": "feat(ipad): declare window sizing and pass the odd-size QA sweep",
+    "sha": "a9f08d5",
+    "time": "2026-09-01T22:03:45.145Z"
+  },
+  {
+    "pr": 282,
+    "title": "feat(ipad): lay management pages out in the readable command column",
+    "sha": "73c2bb9",
+    "time": "2026-09-01T15:52:57.098Z"
+  },
+  {
+    "pr": 281,
+    "title": "fix(skills): let agents invoke the implement skill",
+    "sha": "ee51c04",
+    "time": "2026-08-24T07:34:58.962Z"
+  }
+]
