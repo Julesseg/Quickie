@@ -121,6 +121,16 @@ cards share, and the launcher reads as one family in two layers: the glass
 floats, the cards sit. Text, the [[Match highlight]] bolding, the alias pill
 and the caption are at full contrast in both appearances.
 
+**Amended during #288:** "one step" is not the same *lightness* step in each
+appearance, and taking it as one shipped a light row that read as a white slab
+on a lavender field. Against the near-black mesh there is a whole range to lift
+into; against the near-white wash there is almost none, so an equal lift lands
+on white and the row leaves the purple axis altogether — half the chroma of its
+own field. What is held equal instead is the **separation** the eye actually
+reads: each row now sits about 1.22:1 off the mesh average behind it, which is
+what the dark row always had. On light that is a much smaller lift, and the row
+stays purple.
+
 - The **system material** lost because it is two different things: in light it
   is indistinguishable from the flat fill (a blur behind a near-white card
   blurs a near-white wash), and in dark it desaturates every row to neutral
