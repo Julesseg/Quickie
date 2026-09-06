@@ -4,9 +4,12 @@ import QuickieCore
 
 /// The empty-query Home state (CONTEXT.md → Home): the **Favorites grid** (at most
 /// four cards, 2×2 at compact width and one four-across row at regular) pinned at
-/// the top over a progressive-blur band, with the **Recent** (Frecency) list
-/// scrolling *under* that band. Before the user has pinned or used anything it
-/// falls back to the minimal "start typing" placeholder.
+/// the top of the screen, with the **Recent** (Frecency) list scrolling *under* it.
+/// Nothing floats over that list: the grid's cards sit straight on the living
+/// backdrop, and the rows climbing past them dissolve rather than sliding under a
+/// blurred band (there is none left on Home, over the grid or the status bar).
+/// Before the user has pinned or used anything it falls back to the minimal
+/// "start typing" placeholder.
 struct HomeView: View {
     let content: SearchEngine.HomeContent
     let onRun: (Action) -> Void
@@ -47,14 +50,24 @@ struct HomeView: View {
         content.favorites.isEmpty && content.frecent.isEmpty
     }
 
+    /// The strip the pinned grid reserves at the top: what the Recent list is
+    /// padded past so its first rows aren't born hidden, and the same distance the
+    /// list fades out over so a scrolled row is gone by the time it reaches the
+    /// cards.
+    private static let gridReserve: CGFloat = 168
+
+    /// How far below the status area a row is solid again when no grid is pinned —
+    /// the whole dissolve is then just the status bar's own strip.
+    private static let statusBarClearance: CGFloat = 8
+
     var body: some View {
         if isEmpty {
             HomePlaceholder()
         } else {
             ZStack(alignment: .top) {
                 // The Recent list fills the screen and is bottom-anchored so the
-                // most relevant rows sit nearest the thumb; its top rows scroll
-                // up under the blurred Favorites band.
+                // most relevant rows sit nearest the thumb; its top rows dissolve
+                // as they climb behind the Favorites grid and the status bar.
                 ScrollView {
                     VStack(alignment: .leading, spacing: 4) {
                         if !content.frecent.isEmpty {
@@ -75,7 +88,7 @@ struct HomeView: View {
                     .padding(.top, 16)
                     // Leave room so the first Recent rows aren't born hidden
                     // beneath the pinned grid.
-                    .padding(.top, gridFavorites.isEmpty ? 0 : 168)
+                    .padding(.top, gridFavorites.isEmpty ? 0 : Self.gridReserve)
                 }
                 .defaultScrollAnchor(.bottom)
                 // Swiping down the Recent list dismisses the keyboard interactively
@@ -88,21 +101,27 @@ struct HomeView: View {
                 .onScrollPhaseChange { _, phase in
                     onScrollActive(phase == .interacting || phase == .decelerating)
                 }
+                // Nothing is painted over this list any more — not a band under
+                // the grid, not one under the status bar — so the *content* gives
+                // way instead of a material hiding it: rows dissolve as they climb
+                // past the cards (or, with nothing pinned, as they reach the status
+                // area), leaving the same soft edge with no plate to draw it.
+                .dissolvesAtTop(
+                    height: StatusBarMetrics.topInset
+                        + (gridFavorites.isEmpty ? Self.statusBarClearance : Self.gridReserve),
+                    hold: gridFavorites.isEmpty ? 0.3 : 0.78
+                )
 
                 if !gridFavorites.isEmpty {
                     favoritesGrid
-                } else {
-                    // No grid to carry the blur band, but the Recent list still
-                    // scrolls under the status bar — the bare band keeps the
-                    // status bar readable over it.
-                    StatusBarBlurBand()
                 }
             }
         }
     }
 
-    /// The Favorites grid, pinned at the top over a progressive-blur band so the
-    /// Recent list refracts through it as it scrolls under (ADR 0010).
+    /// The Favorites grid, pinned at the top of the screen. It sits on nothing of
+    /// its own: the cards are glass and refract the [[Living backdrop]] and whatever
+    /// Recent rows pass behind them (ADR 0010), with no material plate between.
     private var favoritesGrid: some View {
         VStack(alignment: .leading, spacing: 8) {
             sectionHeader("Favorites")
@@ -134,30 +153,16 @@ struct HomeView: View {
             .padding(.horizontal, CommandColumn.FavoritesGrid.horizontalInset)
         }
         .padding(.bottom, 16)
+        // The clearance the band's status-bar bleed used to reserve, kept as plain
+        // padding now that nothing is painted up there: the launcher's content
+        // spans the status area, so the grid still has to hold its own header
+        // clear of the clock (`StatusBarMetrics`).
+        .padding(.top, StatusBarMetrics.topInset + 12)
         // The readable command column (ADR 0039): the grid and its header clamp so
         // Home's two surfaces line up with each other and with the Result list that
         // replaces them on the first keystroke. Inside it, `favoriteColumns` decides
         // how many cards share a row (issue #265).
         .commandColumn()
-        // The progressive-blur band: a soft material that fades out at its lower
-        // edge so the Recent list dissolves under it rather than meeting a hard
-        // line (CONTEXT.md → Home; ADR 0010). It bleeds into the status bar as one
-        // cohesive frame (`statusBarBleed`) so it slides as a single block with the
-        // rest of Home rather than leaving its status-bar band anchored behind.
-        .statusBarBleed(topPadding: 12) {
-            Rectangle()
-                .fill(.ultraThinMaterial)
-                .mask {
-                    LinearGradient(
-                        stops: [
-                            .init(color: .black, location: 0.0),
-                            .init(color: .black, location: 0.72),
-                            .init(color: .clear, location: 1.0),
-                        ],
-                        startPoint: .top, endPoint: .bottom
-                    )
-                }
-        }
     }
 
     /// The Frecency list: recently/often-used Actions, best-first, each a full
@@ -389,16 +394,20 @@ private struct StatusBarBleed<Background: View>: ViewModifier {
 
     func body(content: Content) -> some View {
         content
-            .padding(.top, topInset + topPadding)
+            .padding(.top, StatusBarMetrics.topInset + topPadding)
             .background(background)
             .ignoresSafeArea(edges: .top)
     }
+}
 
-    /// The window's top safe-area inset. Read from UIKit because the bar ignores
-    /// the top safe area to span the full height — so its own geometry would report
-    /// zero — yet must still reserve that height to clear the status bar. Static per
-    /// orientation, and `body` re-evaluates on rotation.
-    private var topInset: CGFloat {
+/// The status area's height, for the top-anchored bars that have to reserve it
+/// themselves.
+enum StatusBarMetrics {
+    /// The window's top safe-area inset. Read from UIKit because the launcher's
+    /// content spans the status area — a bar's own geometry would report zero — yet
+    /// each still has to sit clear of the clock. Static per orientation, and the
+    /// bodies that read it re-evaluate on rotation.
+    static var topInset: CGFloat {
         UIApplication.shared.connectedScenes
             .compactMap { $0 as? UIWindowScene }
             .first?.keyWindow?.safeAreaInsets.top ?? 0

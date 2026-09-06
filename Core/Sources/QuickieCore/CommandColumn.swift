@@ -24,7 +24,7 @@ import Foundation
 /// shipped before this policy existed rather than merely equivalent to it.
 ///
 /// Only *content* clamps. The full-bleed layers behind it — the mesh backdrop, the
-/// progressive-blur bands under the breadcrumb and the Favorites band — still span the
+/// progressive-blur bands under the breadcrumb and the status bar — still span the
 /// whole window, because a blur band that stopped at the column would draw the column's
 /// edges as two hard lines (ADR 0010: depth is the glass's job, not an outline's).
 ///

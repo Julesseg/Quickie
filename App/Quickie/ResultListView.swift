@@ -122,13 +122,12 @@ struct ResultListView: View {
             // sits on rank 0 at the bottom, which is every touch-driven change.
             .keepsHighlightVisible(at: highlightedRank)
         }
-        // Weak matches scroll up under the status bar; without a band the status
-        // bar sits directly on row text and both turn unreadable. Anchored inside
-        // the list so it slides out with it as one block during a capture
-        // transition (`statusBarBleed`), like the Home Favorites band.
-        .overlay(alignment: .top) {
-            StatusBarBlurBand()
-        }
+        // Weak matches scroll up under the status bar, where row text and the
+        // clock would otherwise sit on top of each other. The rows give way rather
+        // than a band being painted over them (`dissolvesAtTop`), so the status
+        // area clears itself on every surface the same way — and with nothing
+        // overlaid, nothing can stay anchored behind during a capture transition.
+        .dissolvesAtTop(height: StatusBarMetrics.topInset + 8, hold: 0.3)
     }
 }
 
@@ -169,36 +168,33 @@ private struct KeepsHighlightVisible: ViewModifier {
     }
 }
 
-/// The bare progressive-blur band behind the status bar: solid at the screen's
-/// top edge, fading clear just below the status area so scrolling content
-/// dissolves under it rather than colliding with the status bar's text. The
-/// gradient-masked-material idiom the breadcrumb bars use (kept private there),
-/// but with no content riding it — shared by the surfaces that scroll to the top
-/// with no chrome of their own (the Result list, a grid-less Home). Ultra-thin,
-/// like Home's Favorites band: with nothing floating on it, the blur alone
-/// separates the status bar from the rows — a heavier wash would read as chrome.
-struct StatusBarBlurBand: View {
-    var body: some View {
-        Color.clear
-            .frame(height: 0)
-            .statusBarBleed(topPadding: 16) {
-                Rectangle()
-                    .fill(.ultraThinMaterial)
-                    .mask(
-                        LinearGradient(
-                            stops: [
-                                .init(color: .black, location: 0),
-                                .init(color: .black, location: 0.6),
-                                .init(color: .clear, location: 1),
-                            ],
-                            startPoint: .top,
-                            endPoint: .bottom
-                        )
-                    )
+extension View {
+    /// Dissolves a scrolling surface into the backdrop as it climbs past the top
+    /// of the screen — what replaced the blurred band that used to be painted over
+    /// these surfaces instead (ADR 0043). Nothing is drawn: the *rows* fade, so a
+    /// row and the status bar never share pixels and no material sits between the
+    /// chrome and the [[Living backdrop]] (ADR 0010 — depth is the glass's job,
+    /// not a plate's).
+    ///
+    /// `height` is measured from the screen's top edge, since every surface that
+    /// uses this scrolls under the status area, and `hold` is the fraction of that
+    /// strip the content stays fully clear over before it ramps back to solid.
+    func dissolvesAtTop(height: CGFloat, hold: CGFloat) -> some View {
+        mask(alignment: .top) {
+            VStack(spacing: 0) {
+                LinearGradient(
+                    stops: [
+                        .init(color: .clear, location: 0),
+                        .init(color: .clear, location: hold),
+                        .init(color: .black, location: 1),
+                    ],
+                    startPoint: .top,
+                    endPoint: .bottom
+                )
+                .frame(height: height)
+                Color.black
             }
-            // Purely decorative — it must never swallow a tap or a scroll that
-            // starts under the status area.
-            .allowsHitTesting(false)
+        }
     }
 }
 
