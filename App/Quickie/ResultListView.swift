@@ -122,12 +122,6 @@ struct ResultListView: View {
             // sits on rank 0 at the bottom, which is every touch-driven change.
             .keepsHighlightVisible(at: highlightedRank)
         }
-        // Weak matches scroll up under the status bar, where row text and the
-        // clock would otherwise sit on top of each other. The rows give way rather
-        // than a band being painted over them (`dissolvesAtTop`), so the status
-        // area clears itself on every surface the same way — and with nothing
-        // overlaid, nothing can stay anchored behind during a capture transition.
-        .dissolvesAtTop(height: StatusBarMetrics.topInset + 8, hold: 0.3)
     }
 }
 
@@ -164,36 +158,6 @@ private struct KeepsHighlightVisible: ViewModifier {
                     let motion = MotionPolicy(reduceMotion: reduceMotion).style(for: .inputFocus)
                     withAnimation(motion.animation) { scroller.scrollTo(rank) }
                 }
-        }
-    }
-}
-
-extension View {
-    /// Dissolves a scrolling surface into the backdrop as it climbs past the top
-    /// of the screen — what replaced the blurred band that used to be painted over
-    /// these surfaces instead (ADR 0043). Nothing is drawn: the *rows* fade, so a
-    /// row and the status bar never share pixels and no material sits between the
-    /// chrome and the [[Living backdrop]] (ADR 0010 — depth is the glass's job,
-    /// not a plate's).
-    ///
-    /// `height` is measured from the screen's top edge, since every surface that
-    /// uses this scrolls under the status area, and `hold` is the fraction of that
-    /// strip the content stays fully clear over before it ramps back to solid.
-    func dissolvesAtTop(height: CGFloat, hold: CGFloat) -> some View {
-        mask(alignment: .top) {
-            VStack(spacing: 0) {
-                LinearGradient(
-                    stops: [
-                        .init(color: .clear, location: 0),
-                        .init(color: .clear, location: hold),
-                        .init(color: .black, location: 1),
-                    ],
-                    startPoint: .top,
-                    endPoint: .bottom
-                )
-                .frame(height: height)
-                Color.black
-            }
         }
     }
 }

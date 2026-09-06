@@ -4,10 +4,10 @@ import QuickieCore
 
 /// The empty-query Home state (CONTEXT.md → Home): the **Favorites grid** (at most
 /// four cards, 2×2 at compact width and one four-across row at regular) pinned at
-/// the top of the screen, with the **Recent** (Frecency) list scrolling *under* it.
-/// Nothing floats over that list: the grid's cards sit straight on the living
-/// backdrop, and the rows climbing past them dissolve rather than sliding under a
-/// blurred band (there is none left on Home, over the grid or the status bar).
+/// the top of the screen, with the **Recent** (Frecency) list scrolling *behind*
+/// it. Nothing is painted over that list — the grid's cards sit straight on the
+/// living backdrop, and there is no blurred band left on Home, under the grid or
+/// under the status bar.
 /// Before the user has pinned or used anything it falls back to the minimal
 /// "start typing" placeholder.
 struct HomeView: View {
@@ -51,14 +51,8 @@ struct HomeView: View {
     }
 
     /// The strip the pinned grid reserves at the top: what the Recent list is
-    /// padded past so its first rows aren't born hidden, and the same distance the
-    /// list fades out over so a scrolled row is gone by the time it reaches the
-    /// cards.
+    /// padded past so its first rows aren't born hidden beneath the cards.
     private static let gridReserve: CGFloat = 168
-
-    /// How far below the status area a row is solid again when no grid is pinned —
-    /// the whole dissolve is then just the status bar's own strip.
-    private static let statusBarClearance: CGFloat = 8
 
     var body: some View {
         if isEmpty {
@@ -66,8 +60,8 @@ struct HomeView: View {
         } else {
             ZStack(alignment: .top) {
                 // The Recent list fills the screen and is bottom-anchored so the
-                // most relevant rows sit nearest the thumb; its top rows dissolve
-                // as they climb behind the Favorites grid and the status bar.
+                // most relevant rows sit nearest the thumb; its top rows scroll
+                // up behind the Favorites grid and the status bar.
                 ScrollView {
                     VStack(alignment: .leading, spacing: 4) {
                         if !content.frecent.isEmpty {
@@ -101,16 +95,6 @@ struct HomeView: View {
                 .onScrollPhaseChange { _, phase in
                     onScrollActive(phase == .interacting || phase == .decelerating)
                 }
-                // Nothing is painted over this list any more — not a band under
-                // the grid, not one under the status bar — so the *content* gives
-                // way instead of a material hiding it: rows dissolve as they climb
-                // past the cards (or, with nothing pinned, as they reach the status
-                // area), leaving the same soft edge with no plate to draw it.
-                .dissolvesAtTop(
-                    height: StatusBarMetrics.topInset
-                        + (gridFavorites.isEmpty ? Self.statusBarClearance : Self.gridReserve),
-                    hold: gridFavorites.isEmpty ? 0.3 : 0.78
-                )
 
                 if !gridFavorites.isEmpty {
                     favoritesGrid
