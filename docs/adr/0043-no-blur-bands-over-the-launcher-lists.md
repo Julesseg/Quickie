@@ -5,7 +5,8 @@ Home's Favorites band and the shared status-bar band. The bands that back a
 **breadcrumb** (a [[Quick capture]]'s, the [[Search Files context]]'s) are
 untouched: those carry chrome on them, which is the case this ADR does not
 cover. ADR 0010's backdrop, its never-hand-roll-blur rule and its motion budget
-stand.
+stand. The status-bar half is amended by ADR 0044: a row under the status bar
+now takes the system's scroll edge effect rather than being drawn in full.
 
 ## Context
 

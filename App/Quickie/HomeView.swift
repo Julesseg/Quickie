@@ -6,8 +6,8 @@ import QuickieCore
 /// four cards, 2×2 at compact width and one four-across row at regular) pinned at
 /// the top of the screen, with the **Recent** (Frecency) list scrolling *behind*
 /// it. Nothing is painted over that list — the grid's cards sit straight on the
-/// living backdrop, and there is no blurred band left on Home, under the grid or
-/// under the status bar.
+/// living backdrop, with no blurred band under them. Only under the status bar do
+/// the rows soften, and that is the system's scroll edge effect (ADR 0044).
 /// Before the user has pinned or used anything it falls back to the minimal
 /// "start typing" placeholder.
 struct HomeView: View {
@@ -95,6 +95,11 @@ struct HomeView: View {
                 .onScrollPhaseChange { _, phase in
                     onScrollActive(phase == .interacting || phase == .decelerating)
                 }
+                // The system's own top edge effect under the status bar, so the
+                // clock and battery stay readable over a Recent row passing beneath
+                // them (ADR 0044) — the scroll view's, not a hand-rolled band. It
+                // stops at the status bar: the Favorites grid still sits on nothing.
+                .statusBarEdgeEffect()
 
                 if !gridFavorites.isEmpty {
                     favoritesGrid
@@ -378,6 +383,30 @@ private struct StatusBarBleed<Background: View>: ViewModifier {
             .padding(.top, StatusBarMetrics.topInset + topPadding)
             .background(background)
             .ignoresSafeArea(edges: .top)
+    }
+}
+
+// MARK: - Status-bar edge effect
+
+extension View {
+    /// Gives a launcher list the system's soft **top edge effect** under the status
+    /// bar (the SwiftUI face of `UIScrollView.topEdgeEffect`), so the clock, the
+    /// Dynamic Island's flanks and the signal and battery glyphs stay readable over
+    /// a row scrolling beneath them (ADR 0044).
+    ///
+    /// The style alone draws nothing here: the effect is shaped by the elements of a
+    /// bar overlaying the scroll view's edge, and the launcher wears no bar — its
+    /// navigation bar is hidden. So a hairline `safeAreaBar` at the status bar's
+    /// lower edge stands in for one. It has to *render* to count (a `Color.clear`
+    /// is dropped and the effect with it), hence the near-zero opacity, and it
+    /// takes no touches, so the strip it sits on never swallows a tap on a row.
+    func statusBarEdgeEffect() -> some View {
+        scrollEdgeEffectStyle(.soft, for: .top)
+            .safeAreaBar(edge: .top, spacing: 0) {
+                Color.black.opacity(0.001)
+                    .frame(height: 1)
+                    .allowsHitTesting(false)
+            }
     }
 }
 
