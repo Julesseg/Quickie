@@ -117,6 +117,11 @@ struct ResultListView: View {
             // sits on rank 0 at the bottom, which is every touch-driven change.
             .keepsHighlightVisible(at: highlightedRank)
         }
+        // Weak matches scroll up under the status bar; the system's top edge effect
+        // keeps the clock readable over them, the same one Home's Recent list wears
+        // (ADR 0044). Outside the `GeometryReader`, so the viewport it pins the
+        // stack to already excludes the effect's hairline bar.
+        .statusBarEdgeEffect()
     }
 }
 
