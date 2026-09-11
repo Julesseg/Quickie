@@ -1,0 +1,32 @@
+[
+  {
+    "pr": 293,
+    "title": "fix(ipad): keep Home's Favorites on screen with the keyboard up in landscape",
+    "sha": "df91636",
+    "time": "2026-09-11T13:47:37.342Z"
+  },
+  {
+    "pr": 292,
+    "title": "style(home): blur the lists under the status bar with the system edge effect",
+    "sha": "243ea70",
+    "time": "2026-09-10T14:03:54.143Z"
+  },
+  {
+    "pr": 291,
+    "title": "style(home): dissolve the top edge instead of blurring behind it",
+    "sha": "cc647da",
+    "time": "2026-09-06T21:41:52.720Z"
+  },
+  {
+    "pr": 290,
+    "title": "feat(rows): dress result rows in a flat purple fill with a gold ring on the hero",
+    "sha": "8552dad",
+    "time": "2026-09-04T14:36:37.901Z"
+  },
+  {
+    "pr": 285,
+    "title": "feat(ipad): walk the result highlight with the arrow keys",
+    "sha": "17a614a",
+    "time": "2026-09-02T21:28:44.902Z"
+  }
+]
