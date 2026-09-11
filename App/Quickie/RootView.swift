@@ -856,6 +856,18 @@ struct RootView: View {
                 // thing that should position the bar.
                 .ignoresSafeArea(.keyboard, edges: .bottom)
             }
+            // Let the launcher be *sized* short while the keyboard is up. The
+            // `ignoresSafeArea` below extends the frame under the keyboard only
+            // once it is placed; the size it reports back is still measured
+            // against the keyboard-shortened height. The content's minimum — the
+            // Favorites grid, the bar and the held inset under it — counts the
+            // keyboard a second time, and in a landscape iPad (~374pt above the
+            // keyboard, against ~616pt of minimum) it overflowed. SwiftUI centred
+            // the overflow and pushed Home's top ~120pt off the screen. A flexible
+            // frame reports the short height, gets extended under the keyboard,
+            // and then lays the content out at that full height, which is the
+            // layout the held inset assumes.
+            .frame(minHeight: 0, maxHeight: .infinity)
             // Drive the bar lift ourselves: turn off SwiftUI's automatic keyboard
             // avoidance for the launcher so the live keyboard never moves the layout
             // (the pushed pages set this on themselves; this covers the root + its
