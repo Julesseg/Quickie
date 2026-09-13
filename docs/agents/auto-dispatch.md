@@ -1,36 +1,61 @@
-# Auto-dispatch: unblocked issues → Paseo agent sessions
+# Auto-dispatch: ready issues → Paseo agent sessions
 
-When a PR merges and closes an issue, any `ready-for-agent` issue with no open
-blockers — newly unblocked or never blocked — gets implemented automatically: a
-fresh Claude Code session is spawned for each one via [Paseo](https://paseo.sh)
-on a self-hosted Mac runner.
-Sessions run on the Mac's Claude subscription login (no API credits) and are
-visible in the Paseo desktop/mobile apps.
+Issues marked `ready-for-agent` get implemented automatically once nothing is
+blocking them: a fresh Claude Code session is spawned for each one via
+[Paseo](https://paseo.sh) on a self-hosted Mac runner. Sessions run on the Mac's
+Claude subscription login (no API credits) and are visible in the Paseo
+desktop/mobile apps.
 
 ## How it works
 
 Two workflows split detection from execution:
 
-1. **`unblock-dispatch.yml`** (GitHub-hosted, pure scripting) runs on every
-   `issues: closed` event where the issue was closed as *completed* (and on
-   manual `workflow_dispatch`, which performs the same scan). It scans open
-   `ready-for-agent` issues, parses each body's `## Blocked by` section
-   (`- #N` bullets), and keeps issues whose blockers are all closed —
-   including issues that never had blockers. For each, it fires
-   `agent-implement.yml` with the issue number and comments on the issue.
-2. **`agent-implement.yml`** (self-hosted Mac runner) runs
-   `paseo run --detach --model <model> --thinking <effort> --worktree
-   claude/issue-<N> "/label-and-implement-with-pr issue #<N>"` — the repo's
-   `/label-and-implement-with-pr` skill carries the full workflow
-   instructions: claim the issue with the `agent-dispatched` label, run
-   `/implement` to build it, then open the pull request that closes it.
-   `--detach` means the session runs under the Paseo daemon and outlives the
-   (short) runner job; `--worktree` keeps parallel sessions from clobbering
-   one checkout.
+1. **`unblock-dispatch.yml`** (GitHub-hosted, pure scripting) runs when an issue
+   is closed as *completed*, or on a manual `workflow_dispatch`. It scans open
+   `ready-for-agent` issues, parses each body's `## Blocked by` section (`- #N`
+   bullets), and keeps the ones that are ready to work — never blocked, or with
+   every blocker now closed. For each, it fires `agent-implement.yml` with the
+   issue number and comments on the issue.
+2. **`agent-implement.yml`** (self-hosted Mac runner) re-checks the issue, then
+   fetches the Mac clone's remotes and runs `paseo run --detach --new-branch
+   claude/issue-<N> --base origin/main --label agent-implement=<N> …
+   "/label-and-implement-with-pr issue #<N>"` — unless another labeled session
+   is still running on the Mac, in which case it spawns nothing (see below).
+   The `/label-and-implement-with-pr` skill carries the workflow instructions —
+   claim the issue with the `agent-dispatched` label, run `/implement` to build
+   it per AGENTS.md, build a screenshot report with `/ui-report` when the change
+   is user-visible, merge the base branch in, push, open a PR that closes the
+   issue, then hand that PR to `/babysit-pr` (see below). `--detach` means the
+   session runs under the Paseo daemon and outlives the (short) runner job; the
+   worktree flags keep the session off the clone's own checkout.
 
-   Sessions run on **Opus 4.8 at high reasoning effort** by default, pinned
-   rather than inherited from the daemon. Both are overridable — see
-   [Model and reasoning effort](#model-and-reasoning-effort).
+   That skill ships in this repo, at `.claude/skills/`, alongside a mirror of
+   the maintainer's personal skill set. The personal copies under
+   `~/.claude/skills/` are the source of truth; the repo copies exist so a
+   dispatched session finds the skill in any clone, on any machine, without
+   depending on how that machine's Claude config happens to be set up. When
+   the personal set changes, re-copy it here.
+
+   The mirror excludes the `paseo*` skills, which the Paseo app installs and
+   updates itself (they carry a `.paseo-managed-files.json`). A committed copy
+   of a file something else rewrites goes stale without anyone noticing, and
+   they are machine tooling rather than project workflow. Leave them out on
+   every re-sync.
+
+### After the PR opens
+
+The session does not end at `gh pr create`. `/babysit-pr` keeps it alive,
+watching the PR: it fixes CI failures the branch caused, reruns flaky checks
+(three per SHA), acts on review comments (fixing, or replying with an `[agent]`
+prefix when it disagrees or needs an answer), and rebases onto `main` whenever
+the branch conflicts with it or falls behind it. It stops when the PR is
+merged or closed, when a blocker needs a human (it says so in a PR comment),
+or after 24 hours. Between polls the watcher blocks on GitHub, so an idle
+watch costs almost nothing; but each babysitting session is a live Paseo
+agent until it stops.
+
+The `agent-dispatched` label stays on throughout, and after the babysitter
+stops with the PR still open: the issue is in flight until the PR closes it.
 
 ### Who applies `agent-dispatched`
 
@@ -50,6 +75,46 @@ in the queue holds nothing, so the issue goes back in the pool and is dispatched
 again on the next run. (Because the runs list is the guard, the dispatcher waits
 for each run it fires to become visible before moving on.)
 
+### One session at a time on baldur
+
+Sessions run on **baldur**, the self-hosted Mac — old enough that a second
+concurrent session leaves both crawling. So the in-flight cap is **1**, and the
+spawn job checks the machine itself before starting anything: `paseo ls
+--global` on the runner, narrowed to sessions this workflow labeled
+`agent-implement=<issue>`, and if any of them is `initializing` or `running`
+the job spawns nothing and leaves a notice.
+
+Two layers, because they cover different holes. The dispatcher's cap decides
+what to fire and knows nothing about the Mac — it cannot see a session started
+by a manual `agent-implement` run, or one still winding down inside the
+30-minute handoff grace. The host check is the load-bearing one, and it fails
+closed: **force does not override it**, unlike the issue checks below, because
+it stands for what the hardware can take rather than for bookkeeping that might
+be out of date. To spawn while a session is live, stop that session in Paseo
+first and re-run.
+
+The check is machine-wide, not repo-wide: `--global` sees every session on the
+daemon, so another repo running this same workflow on baldur holds the slot
+too, which is what a limit on the hardware should do.
+
+Two things deliberately do not count. `idle` sessions: an idle session has
+finished its turn and costs the machine nothing while it waits to be archived.
+And sessions this workflow did not start — the label is what identifies them,
+so one you open on baldur by hand is invisible to the check, and opening one
+next to a dispatched session puts two on the Mac anyway.
+
+Because the check reads the label, it only works on a Paseo CLI that has both
+`ls --global` and `run --label`. An older one would leave every session
+unlabeled and count zero busy sessions forever, so the spawn job checks for
+both flags and fails red rather than letting the limit quietly stop existing.
+
+An issue skipped for a busy host is not lost, but it is not instant either: its
+spawn run succeeded, so it holds the issue for the 30-minute grace period and
+then returns to the pool for the next dispatcher run. If the session holding
+the Mac finishes inside that window, the dispatcher run its closing PR triggers
+still sees the hold and defers again — a manual re-scan is the quick way to
+pick the issue back up.
+
 ### The spawn-time re-check
 
 A spawn job can sit queued for hours, so what was true when the dispatcher
@@ -64,50 +129,122 @@ anything, `agent-implement.yml` fetches the issue again and does nothing if:
 Both leave a notice on the run rather than failing it: nothing went wrong, the
 work simply no longer needs doing. A manual run can override either check by
 ticking **force**, which is how you re-dispatch an issue whose session died
-holding the label.
+holding the label. Force does not reach the host check above — a busy baldur
+stops the spawn either way.
 
 ### Scope rules
 
 - Only issues labeled `ready-for-agent` are dispatched.
-- Any such issue with **no open blockers** qualifies — whether its
-  `## Blocked by` list (`- #N` bullets) is now fully closed or it never had
-  blockers at all. Epics (`[Epic]` title prefix) are always skipped.
-- Each run spawns at most **2** new sessions, and at most **3** issues are in
-  flight at once — counting both issues that carry the `agent-dispatched`
-  label and issues whose spawn run is still live. Startable issues beyond
-  either cap are deferred; because every dispatcher run re-scans all open
-  ready issues, they're picked up automatically the next time any issue closes
-  (or the dispatcher is run manually). While the Mac is offline the cap
-  applies to the queue, so at most 3 sessions pile up waiting for it.
+- An issue qualifies when **nothing blocks it** — either it lists no `- #N`
+  bullets under `## Blocked by` at all, or every bullet it lists is closed.
+- **Umbrella issues are always skipped**: epics (`[Epic]` title prefix) and
+  specs (`Spec:` title prefix). A human slices these into per-milestone child
+  issues; a single agent session should never attempt one.
+- At most **1** issue is in flight at once — counting both issues that carry
+  the `agent-dispatched` label and issues whose spawn run is still live —
+  because one session is all baldur can carry. Ready issues beyond the cap are
+  deferred; because every dispatcher run re-scans every open `ready-for-agent`
+  issue, they're picked up automatically on the next run, usually the one fired
+  by the running session's PR closing its own issue. While the Mac is offline
+  the cap applies to the queue, so a single session waits for it.
 - If a session gives up, it removes the issue's `agent-dispatched` label and
   comments — which frees a slot and makes the issue eligible again.
 
-### Model and reasoning effort
+### Where sessions branch from
 
-Sessions default to **Opus 4.8 at high reasoning effort**. Two optional
-repository Actions variables override that without touching the workflow
-(Settings → Secrets and variables → Actions → Variables):
+Every session starts on a fresh branch cut from **`origin/main`**, and the spawn
+step fetches the Mac's clone immediately beforehand.
 
-| Variable         | Default           | Passed as    |
-| ---------------- | ----------------- | ------------ |
-| `PASEO_MODEL`    | `claude-opus-4-8` | `--model`    |
-| `PASEO_THINKING` | `high`            | `--thinking` |
+Both halves matter. Paseo branches off a ref in the clone at
+`PASEO_PROJECT_DIR` and never fetches on its own, so left alone a session
+inherits whatever that clone last saw. Nothing updates its local `main` — the
+runner only ever adds worktrees — so it drifts further behind with every merge,
+and sessions were starting from a `main` over a hundred commits stale. Basing on
+the remote-tracking ref sidesteps the local branch entirely; fetching first is
+what keeps that ref from being stale in its own right.
+
+This does not replace the skill's own `git fetch origin main` and merge before
+it opens the PR. Other sessions land work while a long one runs, so the base
+still moves underfoot. Starting current just means a session reads today's code
+on its first pass instead of rediscovering it at merge time.
+
+Override the base with the `PASEO_BASE` repository Actions variable — any ref in
+the clone, e.g. `origin/release`. An unresolvable one fails the run outright
+rather than quietly branching somewhere else.
+
+### Model, reasoning effort, permission mode, and base
+
+Sessions default to **Opus 5 at high reasoning effort, in bypass mode, branched
+off `origin/main`**. Four optional repository Actions variables override that
+without touching the workflow (Settings → Secrets and variables → Actions →
+Variables):
+
+| Variable         | Default              | Passed as    |
+| ---------------- | -------------------- | ------------ |
+| `PASEO_MODEL`    | `claude-opus-5`      | `--model`    |
+| `PASEO_THINKING` | `high`               | `--thinking` |
+| `PASEO_MODE`     | `bypassPermissions`  | `--mode`     |
+| `PASEO_BASE`     | `origin/main`        | `--base`     |
 
 Leave a variable unset (or set it empty) to fall back to the default — unlike
-`PASEO_PROJECT_DIR`, neither is required. The defaults are pinned in the
-workflow rather than inherited from the Paseo daemon, whose own defaults move
-as new models ship.
+`PASEO_PROJECT_DIR`, none of the four are required. The defaults are pinned in
+the workflow rather than inherited from the Paseo daemon, whose own defaults
+move as new models ship.
 
 See the current legal values with `paseo provider models claude` (efforts are
 per-model, currently `low`/`medium`/`high`/`xhigh`/`max`/`ultracode` on the
-Opus and Sonnet lines).
+Opus and Sonnet lines). Modes come from the provider:
+`plan`/`default`/`acceptEdits`/`auto`/`bypassPermissions`.
 
-**The workflow validates both before spawning**, because `paseo run` itself
-does not: given an unknown `--model` it creates the session anyway rather than
-erroring, which would leave a typo'd variable silently running every issue on
-the wrong model. So the spawn step checks the pair against
-`paseo provider models claude --json` first and fails red — listing the valid
-values — instead of dispatching.
+`bypassPermissions` is the default because nobody is around to answer a
+permission prompt in a detached CI session — the provider's own default
+(`default`, "Always Ask") would stall the session on its first tool use until
+the daemon times it out.
+
+**The workflow validates the model and effort before spawning**, because
+`paseo run` itself does not: given an unknown `--model` it creates the session
+anyway rather than erroring, which would leave a typo'd variable silently
+running every issue on the wrong model. So the spawn step checks the pair
+against `paseo provider models claude --json` first and fails red — listing the
+valid values — instead of dispatching. `--mode` and `--base` need no such
+check; the CLI rejects an unknown mode outright, and a base ref it cannot
+resolve fails the run before any session exists.
+
+## Repo prerequisites
+
+- **Create the `ready-for-agent` label** (repo → Issues → Labels): the
+  dispatcher only ever considers issues carrying it. The `agent-dispatched`
+  label, by contrast, is created automatically on first dispatch — the
+  dispatcher creates it ahead of the session that will apply it.
+- **Keep the `/label-and-implement-with-pr` skill** at
+  `.claude/skills/label-and-implement-with-pr/`, along with the `/implement`,
+  `/ui-report`, and `/babysit-pr` skills it calls. The dispatch prompt is just
+  `/label-and-implement-with-pr issue #<N>`, so the skill is what actually
+  tells the session how to work — including claiming the issue with the
+  `agent-dispatched` label and opening the PR. Without it a dispatched session
+  receives an unresolvable slash command.
+
+  `/implement`, `/ui-report`, and `/babysit-pr` must **not** carry
+  `disable-model-invocation: true`, unlike most of their siblings in the
+  mirrored set. `/label-and-implement-with-pr` reaches them through the Skill
+  tool rather than a user prompt, which is exactly what that flag refuses; with
+  it set, every dispatched session hits the refusal halfway through and falls
+  back to improvising against AGENTS.md. Keep the flag off in both the repo
+  copies and the personal ones, or a re-sync reintroduces it.
+- **Use the `## Blocked by` convention** in issue bodies. The dispatcher parses
+  `- #N` bullets under that exact heading:
+
+  ```markdown
+  ## Blocked by
+
+  - #12
+  - #15
+  ```
+
+  An issue with no such section (or an empty one) is treated as never-blocked
+  and qualifies on any dispatcher run. Since the dispatcher only runs on an
+  issue close or a manual re-scan, a never-blocked issue starts either the next
+  time anything closes or when you run the workflow by hand.
 
 ## One-time Mac setup
 
@@ -120,26 +257,26 @@ values — instead of dispatching.
    terminal. The runner looks for `paseo` on `PATH` plus `/opt/homebrew/bin`,
    `/usr/local/bin`, and `~/.local/bin`.
 3. **Point at the checkout**: set the repository Actions **variable**
-   `PASEO_PROJECT_DIR` to the absolute path of the Quickie clone on the Mac
+   `PASEO_PROJECT_DIR` to the absolute path of this repo's clone on the Mac
    (Settings → Secrets and variables → Actions → Variables). Sessions spawn
-   worktrees off this clone.
+   worktrees off this clone, and the spawn step fetches it first, so its
+   `origin` must be reachable unattended as the runner's user (an SSH key with
+   no passphrase prompt, or a stored credential helper).
 4. **`gh` and `claude` logged in**: sessions read issues with `gh` and run on
    the Claude CLI's subscription login, so both must be authenticated for the
    account the daemon runs under.
 
-The `agent-dispatched` label is created by the dispatcher on its first run —
-ahead of the session that applies it, because `gh issue edit --add-label` fails
-on a label that does not exist yet.
-
 ## Manual dispatch
 
-`unblock-dispatch.yml` can be run manually from the Actions tab to scan and
-dispatch startable issues without waiting for a close event — handy right after
-labeling new issues `ready-for-agent`.
+`unblock-dispatch.yml` accepts a manual run from the Actions tab, which
+re-scans the backlog under the normal scope rules. This is how never-blocked
+issues get started — nothing has to close first — and how you drain a backlog
+after raising the in-flight cap or fixing a `## Blocked by` list.
 
-`agent-implement.yml` also accepts a manual run from the Actions tab with any
-issue number — handy for forcing a specific issue through the pipeline out of
-order. It still counts against the in-flight cap: the run holds the issue
-while it is live, and the session it spawns labels it. Tick **force** to get
-past the [spawn-time re-check](#the-spawn-time-re-check) — the way to
-re-dispatch an issue whose session died still holding the label.
+`agent-implement.yml` also accepts a manual run with any issue number, which
+bypasses the scope rules entirely — the escape hatch for an umbrella issue or
+one you haven't labeled `ready-for-agent`. It still counts against the in-flight
+cap: the run holds the issue while it is live, and the session it spawns labels
+the issue like any other. The spawn-time re-check still applies — a closed or
+already-claimed issue needs **force** ticked — and so does the one-session
+limit, which **force** does not lift.

@@ -1,0 +1,4 @@
+interface:
+  display_name: "Babysit PR"
+  short_description: "Watch a PR until it merges: fix CI, answer reviews, rebase"
+  default_prompt: "Babysit the current pull request until it is merged or closed: run the watcher, act on every action it surfaces (review feedback first, then rebase, then CI), push fixes, relaunch the watcher after every push, and stop only on merge, close, a blocker that needs a human (say so on the PR), or a spent budget."

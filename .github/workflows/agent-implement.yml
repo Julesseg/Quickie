@@ -77,6 +77,7 @@ jobs:
           PASEO_MODEL: ${{ vars.PASEO_MODEL }}
           PASEO_THINKING: ${{ vars.PASEO_THINKING }}
           PASEO_MODE: ${{ vars.PASEO_MODE }}
+          PASEO_BASE: ${{ vars.PASEO_BASE }}
         run: |
           set -euo pipefail
           # Runner services start with a minimal PATH; include the usual
@@ -84,14 +85,60 @@ jobs:
           export PATH="$PATH:/opt/homebrew/bin:/usr/local/bin:$HOME/.local/bin"
           command -v paseo >/dev/null || { echo "::error::paseo CLI not found on the runner's PATH" >&2; exit 1; }
           if [ -z "${PROJECT_DIR:-}" ]; then
-            echo "::error::Set the PASEO_PROJECT_DIR repository Actions variable to the Quickie checkout path on this Mac" >&2
+            echo "::error::Set the PASEO_PROJECT_DIR repository Actions variable to this repo's checkout path on this Mac" >&2
             exit 1
+          fi
+
+          # Every session runs on baldur, an old Mac that cannot carry two at
+          # once, so this is the hard limit on it: never spawn while a session
+          # this workflow started is still working. `initializing` and
+          # `running` are the states that actually occupy the machine — an idle
+          # session has finished its turn and costs it nothing.
+          #
+          # The label applied at spawn time below is what identifies them, so
+          # only this workflow's sessions count; one someone opens on baldur by
+          # hand is invisible here and does not hold the slot.
+          SESSION_LABEL=agent-implement
+
+          # An older CLI missing either flag would not fail loudly — it would
+          # leave every session unlabeled and count zero busy ones forever, so
+          # the limit would quietly stop existing. Check before trusting it.
+          # Matched against captured help text rather than piped into grep,
+          # which can SIGPIPE the CLI under `pipefail` and read as absent.
+          case "$(paseo ls --help)" in
+            *--global*) ;;
+            *) echo "::error::This paseo CLI has no 'ls --global'; the one-session-per-host limit cannot be enforced" >&2; exit 1 ;;
+          esac
+          case "$(paseo run --help)" in
+            *--label*) ;;
+            *) echo "::error::This paseo CLI has no 'run --label'; the one-session-per-host limit cannot be enforced" >&2; exit 1 ;;
+          esac
+
+          BUSY="$(paseo ls --global --json | SESSION_LABEL="$SESSION_LABEL" python3 -c '
+          import json, os, sys
+          data = json.load(sys.stdin)
+          if isinstance(data, dict) and data.get("error"):
+              sys.exit("::error::paseo ls failed: %s" % data["error"].get("message"))
+          agents = data.get("agents", []) if isinstance(data, dict) else data
+          label = os.environ["SESSION_LABEL"]
+          print(", ".join(
+              "issue #%s (%s)" % ((a.get("labels") or {})[label], a.get("shortId") or a.get("id"))
+              for a in agents
+              if a.get("status") in ("initializing", "running") and label in (a.get("labels") or {})
+          ))
+          ')"
+          if [ -n "$BUSY" ]; then
+            # Deliberately not overridable with force, unlike the issue checks
+            # above: this one stands for what the hardware can take, not for
+            # bookkeeping that might be out of date.
+            echo "::notice::Not spawning: baldur is already running a session for ${BUSY} and has room for only one. Stop that session in Paseo and re-run to spawn now; otherwise the next dispatcher run picks this issue back up."
+            exit 0
           fi
 
           # Pinned rather than left to the Paseo daemon's defaults, which move
           # as new models ship. Override per-repo with the PASEO_MODEL /
           # PASEO_THINKING Actions variables.
-          export MODEL="${PASEO_MODEL:-claude-opus-4-8}"
+          export MODEL="${PASEO_MODEL:-claude-opus-5}"
           export THINKING="${PASEO_THINKING:-high}"
 
           # Nobody is around to answer a permission prompt in a detached CI
@@ -100,6 +147,12 @@ jobs:
           # `paseo run` rejects an unknown --mode outright, so this needs no
           # validation below.
           MODE="${PASEO_MODE:-bypassPermissions}"
+
+          # The remote tip, not the Mac clone's checked-out branch: nothing
+          # updates that clone, so its local `main` drifts arbitrarily far
+          # behind while the runner sits idle, and a session branched off it
+          # starts by reading stale code.
+          BASE="${PASEO_BASE:-origin/main}"
 
           # `paseo run` accepts an unknown --model/--thinking without complaint
           # and spawns the session anyway, so a typo'd variable would silently
@@ -117,19 +170,34 @@ jobs:
               sys.exit("::error::PASEO_THINKING %r is not valid for %s. Available: %s"
                        % (thinking, model, ", ".join(options)))
           '
-          echo "Spawning session for issue #${ISSUE} on ${MODEL} at ${THINKING} reasoning effort in ${MODE} mode"
+          # Paseo resolves --base against the clone's own refs and never
+          # fetches, so `origin/main` there is only as current as whoever last
+          # ran a fetch by hand. Refresh first or the default base is a
+          # remote-tracking ref pointing at yesterday.
+          git -C "$PROJECT_DIR" fetch --prune origin
+
+          echo "Spawning session for issue #${ISSUE} on ${MODEL} at ${THINKING} reasoning effort in ${MODE} mode, branched off ${BASE}"
 
           # --detach: the session runs under the Paseo daemon, so it outlives
-          # this job; progress is visible in the Paseo apps. The
-          # /label-and-implement-with-pr skill in the repo config carries the
-          # full workflow instructions: claim the issue with the
-          # agent-dispatched label — which nothing else applies, see
-          # docs/agents/auto-dispatch.md — run /implement, then open the PR.
+          # this job; progress is visible in the Paseo apps. The prompt invokes
+          # the /label-and-implement-with-pr skill, which carries the full
+          # workflow instructions — starting with claiming the issue with the
+          # `agent-dispatched` label, which nothing else applies, and ending
+          # with a pull request (see docs/agents/auto-dispatch.md).
+          # Unlike --model/--thinking, an unresolvable --base fails the run
+          # outright instead of spawning on the wrong commit, so it needs no
+          # validation of its own.
+          # The --label is what the host check above counts, so it is the
+          # session's own claim on baldur for as long as it runs.
           paseo run --detach \
             --provider claude \
             --model "$MODEL" \
             --thinking "$THINKING" \
             --mode "$MODE" \
             --cwd "$PROJECT_DIR" \
-            --worktree "claude/issue-${ISSUE}" \
+            --new-workspace worktree \
+            --worktree-mode branch-off \
+            --new-branch "claude/issue-${ISSUE}" \
+            --base "$BASE" \
+            --label "${SESSION_LABEL}=${ISSUE}" \
             "/label-and-implement-with-pr issue #${ISSUE}"
