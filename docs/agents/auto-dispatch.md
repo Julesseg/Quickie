@@ -29,18 +29,10 @@ Two workflows split detection from execution:
    session runs under the Paseo daemon and outlives the (short) runner job; the
    worktree flags keep the session off the clone's own checkout.
 
-   That skill ships in this repo, at `.claude/skills/`, alongside a mirror of
-   the maintainer's personal skill set. The personal copies under
-   `~/.claude/skills/` are the source of truth; the repo copies exist so a
-   dispatched session finds the skill in any clone, on any machine, without
-   depending on how that machine's Claude config happens to be set up. When
-   the personal set changes, re-copy it here.
-
-   The mirror excludes the `paseo*` skills, which the Paseo app installs and
-   updates itself (they carry a `.paseo-managed-files.json`). A committed copy
-   of a file something else rewrites goes stale without anyone noticing, and
-   they are machine tooling rather than project workflow. Leave them out on
-   every re-sync.
+   That skill, and the ones it calls, are not in this repo: a dispatched
+   session runs on the runner Mac and uses the skills installed in that Mac's
+   own Claude config (`~/.claude/skills/`). Keep the personal set current
+   there.
 
 ### After the PR opens
 
@@ -75,14 +67,14 @@ in the queue holds nothing, so the issue goes back in the pool and is dispatched
 again on the next run. (Because the runs list is the guard, the dispatcher waits
 for each run it fires to become visible before moving on.)
 
-### One session at a time on baldur
+### Three sessions at a time on tyr
 
-Sessions run on **baldur**, the self-hosted Mac — old enough that a second
-concurrent session leaves both crawling. So the in-flight cap is **1**, and the
-spawn job checks the machine itself before starting anything: `paseo ls
---global` on the runner, narrowed to sessions this workflow labeled
-`agent-implement=<issue>`, and if any of them is `initializing` or `running`
-the job spawns nothing and leaves a notice.
+Sessions run on **tyr**, the self-hosted Mac, which carries three concurrent
+sessions and not many more. So the in-flight cap is **3**, and the spawn job
+checks the machine itself before starting anything: `paseo ls --global` on the
+runner, narrowed to sessions this workflow labeled `agent-implement=<issue>`,
+and if three of them are `initializing` or `running` the job spawns nothing
+and leaves a notice.
 
 Two layers, because they cover different holes. The dispatcher's cap decides
 what to fire and knows nothing about the Mac — it cannot see a session started
@@ -90,30 +82,30 @@ by a manual `agent-implement` run, or one still winding down inside the
 30-minute handoff grace. The host check is the load-bearing one, and it fails
 closed: **force does not override it**, unlike the issue checks below, because
 it stands for what the hardware can take rather than for bookkeeping that might
-be out of date. To spawn while a session is live, stop that session in Paseo
-first and re-run.
+be out of date. To spawn while the Mac is full, stop a session in Paseo first
+and re-run.
 
 The check is machine-wide, not repo-wide: `--global` sees every session on the
-daemon, so another repo running this same workflow on baldur holds the slot
-too, which is what a limit on the hardware should do.
+daemon, so the other repos running this same workflow on tyr share the three
+slots, which is what a limit on the hardware should do.
 
 Two things deliberately do not count. `idle` sessions: an idle session has
 finished its turn and costs the machine nothing while it waits to be archived.
 And sessions this workflow did not start — the label is what identifies them,
-so one you open on baldur by hand is invisible to the check, and opening one
-next to a dispatched session puts two on the Mac anyway.
+so one you open on tyr by hand is invisible to the check, and opening one
+next to three dispatched sessions puts four on the Mac anyway.
 
 Because the check reads the label, it only works on a Paseo CLI that has both
 `ls --global` and `run --label`. An older one would leave every session
 unlabeled and count zero busy sessions forever, so the spawn job checks for
 both flags and fails red rather than letting the limit quietly stop existing.
 
-An issue skipped for a busy host is not lost, but it is not instant either: its
+An issue skipped for a full host is not lost, but it is not instant either: its
 spawn run succeeded, so it holds the issue for the 30-minute grace period and
-then returns to the pool for the next dispatcher run. If the session holding
-the Mac finishes inside that window, the dispatcher run its closing PR triggers
-still sees the hold and defers again — a manual re-scan is the quick way to
-pick the issue back up.
+then returns to the pool for the next dispatcher run. If a session frees a slot
+inside that window, the dispatcher run its closing PR triggers still sees the
+hold and defers again — a manual re-scan is the quick way to pick the issue
+back up.
 
 ### The spawn-time re-check
 
@@ -129,7 +121,7 @@ anything, `agent-implement.yml` fetches the issue again and does nothing if:
 Both leave a notice on the run rather than failing it: nothing went wrong, the
 work simply no longer needs doing. A manual run can override either check by
 ticking **force**, which is how you re-dispatch an issue whose session died
-holding the label. Force does not reach the host check above — a busy baldur
+holding the label. Force does not reach the host check above — a full tyr
 stops the spawn either way.
 
 ### Scope rules
@@ -140,13 +132,13 @@ stops the spawn either way.
 - **Umbrella issues are always skipped**: epics (`[Epic]` title prefix) and
   specs (`Spec:` title prefix). A human slices these into per-milestone child
   issues; a single agent session should never attempt one.
-- At most **1** issue is in flight at once — counting both issues that carry
+- At most **3** issues are in flight at once — counting both issues that carry
   the `agent-dispatched` label and issues whose spawn run is still live —
-  because one session is all baldur can carry. Ready issues beyond the cap are
+  because three sessions are what tyr carries. Ready issues beyond the cap are
   deferred; because every dispatcher run re-scans every open `ready-for-agent`
   issue, they're picked up automatically on the next run, usually the one fired
-  by the running session's PR closing its own issue. While the Mac is offline
-  the cap applies to the queue, so a single session waits for it.
+  by a running session's PR closing its own issue. While the Mac is offline
+  the cap applies to the queue, so at most three sessions wait for it.
 - If a session gives up, it removes the issue's `agent-dispatched` label and
   comments — which frees a slot and makes the issue eligible again.
 
@@ -216,21 +208,20 @@ resolve fails the run before any session exists.
   dispatcher only ever considers issues carrying it. The `agent-dispatched`
   label, by contrast, is created automatically on first dispatch — the
   dispatcher creates it ahead of the session that will apply it.
-- **Keep the `/label-and-implement-with-pr` skill** at
-  `.claude/skills/label-and-implement-with-pr/`, along with the `/implement`,
-  `/ui-report`, and `/babysit-pr` skills it calls. The dispatch prompt is just
+- **Keep the `/label-and-implement-with-pr` skill installed on the runner
+  Mac**, under `~/.claude/skills/`, along with the `/implement`, `/ui-report`,
+  and `/babysit-pr` skills it calls. The dispatch prompt is just
   `/label-and-implement-with-pr issue #<N>`, so the skill is what actually
   tells the session how to work — including claiming the issue with the
   `agent-dispatched` label and opening the PR. Without it a dispatched session
   receives an unresolvable slash command.
 
   `/implement`, `/ui-report`, and `/babysit-pr` must **not** carry
-  `disable-model-invocation: true`, unlike most of their siblings in the
-  mirrored set. `/label-and-implement-with-pr` reaches them through the Skill
-  tool rather than a user prompt, which is exactly what that flag refuses; with
-  it set, every dispatched session hits the refusal halfway through and falls
-  back to improvising against AGENTS.md. Keep the flag off in both the repo
-  copies and the personal ones, or a re-sync reintroduces it.
+  `disable-model-invocation: true`, unlike most of their siblings.
+  `/label-and-implement-with-pr` reaches them through the Skill tool rather
+  than a user prompt, which is exactly what that flag refuses; with it set,
+  every dispatched session hits the refusal halfway through and falls back to
+  improvising against AGENTS.md.
 - **Use the `## Blocked by` convention** in issue bodies. The dispatcher parses
   `- #N` bullets under that exact heading:
 
