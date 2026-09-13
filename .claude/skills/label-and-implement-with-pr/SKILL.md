@@ -1,13 +1,13 @@
 ---
 name: label-and-implement-with-pr
-description: "Implement a GitHub issue end to end for auto-dispatch: claim it with the agent-dispatched label, run the implement skill, then open a pull request."
+description: "Implement a GitHub issue end to end for auto-dispatch: claim it with the agent-dispatched label, run the implement skill, report the UI, open a pull request, and babysit it until it merges."
 disable-model-invocation: true
 ---
 
 Implement the GitHub issue the user named, as a dispatched agent session. This
 is the entry point the auto-dispatch pipeline invokes. It wraps the implement
-skill in the two things a dispatched session owes the pipeline: a claim at the
-start and a pull request at the end.
+skill in what a dispatched session owes the pipeline: a claim at the start, a
+pull request at the end, and a watch over that pull request until it merges.
 
 ## 1. Claim the issue, before anything else
 
@@ -35,7 +35,14 @@ That skill owns how the work gets built: TDD at pre-agreed seams, regular
 typechecking and single test files, the full suite once at the end, and a
 code review before committing. Do not restate or second-guess it here.
 
-## 3. Open a pull request
+## 3. Show the UI, when there is any
+
+If the diff touches anything a user sees (views, layout, on-screen text,
+colours, navigation), call the Skill tool with "ui-report". It builds one
+HTML file of screenshots of every touched screen; keep its path for the PR
+body. A change with no user-visible surface skips this step.
+
+## 4. Open a pull request
 
 The implement skill leaves the work committed on the current branch. Take it
 from there.
@@ -53,6 +60,18 @@ still have the context that produced the code.
 
 Then push the branch and open the pull request (`gh pr create`), every time,
 without asking. The title must follow Conventional Commits. The body must
-close the issue (`Closes #<number>`) and list the acceptance criteria with how
-each one was verified. This is the close-out for every run: do not stop at a
-local commit.
+close the issue (`Closes #<number>`), list the acceptance criteria with how
+each one was verified, and, when step 3 ran, give the UI report's path. Do
+not stop at a local commit: the pull request is what step 5 watches.
+
+## 5. Babysit the pull request
+
+Call the Skill tool with "babysit-pr" for the PR you just opened, and stay in
+it until it stops. It watches CI, review comments, and mergeability, pushes
+fixes, rebases when `main` moves under the branch, and stops only when the PR
+is merged or closed, when a blocker needs a human, or when its budget is
+spent. That stop ends this session; opening the PR does not.
+
+Leave the `agent-dispatched` label on however the babysitter stops: the issue
+stays in flight until the PR closes it. The label comes off only in the
+give-up case of step 1.

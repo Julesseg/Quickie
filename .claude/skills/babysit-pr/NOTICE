@@ -1,0 +1,10 @@
+This skill is adapted from the `babysit-pr` skill in openai/codex
+(https://github.com/openai/codex, path .codex/skills/babysit-pr), which is
+licensed under the Apache License, Version 2.0
+(http://www.apache.org/licenses/LICENSE-2.0).
+
+Changes from upstream: the skill text is rewritten for unattended Claude Code
+sessions (questions go on the PR instead of the chat); the watcher gained
+`--until-change`, `--max-wait`, `--budget-seconds`, a `rebase_onto_base`
+recommendation (conflicting or behind-base branches), and `base_branch` in the
+snapshot; Copilot and Claude review bots are surfaced alongside Codex.

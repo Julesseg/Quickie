@@ -17,7 +17,7 @@ Uses the five canonical triage labels (`needs-triage`, `needs-info`, `ready-for-
 When an issue closes as completed (or on a manual run), `unblock-dispatch.yml`
 finds `ready-for-agent` issues with no open blockers — including never-blocked
 ones — and spawns a Paseo agent session for each on the self-hosted Mac runner
-(max 2 new sessions per run, capped in flight). The session itself applies the
+(one session at a time on the runner Mac). The session itself applies the
 `agent-dispatched` label, so it always means a session really started; until it
 does, the spawn run stands in. See `docs/agents/auto-dispatch.md`.
 
@@ -99,9 +99,10 @@ issue. This is the settled, correct setup — do not treat it as a gap to fix.
 - Whether the box you are on can run the UI suite at all is **environment-
   specific**, so it is not stated here as a flat fact — a `SessionStart` hook
   (`.claude/hooks/platform-guidance.sh`) reports it per session: cloud/web
-  sessions run on Linux with no iOS simulator and cannot build the `App/` target
-  or run XCUITest; a developer's Mac has Xcode and *can* run the suite locally,
-  though doing so is slow and optional. Follow whatever that hook tells you.
+  sessions and local Linux machines have no iOS simulator and cannot build the
+  `App/` target or run XCUITest; a developer's Mac has Xcode and *can* run the
+  suite locally, though doing so is slow and optional. Follow whatever that hook
+  tells you.
 
 When implementing an issue: write the UI code, rely on `swift test` for the logic,
 and let the CI XCUITest job cover the UI behaviors. That split is by design — it

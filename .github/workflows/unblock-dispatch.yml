@@ -1,12 +1,11 @@
 name: Unblock dispatch
 
-# When an issue is completed (typically auto-closed by a merged PR), find
-# `ready-for-agent` issues with no open blockers — whether their "## Blocked by"
-# list is now fully closed or they were never blocked at all — and dispatch an
-# agent-implement run for each, up to a per-run cap on new sessions and an
-# in-flight cap. Issues deferred by the caps are picked up automatically on the
-# next close event, because every run re-scans all open ready issues. A manual
-# run (workflow_dispatch) performs the same scan without a close event.
+# Find `ready-for-agent` issues that are ready to work — either never blocked,
+# or with a "## Blocked by" list that is now fully closed — and dispatch an
+# agent-implement run for each, up to an in-flight cap of one (the Mac that
+# runs the sessions can only carry one). Issues deferred by the cap are picked
+# up automatically on the next run, because every run re-scans every open
+# `ready-for-agent` issue.
 #
 # This workflow never labels an issue: the `agent-dispatched` label is applied
 # by the session itself, so it always means a session really started. Until
@@ -16,9 +15,11 @@ name: Unblock dispatch
 on:
   issues:
     types: [closed]
+  # Manual re-scan — the way to start never-blocked issues, drain a backlog
+  # after raising the in-flight cap, or pick up a fixed "## Blocked by" list.
   workflow_dispatch:
 
-# Serialize runs so two near-simultaneous closes can't double-dispatch the
+# Serialize runs so two near-simultaneous events can't double-dispatch the
 # same issue. A cancelled pending run is harmless: each run re-scans
 # everything, so the surviving run covers the cancelled one's event.
 concurrency:
@@ -37,8 +38,11 @@ jobs:
       - uses: actions/github-script@v7
         with:
           script: |
-            const MAX_IN_FLIGHT = 3;
-            const MAX_NEW_PER_RUN = 2;
+            // One at a time: every session runs on baldur, a single old Mac
+            // that cannot carry two at once. This cap keeps the queue honest;
+            // agent-implement.yml enforces the same limit on the host itself,
+            // where it also covers runs this dispatcher did not fire.
+            const MAX_IN_FLIGHT = 1;
             const DISPATCH_LABEL = 'agent-dispatched';
             const READY_LABEL = 'ready-for-agent';
             const WORKFLOW_FILE = 'agent-implement.yml';
@@ -48,12 +52,17 @@ jobs:
             const HANDOFF_GRACE_MS = 30 * 60 * 1000;
 
             const { owner, repo } = context.repo;
-            // Absent on workflow_dispatch, which runs the same scan manually.
-            const closed = context.payload.issue ?? null;
 
-            if (closed && closed.state_reason !== 'completed') {
-              core.info(`Issue #${closed.number} closed as "${closed.state_reason}"; not dispatching.`);
-              return;
+            // The issue whose close unblocked this run — null on a manual
+            // re-scan. Used only to credit the dispatch comment.
+            let closedBy = null;
+            if (context.payload.action === 'closed') {
+              const closed = context.payload.issue;
+              if (closed.state_reason !== 'completed') {
+                core.info(`Issue #${closed.number} closed as "${closed.state_reason}"; not dispatching.`);
+                return;
+              }
+              closedBy = closed;
             }
 
             // The session applies this label, but `gh issue edit --add-label`
@@ -70,6 +79,7 @@ jobs:
             }
 
             // Blockers are the "- #N" bullets under the "## Blocked by" heading.
+            // No section, or one that says "None", yields [] — never blocked.
             function blockersOf(body) {
               const section = (body || '').split(/^## Blocked by\s*$/m)[1];
               if (!section) return [];
@@ -77,7 +87,13 @@ jobs:
               return [...ownText.matchAll(/^\s*-\s*[\w./-]*#(\d+)/gm)].map(m => Number(m[1]));
             }
 
-            const stateCache = new Map(closed ? [[closed.number, 'closed']] : []);
+            // Umbrella issues a human slices into per-milestone work before any
+            // agent grabs them: epics and specs.
+            function isUmbrella(title) {
+              return /^\[epic\]/i.test(title) || /^spec:/i.test(title);
+            }
+
+            const stateCache = new Map(closedBy ? [[closedBy.number, 'closed']] : []);
             async function isClosed(num) {
               if (!stateCache.has(num)) {
                 const { data } = await github.rest.issues.get({ owner, repo, issue_number: num });
@@ -133,31 +149,31 @@ jobs:
               owner, repo, state: 'open', labels: READY_LABEL, per_page: 100,
             });
 
-            // Any ready issue with no open blockers is startable — whether its
-            // "## Blocked by" list is now fully closed or it never had one.
-            const startable = [];
+            const ready = [];
             for (const issue of open) {
               if (issue.pull_request) continue;
               if (inFlight.has(issue.number)) continue;
-              // Epics get sliced by a human before any agent grabs them.
-              if (/^\[epic\]/i.test(issue.title)) continue;
+              if (isUmbrella(issue.title)) {
+                core.info(`Skipping umbrella issue #${issue.number}: ${issue.title}`);
+                continue;
+              }
               const blockers = blockersOf(issue.body);
               let allClosed = true;
               for (const b of blockers) {
                 if (!(await isClosed(b))) { allClosed = false; break; }
               }
-              if (allClosed) startable.push({ issue, blockers });
+              if (allClosed) ready.push({ issue, wasBlocked: blockers.length > 0 });
             }
-            startable.sort((a, b) => a.issue.number - b.issue.number);
+            ready.sort((a, b) => a.issue.number - b.issue.number);
 
-            if (startable.length === 0) {
-              core.info('No startable ready-for-agent issues.');
+            if (ready.length === 0) {
+              core.info('No dispatchable ready-for-agent issues.');
               return;
             }
 
-            const slots = Math.min(MAX_NEW_PER_RUN, Math.max(0, MAX_IN_FLIGHT - inFlight.size));
-            const toDispatch = startable.slice(0, slots);
-            const deferred = startable.slice(slots);
+            const slots = Math.max(0, MAX_IN_FLIGHT - inFlight.size);
+            const toDispatch = ready.slice(0, slots);
+            const deferred = ready.slice(slots);
 
             // createWorkflowDispatch returns no run id, and the run it creates
             // takes a moment to show up in the list. Wait for it: the next
@@ -174,22 +190,21 @@ jobs:
               core.warning(`No spawn run visible for #${number} yet; a re-scan in the next moments could dispatch it twice.`);
             }
 
-            for (const { issue, blockers } of toDispatch) {
+            for (const { issue, wasBlocked } of toDispatch) {
               await github.rest.actions.createWorkflowDispatch({
                 owner, repo, workflow_id: WORKFLOW_FILE,
                 ref: context.payload.repository.default_branch,
                 inputs: { issue: String(issue.number) },
               });
-              const reason = closed && blockers.includes(closed.number)
-                ? `Unblocked by #${closed.number}`
-                : blockers.length > 0 ? 'All blockers are closed' : 'Ready with no blockers';
               await github.rest.issues.createComment({
                 owner, repo, issue_number: issue.number,
-                body: `🤖 ${reason} — dispatched an agent session to implement this issue.`,
+                body: wasBlocked && closedBy
+                  ? `🤖 Unblocked by #${closedBy.number} — dispatched an agent session to implement this issue.`
+                  : `🤖 Dispatched an agent session to implement this issue.`,
               });
               await waitForRun(issue.number);
               core.notice(`Dispatched #${issue.number}: ${issue.title}`);
             }
             for (const { issue } of deferred) {
-              core.notice(`#${issue.number} is startable but deferred (max ${MAX_NEW_PER_RUN} new sessions per run, in-flight cap ${MAX_IN_FLIGHT}); the next run will pick it up.`);
+              core.notice(`#${issue.number} is ready but deferred (in-flight cap ${MAX_IN_FLIGHT}); the next run will pick it up.`);
             }
