@@ -17,7 +17,7 @@ Uses the five canonical triage labels (`needs-triage`, `needs-info`, `ready-for-
 When an issue closes as completed (or on a manual run), `unblock-dispatch.yml`
 finds `ready-for-agent` issues with no open blockers — including never-blocked
 ones — and spawns a Paseo agent session for each on the self-hosted Mac runner
-(one session at a time on the runner Mac). The session itself applies the
+(at most three at a time on the runner Mac). The session itself applies the
 `agent-dispatched` label, so it always means a session really started; until it
 does, the spawn run stands in. See `docs/agents/auto-dispatch.md`.
 

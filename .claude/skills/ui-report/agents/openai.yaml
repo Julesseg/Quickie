@@ -1,4 +1,0 @@
-interface:
-  display_name: "UI report"
-  short_description: "HTML report with screenshots of every screen a change touched"
-  default_prompt: "Build the UI report for the current change: list every screen and state the diff touched, capture each from the built app, and write a single-file HTML report the reviewer can open without launching the app."
