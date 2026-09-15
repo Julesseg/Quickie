@@ -267,8 +267,6 @@ struct ShortcutDetailView: View {
                     }
                 }
                 .accessibilityIdentifier("shortcut-appearance-row")
-            } footer: {
-                Text("Give this shortcut its own symbol and color, shown everywhere it appears. Leave them as None and Default to use the ones Shortcuts provides.")
             }
 
             Section {
