@@ -34,6 +34,10 @@ struct CustomActionEditorView: View {
     /// the close after a skip-over).
     @State private var templateSelection: TextSelection?
 
+    /// The URL field's focus, so a Return keypress — which the single-line rule
+    /// swallows — dismisses the keyboard instead of doing nothing.
+    @FocusState private var templateFocused: Bool
+
     init(
         definition: CustomActionDefinition,
         isNew: Bool,
@@ -62,7 +66,15 @@ struct CustomActionEditorView: View {
                         .lineLimit(1...6)
                         .textInputAutocapitalization(.never)
                         .autocorrectionDisabled()
+                        .submitLabel(.done)
+                        .focused($templateFocused)
                         .accessibilityIdentifier("custom-action-url-field")
+                        // `axis: .vertical` is only there so a long template wraps; a
+                        // template is one line, so line breaks (Return, a multi-line
+                        // paste) are stripped first (`SingleLineText`), and a lone
+                        // Return dismisses the keyboard. The brace rules then run on
+                        // the stripped text.
+                        //
                         // Typing `{` auto-closes to `{}` with the caret between the
                         // pair; typing `}` against the auto-inserted close skips
                         // over it instead of doubling. The text and caret rules are
@@ -80,7 +92,13 @@ struct CustomActionEditorView: View {
                         // if another edit arrived first, so it can never clobber
                         // newer input.
                         .onChange(of: def.template) { oldValue, newValue in
-                            guard let adjustment = BraceAutoClose.adjusted(replacing: oldValue, with: newValue)
+                            if SingleLineText.isReturnKeypress(replacing: oldValue, with: newValue) {
+                                templateFocused = false
+                            }
+                            let singleLine = SingleLineText.adjusted(replacing: oldValue, with: newValue)
+                            guard let adjustment = BraceAutoClose.adjusted(
+                                replacing: oldValue, with: singleLine?.text ?? newValue
+                            ) ?? singleLine
                             else { return }
                             Task { @MainActor in
                                 guard def.template == newValue else { return }
@@ -88,7 +106,11 @@ struct CustomActionEditorView: View {
                                 let caret = adjustment.text.index(
                                     adjustment.text.startIndex, offsetBy: adjustment.caretOffset
                                 )
-                                templateSelection = TextSelection(insertionPoint: caret)
+                                // A dismissing Return has already dropped focus; placing
+                                // a caret then would only fight the dismissal.
+                                if templateFocused {
+                                    templateSelection = TextSelection(insertionPoint: caret)
+                                }
                             }
                         }
                 } header: {
