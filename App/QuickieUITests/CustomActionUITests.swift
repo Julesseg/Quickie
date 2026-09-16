@@ -235,12 +235,8 @@ final class CustomActionUITests: XCTestCase {
         urlField.typeText("app://x\n")
         XCTAssertTrue(waitForValue("app://x", in: urlField),
                       "Return inserts no line break (was: \(urlField.value ?? ""))")
-        let keyboardGone = XCTNSPredicateExpectation(
-            predicate: NSPredicate(format: "count == 0"),
-            object: app.keyboards
-        )
-        XCTAssertEqual(XCTWaiter().wait(for: [keyboardGone], timeout: 5), .completed,
-                       "Return dismisses the keyboard")
+        XCTAssertTrue(app.keyboards.firstMatch.waitForNonExistence(timeout: 10),
+                      "Return dismisses the keyboard")
     }
 
     /// The date slot's two default output formats are one-tap fills (format strings

@@ -68,6 +68,12 @@ struct CustomActionEditorView: View {
                         .autocorrectionDisabled()
                         .submitLabel(.done)
                         .focused($templateFocused)
+                        // Return means "done" on both of the paths it can take: a
+                        // vertical-axis field usually turns it into an inserted line
+                        // break (stripped in `onChange` below, which drops focus
+                        // there), but it can also arrive as a submit — on iPad it
+                        // does — where no text change fires at all.
+                        .onSubmit { templateFocused = false }
                         .accessibilityIdentifier("custom-action-url-field")
                         // `axis: .vertical` is only there so a long template wraps; a
                         // template is one line, so line breaks (Return, a multi-line
