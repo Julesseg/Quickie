@@ -219,6 +219,26 @@ final class CustomActionUITests: XCTestCase {
         return XCTWaiter().wait(for: [settled], timeout: timeout) == .completed
     }
 
+    /// The URL field wraps but stays one line: Return inserts no line break and
+    /// dismisses the keyboard instead. The stripping and caret rules are Core-tested
+    /// (SingleLineTextTests); this proves the field wiring.
+    @MainActor
+    func testURLFieldRejectsLineBreaks() throws {
+        let app = launchApp()
+        openCustomActionsPage(app)
+        openNewEditor(app)
+
+        let urlField = app.textFields["custom-action-url-field"]
+        XCTAssertTrue(urlField.waitForExistence(timeout: 5))
+        urlField.tap()
+
+        urlField.typeText("app://x\n")
+        XCTAssertTrue(waitForValue("app://x", in: urlField),
+                      "Return inserts no line break (was: \(urlField.value ?? ""))")
+        XCTAssertTrue(app.keyboards.firstMatch.waitForNonExistence(timeout: 10),
+                      "Return dismisses the keyboard")
+    }
+
     /// The date slot's two default output formats are one-tap fills (format strings
     /// are fiddly to type): each button stamps its string into the format field, and
     /// the timed default's time tokens are what flip the slot to a date-and-time
