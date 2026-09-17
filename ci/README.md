@@ -90,7 +90,7 @@ environment that, by default, only lets the **default branch** deploy — so the
 deploy job on a PR branch is rejected at the gate (a ~1-second failure with no
 runner and no steps). Fix it at *Settings → Environments → `github-pages` →
 Deployment branches and tags*: pick **No restriction**, or keep *Selected
-branches and tags* and add a `claude/*` rule to cover the PR branches.
+branches and tags* and add an `agent/*` rule to cover the PR branches.
 
 The `build-history` branch is created automatically on the first successful
 publish — it's a derived store (force-pushed each run so old `.ipa` blobs don't
