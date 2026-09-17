@@ -5,7 +5,7 @@ name: Agent implement (Paseo)
 # "issue #<N>" shape.
 run-name: "Agent implement: issue #${{ inputs.issue }}"
 
-# Spawns a detached Paseo agent session on the self-hosted Mac runner to
+# Spawns a background Paseo agent session on the self-hosted Mac runner to
 # implement one issue. Dispatched by unblock-dispatch.yml; can also be run
 # manually from the Actions tab for any issue number.
 # See docs/agents/auto-dispatch.md for the runner + Paseo setup.
@@ -68,13 +68,14 @@ jobs:
             core.setOutput('skip', 'true');
             core.notice(`Not spawning: ${stale}. Re-run with force to override.`);
 
-      - name: Spawn detached Paseo session
+      - name: Spawn Paseo session
         if: steps.preflight.outputs.skip != 'true'
         env:
           ISSUE: ${{ inputs.issue }}
           PROJECT_DIR: ${{ vars.PASEO_PROJECT_DIR }}
-          # Optional repo Actions variables; the defaults below apply when unset.
+          PASEO_PROVIDER: ${{ vars.PASEO_PROVIDER }}
           PASEO_MODEL: ${{ vars.PASEO_MODEL }}
+          # Optional repo Actions variables.
           PASEO_THINKING: ${{ vars.PASEO_THINKING }}
           PASEO_MODE: ${{ vars.PASEO_MODE }}
           PASEO_BASE: ${{ vars.PASEO_BASE }}
@@ -141,18 +142,14 @@ jobs:
             exit 0
           fi
 
-          # Pinned rather than left to the Paseo daemon's defaults, which move
-          # as new models ship. Override per-repo with the PASEO_MODEL /
-          # PASEO_THINKING Actions variables.
-          export MODEL="${PASEO_MODEL:-claude-opus-5}"
-          export THINKING="${PASEO_THINKING:-high}"
-
-          # Nobody is around to answer a permission prompt in a detached CI
-          # session, so the default mode ("Always Ask") would just stall until
-          # the daemon times it out. Bypass instead. Unlike --model/--thinking,
-          # `paseo run` rejects an unknown --mode outright, so this needs no
-          # validation below.
-          MODE="${PASEO_MODE:-bypassPermissions}"
+          PROVIDER="${PASEO_PROVIDER:-}"
+          MODEL="${PASEO_MODEL:-}"
+          THINKING="${PASEO_THINKING:-}"
+          MODE="${PASEO_MODE:-}"
+          if [ -z "$PROVIDER" ] || [ -z "$MODEL" ]; then
+            echo "::error::Set the required PASEO_PROVIDER and PASEO_MODEL repository Actions variables" >&2
+            exit 1
+          fi
 
           # The remote tip, not the Mac clone's checked-out branch: nothing
           # updates that clone, so its local `main` drifts arbitrarily far
@@ -160,19 +157,31 @@ jobs:
           # starts by reading stale code.
           BASE="${PASEO_BASE:-origin/main}"
 
-          # `paseo run` accepts an unknown --model/--thinking without complaint
-          # and spawns the session anyway, so a typo'd variable would silently
-          # run on the wrong model. Check both against the provider first.
-          paseo provider models claude --json | python3 -c '
+          # Resolve and authenticate the provider before creating a branch or
+          # agent run. A disabled provider, missing login, or invalid model is
+          # an actionable configuration error.
+          paseo provider ls --json | PROVIDER="$PROVIDER" python3 -c '
+          import json, os, sys
+          data = json.load(sys.stdin)
+          providers = data.get("providers", data) if isinstance(data, dict) else data
+          provider = next((p for p in providers if p.get("provider") == os.environ["PROVIDER"]), None)
+          if provider is None:
+              sys.exit("::error::PASEO_PROVIDER %r is unknown" % os.environ["PROVIDER"])
+          if provider.get("status") != "available":
+              sys.exit("::error::PASEO_PROVIDER %r is unavailable (%s). Enable and authenticate it in Paseo first."
+                       % (os.environ["PROVIDER"], provider.get("status", "unknown status")))
+          '
+          paseo provider diagnostic "$PROVIDER"
+          paseo provider models "$PROVIDER" --thinking --json | PROVIDER="$PROVIDER" MODEL="$MODEL" THINKING="$THINKING" python3 -c '
           import json, os, sys
           models = json.load(sys.stdin)
           model, thinking = os.environ["MODEL"], os.environ["THINKING"]
           match = next((m for m in models if m["id"] == model), None)
           if match is None:
-              sys.exit("::error::PASEO_MODEL %r is not a Claude model id. Available: %s"
-                       % (model, ", ".join(m["id"] for m in models)))
+              sys.exit("::error::PASEO_MODEL %r is not valid for PASEO_PROVIDER %r. Available: %s"
+                       % (model, os.environ.get("PROVIDER", ""), ", ".join(m["id"] for m in models)))
           options = match.get("thinkingOptionIds") or []
-          if thinking not in options:
+          if thinking and thinking not in options:
               sys.exit("::error::PASEO_THINKING %r is not valid for %s. Available: %s"
                        % (thinking, model, ", ".join(options)))
           '
@@ -182,28 +191,20 @@ jobs:
           # remote-tracking ref pointing at yesterday.
           git -C "$PROJECT_DIR" fetch --prune origin
 
-          echo "Spawning session for issue #${ISSUE} on ${MODEL} at ${THINKING} reasoning effort in ${MODE} mode, branched off ${BASE}"
+          echo "Spawning session for issue #${ISSUE} with ${PROVIDER}/${MODEL}, branched off ${BASE}"
 
-          # --detach: the session runs under the Paseo daemon, so it outlives
-          # this job; progress is visible in the Paseo apps. The prompt invokes
-          # the /label-and-implement-with-pr skill, which carries the full
-          # workflow instructions — starting with claiming the issue with the
-          # `agent-dispatched` label, which nothing else applies, and ending
-          # with a pull request (see docs/agents/auto-dispatch.md).
-          # Unlike --model/--thinking, an unresolvable --base fails the run
-          # outright instead of spawning on the wrong commit, so it needs no
-          # validation of its own.
+          # The background session outlives this job. Its instruction names the
+          # shared skill without depending on any client's slash-command syntax.
           # The --label is what the host check above counts, so it is the
           # session's own claim on one of tyr's slots for as long as it runs.
-          paseo run --detach \
-            --provider claude \
-            --model "$MODEL" \
-            --thinking "$THINKING" \
-            --mode "$MODE" \
+          RUN_ARGS=(--background --provider "$PROVIDER" --model "$MODEL")
+          [ -z "$THINKING" ] || RUN_ARGS+=(--thinking "$THINKING")
+          [ -z "$MODE" ] || RUN_ARGS+=(--mode "$MODE")
+          paseo run "${RUN_ARGS[@]}" \
             --cwd "$PROJECT_DIR" \
             --new-workspace worktree \
             --worktree-mode branch-off \
-            --new-branch "claude/issue-${ISSUE}" \
+            --new-branch "agent/issue-${ISSUE}" \
             --base "$BASE" \
             --label "${SESSION_LABEL}=${ISSUE}" \
-            "/label-and-implement-with-pr issue #${ISSUE}"
+            "Use the label-and-implement-with-pr skill to implement issue #${ISSUE}."
