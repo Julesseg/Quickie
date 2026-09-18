@@ -84,6 +84,7 @@ final class SecondaryActionUITests: XCTestCase {
         // dead item).
         XCTAssertFalse(app.buttons["Reveal in Files"].exists,
                        "a non-file row must not offer Reveal in Files")
+
     }
 
     /// Compose a snippet, then long-press its result row: the menu offers **Edit**
@@ -134,6 +135,12 @@ final class SecondaryActionUITests: XCTestCase {
                       "the content verbs join the existing Pin item in one menu")
         XCTAssertFalse(app.buttons["Reveal in Files"].exists,
                        "a non-file row must not offer Reveal in Files")
+
+        app.buttons["Edit"].tap()
+        XCTAssertTrue(app.buttons["duplicate-custom-action"].waitForExistence(timeout: 5),
+                      "editing from a result row reaches the same Duplicate control")
+        XCTAssertTrue(app.buttons["delete-custom-action"].exists,
+                      "editing from a result row reaches the same Delete control")
     }
 
     /// A Shortcut row long-press offers **Edit** — a deeplink into the Shortcuts

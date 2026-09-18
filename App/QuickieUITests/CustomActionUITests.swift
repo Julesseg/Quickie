@@ -571,6 +571,74 @@ final class CustomActionUITests: XCTestCase {
         XCTAssertTrue(app.staticTexts["Dupe Me"].exists, "the original remains")
     }
 
+    /// A saved Custom Action's editor owns the destructive and copy verbs now that
+    /// the permanent-edit management page cannot offer them through a swipe. A new,
+    /// unsaved form deliberately has neither row.
+    @MainActor
+    func testEditorDuplicateReopensCopyAndDeleteConfirms() throws {
+        let app = launchApp()
+        openCustomActionsPage(app)
+        openNewEditor(app)
+
+        XCTAssertFalse(app.buttons["duplicate-custom-action"].exists,
+                       "a new action cannot duplicate an unsaved record")
+        XCTAssertFalse(app.buttons["delete-custom-action"].exists,
+                       "a new action cannot delete an unsaved record")
+
+        setText("Editor Copy", in: app.textFields["custom-action-name-field"])
+        setText("https://example.com/?q={q}", in: app.textFields["custom-action-url-field"])
+        app.buttons["save-custom-action"].tap()
+
+        let original = app.staticTexts["Editor Copy"]
+        var scrolls = 0
+        while !original.exists && scrolls < 6 {
+            app.swipeUp()
+            scrolls += 1
+        }
+        XCTAssertTrue(original.waitForExistence(timeout: 10))
+        original.tap()
+
+        let duplicate = app.buttons["duplicate-custom-action"]
+        var footerScrolls = 0
+        while !duplicate.exists && footerScrolls < 6 {
+            app.swipeUp()
+            footerScrolls += 1
+        }
+        XCTAssertTrue(duplicate.waitForExistence(timeout: 5), "editing exposes Duplicate")
+        duplicate.tap()
+
+        let name = app.textFields["custom-action-name-field"]
+        XCTAssertTrue(name.waitForExistence(timeout: 10), "Duplicate reopens an editor")
+        XCTAssertEqual(name.value as? String, "Editor Copy copy",
+                       "the reopened editor is bound to the fresh copy")
+
+        let delete = app.buttons["delete-custom-action"]
+        var deleteScrolls = 0
+        while !delete.exists && deleteScrolls < 6 {
+            app.swipeUp()
+            deleteScrolls += 1
+        }
+        XCTAssertTrue(delete.exists, "the copied action is itself editable")
+        delete.tap()
+        let confirmation = app.sheets["Delete Custom Action?"]
+        let confirm = confirmation.buttons["Delete Custom Action"]
+        XCTAssertTrue(confirm.waitForExistence(timeout: 5), "Delete asks for confirmation")
+        // On this compact simulator SwiftUI presents the confirmation as a popover
+        // with an outside-tap dismissal instead of exposing the cancel action as a
+        // button. Dismiss it the way a user does, then prove the record is untouched.
+        app.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.1)).tap()
+        XCTAssertTrue(confirmation.waitForNonExistence(timeout: 5), "dismissing the confirmation cancels Delete")
+        XCTAssertTrue(name.exists, "cancelling Delete leaves the editor open")
+
+        delete.tap()
+        XCTAssertTrue(confirm.waitForExistence(timeout: 5))
+        confirm.tap()
+        XCTAssertTrue(app.staticTexts["Editor Copy"].waitForExistence(timeout: 10),
+                      "confirming Delete dismisses the editor and keeps the original")
+        XCTAssertFalse(app.staticTexts["Editor Copy copy"].exists,
+                       "confirming Delete removes the copied action")
+    }
+
     // MARK: - Editor: the merged Symbol & Color page
 
     /// The editor offers **one** appearance row (CONTEXT.md → Custom Action, Action

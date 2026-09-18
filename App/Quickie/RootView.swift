@@ -38,6 +38,7 @@ struct RootView: View {
     /// merged by id, so once `@Query` catches up (on the next in-process save) the
     /// merge is a no-op.
     @State private var foregroundCustomActions: [StoredCustomAction] = []
+    @State private var pendingActiveSheet: ActiveSheet?
 
     /// User Snippets feed the same index — copy-out Actions ranked beside every
     /// other capability (issue #6).
@@ -1294,7 +1295,10 @@ struct RootView: View {
             // also drops the keyboard, so re-arm focus on return. `onDismiss`
             // is itself the event — it fires *after* the dismiss animation
             // finishes, so no delay is needed.
-            .sheet(item: $activeSheet, onDismiss: { refocusInput() }) { sheet in
+            .sheet(item: $activeSheet, onDismiss: {
+                refocusInput()
+                reopenPendingActiveSheet()
+            }) { sheet in
                 switch sheet {
                 case .composeSnippet(let seed):
                     SnippetEditorView(seed: seed.text)
@@ -1303,9 +1307,13 @@ struct RootView: View {
                 case .editCustomAction(let action):
                     // The same live-mirroring editor the Custom Actions page presents,
                     // applying the edited definition to the stored record.
-                    CustomActionEditorView(definition: action.definition, isNew: false) { def in
-                        action.apply(def)
-                    }
+                    CustomActionEditorView(
+                        definition: action.definition,
+                        isNew: false,
+                        onSave: { def in action.apply(def) },
+                        onDuplicate: { duplicateCustomActionAndReopen(action) },
+                        onDelete: { modelContext.delete(action) }
+                    )
                 }
             }
             // New Event's editor mode (issue #38): the pre-filled system event editor
@@ -1787,6 +1795,26 @@ struct RootView: View {
             return
         }
         activeSheet = .editCustomAction(action)
+    }
+
+    /// Duplicating from a result row uses the same fresh-id store insert as the
+    /// management page, then replaces the sheet so the user lands in the copy's form.
+    private func duplicateCustomActionAndReopen(_ action: StoredCustomAction) {
+        var definition = action.definition
+        definition.name = CustomActionDefinition.duplicateName(
+            from: definition.name,
+            existingNames: Set(indexedCustomActions.map(\.title))
+        )
+        let copy = StoredCustomAction.make(from: definition)
+        modelContext.insert(copy)
+        pendingActiveSheet = .editCustomAction(copy)
+        activeSheet = nil
+    }
+
+    private func reopenPendingActiveSheet() {
+        guard let pendingActiveSheet else { return }
+        self.pendingActiveSheet = nil
+        activeSheet = pendingActiveSheet
     }
 
     /// Resolves a row's content to the text a **Copy** puts on the pasteboard (ADR

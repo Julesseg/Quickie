@@ -160,6 +160,34 @@ final class ShortcutUITests: XCTestCase {
                        "no imported row survives the bulk clear")
     }
 
+    /// A shortcut can also be reached from the fallback list, where a swipe is not
+    /// available, so its own settings page owns a deliberate confirmed Delete.
+    @MainActor
+    func testShortcutDetailDeleteConfirmsAndReturnsToList() throws {
+        let app = launchApp(seed: "Timer")
+
+        let input = app.textFields["search-input"]
+        XCTAssertTrue(input.waitForExistence(timeout: 30))
+        input.tap()
+        input.typeText("shortcuts")
+        app.buttons["builtin.shortcuts-page"].tap()
+
+        let row = app.buttons["shortcut-row.Timer"]
+        XCTAssertTrue(row.waitForExistence(timeout: 10))
+        row.tap()
+
+        let delete = app.buttons["delete-shortcut.Timer"]
+        XCTAssertTrue(delete.waitForExistence(timeout: 10), "the settings page ends with Delete")
+        delete.tap()
+        let confirm = app.buttons["Delete Shortcut"]
+        XCTAssertTrue(confirm.waitForExistence(timeout: 5), "shortcut deletion asks for confirmation")
+        confirm.tap()
+        XCTAssertTrue(row.waitForNonExistence(timeout: 10),
+                      "confirming removes the shortcut")
+        XCTAssertTrue(app.navigationBars["Shortcuts"].waitForExistence(timeout: 10),
+                      "confirming Delete pops back to the Shortcuts list")
+    }
+
     /// A Shortcut Action with `acceptsInput` **on** runs through the breadcrumb
     /// (issue #46 AC #4): tapping it starts a capture that collects the one optional
     /// `text` input, headed by the shortcut's name — rather than firing immediately.

@@ -114,6 +114,17 @@ public struct CustomActionDefinition: Equatable, Sendable {
     /// an untouched action stores no token and migrates cleanly.
     public var colorToken: String? { color?.rawValue }
 
+    /// The title for a user-created copy. The first copy follows the visible
+    /// " copy" convention; later copies gain a number so each row stays
+    /// distinguishable without changing the original action.
+    public static func duplicateName(from name: String, existingNames: Set<String>) -> String {
+        let base = "\(name) copy"
+        guard existingNames.contains(base) else { return base }
+        var suffix = 2
+        while existingNames.contains("\(base) \(suffix)") { suffix += 1 }
+        return "\(base) \(suffix)"
+    }
+
     /// The distinct `{name}` token names in **URL-appearance order** — the raw slots
     /// the template declares. The same name appearing twice collapses to one entry
     /// (one Argument fills every occurrence); numeric names (`{1}`) are accepted like

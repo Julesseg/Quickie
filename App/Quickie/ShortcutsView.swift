@@ -168,6 +168,9 @@ struct ShortcutDetailView: View {
     let store: ShortcutsStore
     let enablement: EnablementStore
 
+    @Environment(\.dismiss) private var dismiss
+    @State private var confirmingDelete = false
+
     /// The shortcut's stable Action id — the same derivation the engine
     /// filters by (`Action.shortcutID(for:)`), so the toggle can't drift.
     private var actionID: String { Action.shortcutID(for: name) }
@@ -280,6 +283,29 @@ struct ShortcutDetailView: View {
                     .accessibilityIdentifier("shortcut-alias-field.\(name)")
             } header: {
                 Text("Alias")
+            }
+
+            Section {
+                Button(role: .destructive) {
+                    confirmingDelete = true
+                } label: {
+                    Label("Delete", systemImage: "trash")
+                        .foregroundStyle(.red)
+                }
+                .accessibilityIdentifier("delete-shortcut.\(name)")
+                .confirmationDialog(
+                    "Delete \(name)?",
+                    isPresented: $confirmingDelete,
+                    titleVisibility: .visible
+                ) {
+                    Button("Delete Shortcut", role: .destructive) {
+                        store.delete(name)
+                        dismiss()
+                    }
+                    Button("Cancel", role: .cancel) {}
+                } message: {
+                    Text("This removes the imported shortcut from Quickie. Re-syncing can import it again.")
+                }
             }
         }
         .managementColumn()
