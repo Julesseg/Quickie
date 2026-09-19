@@ -307,7 +307,7 @@ final class SecondaryActionUITests: XCTestCase {
         app.buttons["Edit"].tap()
         let duplicate = app.buttons["duplicate-custom-action"]
         var footerScrolls = 0
-        while !duplicate.exists && footerScrolls < 6 {
+        while !duplicate.exists && footerScrolls < 12 {
             app.swipeUp()
             footerScrolls += 1
         }
