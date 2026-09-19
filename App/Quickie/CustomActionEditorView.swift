@@ -22,6 +22,8 @@ struct CustomActionEditorView: View {
     /// Whether this is a fresh action (drives the navigation title).
     let isNew: Bool
     let onSave: (CustomActionDefinition) -> Void
+    let onDuplicate: (() -> Void)?
+    let onDelete: (() -> Void)?
 
     /// The live view-model: a `CustomActionDefinition` whose `var` fields bind
     /// straight to the form, so `rows`/`arguments`/validation recompute per keystroke.
@@ -34,6 +36,8 @@ struct CustomActionEditorView: View {
     /// the close after a skip-over).
     @State private var templateSelection: TextSelection?
 
+    @State private var confirmingDelete = false
+
     /// The URL field's focus, so a Return keypress — which the single-line rule
     /// swallows — dismisses the keyboard instead of doing nothing.
     @FocusState private var templateFocused: Bool
@@ -41,10 +45,14 @@ struct CustomActionEditorView: View {
     init(
         definition: CustomActionDefinition,
         isNew: Bool,
-        onSave: @escaping (CustomActionDefinition) -> Void
+        onSave: @escaping (CustomActionDefinition) -> Void,
+        onDuplicate: (() -> Void)? = nil,
+        onDelete: (() -> Void)? = nil
     ) {
         self.isNew = isNew
         self.onSave = onSave
+        self.onDuplicate = onDuplicate
+        self.onDelete = onDelete
         _def = State(initialValue: definition)
     }
 
@@ -136,6 +144,39 @@ struct CustomActionEditorView: View {
                         .textInputAutocapitalization(.never)
                         .autocorrectionDisabled()
                         .accessibilityIdentifier("custom-action-alias-field")
+                }
+
+                if !isNew, let onDuplicate, let onDelete {
+                    Section {
+                        Button {
+                            onDuplicate()
+                            dismiss()
+                        } label: {
+                            Label("Duplicate", systemImage: "plus.square.on.square")
+                        }
+                        .accessibilityIdentifier("duplicate-custom-action")
+
+                        Button(role: .destructive) {
+                            confirmingDelete = true
+                        } label: {
+                            Label("Delete Custom Action", systemImage: "trash")
+                                .foregroundStyle(.red)
+                        }
+                        .accessibilityIdentifier("delete-custom-action")
+                        .confirmationDialog(
+                            "Delete Custom Action?",
+                            isPresented: $confirmingDelete,
+                            titleVisibility: .visible
+                        ) {
+                            Button("Delete Custom Action", role: .destructive) {
+                                onDelete()
+                                dismiss()
+                            }
+                            Button("Cancel", role: .cancel) {}
+                        } message: {
+                            Text("This permanently removes the Custom Action.")
+                        }
+                    }
                 }
             }
             // Dragging the form dismisses the keyboard, so the lower sections (the

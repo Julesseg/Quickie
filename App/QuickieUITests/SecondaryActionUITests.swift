@@ -134,6 +134,7 @@ final class SecondaryActionUITests: XCTestCase {
                       "the content verbs join the existing Pin item in one menu")
         XCTAssertFalse(app.buttons["Reveal in Files"].exists,
                        "a non-file row must not offer Reveal in Files")
+
     }
 
     /// A Shortcut row long-press offers **Edit** — a deeplink into the Shortcuts
@@ -173,6 +174,7 @@ final class SecondaryActionUITests: XCTestCase {
                        "a shortcut has no text, so it must not offer Share")
         XCTAssertFalse(app.buttons["Reveal in Files"].exists,
                        "a non-file row must not offer Reveal in Files")
+
     }
 
     /// The name of the Shortcut Action seeded through the real import path so a
@@ -301,6 +303,10 @@ final class SecondaryActionUITests: XCTestCase {
                        "a custom action has no pre-resolved value, so it must not offer Share")
         XCTAssertFalse(app.buttons["Reveal in Files"].exists,
                        "a non-file row must not offer Reveal in Files")
+
+        app.buttons["Edit"].tap()
+        XCTAssertTrue(app.textFields["custom-action-name-field"].waitForExistence(timeout: 5),
+                      "editing from a result row reaches the Custom Action editor")
     }
 
     /// A command row carries no content, so its long-press menu shows the universal
