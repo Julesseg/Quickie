@@ -305,7 +305,13 @@ final class SecondaryActionUITests: XCTestCase {
                        "a non-file row must not offer Reveal in Files")
 
         app.buttons["Edit"].tap()
-        XCTAssertTrue(app.buttons["duplicate-custom-action"].waitForExistence(timeout: 5),
+        let duplicate = app.buttons["duplicate-custom-action"]
+        var footerScrolls = 0
+        while !duplicate.exists && footerScrolls < 6 {
+            app.swipeUp()
+            footerScrolls += 1
+        }
+        XCTAssertTrue(duplicate.waitForExistence(timeout: 5),
                       "editing from a result row reaches the same Duplicate control")
         XCTAssertTrue(app.buttons["delete-custom-action"].exists,
                       "editing from a result row reaches the same Delete control")
