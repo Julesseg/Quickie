@@ -1,0 +1,32 @@
+[
+  {
+    "pr": 303,
+    "title": "feat(custom-actions): move Delete and Duplicate into the editors",
+    "sha": "681b5d7",
+    "time": "2026-09-19T16:52:28.832Z"
+  },
+  {
+    "pr": 302,
+    "title": "chore: make agent configuration client-neutral",
+    "sha": "289b214",
+    "time": "2026-09-17T20:19:18.126Z"
+  },
+  {
+    "pr": 297,
+    "title": "fix(custom-actions): keep the URL template on one line while it wraps",
+    "sha": "639c7f2",
+    "time": "2026-09-17T07:48:47.868Z"
+  },
+  {
+    "pr": 295,
+    "title": "style(shortcuts): drop the footer under the Symbol & Color row",
+    "sha": "4bd9ebe",
+    "time": "2026-09-15T09:32:27.638Z"
+  },
+  {
+    "pr": 294,
+    "title": "ci(agents): align auto-dispatch with Aujour's pipeline",
+    "sha": "7fb71b3",
+    "time": "2026-09-13T18:59:27.339Z"
+  }
+]
