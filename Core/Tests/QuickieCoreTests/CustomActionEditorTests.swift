@@ -11,6 +11,17 @@ import Testing
 // no SwiftUI so `cd Core && swift test` covers them.
 struct CustomActionEditorTests {
 
+    @Test("duplicate names use copy suffixes without collisions")
+    func duplicateNameUsesCopySuffixesWithoutCollisions() {
+        #expect(CustomActionDefinition.duplicateName(from: "Search", existingNames: []) == "Search copy")
+        #expect(
+            CustomActionDefinition.duplicateName(
+                from: "Search",
+                existingNames: ["Search copy", "Search copy 2"]
+            ) == "Search copy 3"
+        )
+    }
+
     // MARK: - Reconciliation: rows mirror the template, in fill order
 
     @Test("rows default to URL-appearance order")

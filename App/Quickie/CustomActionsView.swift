@@ -21,6 +21,7 @@ struct CustomActionsView: View {
     let enablement: EnablementStore
 
     @State private var editorTarget: EditorTarget?
+    @State private var pendingEditorTarget: EditorTarget?
 
     private enum EditorTarget: Identifiable {
         case new
@@ -102,7 +103,7 @@ struct CustomActionsView: View {
                 .accessibilityLabel("Add Custom Action")
             }
         }
-        .sheet(item: $editorTarget) { target in
+        .sheet(item: $editorTarget, onDismiss: reopenPendingEditor) { target in
             switch target {
             case .new:
                 CustomActionEditorView(
@@ -112,9 +113,13 @@ struct CustomActionsView: View {
                     modelContext.insert(StoredCustomAction.make(from: def))
                 }
             case .edit(let action):
-                CustomActionEditorView(definition: action.definition, isNew: false) { def in
-                    action.apply(def)
-                }
+                CustomActionEditorView(
+                    definition: action.definition,
+                    isNew: false,
+                    onSave: { def in action.apply(def) },
+                    onDuplicate: { duplicateAndReopen(action) },
+                    onDelete: { modelContext.delete(action) }
+                )
             }
         }
     }
@@ -131,19 +136,32 @@ struct CustomActionsView: View {
     /// (the PRD's "Things Todo" vs "Things Todo → Inbox").
     private func duplicate(_ action: StoredCustomAction) {
         var def = action.definition
-        def.name = duplicateName(for: def.name)
+        def.name = CustomActionDefinition.duplicateName(
+            from: def.name,
+            existingNames: Set(customActions.map(\.title))
+        )
         modelContext.insert(StoredCustomAction.make(from: def))
     }
 
-    /// A distinct title for a duplicate — the original with a " copy" suffix, numbered
-    /// if that is already taken — so the list never shows two identical names.
-    private func duplicateName(for name: String) -> String {
-        let base = "\(name) copy"
-        let existing = Set(customActions.map(\.title))
-        guard existing.contains(base) else { return base }
-        var suffix = 2
-        while existing.contains("\(base) \(suffix)") { suffix += 1 }
-        return "\(base) \(suffix)"
+    /// Sheet content does not replace its item while presented. Save the copy as the
+    /// next target and present it only from `onDismiss`, after the original editor has
+    /// completely left the hierarchy.
+    private func duplicateAndReopen(_ action: StoredCustomAction) {
+        var definition = action.definition
+        definition.name = CustomActionDefinition.duplicateName(
+            from: definition.name,
+            existingNames: Set(customActions.map(\.title))
+        )
+        let copy = StoredCustomAction.make(from: definition)
+        modelContext.insert(copy)
+        pendingEditorTarget = .edit(copy)
+        editorTarget = nil
+    }
+
+    private func reopenPendingEditor() {
+        guard let pendingEditorTarget else { return }
+        self.pendingEditorTarget = nil
+        editorTarget = pendingEditorTarget
     }
 }
 
