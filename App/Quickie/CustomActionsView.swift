@@ -64,6 +64,10 @@ struct CustomActionsView: View {
             // The Custom Actions page owns this cross-provider ordering surface. Its
             // guests (Shortcuts and built-in captures) live only in this ladder.
             FallbackListSections(store: store, enablement: enablement, eligible: eligible)
+                // The fallback sections are permanently editable so their ordered
+                // tiers show standard reorder grips. Keep that environment local:
+                // Catalog is a navigation destination, not an editable ladder.
+                .environment(\.editMode, .constant(.active))
 
             Section {
                 if otherActions.isEmpty {
@@ -82,9 +86,6 @@ struct CustomActionsView: View {
                 Text("Other actions")
             }
         }
-        // The fallback sections are permanently editable so their ordered tiers show
-        // standard reorder grips. Delete and Duplicate live in each action's editor.
-        .environment(\.editMode, .constant(.active))
         .managementColumn()
         .navigationTitle("Custom Actions")
         .toolbar {
