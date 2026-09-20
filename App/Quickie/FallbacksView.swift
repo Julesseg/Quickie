@@ -35,6 +35,10 @@ struct FallbackListSections: View {
     /// The live fallback-eligible Actions, from `RootView` — the union the three
     /// sections partition by the store's tiers and the disabled set.
     let eligible: [Action]
+    /// Opens an action's home from its one and only fallback-list row. The Custom
+    /// Actions page resolves its own rows to the editor; guest providers supply their
+    /// own destination as the page's navigation model grows.
+    let onSelect: (Action) -> Void
 
     /// The Shelf section, most-important-first (leading edge of the button row): the
     /// Shelf resolved to live Actions, minus any that are instance-disabled — a
@@ -86,7 +90,8 @@ struct FallbackListSections: View {
                             action: action,
                             style: .shelf,
                             onPrimary: { withAnimation { store.move(action.id, to: .enabled) } },
-                            onShelve: nil
+                            onShelve: nil,
+                            onSelect: { onSelect(action) }
                         )
                     }
                     .onMove { offsets, destination in
@@ -111,7 +116,8 @@ struct FallbackListSections: View {
                             action: action,
                             style: .active,
                             onPrimary: { withAnimation { store.move(action.id, to: .pool) } },
-                            onShelve: { withAnimation { store.move(action.id, to: .shelf) } }
+                            onShelve: { withAnimation { store.move(action.id, to: .shelf) } },
+                            onSelect: { onSelect(action) }
                         )
                     }
                     .onMove { offsets, destination in
@@ -141,7 +147,8 @@ struct FallbackListSections: View {
                                 onToggleDisabled: { withAnimation { enablement.toggleDisabled(action.id) } }
                             ),
                             onPrimary: { promote(action, to: .enabled) },
-                            onShelve: { promote(action, to: .shelf) }
+                            onShelve: { promote(action, to: .shelf) },
+                            onSelect: { onSelect(action) }
                         )
                     }
                 }
@@ -207,6 +214,8 @@ private struct FallbackRow: View {
     let onPrimary: () -> Void
     /// Promote onto the Shelf. `nil` on Shelf rows, which are already there.
     let onShelve: (() -> Void)?
+    /// Opens the action's home without duplicating it in an authoring section.
+    let onSelect: () -> Void
 
     var body: some View {
         HStack(spacing: 12) {
@@ -245,9 +254,11 @@ private struct FallbackRow: View {
                 if let caption = kindCaption {
                     Text(caption)
                         .font(.caption)
-                        .foregroundStyle(.secondary)
+                    .foregroundStyle(.secondary)
                 }
             }
+            .contentShape(Rectangle())
+            .onTapGesture(perform: onSelect)
             Spacer(minLength: 8)
 
             // The instance enable/disable toggle lives only on the pool rows —

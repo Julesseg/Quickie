@@ -529,12 +529,12 @@ final class CustomActionUITests: XCTestCase {
                       "a date slot reveals its single output-format field")
     }
 
-    // MARK: - Duplicate swipe action
+    // MARK: - Fallback-list editor access
 
-    /// Swiping a Custom Action row offers a **Duplicate** action that forks a ` copy`
-    /// alongside the original — a fast way to author a near-identical variant.
+    /// A fallback-eligible Custom Action appears only in the fallback list, but its
+    /// row still opens the editor where the permanent page keeps Duplicate and Delete.
     @MainActor
-    func testDuplicateSwipeActionForksTheRow() throws {
+    func testFallbackCustomActionRowOpensItsEditor() throws {
         let app = launchApp()
         openCustomActionsPage(app)
         openNewEditor(app)
@@ -555,16 +555,11 @@ final class CustomActionUITests: XCTestCase {
         }
         XCTAssertTrue(original.waitForExistence(timeout: 10), "the authored action is listed")
 
-        // Reveal the row's swipe actions and tap Duplicate.
-        original.swipeLeft()
-        let duplicate = app.buttons["Duplicate"]
-        XCTAssertTrue(duplicate.waitForExistence(timeout: 5), "the row offers a Duplicate swipe action")
-        duplicate.tap()
-
-        // A ` copy` forks alongside the original, which remains.
-        XCTAssertTrue(app.staticTexts["Dupe Me copy"].waitForExistence(timeout: 5),
-                      "duplicating forks a ' copy' row")
-        XCTAssertTrue(app.staticTexts["Dupe Me"].exists, "the original remains")
+        original.tap()
+        let name = app.textFields["custom-action-name-field"]
+        XCTAssertTrue(name.waitForExistence(timeout: 10),
+                      "tapping a fallback-list Custom Action opens its editor")
+        XCTAssertEqual(name.value as? String, "Dupe Me")
     }
 
     /// A saved Custom Action's editor owns the destructive and copy verbs now that
