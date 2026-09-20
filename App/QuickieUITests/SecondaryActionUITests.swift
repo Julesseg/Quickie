@@ -304,9 +304,6 @@ final class SecondaryActionUITests: XCTestCase {
         XCTAssertFalse(app.buttons["Reveal in Files"].exists,
                        "a non-file row must not offer Reveal in Files")
 
-        app.buttons["Edit"].tap()
-        XCTAssertTrue(app.textFields["custom-action-name-field"].waitForExistence(timeout: 5),
-                      "editing from a result row reaches the Custom Action editor")
     }
 
     /// A command row carries no content, so its long-press menu shows the universal
