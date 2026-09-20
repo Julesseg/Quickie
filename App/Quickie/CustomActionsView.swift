@@ -4,21 +4,20 @@ import QuickieCore
 import QuickieStoreKit
 
 /// The **Custom Actions** Management page (CONTEXT.md → Custom Action, Management
-/// page; ADR 0019/0021, issue #94): the authoring surface where a URL-template
-/// Action is created, edited, enabled/disabled, and deleted — the same unified shape
-/// every provider has. Options lead with the provider-level Enabled toggle; the
-/// actions list follows, each row a stored Custom Action with a per-row enable/disable
-/// toggle, swipe-to-delete, tap-to-edit, and an Add button. Reached by typing "Custom
-/// Actions" or from the Settings Providers list. The Fallbacks page stays the
-/// activation/ordering surface for the fallback-eligible ones; here every Custom Action
-/// appears, eligible or not.
+/// page; ADR 0019/0021/0045): the authoring surface where a URL-template Action is
+/// created, edited, enabled/disabled, and deleted. It also owns the cross-provider
+/// Fallback list: its options gate the Shelf and bottom region, then the three ladder
+/// sections place every fallback-eligible Custom Action exactly once. The remaining
+/// static and non-text-first Custom Actions appear under Other actions.
 struct CustomActionsView: View {
     @Environment(\.modelContext) private var modelContext
     @Query(sort: \StoredCustomAction.createdAt) private var customActions: [StoredCustomAction]
 
     /// The instance-level Disabled state (issue #68): each row's toggle reversibly
     /// hides that one Custom Action from results/Recents/Favorites.
+    let store: FallbacksStore
     let enablement: EnablementStore
+    let eligible: [Action]
 
     @State private var editorTarget: EditorTarget?
     @State private var pendingEditorTarget: EditorTarget?
@@ -35,12 +34,19 @@ struct CustomActionsView: View {
         }
     }
 
+    /// A fallback-eligible Custom Action belongs to its resolved ladder section, not
+    /// a duplicate authoring row. This leaves only static links and non-text-first
+    /// templates in Other actions (ADR 0045).
+    private var otherActions: [StoredCustomAction] {
+        customActions.filter { $0.definition.makeAction(id: $0.id)?.isFallbackEligible != true }
+    }
+
     // Pushed onto the launcher's navigation stack — the back chevron and edge-swipe
     // handle dismissal, so this view adds no stack or Done button.
     var body: some View {
         List {
-            // The unified page shape (ADR 0019): Options lead, the stored Custom
-            // Actions follow.
+            // The unified page shape (ADR 0019): Options lead. The Fallbacks toggle
+            // is declared in Core directly below Enabled, with no footer.
             ProviderOptionsSection(provider: .customActions)
 
             // The Catalog's single entry point (CONTEXT.md → Catalog; ADR 0028;
@@ -55,41 +61,30 @@ struct CustomActionsView: View {
                 .accessibilityIdentifier("browse-catalog")
             }
 
+            // The Custom Actions page owns this cross-provider ordering surface. Its
+            // guests (Shortcuts and built-in captures) live only in this ladder.
+            FallbackListSections(store: store, enablement: enablement, eligible: eligible)
+
             Section {
-                if customActions.isEmpty {
-                    Text("No Custom Actions yet")
+                if otherActions.isEmpty {
+                    Text("No other actions")
                         .foregroundStyle(.secondary)
                 }
-                ForEach(customActions) { action in
+                ForEach(otherActions) { action in
                     CustomActionRow(
                         action: action,
                         isDisabled: enablement.isDisabled(action.id),
                         onToggleDisabled: { enablement.toggleDisabled(action.id) },
                         onEdit: { editorTarget = .edit(action) }
                     )
-                    .swipeActions(edge: .trailing) {
-                        // Explicit Delete keeps the destructive full-swipe (the same
-                        // action `.onDelete` gives in edit mode), and Duplicate rides
-                        // alongside it — a fast way to fork a near-identical template.
-                        Button(role: .destructive) {
-                            modelContext.delete(action)
-                        } label: {
-                            Label("Delete", systemImage: "trash")
-                        }
-                        Button {
-                            duplicate(action)
-                        } label: {
-                            Label("Duplicate", systemImage: "plus.square.on.square")
-                        }
-                        .tint(.indigo)
-                        .accessibilityIdentifier("duplicate-custom-action.\(action.id)")
-                    }
                 }
-                .onDelete(perform: delete)
             } header: {
-                Text("Custom Actions")
+                Text("Other actions")
             }
         }
+        // The fallback sections are permanently editable so their ordered tiers show
+        // standard reorder grips. Delete and Duplicate live in each action's editor.
+        .environment(\.editMode, .constant(.active))
         .managementColumn()
         .navigationTitle("Custom Actions")
         .toolbar {
@@ -122,25 +117,6 @@ struct CustomActionsView: View {
                 )
             }
         }
-    }
-
-    private func delete(_ offsets: IndexSet) {
-        for index in offsets {
-            modelContext.delete(customActions[index])
-        }
-    }
-
-    /// Inserts a copy of `action` — same template, type specs, fill order, and
-    /// fallback flag, under a fresh identity (so pins/frecency don't alias) and a
-    /// distinct " copy" title. A fast fork for authoring a near-identical variant
-    /// (the PRD's "Things Todo" vs "Things Todo → Inbox").
-    private func duplicate(_ action: StoredCustomAction) {
-        var def = action.definition
-        def.name = CustomActionDefinition.duplicateName(
-            from: def.name,
-            existingNames: Set(customActions.map(\.title))
-        )
-        modelContext.insert(StoredCustomAction.make(from: def))
     }
 
     /// Sheet content does not replace its item while presented. Save the copy as the

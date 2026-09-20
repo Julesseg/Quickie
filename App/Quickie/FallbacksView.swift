@@ -1,8 +1,8 @@
 import SwiftUI
 import QuickieCore
 
-/// The three-section **Fallbacks** page (CONTEXT.md → Fallback list, Shelf; issues
-/// #114, #241) — the same shape as editing the app row of the native iOS share sheet.
+/// The three **Fallback list** sections on the Custom Actions page (CONTEXT.md →
+/// Fallback list, Shelf; ADR 0045). They keep the native-share-sheet ladder shape.
 /// It renders the promotion ladder top-down: the **Shelf** (the glass button row above
 /// the input — drag-ordered, a red minus drops a member to the *top* of Active), then
 /// the **Active section** (user-ordered, most-important-first, reorderable, a red minus
@@ -23,10 +23,11 @@ import QuickieCore
 /// until the user promotes it again. So the pool holds both enabled-but-not-active
 /// actions (a green plus, ready to promote) and disabled ones (dimmed).
 ///
-/// Reached as the typed "Fallbacks" command row and presented full-screen. It is fed
-/// the live fallback-eligible Actions (text-first Custom Actions, accepts-input
-/// Shortcuts, the built-in captures) so eligibility stays derived from shape.
-struct FallbacksView: View {
+/// This is embedded between the Custom Actions page's Options and Other actions
+/// sections. It is fed the live fallback-eligible Actions (text-first Custom Actions,
+/// accepts-input Shortcuts, and the built-in captures), so eligibility stays derived
+/// from shape.
+struct FallbackListSections: View {
     let store: FallbacksStore
     /// The per-action instance Disabled state (issue #68) — the same toggle the
     /// action's home page shows, surfaced here and coupled to demotion.
@@ -70,13 +71,8 @@ struct FallbacksView: View {
         FallbackTiers.liveMembers(of: ids, in: eligible, hiding: enablement.disabled)
     }
 
-    // Pushed onto the launcher's navigation stack — no own stack or Done button.
     var body: some View {
-        List {
-            // The unified page shape (ADR 0019): Options (the kind-level master
-            // Enabled switch over the whole bottom region) lead the sections.
-            ProviderOptionsSection(provider: .fallbacks)
-
+        Group {
             Section {
                 if shelvedActions.isEmpty {
                     Text("No shelved fallbacks. The shelf above the input stays hidden.")
@@ -123,7 +119,7 @@ struct FallbacksView: View {
                     }
                 }
             } header: {
-                Text("Active")
+                Text("Active fallbacks")
             } footer: {
                 Text("Top is most important — nearest the input in results.")
             }
@@ -150,17 +146,9 @@ struct FallbacksView: View {
                     }
                 }
             } header: {
-                Text("Available")
+                Text("Available for fallback")
             }
         }
-        // Always in edit mode so the reorder grips show on the Shelf and Active rows
-        // without a separate Edit step — the same always-editable shape as the iOS
-        // share sheet's app row. The custom minus/plus/shelf buttons and the pool
-        // toggles stay interactive (they carry explicit button/toggle styles, not
-        // row-selection taps).
-        .environment(\.editMode, .constant(.active))
-        .managementColumn()
-        .navigationTitle("Fallbacks")
     }
 
     /// Promotes a pooled Action a rung up — to the bottom of Active or onto the Shelf.
@@ -185,7 +173,7 @@ struct FallbacksView: View {
     }
 }
 
-/// One Fallbacks-page row. Both activation verbs sit together on the **leading** edge,
+/// One Fallback-list row. Both activation verbs sit together on the **leading** edge,
 /// ahead of the title: In the **Shelf** it is a red minus (drop to the top of Active) +
 /// title, with the system drag grip trailing (edit mode). In **Active** it is a red
 /// minus (demote to the pool) + a shelf button + title, also with the grip. In the

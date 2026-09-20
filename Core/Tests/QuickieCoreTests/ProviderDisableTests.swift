@@ -81,16 +81,12 @@ struct ProviderDisableTests {
         #expect(!engine.results(for: "meeting").contains { $0.kind == .file })
     }
 
-    @Test("disabling Fallbacks is a master switch over the whole bottom region")
-    func disabledFallbacksEmptyTheFallbackRegion() {
-        // The Fallback list's instances span three kinds — Fallback queries,
-        // Save for later, New Snippet — and a disabled kind short-circuits its
-        // instances (CONTEXT.md → Disabled, Fallback list). So the master
-        // Enabled toggle empties the *whole* region, even though Save for later
-        // and New Snippet ride the Pile's and Snippets' catalogs in the app's
-        // wiring (issue #67: per-item disable is a later slice).
+    @Test("disabling Custom Actions silences the whole fallback region")
+    func disabledCustomActionsEmptyTheFallbackRegion() {
+        // The Custom Actions page owns the cross-provider fallback region (ADR
+        // 0045), even though the built-in captures ride Pile and Snippets catalogs.
         let providers: [Provider] = [
-            IndexedProvider(catalog: [Action.webSearchFallback()], id: .fallbacks),
+            IndexedProvider(catalog: [Action.webSearchFallback()], id: .customActions),
             IndexedProvider(catalog: [.saveForLater()], id: .pile),
             IndexedProvider(catalog: [.newSnippet()], id: .snippets),
         ]
@@ -100,7 +96,7 @@ struct ProviderDisableTests {
         #expect(enabled.results(for: "anything").filter(\.isFallbackEligible).count == 3)
 
         let engine = SearchEngine(
-            providers: providers, enabledFallbacks: enabledIDs, enablement: disabled(.fallbacks)
+            providers: providers, enabledFallbacks: enabledIDs, enablement: disabled(.customActions)
         )
         #expect(engine.results(for: "anything").filter(\.isFallbackEligible).isEmpty)
     }
@@ -111,7 +107,7 @@ struct ProviderDisableTests {
         // catalog — so the Pile's switch governs both the saved entries and the
         // capture that creates them, while the other fallbacks stay.
         let providers: [Provider] = [
-            IndexedProvider(catalog: [Action.webSearchFallback()], id: .fallbacks),
+            IndexedProvider(catalog: [Action.webSearchFallback()], id: .customActions),
             IndexedProvider(
                 catalog: [.pileEntry(id: "pile.1", text: "call the bank"), .saveForLater()],
                 id: .pile

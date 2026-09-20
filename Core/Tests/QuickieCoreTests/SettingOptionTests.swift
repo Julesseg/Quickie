@@ -101,6 +101,15 @@ struct SettingOptionTests {
         }
     }
 
+    @Test("Custom Actions declares a bare Fallbacks toggle beneath Enabled")
+    func customActionsDeclaresFallbacksToggle() {
+        let schema = ProviderID.customActions.settingsSchema
+        #expect(schema.map(\.key) == [SettingOption.enabledKey, SettingsKey.customActionsFallbacks])
+        #expect(schema.last?.title == "Fallbacks")
+        #expect(schema.last?.footer == nil)
+        #expect(schema.last?.kind == .toggle(default: true))
+    }
+
     @Test("the File Search schema ships an inline-cap stepper with sane bounds")
     func fileSearchSchemaShipsInlineCapStepper() {
         // The second extensibility proof (issue #69 AC #4): a stepper, the third

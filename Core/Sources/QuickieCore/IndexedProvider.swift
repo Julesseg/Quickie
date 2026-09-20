@@ -36,7 +36,7 @@ public struct IndexedProvider: Provider {
 
 extension IndexedProvider {
     /// The built-in command rows the app always indexes (CONTEXT.md → Management
-    /// page): Settings, Custom Actions, Fallbacks, and Indexed Folders, each reached by
+    /// page): Settings, Custom Actions, and Indexed Folders, each reached by
     /// typing its name to surface a full-screen page in place of chrome. No privileged
     /// web search lives here — the default web-search Custom Action and the default
     /// static site links (`CatalogSeed`) are seeded into the store as ordinary,
@@ -51,7 +51,6 @@ extension IndexedProvider {
         IndexedProvider(catalog: [
             .openSettings(),
             .openCustomActionsPage(),
-            .openFallbacksPage(),
             .searchFiles(),
             // The Settings command rows of the providers that never had a typed
             // management row (ADR 0019; issue #66): the dynamic injectors

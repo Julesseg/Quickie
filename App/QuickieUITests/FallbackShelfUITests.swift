@@ -1,7 +1,7 @@
 import XCTest
 
 /// The UI half of the Shelf tier (CONTEXT.md → Fallback list, Shelf; ADR 0037; issue
-/// #241): the Fallbacks page's third section and the promotion ladder's placement
+/// #241): the Custom Actions fallback list's third section and the promotion ladder's placement
 /// rules as the user experiences them — a shelf button on every Active and pool row,
 /// a red minus on the Shelf that drops a member to the **top** of Active, and a
 /// shelved action vacating the Result list's bottom fallback region.
@@ -29,17 +29,17 @@ final class FallbackShelfUITests: XCTestCase {
     }
 
     @MainActor
-    private func openFallbacksPage(_ app: XCUIApplication) {
+    private func openCustomActionsPage(_ app: XCUIApplication) {
         let input = app.textFields["search-input"]
         XCTAssertTrue(input.waitForExistence(timeout: 30))
         input.tap()
-        input.typeText("fallbacks")
-        let command = app.buttons["builtin.fallbacks-page"]
-        XCTAssertTrue(command.waitForExistence(timeout: 5), "typing 'fallbacks' surfaces its command row")
+        input.typeText("custom actions")
+        let command = app.buttons["builtin.custom-actions-page"]
+        XCTAssertTrue(command.waitForExistence(timeout: 5), "typing 'custom actions' surfaces its command row")
         command.tap()
     }
 
-    /// The Fallbacks-page row (cell) whose title contains `title`, resolved by
+    /// The Custom Actions fallback-list row (cell) whose title contains `title`, resolved by
     /// containment — the reliable way to reach a row's inline controls where a
     /// top-level id query over a lazy List row is flaky. On a short screen (CI runs on
     /// iPhone SE) a row can land outside the fold, and the page is a section taller now
@@ -64,7 +64,7 @@ final class FallbackShelfUITests: XCTestCase {
         for _ in 0..<4 { app.swipeDown() }
     }
 
-    /// Empties the launcher input. `openFallbacksPage` types a fresh query, so a test
+    /// Empties the launcher input. `openCustomActionsPage` types a fresh query, so a test
     /// that has already typed something must clear it first — otherwise the two run
     /// together ("dentist" + "fallbacks") and no command row matches.
     @MainActor
@@ -97,7 +97,7 @@ final class FallbackShelfUITests: XCTestCase {
                       "an active capture is offered in the bottom fallback region")
 
         clearInput(app, count: "dentist".count)
-        openFallbacksPage(app)
+        openCustomActionsPage(app)
         let active = cell(app, titled: "Save for later")
         XCTAssertTrue(active.waitForExistence(timeout: 10), "Save for later is on the page")
         let shelve = active.buttons["Move to the shelf"]
@@ -126,7 +126,7 @@ final class FallbackShelfUITests: XCTestCase {
     @MainActor
     func testDemotingFromTheShelfLandsAtTheTopOfActive() throws {
         let app = launchApp()
-        openFallbacksPage(app)
+        openCustomActionsPage(app)
 
         // Save for later ships in Active, below the five search seeds — far enough down
         // that it and the first Active row are never in one snapshot, so the ordering
@@ -163,7 +163,7 @@ final class FallbackShelfUITests: XCTestCase {
     @MainActor
     func testAPoolRowCanBePromotedStraightToTheShelf() throws {
         let app = launchApp()
-        openFallbacksPage(app)
+        openCustomActionsPage(app)
 
         let pooled = cell(app, titled: "New Reminder")
         XCTAssertTrue(pooled.waitForExistence(timeout: 10), "New Reminder is fallback-eligible and pooled")

@@ -175,9 +175,9 @@ struct CustomActionEditorTests {
     @Test("the Custom Actions provider is its own configurable kind")
     func customActionsIsAProvider() {
         #expect(ProviderID.customActions.displayName == "Custom Actions")
-        // Its schema leads with the Enabled toggle like every provider (no own options
-        // this slice — the editor is where a Custom Action is configured).
-        #expect(ProviderID.customActions.settingsSchema.map(\.kind) == [.enabled])
+        // Its schema leads with Enabled, then declares the footerless Fallbacks
+        // region gate the page owns (ADR 0045).
+        #expect(ProviderID.customActions.settingsSchema.map(\.kind) == [.enabled, .toggle(default: true)])
     }
 
     @Test("typing surfaces a Custom Actions command row that deeplinks to its page")

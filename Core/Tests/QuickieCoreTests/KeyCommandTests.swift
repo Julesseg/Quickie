@@ -92,7 +92,7 @@ struct KeyCommandTests {
 
     /// Stand-in pins: the built-in command rows, which every install has.
     private let grid: [Action] = [
-        .openSettings(), .openCustomActionsPage(), .openFallbacksPage(), .searchFiles(),
+        .openSettings(), .openCustomActionsPage(), .searchFiles(), .openCalculatorPage(),
     ]
 
     @Test("a slot addresses the matching Favorites-grid card, one-based")

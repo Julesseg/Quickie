@@ -220,20 +220,20 @@ final class InstanceDisableUITests: XCTestCase {
         XCTAssertFalse(fileRow.exists, "a disabled folder's files are hidden from results")
     }
 
-    /// The Fallbacks page deletes nothing (issue #114): deletion lives on an action's
+    /// The Custom Actions page's fallback list deletes nothing (issue #114): deletion lives on an action's
     /// home page, so even the seeded web-search Custom Action exposes no swipe-to-delete
     /// here. And the permanent built-in captures are demotable but never leave the page
     /// — demoting Save for later moves it to the Available pool, where it can be
     /// promoted straight back.
     @MainActor
-    func testFallbacksPageHasNoDeleteAndBuiltInsArePermanent() throws {
+    func testFallbackListHasNoDeleteAndBuiltInsArePermanent() throws {
         let app = launchApp()
 
         let input = app.textFields["search-input"]
         XCTAssertTrue(input.waitForExistence(timeout: 30))
         input.tap()
-        input.typeText("fallbacks")
-        let command = app.buttons["builtin.fallbacks-page"]
+        input.typeText("custom actions")
+        let command = app.buttons["builtin.custom-actions-page"]
         XCTAssertTrue(command.waitForExistence(timeout: 5))
         command.tap()
 
@@ -244,7 +244,7 @@ final class InstanceDisableUITests: XCTestCase {
         webSearch.swipeLeft()
         XCTAssertFalse(
             app.buttons["Delete"].waitForExistence(timeout: 2),
-            "the Fallbacks page has no delete affordance — deletion lives on the action's home page"
+            "the fallback list has no delete affordance — deletion lives on the action's home page"
         )
 
         // Save for later is pre-enabled (Active), so its cell carries the demote
@@ -265,7 +265,7 @@ final class InstanceDisableUITests: XCTestCase {
         )
     }
 
-    /// The Fallbacks-page row (cell) whose title contains `title`, resolved by
+    /// The Custom Actions fallback-list row (cell) whose title contains `title`, resolved by
     /// containment — the reliable way to reach a row's inline controls where a
     /// top-level id query over a lazy List row is flaky. On a short screen (CI runs
     /// on iPhone SE) a demoted row can land in the Available pool below the fold — and
@@ -294,8 +294,8 @@ final class InstanceDisableUITests: XCTestCase {
         let input = app.textFields["search-input"]
         XCTAssertTrue(input.waitForExistence(timeout: 30))
         input.tap()
-        input.typeText("fallbacks")
-        let command = app.buttons["builtin.fallbacks-page"]
+        input.typeText("custom actions")
+        let command = app.buttons["builtin.custom-actions-page"]
         XCTAssertTrue(command.waitForExistence(timeout: 5))
         command.tap()
 

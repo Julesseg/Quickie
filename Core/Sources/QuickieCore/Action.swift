@@ -865,30 +865,17 @@ extension Action {
     /// row; ADR 0021, issue #94): deeplinks to the Custom Actions provider page under
     /// the hub — the authoring surface where a URL-template Action is created and
     /// edited — both slotted actions and static (slot-less) links, unified here (ADR
-    /// 0030). Distinct from "Fallbacks", which orders the fallback region.
+    /// 0030). Its aliases retain the retired Fallbacks page's typed routes because
+    /// this page now owns the fallback region (ADR 0045).
     public static func openCustomActionsPage() -> Action {
         Action(
             id: "builtin.custom-actions-page",
             kind: .managementPage,
             title: "Custom Actions",
-            aliases: ["custom action", "url actions", "templates", "url templates", "links", "bookmarks"],
+            aliases: ["custom action", "url actions", "templates", "url templates", "links", "bookmarks", "fallback", "fallbacks", "search engines", "manage fallbacks"],
             inputTypes: [],
             outputType: .text
         ) { _ in .openPage(.settings(panel: .customActions)) }
-    }
-
-    /// The "Fallbacks" command (CONTEXT.md → Fallback list, Settings command
-    /// row): deeplinks to the unified, reorderable Fallbacks provider page
-    /// (Fallback queries + New Note + New Snippet) under the hub.
-    public static func openFallbacksPage() -> Action {
-        Action(
-            id: "builtin.fallbacks-page",
-            kind: .managementPage,
-            title: "Fallbacks",
-            aliases: ["fallback", "search engines", "manage fallbacks"],
-            inputTypes: [],
-            outputType: .text
-        ) { _ in .openPage(.settings(panel: .fallbacks)) }
     }
 
     /// The "Computed" command (CONTEXT.md → Settings command row; ADR 0019, 0032):

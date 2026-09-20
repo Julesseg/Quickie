@@ -43,6 +43,11 @@ public struct SearchEngine {
     /// "Recent" list, or the Favorites grid — reversibly, its data retained.
     private let enablement: ProviderEnablement
 
+    /// The Custom Actions page's declared fallback-region toggle (ADR 0045). Together
+    /// with that page's kind Enabled switch it gates the Shelf and bottom region, not
+    /// the actions' ordinary name matches or their stored ladder membership.
+    private let fallbacksEnabled: Bool
+
     /// The **instance**-level Disabled state (CONTEXT.md → Disabled; issue
     /// #68): single actions — a Quicklink, Snippet, Pile entry, or Shortcut —
     /// reversibly hidden by stable id from results, Recents, and Favorites,
@@ -90,6 +95,7 @@ public struct SearchEngine {
         now: Date = Date(),
         enabledFallbacks: [String] = [],
         enablement: ProviderEnablement = ProviderEnablement(),
+        fallbacksEnabled: Bool = true,
         disabledInstances: Set<String> = []
     ) {
         self.providers = providers
@@ -102,6 +108,7 @@ public struct SearchEngine {
         for (index, id) in enabledFallbacks.enumerated() where rank[id] == nil { rank[id] = index }
         self.enabledRank = rank
         self.enablement = enablement
+        self.fallbacksEnabled = fallbacksEnabled
         self.disabledInstances = disabledInstances
         // Build the enabled-only indexed map **once** at construction (issue #140
         // review): `action(for:)`, `bridgedActions()`, `eligibleActions()`, and
@@ -167,18 +174,20 @@ public struct SearchEngine {
                 guard !disabledInstances.contains(action.id) else { continue }
                 if action.isFallbackEligible, enabledRank[action.id] != nil {
                     // Eligible *and* in the user's enabled list → it rides the
-                    // bottom region (CONTEXT.md → Fallback list). The Fallbacks
-                    // kind's Enabled toggle is the *master* switch over the whole
-                    // region (issue #67): the enabled list spans three kinds
-                    // (Custom Actions + Save for later + New Snippet), and a
-                    // disabled kind short-circuits its instances (CONTEXT.md →
-                    // Disabled) — even the two permanent captures that ride other
-                    // providers' catalogs. Master off drops the action entirely —
-                    // *both* rows below — like any disabled kind.
+                    // bottom region (CONTEXT.md → Fallback list). The Custom Actions
+                    // page owns that cross-provider surface (ADR 0045): its kind
+                    // switch and Fallbacks toggle silence the region, including
+                    // captures and Shortcuts, without changing the ladder or making
+                    // those non-Custom-Action actions unreachable by name.
                     // An eligible action *not* in the enabled list skips this branch
                     // and name-matches like any Action: a pooled Custom Action /
                     // Shortcut is still startable verb-first.
-                    guard enablement.isEnabled(.fallbacks) else { continue }
+                    guard isFallbackRegionEnabled else {
+                        if let hit = rankedMatch(for: action, weight: weight, query: trimmed) {
+                            ranked.append(hit)
+                        }
+                        continue
+                    }
                     fallbacks.append(action)
                     // Dual-row rule (CONTEXT.md → Fallback Action; issue #197): an
                     // enabled fallback whose name/alias matches the query *also*
@@ -301,6 +310,12 @@ public struct SearchEngine {
         action.isFallbackEligible && enabledRank[action.id] != nil
     }
 
+    /// The one exceptional cross-kind gate: Custom Actions owns the fallback region,
+    /// so its kind switch reaches the Shelf and bottom rows belonging to other kinds.
+    private var isFallbackRegionEnabled: Bool {
+        enablement.isEnabled(.customActions) && fallbacksEnabled
+    }
+
     /// The Indexed Actions keyed by id — the enumerable catalog `home()` resolves
     /// Favorite and Frecency ids against, fallback entries included (a pinned
     /// fallback draws a card like any other pin). `home()` reads it with disabled
@@ -345,11 +360,6 @@ public struct SearchEngine {
             for action in provider.candidates(for: "") {
                 if !includingDisabled {
                     if disabledInstances.contains(action.id) { continue }
-                    // An enabled fallback hidden by the master switch draws no card,
-                    // like any disabled kind. A pooled eligible action isn't riding
-                    // the region, so it keeps its card.
-                    let isEnabledFallback = action.isFallbackEligible && enabledRank[action.id] != nil
-                    if isEnabledFallback, !enablement.isEnabled(.fallbacks) { continue }
                 }
                 if byId[action.id] == nil { byId[action.id] = action }
             }
