@@ -2,7 +2,7 @@ import Foundation
 import Testing
 @testable import QuickieCore
 
-// The three-tier promotion ladder behind the Fallbacks page — pool → enabled →
+// The three-tier promotion ladder on the Custom Actions page — pool → enabled →
 // Shelf (CONTEXT.md → Fallback list, Shelf; ADR 0037; issue #241). The App's
 // `FallbacksStore` is a thin UserDefaults wrapper over this value, so the placement
 // rules ("promoting to the Shelf removes it from Active", "demoting from the Shelf

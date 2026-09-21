@@ -71,10 +71,10 @@ public final class StoredQuicklink {
 /// There is **no stored fallback flag** (issue #114): a Custom Action is
 /// fallback-*eligible* whenever its first fill-order argument is free text, derived
 /// live by `CustomActionDefinition.isFallbackEligible` / `Action.isFallbackEligible`.
-/// Activation is membership in the Fallbacks page's single enabled list
+/// Activation is membership in the Custom Actions page's single enabled list
 /// (`FallbacksStore`), keyed by `id`, not a column here.
 ///
-/// `id` is a stable identity assigned at creation — the key the Fallbacks page's
+/// `id` is a stable identity assigned at creation — the key the Custom Actions page's
 /// enabled list references, and the id of the Action built from this row, so
 /// activation/ordering survives relaunches.
 @Model

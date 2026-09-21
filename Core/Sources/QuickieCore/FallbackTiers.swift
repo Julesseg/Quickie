@@ -148,7 +148,7 @@ public struct FallbackTiers: Equatable, Sendable {
     /// live eligible catalog, in the list's order, minus the instance-disabled ones.
     ///
     /// The last step every rung is drawn through — the Shelf above the input and all
-    /// three sections of the Fallbacks page — so "shown" means one thing on both
+    /// three sections of the Custom Actions page — so "shown" means one thing on both
     /// surfaces. In particular the disabled filter belongs *here* rather than at each
     /// call site: a disabled action always sits in the pool, and dropping it only in
     /// some of the places it renders would surface it on one surface for the frame

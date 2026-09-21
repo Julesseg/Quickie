@@ -148,8 +148,8 @@ public struct StepperSetting: Equatable, Sendable {
 /// it keys off the provider via `ProviderEnablement` (`SettingOption.enabledKey`).
 public enum SettingsKey {
     /// The Custom Actions page's cross-provider fallback-region switch (ADR 0045).
-    /// It is deliberately new: the retired Fallbacks provider's enablement value is
-    /// not migrated, so every existing install starts on.
+    /// It is deliberately new: the legacy fallback enablement value is not migrated,
+    /// so every existing install starts on.
     public static let customActionsFallbacks = "custom-actions.fallbacks"
     /// The New Event target-calendar dynamic choice: empty = "Ask each time"
     /// (`.ask`), any other value a fixed calendar id.
