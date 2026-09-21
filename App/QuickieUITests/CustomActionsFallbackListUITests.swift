@@ -112,7 +112,7 @@ final class CustomActionsFallbackListUITests: XCTestCase {
         openCustomActions(app)
 
         XCTAssertTrue(app.staticTexts["Options"].exists)
-        XCTAssertTrue(app.switches["provider-enabled-customActions"].exists)
+        XCTAssertTrue(app.switches["provider-enabled-custom-actions"].exists)
         XCTAssertTrue(app.switches["setting-custom-actions.fallbacks"].exists)
         XCTAssertTrue(app.buttons["browse-catalog"].exists,
                       "Browse catalog stays inside the leading Options section")
