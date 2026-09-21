@@ -38,7 +38,10 @@ struct ProviderOptionsSection: View {
 /// One schema row (ADR 0020; issue #69): switches on the option's `kind` to the
 /// matching control. The `bespoke` escape hatch renders nothing today — it is the
 /// deliberate, unused pressure valve; the rule stays schema-first.
-private struct OptionRow: View {
+/// A single schema-declared option. It is internal so a provider page can compose
+/// its declared rows with one closely related navigation row in the same Options
+/// section without re-implementing the schema switch.
+struct OptionRow: View {
     let provider: ProviderID
     let option: SettingOption
 
