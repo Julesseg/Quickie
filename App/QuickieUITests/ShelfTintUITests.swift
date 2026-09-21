@@ -104,9 +104,9 @@ final class ShelfTintUITests: XCTestCase {
         let input = app.textFields["search-input"]
         XCTAssertTrue(input.waitForExistence(timeout: 30))
         input.tap()
-        input.typeText("fallbacks")
-        let command = app.buttons["builtin.fallbacks-page"]
-        XCTAssertTrue(command.waitForExistence(timeout: 10), "typing 'fallbacks' surfaces its command row")
+        input.typeText("custom actions")
+        let command = app.buttons["builtin.custom-actions-page"]
+        XCTAssertTrue(command.waitForExistence(timeout: 10), "typing 'custom actions' surfaces its command row")
         command.tap()
 
         for title in titles {
@@ -115,7 +115,7 @@ final class ShelfTintUITests: XCTestCase {
             let row = app.cells.containing(NSPredicate(format: "label CONTAINS[c] %@", title)).firstMatch
             for _ in 0..<4 where !row.exists { app.swipeDown() }
             for _ in 0..<6 where !row.exists { app.swipeUp() }
-            XCTAssertTrue(row.waitForExistence(timeout: 10), "\(title) is listed on the Fallbacks page")
+            XCTAssertTrue(row.waitForExistence(timeout: 10), "\(title) is listed in the Custom Actions fallback list")
             let shelfButton = row.buttons["Move to the shelf"]
             XCTAssertTrue(shelfButton.waitForExistence(timeout: 5), "\(title) carries the shelf button")
             shelfButton.tap()

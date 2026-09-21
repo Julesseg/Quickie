@@ -63,6 +63,10 @@ struct QuickieApp: App {
         // the cold-launch commit. After the reset above, on the clean slate.
         if ProcessInfo.processInfo.arguments.contains("--uitesting") {
             PendingQueryStore.seedFromLaunchArguments()
+            // The Custom Actions fallback-region option is a schema-owned
+            // `@AppStorage` value. UI tests start from its declared on default so a
+            // switch flipped by one test cannot silence a later test's region.
+            UserDefaults.standard.removeObject(forKey: SettingsKey.customActionsFallbacks)
         }
         // Seed pending widget-run outbox events under UI testing (issue #126):
         // XCUITest can't tap a Home-Screen widget, so this plants real outbox

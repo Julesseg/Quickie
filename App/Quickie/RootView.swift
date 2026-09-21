@@ -90,6 +90,11 @@ struct RootView: View {
     @AppStorage(SettingsKey.calculatorColor) private var calculatorColor = true
     @AppStorage(SettingsKey.fileSearchInlineCap) private var fileSearchInlineCap = 3
 
+    /// The Custom Actions page owns the cross-provider fallback region (ADR 0045).
+    /// This declared option starts on for every install; the retired Fallbacks kind
+    /// value is intentionally not read or migrated.
+    @AppStorage(SettingsKey.customActionsFallbacks) private var customActionsFallbacks = true
+
     /// The Pile's **Pending query** auto-save toggle (CONTEXT.md → Pending query;
     /// issue #152; ADR 0031), declared in the Pile provider's schema. On, text left
     /// unresolved in the root input when the app backgrounds is snapshotted and —
@@ -386,6 +391,7 @@ struct RootView: View {
             // here; the disabled pool is derived, never stored.
             enabledFallbacks: fallbacks.resolvedEnabled(for: eligibleActions.map(\.id)),
             enablement: providerEnablement.enablement,
+            fallbacksEnabled: customActionsFallbacks,
             disabledInstances: instanceEnablement.disabled
         )
     }
@@ -425,9 +431,9 @@ struct RootView: View {
     /// surfaces of one Fallback list can never disagree about what an action's state
     /// means:
     ///
-    /// - the Fallbacks page's own **Enabled** switch governs the whole list, Shelf
-    ///   included — it is the kind-level master over the fallback surface, not over the
-    ///   bottom region alone;
+    /// - the Custom Actions kind switch and its **Fallbacks** option govern the whole
+    ///   list, Shelf included — they are the master over the fallback surface, not
+    ///   merely the bottom region;
     /// - an **instance-disabled** action is hidden everywhere, including for the frame
     ///   before `demoteDisabled` prunes it off the tier.
     ///
@@ -435,7 +441,7 @@ struct RootView: View {
     /// the row in the view hierarchy costs no extra pass over `makeAction`, and renders
     /// through the same `liveMembers` the Fallbacks page's sections do.
     private func shelfMembers(from eligible: [Action]) -> [Action] {
-        guard providerEnablement.enablement.isEffectivelyEnabled(.fallbacks) else { return [] }
+        guard providerEnablement.enablement.isEnabled(.customActions), customActionsFallbacks else { return [] }
         return FallbackTiers.liveMembers(
             of: fallbacks.resolvedShelf(for: eligible.map(\.id)),
             in: eligible,
@@ -1393,8 +1399,12 @@ struct RootView: View {
     @ViewBuilder
     private func providerPage(for provider: ProviderID) -> some View {
         switch provider {
-        case .customActions: CustomActionsView(enablement: instanceEnablement)
-        case .fallbacks: FallbacksView(store: fallbacks, enablement: instanceEnablement, eligible: eligibleFallbackActions)
+        case .customActions:
+            CustomActionsView(
+                store: fallbacks,
+                enablement: instanceEnablement,
+                eligible: eligibleFallbackActions
+            )
         case .snippets: SnippetManagerView(enablement: instanceEnablement)
         case .shortcuts: ShortcutsView(store: shortcuts, enablement: instanceEnablement)
         case .fileSearch: IndexedFoldersView(store: indexedFolders)

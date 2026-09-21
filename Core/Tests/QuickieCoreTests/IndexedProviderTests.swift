@@ -34,7 +34,7 @@ struct IndexedProviderTests {
         let ids = IndexedProvider.builtIns().candidates(for: "").map(\.id)
         #expect(ids.contains("builtin.settings"))
         #expect(ids.contains("builtin.custom-actions-page"))
-        #expect(ids.contains("builtin.fallbacks-page"))
+        #expect(!ids.contains("builtin.fallbacks-page"))
         // The Search Files command enters the scoped file-browsing context (ADR 0014).
         #expect(ids.contains("builtin.search-files"))
     }
@@ -57,8 +57,8 @@ struct IndexedProviderTests {
         // ordinary data, not shipped here; the built-ins are command rows only.
         #expect(actions.allSatisfy { !$0.isFallbackEligible })
         // A command row never wears a data kind — so the "Quicklinks" command
-        // can't be mistaken for a user's Quicklink, nor "Fallbacks" for a Custom Action, nor
-        // the "Search Files" entry point for a file result row.
+        // can't be mistaken for a user's Quicklink or the "Search Files" entry point for
+        // a file result row.
         #expect(actions.allSatisfy { $0.kind == .settings || $0.kind == .managementPage || $0.kind == .searchFiles })
     }
 }

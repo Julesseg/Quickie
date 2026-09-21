@@ -78,4 +78,128 @@ final class FallbackDualRowUITests: XCTestCase {
         XCTAssertFalse(app.buttons["pill-0"].exists,
                        "a verb-first start seeds no pill — the breadcrumb begins empty")
     }
+
+    /// The declared Fallbacks option is the narrow region gate: off removes the
+    /// bottom fallback row without changing the action's name-match route.
+    @MainActor
+    func testFallbacksToggleHidesTheRegionButKeepsNameMatches() throws {
+        let app = launchApp()
+        openCustomActions(app)
+        moveSaveForLaterToShelf(in: app)
+
+        flip("setting-custom-actions.fallbacks", to: false, in: app)
+        assertSaveForLaterRemainsShelved(in: app)
+
+        goBackHome(app)
+        let input = app.textFields["search-input"]
+        input.tap()
+        input.typeText("anything")
+        XCTAssertFalse(app.buttons["shelf.builtin.save-for-later"].waitForExistence(timeout: 2),
+                       "Fallbacks off hides the Shelf without changing its membership")
+        XCTAssertFalse(app.buttons["seed.web-search"].waitForExistence(timeout: 2),
+                       "Fallbacks off removes the bottom fallback row")
+
+        input.typeText(String(repeating: XCUIKeyboardKey.delete.rawValue, count: "anything".count))
+        input.typeText("web")
+        XCTAssertTrue(app.buttons["seed.web-search"].waitForExistence(timeout: 5),
+                      "Fallbacks off leaves the action reachable by name")
+    }
+
+    /// The Custom Actions kind switch is the exceptional master over this page's
+    /// fallback sections. Built-in captures remain ordinary name matches.
+    @MainActor
+    func testCustomActionsSwitchSilencesFallbacksButNotBuiltInNameMatches() throws {
+        let app = launchApp()
+        openCustomActions(app)
+        moveSaveForLaterToShelf(in: app)
+
+        flip("provider-enabled-custom-actions", to: false, in: app)
+
+        // The disabled kind no longer resolves its page's cross-provider list. Turn it
+        // back on while still on this page to prove the gate never rewrote the ladder,
+        // then turn it off again for the launcher assertions below.
+        flip("provider-enabled-custom-actions", to: true, in: app)
+        assertSaveForLaterRemainsShelved(in: app)
+        flip("provider-enabled-custom-actions", to: false, in: app)
+
+        goBackHome(app)
+        let input = app.textFields["search-input"]
+        input.tap()
+        input.typeText("anything")
+        XCTAssertFalse(app.buttons["shelf.builtin.save-for-later"].waitForExistence(timeout: 2),
+                       "Custom Actions off hides the Shelf without changing its membership")
+        XCTAssertFalse(app.buttons["seed.web-search"].waitForExistence(timeout: 2),
+                       "Custom Actions off removes its fallback region")
+
+        input.typeText(String(repeating: XCUIKeyboardKey.delete.rawValue, count: "anything".count))
+        input.typeText("save")
+        XCTAssertTrue(app.buttons["builtin.save-for-later"].waitForExistence(timeout: 5),
+                      "a built-in capture remains reachable by name")
+    }
+
+    @MainActor
+    private func openCustomActions(_ app: XCUIApplication) {
+        let input = app.textFields["search-input"]
+        XCTAssertTrue(input.waitForExistence(timeout: 10))
+        input.tap()
+        input.typeText("custom actions")
+        let command = app.buttons["builtin.custom-actions-page"]
+        XCTAssertTrue(command.waitForExistence(timeout: 5))
+        command.tap()
+    }
+
+    @MainActor
+    private func goBackHome(_ app: XCUIApplication) {
+        let back = app.navigationBars.buttons.firstMatch
+        XCTAssertTrue(back.waitForExistence(timeout: 5))
+        back.tap()
+        XCTAssertTrue(app.textFields["search-input"].waitForExistence(timeout: 10))
+    }
+
+    @MainActor
+    private func moveSaveForLaterToShelf(in app: XCUIApplication) {
+        let row = fallbackCell(app, titled: "Save for later")
+        XCTAssertTrue(row.waitForExistence(timeout: 10), "Save for later is active by default")
+        let shelve = row.buttons["Move to the shelf"]
+        XCTAssertTrue(shelve.waitForExistence(timeout: 5), "an active fallback can move to the Shelf")
+        shelve.tap()
+        assertSaveForLaterRemainsShelved(in: app)
+    }
+
+    @MainActor
+    private func assertSaveForLaterRemainsShelved(in app: XCUIApplication) {
+        let row = fallbackCell(app, titled: "Save for later")
+        XCTAssertTrue(row.buttons["Remove from the shelf"].waitForExistence(timeout: 5),
+                      "the saved membership remains in the Custom Actions fallback list")
+    }
+
+    @MainActor
+    private func fallbackCell(_ app: XCUIApplication, titled title: String) -> XCUIElement {
+        let row = app.cells.containing(NSPredicate(format: "label CONTAINS[c] %@", title)).firstMatch
+        for _ in 0..<4 where !row.exists { app.swipeDown() }
+        for _ in 0..<5 where !row.exists { app.swipeUp() }
+        return row
+    }
+
+    /// SwiftUI exposes these Form toggles as a row-spanning element on some device
+    /// families, so tap its nested switch when present and otherwise the trailing
+    /// control coordinate. Assert the value so the acceptance test never mistakes a
+    /// missed row tap for a loop regression.
+    @MainActor
+    private func flip(_ identifier: String, to on: Bool, in app: XCUIApplication) {
+        let toggle = app.switches[identifier]
+        XCTAssertTrue(toggle.waitForExistence(timeout: 5), "the \(identifier) toggle exists")
+        let landed = NSPredicate(format: "value == %@", on ? "1" : "0")
+        let inner = toggle.switches.firstMatch
+        if inner.exists {
+            inner.tap()
+        } else {
+            toggle.coordinate(withNormalizedOffset: CGVector(dx: 0.95, dy: 0.5)).tap()
+        }
+        if XCTWaiter.wait(for: [XCTNSPredicateExpectation(predicate: landed, object: toggle)], timeout: 3) != .completed {
+            toggle.coordinate(withNormalizedOffset: CGVector(dx: 0.95, dy: 0.5)).tap()
+            _ = XCTWaiter.wait(for: [XCTNSPredicateExpectation(predicate: landed, object: toggle)], timeout: 3)
+        }
+        XCTAssertEqual(toggle.value as? String, on ? "1" : "0", "the \(identifier) toggle reached its requested state")
+    }
 }

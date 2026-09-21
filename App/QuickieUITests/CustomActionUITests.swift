@@ -6,7 +6,7 @@ import XCTest
 /// URL grows argument rows, renaming a row rewrites the URL token, drag sets the
 /// fill order, the derived eligibility note reflects the first argument, and Save is
 /// gated), and one **end-to-end** breadcrumb run of a multi-argument Custom Action
-/// authored through the new Management page and activated on the Fallbacks page.
+/// authored through the Custom Actions page and activated in its fallback list.
 ///
 /// The reconciliation, rename, reorder, and validation *logic* are covered
 /// deterministically by QuickieCore's CustomActionEditorTests; these prove the
@@ -91,7 +91,7 @@ final class CustomActionUITests: XCTestCase {
     }
 
     /// Activates an authored Custom Action as a fallback the way a user now does —
-    /// there is no editor toggle (issue #114): open the Fallbacks page and tap the
+    /// there is no editor toggle (issue #114): open the Custom Actions page and tap the
     /// green plus on the action's row in the **Available** pool, promoting it to the
     /// active section, then pop back to the launcher. Assumes the launcher is showing
     /// with an empty query (opening the page via its command row clears the query).
@@ -99,11 +99,7 @@ final class CustomActionUITests: XCTestCase {
     private func activateAsFallback(_ app: XCUIApplication, title: String) {
         let input = app.textFields["search-input"]
         XCTAssertTrue(input.waitForExistence(timeout: 10))
-        input.tap()
-        input.typeText("fallbacks")
-        let command = app.buttons["builtin.fallbacks-page"]
-        XCTAssertTrue(command.waitForExistence(timeout: 5), "typing 'fallbacks' surfaces the command row")
-        command.tap()
+        openCustomActionsPage(app)
 
         // The freshly authored action waits in the Available pool (newly eligible
         // actions are not auto-enabled). The pool sits below the pre-enabled Active
@@ -301,7 +297,7 @@ final class CustomActionUITests: XCTestCase {
 
     /// The editor says nothing about fallbacks (issue #114): no toggle — eligibility is
     /// derived from shape, never declared — and, since the copy trim, no explanatory
-    /// note either. Activation lives on the Fallbacks page, which is where the pool
+    /// note either. Activation lives in the Custom Actions fallback list, which is where the pool
     /// shows what became eligible; the derivation itself is covered by QuickieCore.
     @MainActor
     func testEditorDeclaresNothingAboutFallbacks() throws {
@@ -332,7 +328,7 @@ final class CustomActionUITests: XCTestCase {
 
     // MARK: - End-to-end: a multi-argument Custom Action runs through the breadcrumb
 
-    /// Authoring a multi-slot Custom Action, activating it on the Fallbacks page, and
+    /// Authoring a multi-slot Custom Action, activating it in the fallback list, and
     /// running it: selecting it from the fallback region seeds-and-commits the typed
     /// query as the first slot and continues to the second, and committing the last
     /// slot completes the run — opening the fully-formed URL at the edge.
@@ -363,7 +359,7 @@ final class CustomActionUITests: XCTestCase {
                       "the authored Custom Action is listed on the Management page")
         goBackHome(app)
 
-        // Activate it as a fallback on the Fallbacks page (its free-text first slot
+        // Activate it as a fallback in the Custom Actions fallback list (its free-text first slot
         // makes it eligible; newly eligible actions wait in the pool until promoted).
         activateAsFallback(app, title: "Add Todo")
 
@@ -533,12 +529,12 @@ final class CustomActionUITests: XCTestCase {
                       "a date slot reveals its single output-format field")
     }
 
-    // MARK: - Duplicate swipe action
+    // MARK: - Fallback-list editor access
 
-    /// Swiping a Custom Action row offers a **Duplicate** action that forks a ` copy`
-    /// alongside the original — a fast way to author a near-identical variant.
+    /// A fallback-eligible Custom Action appears only in the fallback list, but its
+    /// row still opens the editor where the permanent page keeps Duplicate and Delete.
     @MainActor
-    func testDuplicateSwipeActionForksTheRow() throws {
+    func testFallbackCustomActionRowOpensItsEditor() throws {
         let app = launchApp()
         openCustomActionsPage(app)
         openNewEditor(app)
@@ -559,16 +555,11 @@ final class CustomActionUITests: XCTestCase {
         }
         XCTAssertTrue(original.waitForExistence(timeout: 10), "the authored action is listed")
 
-        // Reveal the row's swipe actions and tap Duplicate.
-        original.swipeLeft()
-        let duplicate = app.buttons["Duplicate"]
-        XCTAssertTrue(duplicate.waitForExistence(timeout: 5), "the row offers a Duplicate swipe action")
-        duplicate.tap()
-
-        // A ` copy` forks alongside the original, which remains.
-        XCTAssertTrue(app.staticTexts["Dupe Me copy"].waitForExistence(timeout: 5),
-                      "duplicating forks a ' copy' row")
-        XCTAssertTrue(app.staticTexts["Dupe Me"].exists, "the original remains")
+        original.tap()
+        let name = app.textFields["custom-action-name-field"]
+        XCTAssertTrue(name.waitForExistence(timeout: 10),
+                      "tapping a fallback-list Custom Action opens its editor")
+        XCTAssertEqual(name.value as? String, "Dupe Me")
     }
 
     /// A saved Custom Action's editor owns the destructive and copy verbs now that

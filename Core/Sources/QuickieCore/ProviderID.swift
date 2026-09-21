@@ -15,10 +15,10 @@ public enum ProviderID: String, CaseIterable, Equatable, Hashable, Sendable {
     /// URL Actions with **zero or more** `{name}` slots — a slotted one the breadcrumb
     /// fills, a slot-less one a static link that opens directly (the former Quicklink,
     /// now folded in). Its own configurable kind — the authoring surface is the Custom
-    /// Actions Management page (issue #94); the Fallbacks page stays the fallback-region
-    /// ordering surface. The retired `.quicklinks` provider merged in here (ADR 0030).
+    /// Actions Management page (issue #94). The retired `.quicklinks` provider merged
+    /// in here (ADR 0030); this page also owns the cross-provider Fallback list (ADR
+    /// 0045).
     case customActions = "custom-actions"
-    case fallbacks
     case snippets
     /// The Pile (CONTEXT.md → Pile; ADR 0018): the saved-for-later queries,
     /// replacing the former Notes provider wholesale.
@@ -38,7 +38,6 @@ public enum ProviderID: String, CaseIterable, Equatable, Hashable, Sendable {
     public var displayName: String {
         switch self {
         case .customActions: return "Custom Actions"
-        case .fallbacks: return "Fallbacks"
         case .snippets: return "Snippets"
         case .pile: return "Pile"
         case .shortcuts: return "Shortcuts"

@@ -159,24 +159,35 @@ struct FallbackTests {
         #expect(web.contains { $0.region == .fallback })
     }
 
-    @Test("the Fallbacks master switch off drops both rows — region and ranked")
-    func masterSwitchOffDropsBothRows() {
-        // Disabling the Fallbacks kind is the master switch over the whole region
-        // (issue #67). It drops the enabled fallback entirely — not just its region
-        // row but the ranked duplicate too, like any disabled kind.
+    @Test("the fallback region needs Custom Actions enabled and its Fallbacks toggle on")
+    func fallbackRegionRequiresBothCustomActionsGates() {
+        // The Custom Actions page owns the cross-provider fallback region (ADR 0045).
+        // Its kind switch and its declared Fallbacks toggle gate only that region:
+        // a built-in capture remains searchable by name when either gate is off.
         let engine = SearchEngine(
             providers: [
                 IndexedProvider(catalog: [
-                    CustomActionDefinition(
-                        name: "Search the web",
-                        template: "https://duckduckgo.com/?q={query}"
-                    ).makeAction(id: "web-search")!,
+                    .saveForLater(),
                 ])
             ],
-            enabledFallbacks: ["web-search"],
-            enablement: ProviderEnablement(disabled: [.fallbacks])
+            enabledFallbacks: [Action.saveForLaterID]
         )
-        #expect(engine.rows(for: "search").isEmpty)
+
+        #expect(engine.rows(for: "anything").map(\.region) == [.fallback])
+
+        let toggleOff = SearchEngine(
+            providers: [IndexedProvider(catalog: [.saveForLater()])],
+            enabledFallbacks: [Action.saveForLaterID],
+            fallbacksEnabled: false
+        )
+        #expect(toggleOff.rows(for: "save").map(\.region) == [.ranked])
+
+        let kindOff = SearchEngine(
+            providers: [IndexedProvider(catalog: [.saveForLater()], id: .pile)],
+            enabledFallbacks: [Action.saveForLaterID],
+            enablement: ProviderEnablement(disabled: [.customActions])
+        )
+        #expect(kindOff.rows(for: "save").map(\.region) == [.ranked])
     }
 
     @Test("an eligible-but-pooled action is a normal verb-first match, not a fallback row")

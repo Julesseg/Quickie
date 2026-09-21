@@ -204,7 +204,6 @@ extension ProviderID {
     var symbol: String {
         switch self {
         case .customActions: return "bolt.horizontal"
-        case .fallbacks: return "magnifyingglass"
         case .snippets: return "doc.on.clipboard"
         case .pile: return "tray.full"
         case .shortcuts: return "square.stack.3d.up"

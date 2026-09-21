@@ -84,24 +84,22 @@ struct HomeTests {
         #expect(engine.home().frecent.isEmpty)
     }
 
-    @Test("a disabled pinned Fallback drops from the grid but keeps its pin")
-    func disabledPinnedFallbackLeavesTheGridButKeepsResolving() {
-        // Both disable axes hide the card (CONTEXT.md → Disabled, Fallback list) —
-        // the Fallbacks master switch and the action's instance-disable — while the
-        // id keeps resolving, so the pin survives reconciliation and the card returns
-        // on re-enable. (Demotion to the pool is *not* one of these: a pooled eligible
-        // action still draws its card.)
+    @Test("the Fallbacks toggle leaves pinned actions on Home")
+    func fallbackToggleLeavesPinnedActionOnHome() {
+        // The region toggle changes neither ladder membership nor other surfaces, so
+        // an enabled fallback stays a usable pinned card. Instance disable still hides
+        // it while retaining the id for reconciliation.
         let providers: [Provider] = [IndexedProvider(catalog: [.webSearchFallback()])]
         let enabled = [Action.webSearchFallbackID]
 
-        let masterOff = SearchEngine(
+        let toggleOff = SearchEngine(
             providers: providers,
             favorites: ["builtin.web-search"],
             enabledFallbacks: enabled,
-            enablement: ProviderEnablement(disabled: [.fallbacks])
+            fallbacksEnabled: false
         )
-        #expect(masterOff.home().favorites.isEmpty)
-        #expect(masterOff.resolvableHomeIDs().contains("builtin.web-search"))
+        #expect(toggleOff.home().favorites.map(\.id) == ["builtin.web-search"])
+        #expect(toggleOff.resolvableHomeIDs().contains("builtin.web-search"))
 
         let instanceOff = SearchEngine(
             providers: providers,

@@ -7,7 +7,7 @@ import XCTest
 /// Its two pure rules (the visibility/seed rule, the peek sizing) are pinned
 /// deterministically in QuickieCore's `FallbackShelfTests`; these prove the wiring the
 /// simulator alone can show. `FallbackShelfUITests` covers the other half of the tier —
-/// the Fallbacks page's Shelf section and the promotion ladder.
+/// the Custom Actions fallback list's Shelf section and the promotion ladder.
 ///
 /// A UI-test launch starts with an **empty Shelf** (`FallbacksStore.launch`), so every
 /// test here shelves the member it cares about first rather than leaning on the
@@ -40,9 +40,9 @@ final class ShelfRowUITests: XCTestCase {
         let input = app.textFields["search-input"]
         XCTAssertTrue(input.waitForExistence(timeout: 30))
         input.tap()
-        input.typeText("fallbacks")
-        let command = app.buttons["builtin.fallbacks-page"]
-        XCTAssertTrue(command.waitForExistence(timeout: 5), "typing 'fallbacks' surfaces its command row")
+        input.typeText("custom actions")
+        let command = app.buttons["builtin.custom-actions-page"]
+        XCTAssertTrue(command.waitForExistence(timeout: 5), "typing 'custom actions' surfaces its command row")
         command.tap()
 
         // On a short screen (CI runs on iPhone SE) the row can land outside the fold,
@@ -52,7 +52,7 @@ final class ShelfRowUITests: XCTestCase {
         let row = app.cells.containing(NSPredicate(format: "label CONTAINS[c] %@", title)).firstMatch
         for _ in 0..<4 where !row.exists { app.swipeDown() }
         for _ in 0..<5 where !row.exists { app.swipeUp() }
-        XCTAssertTrue(row.waitForExistence(timeout: 10), "\(title) is listed on the Fallbacks page")
+        XCTAssertTrue(row.waitForExistence(timeout: 10), "\(title) is listed in the Custom Actions fallback list")
         let shelfButton = row.buttons["Move to the shelf"]
         XCTAssertTrue(shelfButton.waitForExistence(timeout: 5), "the row carries the shelf button")
         shelfButton.tap()

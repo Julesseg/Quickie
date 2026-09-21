@@ -258,7 +258,7 @@ final class ShortcutUITests: XCTestCase {
 
     /// An accepts-input Shortcut promoted to a fallback runs in **one tap** (issue
     /// #114): its free-text input makes it fallback-eligible, so activating it on the
-    /// Fallbacks page and selecting its fallback row seeds-and-commits the typed query
+    /// Custom Actions fallback list and selecting its fallback row seeds-and-commits the typed query
     /// as the shortcut's input and fires it immediately — a single-argument fallback
     /// takes no breadcrumb stop. (The x-callback-url open is pure Core logic; the
     /// reliable UI signal is that no input breadcrumb traps the user.)
@@ -266,12 +266,12 @@ final class ShortcutUITests: XCTestCase {
     func testInputAcceptingShortcutRunsAsOneTapFallback() throws {
         let app = launchAppWithInput(seed: "Translate")
 
-        // Activate Translate on the Fallbacks page.
+        // Activate Translate in the Custom Actions fallback list.
         let input = app.textFields["search-input"]
         XCTAssertTrue(input.waitForExistence(timeout: 30))
         input.tap()
-        input.typeText("fallbacks")
-        let command = app.buttons["builtin.fallbacks-page"]
+        input.typeText("custom actions")
+        let command = app.buttons["builtin.custom-actions-page"]
         XCTAssertTrue(command.waitForExistence(timeout: 5))
         command.tap()
 
