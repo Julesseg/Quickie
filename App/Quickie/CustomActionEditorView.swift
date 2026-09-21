@@ -1,5 +1,6 @@
 import SwiftUI
 import SwiftData
+import UIKit
 import QuickieCore
 import QuickieStoreKit
 
@@ -80,8 +81,10 @@ struct CustomActionEditorView: View {
                         // vertical-axis field usually turns it into an inserted line
                         // break (stripped in `onChange` below, which drops focus
                         // there), but it can also arrive as a submit — on iPad it
-                        // does — where no text change fires at all.
-                        .onSubmit { templateFocused = false }
+                        // does — where no text change fires at all. Resigning the
+                        // UIKit responder as well makes the dismissal survive the
+                        // vertical field's deferred text flush.
+                        .onSubmit(dismissTemplateKeyboard)
                         .accessibilityIdentifier("custom-action-url-field")
                         // `axis: .vertical` is only there so a long template wraps; a
                         // template is one line, so line breaks (Return, a multi-line
@@ -107,7 +110,7 @@ struct CustomActionEditorView: View {
                         // newer input.
                         .onChange(of: def.template) { oldValue, newValue in
                             if SingleLineText.isReturnKeypress(replacing: oldValue, with: newValue) {
-                                templateFocused = false
+                                dismissTemplateKeyboard()
                             }
                             let singleLine = SingleLineText.adjusted(replacing: oldValue, with: newValue)
                             guard let adjustment = BraceAutoClose.adjusted(
@@ -198,6 +201,17 @@ struct CustomActionEditorView: View {
                 }
             }
         }
+    }
+
+    /// Drops both SwiftUI's focus state and UIKit's current first responder. The
+    /// latter is needed for a vertical `TextField`: after Return inserts and the
+    /// single-line rule removes a newline, UIKit can restore its responder after
+    /// SwiftUI has cleared `templateFocused`.
+    private func dismissTemplateKeyboard() {
+        templateFocused = false
+        UIApplication.shared.sendAction(
+            #selector(UIResponder.resignFirstResponder), to: nil, from: nil, for: nil
+        )
     }
 
     /// The URL field's footer: a scheme warning when the URL won't parse, and the
