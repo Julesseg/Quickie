@@ -18,9 +18,15 @@ struct CustomActionsView: View {
     let store: FallbacksStore
     let enablement: EnablementStore
     let eligible: [Action]
+    /// The guest-provider stores let a row open the page that owns it without
+    /// introducing a second copy of the fallback list in that provider.
+    let shortcuts: ShortcutsStore
+    let reminderSteps: CaptureStepsStore
+    let eventSteps: CaptureStepsStore
 
     @State private var editorTarget: EditorTarget?
     @State private var pendingEditorTarget: EditorTarget?
+    @State private var guestDestination: GuestDestination?
 
     private enum EditorTarget: Identifiable {
         case new
@@ -34,31 +40,52 @@ struct CustomActionsView: View {
         }
     }
 
+    /// A fallback guest pushes its existing home page from this page's navigation
+    /// context. Custom Actions remain sheets because their live-mirroring editor is
+    /// already a sheet everywhere else; the other providers retain their normal
+    /// pushed management pages (ADR 0045).
+    private enum GuestDestination: Hashable {
+        case shortcut(String)
+        case provider(ProviderID)
+    }
+
     /// A fallback-eligible Custom Action belongs to its resolved ladder section, not
     /// a duplicate authoring row. This leaves only static links and non-text-first
     /// templates in Other actions (ADR 0045).
-    private var otherActions: [StoredCustomAction] {
-        customActions.filter { $0.definition.makeAction(id: $0.id)?.isFallbackEligible != true }
+    private var otherActions: [(stored: StoredCustomAction, action: Action)] {
+        customActions
+            .compactMap { stored in
+                guard let action = stored.definition.makeAction(id: stored.id), !action.isFallbackEligible else {
+                    return nil
+                }
+                return (stored, action)
+            }
+            .sorted {
+                let order = $0.stored.title.localizedCaseInsensitiveCompare($1.stored.title)
+                return order == .orderedSame ? $0.stored.id < $1.stored.id : order == .orderedAscending
+            }
     }
 
     // Pushed onto the launcher's navigation stack — the back chevron and edge-swipe
     // handle dismissal, so this view adds no stack or Done button.
     var body: some View {
         List {
-            // The unified page shape (ADR 0019): Options lead. The Fallbacks toggle
-            // is declared in Core directly below Enabled, with no footer.
-            ProviderOptionsSection(provider: .customActions)
-
-            // The Catalog's single entry point (CONTEXT.md → Catalog; ADR 0028;
-            // issue #143) — a navigation row in the options section, the
-            // Sync-Shortcut precedent.
+            // The unified page shape (ADR 0019): the Custom Actions schema's two
+            // settings and Catalog's sole entry point form one Options section. Keep
+            // the settings rendered through OptionRow: Core still declares their
+            // structure, while this page supplies the closely-related destination.
             Section {
-                NavigationLink {
-                    CatalogView()
-                } label: {
+                ForEach(ProviderID.customActions.settingsSchema) { option in
+                    OptionRow(provider: .customActions, option: option)
+                }
+                // The Catalog's single entry point (CONTEXT.md → Catalog; ADR 0028;
+                // issue #143) follows Enabled and Fallbacks in the same section.
+                NavigationLink { CatalogView() } label: {
                     Label("Browse catalog", systemImage: "square.grid.2x2")
                 }
                 .accessibilityIdentifier("browse-catalog")
+            } header: {
+                Text("Options")
             }
 
             // The Custom Actions page owns this cross-provider ordering surface. Its
@@ -67,12 +94,8 @@ struct CustomActionsView: View {
                 store: store,
                 enablement: enablement,
                 eligible: eligible,
-                onSelect: { action in
-                    guard action.kind == .customAction,
-                          let stored = customActions.first(where: { $0.id == action.id })
-                    else { return }
-                    editorTarget = .edit(stored)
-                }
+                caption: caption,
+                onSelect: select
             )
                 // The fallback sections are permanently editable so their ordered
                 // tiers show standard reorder grips. Keep that environment local:
@@ -84,12 +107,17 @@ struct CustomActionsView: View {
                     Text("No other actions")
                         .foregroundStyle(.secondary)
                 }
-                ForEach(otherActions) { action in
-                    CustomActionRow(
-                        action: action,
-                        isDisabled: enablement.isDisabled(action.id),
-                        onToggleDisabled: { enablement.toggleDisabled(action.id) },
-                        onEdit: { editorTarget = .edit(action) }
+                ForEach(otherActions, id: \.stored.id) { entry in
+                    CustomActionsListRow(
+                        action: entry.action,
+                        style: .other(
+                            isDisabled: enablement.isDisabled(entry.stored.id),
+                            onToggleDisabled: { enablement.toggleDisabled(entry.stored.id) }
+                        ),
+                        caption: entry.stored.urlString,
+                        onPrimary: {},
+                        onShelve: nil,
+                        onSelect: { editorTarget = .edit(entry.stored) }
                     )
                 }
             } header: {
@@ -128,6 +156,67 @@ struct CustomActionsView: View {
                 )
             }
         }
+        .navigationDestination(item: $guestDestination) { destination in
+            switch destination {
+            case .shortcut(let name):
+                ShortcutDetailView(name: name, store: shortcuts, enablement: enablement)
+            case .provider(.reminders):
+                CaptureStepsPage<ReminderStep>(provider: .reminders, store: reminderSteps)
+            case .provider(.events):
+                CaptureStepsPage<EventStep>(provider: .events, store: eventSteps)
+            case .provider(.pile):
+                ProviderOptionsPage(provider: .pile)
+            case .provider(.snippets):
+                SnippetManagerView(enablement: enablement)
+            case .provider:
+                EmptyView()
+            }
+        }
+    }
+
+    /// All fallback rows use one presentation contract. A Custom Action's caption is
+    /// its actual URL template; guests say what they are, rather than pretending to
+    /// own a URL. The action id is the stable bridge from the Core index to SwiftData.
+    private func caption(for action: Action) -> String {
+        if action.kind == .customAction,
+           let stored = customActions.first(where: { $0.id == action.id }) {
+            return stored.urlString
+        }
+
+        switch action.kind {
+        case .shortcut:
+            return "Shortcut"
+        case .saveForLater, .newSnippet, .reminder, .event:
+            return "Built-in capture"
+        default:
+            return action.kind.rawValue
+        }
+    }
+
+    /// Custom Actions edit in their live-mirroring sheet; guest rows push the home
+    /// page that owns their settings. The fallback list stays a pure projection of
+    /// Core's tiers, with navigation kept at this UI edge.
+    private func select(_ action: Action) {
+        if action.kind == .customAction,
+           let stored = customActions.first(where: { $0.id == action.id }) {
+            editorTarget = .edit(stored)
+            return
+        }
+
+        switch action.kind {
+        case .shortcut:
+            guestDestination = .shortcut(action.title)
+        case .reminder:
+            guestDestination = .provider(.reminders)
+        case .event:
+            guestDestination = .provider(.events)
+        case .saveForLater:
+            guestDestination = .provider(.pile)
+        case .newSnippet:
+            guestDestination = .provider(.snippets)
+        default:
+            break
+        }
     }
 
     /// Sheet content does not replace its item while presented. Save the copy as the
@@ -149,66 +238,5 @@ struct CustomActionsView: View {
         guard let pendingEditorTarget else { return }
         self.pendingEditorTarget = nil
         editorTarget = pendingEditorTarget
-    }
-}
-
-/// One row in the Custom Actions list: name, its URL (template or static link), a
-/// per-row enable/disable toggle (issue #68), and a tap into the editor — the same row
-/// shape as the Fallbacks page.
-private struct CustomActionRow: View {
-    let action: StoredCustomAction
-    let isDisabled: Bool
-    let onToggleDisabled: () -> Void
-    let onEdit: () -> Void
-
-    /// The badge's tint follows the action's shape via the shared Core rule (a slotted
-    /// template is a Custom Action, a slot-less one a static link), matching the glyph
-    /// the result rows render.
-    private var badgeKind: ActionKind {
-        CustomActionDefinition.derivedKind(forTemplate: action.urlString)
-    }
-
-    /// The chosen leading glyph, normalized to *set* vs *unset* by the same Core rule
-    /// the produced Action uses — so a blank stored value shows no badge here exactly
-    /// as it renders the derived glyph on the result surfaces.
-    private var chosenGlyph: String? {
-        CustomActionDefinition.normalizedGlyph(action.glyph)
-    }
-
-    /// The chosen **Action color** (issue #243), resolved from the stored token by the
-    /// same tolerant Core rule every other surface uses — so an unknown token shows the
-    /// kind's tint here exactly as it does on a result row.
-    private var chosenColor: ActionColor? {
-        ActionColor(token: action.colorToken)
-    }
-
-    var body: some View {
-        HStack(spacing: 12) {
-            // The action's customizations appear as a leading badge on the
-            // management-page row (CONTEXT.md → Custom Action, Action color; issues
-            // #163, #243) — the same badge, tint, and weight the result rows wear. Shown
-            // when **either** a symbol or a colour is set, since either alone makes the
-            // badge say something the plain row doesn't; with neither, the row reads
-            // exactly as before. A colour-only action still needs a symbol to sit on, so
-            // the badge falls back to the kind-derived glyph.
-            if chosenGlyph != nil || chosenColor != nil {
-                ProviderBadge(kind: badgeKind, symbol: chosenGlyph, color: chosenColor)
-            }
-            VStack(alignment: .leading, spacing: 2) {
-                Text(action.title)
-                    .font(.body)
-                    .foregroundStyle(isDisabled ? .secondary : .primary)
-                Text(action.urlString)
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-                    .lineLimit(1)
-            }
-            Spacer(minLength: 8)
-            Toggle("Enabled", isOn: Binding(get: { !isDisabled }, set: { _ in onToggleDisabled() }))
-                .labelsHidden()
-                .accessibilityIdentifier("custom-action-enabled.\(action.id)")
-        }
-        .contentShape(Rectangle())
-        .onTapGesture { onEdit() }
     }
 }

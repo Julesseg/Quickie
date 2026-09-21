@@ -1403,7 +1403,10 @@ struct RootView: View {
             CustomActionsView(
                 store: fallbacks,
                 enablement: instanceEnablement,
-                eligible: eligibleFallbackActions
+                eligible: eligibleFallbackActions,
+                shortcuts: shortcuts,
+                reminderSteps: reminderSteps,
+                eventSteps: eventSteps
             )
         case .snippets: SnippetManagerView(enablement: instanceEnablement)
         case .shortcuts: ShortcutsView(store: shortcuts, enablement: instanceEnablement)

@@ -35,6 +35,11 @@ struct FallbackListSections: View {
     /// The live fallback-eligible Actions, from `RootView` — the union the three
     /// sections partition by the store's tiers and the disabled set.
     let eligible: [Action]
+    /// The unified row's caption is provider data owned by the enclosing page: a
+    /// Custom Action supplies its URL template, while guest rows retain their kind
+    /// caption. Keeping it a single input prevents the ladder from maintaining a
+    /// second, stale copy of SwiftData records.
+    let caption: (Action) -> String
     /// Opens an action's home from its one and only fallback-list row. The Custom
     /// Actions page resolves its own rows to the editor; guest providers supply their
     /// own destination as the page's navigation model grows.
@@ -86,9 +91,10 @@ struct FallbackListSections: View {
                     ForEach(shelvedActions) { action in
                         // Shelf rows: a red minus that drops the member to the *top*
                         // of Active, plus the drag grip. No shelf button — it's here.
-                        FallbackRow(
+                        CustomActionsListRow(
                             action: action,
                             style: .shelf,
+                            caption: caption(action),
                             onPrimary: { withAnimation { store.move(action.id, to: .enabled) } },
                             onShelve: nil,
                             onSelect: { onSelect(action) }
@@ -112,9 +118,10 @@ struct FallbackListSections: View {
                         // Active rows: a red minus to demote, the shelf button to
                         // promote a rung up, and the drag grip to reorder — no
                         // enable/disable toggle (it lives on the pool).
-                        FallbackRow(
+                        CustomActionsListRow(
                             action: action,
                             style: .active,
+                            caption: caption(action),
                             onPrimary: { withAnimation { store.move(action.id, to: .pool) } },
                             onShelve: { withAnimation { store.move(action.id, to: .shelf) } },
                             onSelect: { onSelect(action) }
@@ -140,12 +147,13 @@ struct FallbackListSections: View {
                         // Pool rows: a green plus to promote to Active, the shelf
                         // button to climb straight to the Shelf, and the action's
                         // enable/disable toggle — the toggle only appears here.
-                        FallbackRow(
+                        CustomActionsListRow(
                             action: action,
                             style: .pool(
                                 isDisabled: enablement.isDisabled(action.id),
                                 onToggleDisabled: { withAnimation { enablement.toggleDisabled(action.id) } }
                             ),
+                            caption: caption(action),
                             onPrimary: { promote(action, to: .enabled) },
                             onShelve: { promote(action, to: .shelf) },
                             onSelect: { onSelect(action) }
@@ -154,6 +162,8 @@ struct FallbackListSections: View {
                 }
             } header: {
                 Text("Available for fallback")
+            } footer: {
+                Text("A fallback takes what you typed as its first argument.")
             }
         }
     }
@@ -180,26 +190,26 @@ struct FallbackListSections: View {
     }
 }
 
-/// One Fallback-list row. Both activation verbs sit together on the **leading** edge,
-/// ahead of the title: In the **Shelf** it is a red minus (drop to the top of Active) +
-/// title, with the system drag grip trailing (edit mode). In **Active** it is a red
-/// minus (demote to the pool) + a shelf button + title, also with the grip. In the
-/// **pool** it is a green plus (promote to Active) + a shelf button + title, with the
-/// action's instance enable/disable toggle trailing. No delete affordance in any of them.
-private struct FallbackRow: View {
-    /// Which section the row is rendering in — and, for the pool, the instance
-    /// Disabled state and switch that only *it* carries, so the two ordered tiers
-    /// don't pass placeholders for a control they never show.
+/// The one row the Custom Actions page uses across its Fallback-list tiers and
+/// Other actions. Section style owns the controls, while this row owns the badge,
+/// caption, toggle placement, dimming, and one tap rule — so those presentation rules
+/// cannot drift between a Custom Action's own section and its fallback rung.
+struct CustomActionsListRow: View {
+    /// Which section renders the row. The two ordered tiers deliberately carry no
+    /// instance toggle; Available and Other are the only places it belongs.
     enum Style {
         case shelf
         case active
         case pool(isDisabled: Bool, onToggleDisabled: () -> Void)
+        case other(isDisabled: Bool, onToggleDisabled: () -> Void)
 
         /// The pool's dimming/toggle state; the ordered tiers never hold a disabled
         /// action (`demoteDisabled` drops it to the pool), so they read as enabled.
         var isDisabled: Bool {
-            if case .pool(let isDisabled, _) = self { return isDisabled }
-            return false
+            switch self {
+            case .pool(let isDisabled, _), .other(let isDisabled, _): return isDisabled
+            default: return false
+            }
         }
 
         var isPool: Bool {
@@ -210,7 +220,8 @@ private struct FallbackRow: View {
 
     let action: Action
     let style: Style
-    /// Demote (Shelf, Active) or promote (pool) — the section's primary activation verb.
+    let caption: String
+    /// Demote (Shelf, Active) or promote (pool). Other actions have no ladder verb.
     let onPrimary: () -> Void
     /// Promote onto the Shelf. `nil` on Shelf rows, which are already there.
     let onShelve: (() -> Void)?
@@ -219,13 +230,15 @@ private struct FallbackRow: View {
 
     var body: some View {
         HStack(spacing: 12) {
-            Button(action: onPrimary) {
-                Image(systemName: style.isPool ? "plus.circle.fill" : "minus.circle.fill")
-                    .foregroundStyle(style.isPool ? .green : .red)
+            if hasPrimaryControl {
+                Button(action: onPrimary) {
+                    Image(systemName: style.isPool ? "plus.circle.fill" : "minus.circle.fill")
+                        .foregroundStyle(style.isPool ? .green : .red)
+                }
+                .buttonStyle(.borderless)
+                .accessibilityLabel(primaryLabel)
+                .accessibilityIdentifier("\(style.isPool ? "fallback-promote" : "fallback-demote").\(action.id)")
             }
-            .buttonStyle(.borderless)
-            .accessibilityLabel(primaryLabel)
-            .accessibilityIdentifier("\(style.isPool ? "fallback-promote" : "fallback-demote").\(action.id)")
 
             // The shelf button — one rung up, from Active *or* straight from the pool
             // (no forced two-step climb). Absent on Shelf rows, which are already there.
@@ -251,12 +264,15 @@ private struct FallbackRow: View {
                 Text(action.title)
                     .font(.body)
                     .foregroundStyle(style.isDisabled ? .secondary : .primary)
-                if let caption = kindCaption {
-                    Text(caption)
-                        .font(.caption)
+                Text(caption)
+                    .font(.caption)
                     .foregroundStyle(.secondary)
-                }
+                    .lineLimit(1)
             }
+            // The text region is the row's navigation target. Keeping the gesture
+            // off the enclosing HStack ensures tier buttons and Enabled toggles keep
+            // their own actions instead of also opening an editor or provider page.
+            .frame(maxWidth: .infinity, alignment: .leading)
             .contentShape(Rectangle())
             .onTapGesture(perform: onSelect)
             Spacer(minLength: 8)
@@ -265,11 +281,31 @@ private struct FallbackRow: View {
             // disabling hides the action everywhere; a shelved or active fallback is
             // demoted here first (or disabled from its home page) before it can be
             // switched off.
-            if case .pool(let isDisabled, let onToggleDisabled) = style {
+            switch style {
+            case .pool(let isDisabled, let onToggleDisabled), .other(let isDisabled, let onToggleDisabled):
                 Toggle("Enabled", isOn: Binding(get: { !isDisabled }, set: { _ in onToggleDisabled() }))
                     .labelsHidden()
-                    .accessibilityIdentifier("fallback-enabled.\(action.id)")
+                    .accessibilityIdentifier("\(style.isPool ? "fallback-enabled" : "custom-action-enabled").\(action.id)")
+            default:
+                EmptyView()
             }
+        }
+        .accessibilityIdentifier("custom-actions-row.\(sectionIdentifier).\(action.id)")
+    }
+
+    private var hasPrimaryControl: Bool {
+        switch style {
+        case .shelf, .active, .pool: return true
+        case .other: return false
+        }
+    }
+
+    private var sectionIdentifier: String {
+        switch style {
+        case .shelf: return "shelf"
+        case .active: return "active"
+        case .pool: return "available"
+        case .other: return "other"
         }
     }
 
@@ -280,18 +316,7 @@ private struct FallbackRow: View {
         case .shelf: return "Remove from the shelf"
         case .active: return "Remove from active fallbacks"
         case .pool: return "Add to active fallbacks"
-        }
-    }
-
-    /// A small caption naming what kind of fallback this is — so a permanent capture
-    /// reads distinctly from a user's Custom Action or Shortcut.
-    private var kindCaption: String? {
-        switch action.kind {
-        case .customAction: return "Custom Action"
-        case .shortcut: return "Shortcut"
-        case .saveForLater, .newSnippet, .reminder, .event: return "Built-in capture"
-        case .system: return "System built-in"
-        default: return nil
+        case .other: return ""
         }
     }
 }
