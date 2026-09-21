@@ -38,7 +38,13 @@ struct SettingsHubTests {
         // typing "custom actions" lands on the Custom Actions page, settings +
         // content in one. There is no separate content page left to open.
         #expect(Action.openCustomActionsPage().run() == .openPage(.settings(panel: .customActions)))
-        #expect(SearchEngine(providers: [IndexedProvider.builtIns()]).results(for: "fallbacks").map(\.id) == ["builtin.custom-actions-page"])
+        let builtIns = SearchEngine(providers: [IndexedProvider.builtIns()])
+        for query in ["fallback", "fallbacks", "search engines", "manage fallbacks"] {
+            #expect(
+                builtIns.results(for: query).map(\.id) == ["builtin.custom-actions-page"],
+                "\(query) reaches Custom Actions without restoring a Fallbacks command row"
+            )
+        }
         #expect(Action.openSnippetsLibrary().run() == .openPage(.settings(panel: .snippets)))
         #expect(Action.openShortcutsPage().run() == .openPage(.settings(panel: .shortcuts)))
         // The Pile is the deliberate exception (ADR 0018): its typed row opens

@@ -4,13 +4,13 @@ import QuickieCore
 /// A quick-capture provider page (Reminders, Events) under the Settings hub: the
 /// declared Options (Enabled, the default list/calendar picker, and — for Events —
 /// the editor toggle) lead, then the capture's **reorderable step double-list**
-/// (issue #145 follow-up). Same two-section shape as the Fallbacks page: an **On**
+/// (issue #145 follow-up). It has an **On**
 /// section (user-ordered, reorderable, a red minus turns a step off) above an **Off**
 /// pool (every step not on, a green plus turns it on). Title is always the first
 /// breadcrumb step, so it is pinned out of the list — only the steps after it arrange.
 ///
-/// The whole list sits in constant edit mode (like the Fallbacks page) so the reorder
-/// grips show without a separate Edit step; the Options rows above stay interactive.
+/// The whole list sits in constant edit mode so the reorder grips show without a
+/// separate Edit step; the Options rows above stay interactive.
 struct CaptureStepsPage<Step: CaptureStepKind>: View {
     let provider: ProviderID
     let store: CaptureStepsStore

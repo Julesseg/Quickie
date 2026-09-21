@@ -10,8 +10,8 @@ import QuickieCore
 /// of truth (ADR 0006), mirroring `SignalsStore` / `FallbacksStore`.
 ///
 /// This one store covers every action's instance-disable, fallbacks included: the
-/// Fallbacks page shows the same toggle, and disabling an action also demotes it from
-/// the enabled Fallback list into the Available pool (`FallbacksStore.demoteDisabled`).
+/// Custom Actions page shows the same toggle, and disabling an action also demotes it
+/// from the enabled Fallback list into the Available pool (`FallbacksStore.demoteDisabled`).
 /// Ids are UUID-derived and never reused, so a deleted action's stale id is inert.
 @MainActor
 @Observable

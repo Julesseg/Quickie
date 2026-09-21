@@ -38,6 +38,27 @@ final class CustomActionsFallbackListUITests: XCTestCase {
         XCTAssertTrue(app.navigationBars["Custom Actions"].waitForExistence(timeout: 10))
     }
 
+    /// The former Fallbacks routes now resolve to the Custom Actions command, whose
+    /// page hosts the fallback list. No second command row or navigation surface is
+    /// left behind for the retired provider.
+    @MainActor
+    func testFallbackAliasesOpenCustomActionsWithoutAFallbacksRow() throws {
+        for query in ["fallback", "fallbacks", "search engines", "manage fallbacks"] {
+            let app = launchApp()
+            let input = app.textFields["search-input"]
+            XCTAssertTrue(input.waitForExistence(timeout: 10))
+            input.tap()
+            input.typeText(query)
+
+            let customActions = app.buttons["builtin.custom-actions-page"]
+            XCTAssertTrue(customActions.waitForExistence(timeout: 5), "\(query) surfaces Custom Actions")
+            XCTAssertFalse(app.buttons["builtin.fallbacks-page"].exists, "\(query) has no Fallbacks row")
+            customActions.tap()
+            XCTAssertTrue(app.navigationBars["Custom Actions"].waitForExistence(timeout: 10))
+            app.terminate()
+        }
+    }
+
     /// Resolve a row by its visible title, walking a short phone-sized list in both
     /// directions so a promotion that moves it up the ladder stays discoverable.
     @MainActor

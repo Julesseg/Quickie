@@ -46,7 +46,7 @@ App/                       Quickie — thin SwiftUI/SwiftData iOS app (Xcode 26,
     SettingsView.swift     Settings hub: app prefs + one row per Provider (ADR 0019)
     ProviderPages.swift    the per-provider Management pages (ADR 0020)
     CustomActionsView.swift / CustomActionEditorView.swift / CatalogView.swift
-    FallbacksView.swift, SnippetManagerView.swift, PileView.swift,
+    FallbackListSections.swift, SnippetManagerView.swift, PileView.swift,
     ShortcutsView.swift, SystemView.swift, FileSearchContextView.swift, …
     AppShortcuts.swift     headline App Shortcuts for Siri/Spotlight (ADR 0024)
     Quickie.entitlements   App Group + CloudKit entitlements
@@ -159,8 +159,7 @@ one — reachable by typing its name or from the Settings hub (ADR 0019).
 
 | Provider | What it contributes |
 | --- | --- |
-| **Custom Actions** | User-authored URL Actions with zero or more `{slot}`s — slotted ones fill via the breadcrumb, slot-less ones are static links. Seeded on first run; extendable from the **Catalog**. |
-| **Fallbacks** | Not a source of Actions but the surface that decides which eligible Actions consume the typed query, in what order, and which sit on the **Shelf** above the input (ADR 0037). |
+| **Custom Actions** | User-authored URL Actions with zero or more `{slot}`s — slotted ones fill via the breadcrumb, slot-less ones are static links. Its page also hosts the Fallback list, which decides which eligible Actions consume typed input, their order, and which sit on the **Shelf** (ADR 0037, 0045). Seeded on first run; extendable from the **Catalog**. |
 | **Snippets** | Stored text, copied on run. |
 | **Pile** | Queries saved for later, including the auto-saved pending query. |
 | **Shortcuts** | Shortcuts imported by name via the companion Sync Shortcut (ADR 0007). |

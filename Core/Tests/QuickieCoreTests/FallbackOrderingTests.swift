@@ -2,7 +2,7 @@ import Foundation
 import Testing
 @testable import QuickieCore
 
-// The Fallbacks page persists a single ordered **enabled list**, read
+// The Custom Actions page persists a single ordered **enabled list**, read
 // most-important-first (CONTEXT.md → Fallback list) — the only fallback fact. The
 // SearchEngine projects it into the bottom fallback region: the most-important
 // enabled fallback sits nearest the ranked matches (the thumb), and an eligible

@@ -128,6 +128,10 @@ final class SettingsHubUITests: XCTestCase {
         // existence before asserting.
         let customActionsRow = app.descendants(matching: .any)["settings-provider-custom-actions"].firstMatch
         XCTAssertTrue(customActionsRow.waitForExistence(timeout: 10), "the hub lists a Custom Actions provider row")
+        XCTAssertFalse(
+            app.descendants(matching: .any)["settings-provider-fallbacks"].firstMatch.exists,
+            "the retired Fallbacks provider is not a Settings destination"
+        )
         let calculatorRow = app.descendants(matching: .any)["settings-provider-calculator"].firstMatch
         var swipes = 0
         while !calculatorRow.exists && swipes < 4 {

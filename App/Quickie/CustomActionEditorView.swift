@@ -15,7 +15,7 @@ import QuickieStoreKit
 ///
 /// One screen for both create and edit: the parent hands an initial definition and
 /// an `onSave`, and owns the SwiftData write (insert vs. apply). Reached from the
-/// Custom Actions Management page (create + edit) and the Fallbacks page (edit).
+/// Custom Actions Management page (create + edit, including its fallback list).
 struct CustomActionEditorView: View {
     @Environment(\.dismiss) private var dismiss
 

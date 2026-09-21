@@ -10,8 +10,8 @@ import QuickieStoreKit
 /// input, a reversed Result list above it, and tap-to-run. The empty-query state
 /// shows Home — the Favorites grid over the Recent list (ADR 0008 / issue #36).
 ///
-/// Management surfaces (Settings, Custom Actions, Fallbacks, the Pile, All Snippets)
-/// are no longer chrome: each is reached by typing to surface a command row and
+/// Management surfaces (Settings, Custom Actions, the Pile, All Snippets) are no
+/// longer chrome: each is reached by typing to surface a command row and
 /// presents **full-screen** (ADR 0013 / CONTEXT.md → Management page). The old
 /// top-right gear button and combined manage sheet are gone.
 struct RootView: View {
@@ -348,7 +348,7 @@ struct RootView: View {
                     disabledFolders: indexedFolders.disabledFolderIDs
                 ),
                 // The built-in management command rows (Settings, Custom Actions,
-                // Fallbacks) — no privileged web search. No ProviderID: these are each
+                // fallback routes) — no privileged web search. No ProviderID: these are each
                 // provider's typed route back to its page, so they must outlive any
                 // kind's disable (issue #67).
                 IndexedProvider.builtIns(),
@@ -356,7 +356,7 @@ struct RootView: View {
                 // #94) — both slotted actions and static (slot-less) links, unified here.
                 // The catalog attributes to `.customActions`, so the Custom Actions
                 // page's Enabled toggle governs them all — eligible for the Fallback list
-                // or not. The Fallbacks page activates the eligible ones through
+                // or not. The Custom Actions page activates the eligible ones through
                 // `FallbacksStore`'s enabled list, an independent region axis.
                 IndexedProvider(catalog: storedCustomActions, id: .customActions),
                 IndexedProvider(catalog: storedSnippets + [.newSnippet()], id: .snippets),
@@ -408,7 +408,7 @@ struct RootView: View {
             .filter(\.isFallbackEligible)
     }
 
-    /// Every fallback-eligible Action in the live catalog — the Fallbacks page splits
+    /// Every fallback-eligible Action in the live catalog — the Custom Actions page splits
     /// these into the Shelf, the Active section, and the derived pool. Rebuilds the
     /// Actions rather than sharing the engine's per-keystroke locals, so `body` reads it
     /// into **one** local (`eligibleFallbackList`) that the Shelf row and the
@@ -439,7 +439,7 @@ struct RootView: View {
     ///
     /// Takes the already-built eligible catalog rather than rebuilding it, so putting
     /// the row in the view hierarchy costs no extra pass over `makeAction`, and renders
-    /// through the same `liveMembers` the Fallbacks page's sections do.
+    /// through the same `liveMembers` the Custom Actions page's sections do.
     private func shelfMembers(from eligible: [Action]) -> [Action] {
         guard providerEnablement.enablement.isEnabled(.customActions), customActionsFallbacks else { return [] }
         return FallbackTiers.liveMembers(
@@ -1004,8 +1004,8 @@ struct RootView: View {
                     // The launcher's input is focused — the keyboard is up — at
                     // the instant a page is pushed, and removing the input (the
                     // `path.isEmpty` inset above) drops the keyboard *while* the
-                    // page slides in. A `List`-based page (Fallbacks, Quicklinks,
-                    // the Pile, Snippets) reserves keyboard-avoidance inset at push
+                    // page slides in. A `List`-based page (Custom Actions, the
+                    // Pile, Snippets) reserves keyboard-avoidance inset at push
                     // time and then animates it away as the keyboard descends —
                     // the white band that slides down off-screen. Settings is a
                     // `Form` and never showed it. None of these pages hosts a text
@@ -1183,7 +1183,7 @@ struct RootView: View {
                 PendingQueryActivityController.sync(preview: preview)
             }
             // Keep that coupling live: disabling an action anywhere (its home page or
-            // the Fallbacks page) demotes it from the enabled Fallback list.
+            // the Custom Actions page) demotes it from the enabled Fallback list.
             .onChange(of: instanceEnablement.disabled) { _, disabled in
                 fallbacks.demoteDisabled(disabled)
             }

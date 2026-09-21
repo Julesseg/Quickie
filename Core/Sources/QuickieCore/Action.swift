@@ -33,8 +33,8 @@ public enum ActionOutcome: Equatable, Sendable {
     /// before it is stored, unlike the Pile's silent capture.
     case composeSnippet(seed: String)
     /// Open one of the full-screen management pages (CONTEXT.md → Management
-    /// page): the typed-to command that surfaces Settings or a library/Fallbacks
-    /// list, which otherwise lives only as a filtered result row. Replaces the
+    /// page): the typed-to command that surfaces Settings or a library list, which
+    /// otherwise lives only as a filtered result row. Replaces the
     /// old chrome buttons and the combined manage sheet.
     case openPage(ManagementPage)
     /// Create an EventKit reminder from a fully-collected New Reminder capture
@@ -153,10 +153,9 @@ public enum ActionKind: String, Equatable, Sendable, Codable {
     /// surface, distinct from a `file` result row and from the Indexed Folders
     /// management command.
     case searchFiles
-    /// A management command row that opens a library/management page it does not
-    /// itself belong to — the Fallbacks page. A dedicated kind so a command row never
-    /// wears the same badge as the data rows it governs (a Fallbacks command vs a
-    /// Custom Action).
+    /// A management command row that opens a provider's management page rather than
+    /// representing data itself. A dedicated kind so a command row never wears the
+    /// same badge as the data rows it governs.
     case managementPage
     /// A System provider built-in (CONTEXT.md → System provider; ADR 0029): the
     /// permanent OS-integration action Open iOS Settings. Its own kind so the row
@@ -181,8 +180,8 @@ public enum MainAction: Equatable, Sendable {
     case saveToPile
     /// Open an editor to compose a new Snippet from the typed text.
     case compose
-    /// Open a full-screen management page (Settings, Custom Actions, Fallbacks, the
-    /// Pile, all Snippets).
+    /// Open a full-screen management page (Settings, Custom Actions, the Pile, all
+    /// Snippets).
     case openPage
     /// Open a file surfaced by File Search — the app resolves its bookmark identity
     /// to a security-scoped URL and opens it (CONTEXT.md → File Search).
@@ -865,8 +864,8 @@ extension Action {
     /// row; ADR 0021, issue #94): deeplinks to the Custom Actions provider page under
     /// the hub — the authoring surface where a URL-template Action is created and
     /// edited — both slotted actions and static (slot-less) links, unified here (ADR
-    /// 0030). Its aliases retain the retired Fallbacks page's typed routes because
-    /// this page now owns the fallback region (ADR 0045).
+    /// 0030). Its aliases retain the former fallback route terms because this page
+    /// now owns the fallback region (ADR 0045).
     public static func openCustomActionsPage() -> Action {
         Action(
             id: "builtin.custom-actions-page",
