@@ -1,0 +1,15 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100" width="1024" height="1024">
+  <!-- Prototype B: the page becomes a substantial cut-paper object. -->
+  <defs>
+    <linearGradient id="field" x1="0" y1="0" x2="1" y2="1"><stop stop-color="#7658DB"/><stop offset="1" stop-color="#3D2295"/></linearGradient>
+    <linearGradient id="paper" x1="0" y1="0" x2="1" y2="1"><stop stop-color="#FFFFFF"/><stop offset="1" stop-color="#F0EAFE"/></linearGradient>
+    <filter id="shadow" x="-30%" y="-30%" width="160%" height="160%"><feDropShadow dx="0" dy="3" stdDeviation="3" flood-color="#1E0D56" flood-opacity=".25"/></filter>
+  </defs>
+  <rect width="100" height="100" fill="url(#field)"/>
+  <g filter="url(#shadow)">
+    <path d="M23 18H63L77 32V61C63 74 44 82 23 83Z" fill="url(#paper)"/>
+    <path d="M63 18V32H77Z" fill="#CBB8FF"/>
+    <path d="M30 71V27H57" fill="none" stroke="#4A2DA5" stroke-width="5" stroke-linecap="round" stroke-linejoin="round"/>
+    <path d="M30 71C44 68 57 62 67 55C59 51 52 49 45 49C41 60 36 67 30 71Z" fill="#4A2DA5"/>
+  </g>
+</svg>

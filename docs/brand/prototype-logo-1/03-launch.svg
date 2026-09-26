@@ -1,0 +1,14 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100" width="1024" height="1024">
+  <!-- Prototype C: an energetic ribbon gives the source wing a launch direction. -->
+  <defs>
+    <linearGradient id="field" x1="0" y1="0" x2="1" y2="1"><stop stop-color="#281052"/><stop offset="1" stop-color="#090719"/></linearGradient>
+    <linearGradient id="flight" x1="0" y1="1" x2="1" y2="0"><stop stop-color="#9E80FF"/><stop offset=".55" stop-color="#DDC9FF"/><stop offset="1" stop-color="#FFC94F"/></linearGradient>
+  </defs>
+  <rect width="100" height="100" fill="url(#field)"/>
+  <g transform="rotate(-8 50 50)">
+    <path d="M20 77V22H70V57" fill="none" stroke="#F9F2FF" stroke-width="7.5" stroke-linejoin="round" stroke-linecap="round"/>
+    <path d="M20 77C39 73 61 64 70 57C63 51 53 49 45 50C41 63 31 73 20 77Z" fill="url(#flight)"/>
+    <path d="M28 79C48 78 70 69 82 57" fill="none" stroke="#FFC94F" stroke-width="3" stroke-linecap="round"/>
+    <path d="M79 56L85 54L83 61" fill="none" stroke="#FFC94F" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>
+  </g>
+</svg>

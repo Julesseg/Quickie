@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 841.9 595.3">
+  <!-- Copy of ~/Downloads/Logo 1.svg for a self-contained prototype reference. -->
+  <g stroke="#1d1d1b" stroke-linecap="round" stroke-linejoin="round" stroke-width="3">
+    <polyline fill="#fff" points="177.6 435.4 177.6 177.4 362.3 177.4 362.3 343.6"/>
+    <path fill="#1d1d1b" d="M177.6,435.4s132.2-15,184.7-91.8c0,0-50.4-12.2-68.7-28.7,0,0-43.2,100.3-116,120.6Z"/>
+  </g>
+</svg>

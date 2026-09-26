@@ -1,0 +1,65 @@
+<!doctype html>
+<html lang="en">
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Logo 1 · Quickie app icon prototypes</title>
+<style>
+  :root{font-family:ui-sans-serif,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;color:#242038;background:#f3f0ed}
+  *{box-sizing:border-box}body{margin:0}button{font:inherit}a{color:inherit}
+  .wrap{max-width:1150px;margin:auto;padding:34px 28px 120px}
+  .eyebrow{color:#7658ac;font-size:12px;font-weight:800;letter-spacing:.14em;text-transform:uppercase}
+  h1{font-size:clamp(32px,5vw,54px);letter-spacing:-.055em;margin:9px 0 8px;line-height:1.04}
+  .lede{color:#635c70;max-width:650px;line-height:1.5;margin:0 0 32px}
+  .layout{display:grid;grid-template-columns:minmax(0,1.3fr) minmax(290px,.7fr);gap:20px}
+  .panel{border:1px solid #e7e0df;background:#fff;border-radius:26px;box-shadow:0 18px 60px #3b28630d}
+  .hero{padding:28px;display:flex;flex-direction:column;gap:26px}
+  .stage{background:radial-gradient(circle at 50% 30%,#f4edfc,#e9e3ec 70%);border-radius:19px;min-height:460px;display:grid;place-items:center;padding:35px}
+  .main-icon{width:min(72%,350px);aspect-ratio:1;border-radius:22.5%;overflow:hidden;box-shadow:0 26px 45px #2117333d,0 2px 6px #21173328}
+  .main-icon img,.mini img,.home-icon img{width:100%;height:100%;display:block}
+  .hero-meta{display:flex;align-items:flex-start;justify-content:space-between;gap:20px}
+  h2{margin:0 0 7px;font-size:25px;letter-spacing:-.03em}.explain{margin:0;color:#655d70;line-height:1.45;max-width:450px}
+  .download{white-space:nowrap;border:1px solid #d9cee7;padding:9px 13px;border-radius:10px;text-decoration:none;color:#512d93;font-size:13px;font-weight:700}
+  .aside{display:grid;gap:20px;align-content:start}
+  .context{padding:23px}.context h3,.compare h3{font-size:13px;margin:0 0 19px;color:#5e526b;text-transform:uppercase;letter-spacing:.09em}
+  .sizes{display:flex;align-items:end;gap:25px;padding-bottom:5px}.size{text-align:center;color:#716878;font-size:12px}
+  .mini{overflow:hidden;border-radius:22.5%;box-shadow:0 4px 12px #281c3c40;margin:0 auto 11px}.s64{width:64px;height:64px}.s32{width:32px;height:32px}.s120{width:120px;height:120px}
+  .home{background:linear-gradient(155deg,#d6caee,#9fa7c7 55%,#4f5580);padding:24px;border-radius:17px;display:flex;align-items:center;gap:16px;margin-top:25px}
+  .home-icon{width:59px;height:59px;border-radius:22.5%;overflow:hidden;box-shadow:0 3px 10px #26204055;flex:none}.home-label{color:white;text-shadow:0 1px 3px #30284a8f;font-size:13px}.home-label strong{display:block;font-size:18px}
+  .compare{padding:23px}.source{display:grid;grid-template-columns:80px 1fr;gap:17px;align-items:center}.source img{width:80px;height:80px;object-fit:cover;border:1px solid #e9e6e4;border-radius:15px;background:#fff}.source p{font-size:13px;color:#716878;line-height:1.42;margin:0}
+  .choices{display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin-top:20px}.choice{text-align:left;border:2px solid transparent;background:#fff;border-radius:19px;padding:14px;cursor:pointer;box-shadow:0 5px 20px #3020420c}.choice[aria-current=true]{border-color:#7658db}.choice img{width:100%;aspect-ratio:1;border-radius:22.5%;display:block;margin-bottom:11px}.choice strong{display:block;font-size:14px}.choice span{color:#716878;font-size:12px}
+  .switcher{position:fixed;left:50%;bottom:20px;transform:translateX(-50%);display:flex;align-items:center;gap:12px;background:#211735;color:white;border-radius:999px;padding:7px;box-shadow:0 12px 35px #21173555;z-index:2}.switcher button{width:36px;height:36px;border:0;border-radius:50%;color:white;background:#493767;cursor:pointer}.switcher span{min-width:168px;text-align:center;font-size:13px;font-weight:700}
+  @media(max-width:750px){.layout{grid-template-columns:1fr}.stage{min-height:320px}.wrap{padding:24px 16px 115px}.choices{gap:7px}.choice{padding:8px}.choice strong{font-size:12px}.choice span{font-size:11px}}
+</style>
+<main class="wrap">
+  <div class="eyebrow">Quickie / disposable design study</div>
+  <h1>From mark to app icon</h1>
+  <p class="lede">Three treatments of the page outline and curved launch stroke in <em>Logo 1.svg</em>. Compare them at home screen size before choosing a direction. These are prototypes, not production assets.</p>
+  <div class="layout">
+    <section class="panel hero">
+      <div class="stage"><div class="main-icon"><img class="variant-img" alt="Selected app icon prototype"></div></div>
+      <div class="hero-meta"><div><h2 id="name"></h2><p class="explain" id="description"></p></div><a class="download" id="asset" href="#">Open SVG ↗</a></div>
+    </section>
+    <div class="aside">
+      <section class="panel context"><h3>At real sizes</h3><div class="sizes"><div class="size"><div class="mini s120"><img class="variant-img" alt=""></div>120 px</div><div class="size"><div class="mini s64"><img class="variant-img" alt=""></div>64 px</div><div class="size"><div class="mini s32"><img class="variant-img" alt=""></div>32 px</div></div><div class="home"><div class="home-icon"><img class="variant-img" alt=""></div><div class="home-label"><strong>Quickie</strong>Home screen context</div></div></section>
+      <section class="panel compare"><h3>Source idea</h3><div class="source"><img src="source.svg" alt="Original Logo 1.svg"><p>A tall page outline and a sweeping lower stroke. The source's landscape artboard and hairline weight leave the mark too small for an icon.</p></div></section>
+    </div>
+  </div>
+  <div class="choices" id="choices"></div>
+</main>
+<nav class="switcher" aria-label="Prototype switcher"><button id="prev" aria-label="Previous prototype">←</button><span id="current"></span><button id="next" aria-label="Next prototype">→</button></nav>
+<script>
+const variants=[
+  {key:'a',file:'01-outline.svg',name:'A · Outline',description:'The closest reading of the source: one open page and one single wing. Bolder proportions and a quiet purple field make it legible as an app icon.'},
+  {key:'b',file:'02-fold.svg',name:'B · Folded paper',description:'The page becomes a solid object with a folded corner. The launch stroke is cut into it, making the mark feel more tactile and document-like.'},
+  {key:'c',file:'03-launch.svg',name:'C · Launch ribbon',description:'The wing carries forward into a short arrow. More motion and contrast, with Quickie’s existing gold reserved for the point of departure.'}
+];
+let index=Math.max(0,variants.findIndex(v=>v.key===new URLSearchParams(location.search).get('variant')));
+const choices=document.getElementById('choices');
+choices.innerHTML=variants.map((v,i)=>`<button class="choice" data-index="${i}" aria-label="View ${v.name}"><img src="${v.file}" alt=""><strong>${v.name}</strong><span>${v.description.split('.')[0]}.</span></button>`).join('');
+function show(i){index=(i+variants.length)%variants.length;const v=variants[index];document.querySelectorAll('.variant-img').forEach(img=>img.src=v.file);document.getElementById('name').textContent=v.name;document.getElementById('description').textContent=v.description;document.getElementById('asset').href=v.file;document.getElementById('current').textContent=v.name;document.querySelectorAll('.choice').forEach((b,n)=>b.setAttribute('aria-current',String(n===index)));const u=new URL(location.href);u.searchParams.set('variant',v.key);history.replaceState(null,'',u)}
+choices.addEventListener('click',e=>{const b=e.target.closest('[data-index]');if(b)show(Number(b.dataset.index))});
+document.getElementById('prev').onclick=()=>show(index-1);document.getElementById('next').onclick=()=>show(index+1);
+document.addEventListener('keydown',e=>{if(e.target.closest('input,textarea,[contenteditable]'))return;if(e.key==='ArrowLeft')show(index-1);if(e.key==='ArrowRight')show(index+1)});
+show(index);
+</script>
+</html>
