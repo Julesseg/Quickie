@@ -47,7 +47,7 @@ Set these repository Actions variables:
 | `T3_BASE` | no | `origin/main` | New worktree base |
 | `T3_CLI` | no | PATH, then `~/.t3/bin/t3` | CLI executable |
 | `T3_BASE_DIR` | no | CLI default | T3 home for a custom server |
-| `T3_DISPATCH_STATE` | no | Shared registry above | Common host admission state override |
+| `T3_DISPATCH_STATE` | no | Shared registry above | One shared absolute host admission path |
 
 Save the project's provider, model, reasoning options and permission mode in
 T3 before enabling unattended dispatch. The launcher inherits that selection;

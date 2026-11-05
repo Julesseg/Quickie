@@ -185,5 +185,14 @@ else:
         self.assertEqual(sum("Not spawning" in output for output, _ in outputs), 1)
 
 
+
+    def test_relative_registry_override_fails_in_every_checkout(self):
+        for name in ("checkout-a", "checkout-b"):
+            checkout = self.root / name
+            checkout.mkdir()
+            with contextlib.chdir(checkout), self.assertRaisesRegex(ValueError, "absolute"):
+                dispatch.registry_path({**self.env, "T3_DISPATCH_STATE": "dispatch.json"})
+
+
 if __name__ == "__main__":
     unittest.main()

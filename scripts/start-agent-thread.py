@@ -29,7 +29,10 @@ def active_dispatches(threads):
 
 def registry_path(env):
     if env.get("T3_DISPATCH_STATE"):
-        return Path(env["T3_DISPATCH_STATE"]).expanduser()
+        path = Path(env["T3_DISPATCH_STATE"]).expanduser()
+        if not path.is_absolute():
+            raise ValueError("T3_DISPATCH_STATE must be one shared absolute path")
+        return path
     server_home = Path(env.get("T3_BASE_DIR") or env.get("T3CODE_HOME") or Path.home() / ".t3").expanduser().resolve()
     identity = hashlib.sha256(str(server_home).encode()).hexdigest()[:16]
     return Path.home() / ".local/state/t3-agent-implement" / (identity + ".json")
