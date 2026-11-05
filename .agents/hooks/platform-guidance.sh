@@ -23,9 +23,11 @@ else
   cat <<'EOF'
 ENV=LOCAL MAC. Xcode is available, so UI tests can run locally when useful.
 `cd Core && swift test` remains the fast loop and CI is the full UI gate. For
-UI tests, boot a simulator you own, then run:
+interactive checks in T3, use its device tools (docs/agents/t3-code.md). For
+automated UI tests, select a simulator owned by this task, then run:
   cd App && xcodebuild test -project Quickie.xcodeproj -scheme Quickie \
     -destination 'platform=iOS Simulator,id=<booted-udid>' CODE_SIGNING_ALLOWED=NO
-Shut down any simulator you booted when verification finishes.
+Preserve already-booted simulators; shut down only devices this task booted.
+Quit Simulator only when no devices remain booted.
 EOF
 fi
