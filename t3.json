@@ -1,0 +1,21 @@
+{
+  "$schema": "https://t3.codes/schema/t3.json",
+  "defaultThreadEnvMode": "worktree",
+  "scripts": [
+    {
+      "name": "Core tests",
+      "command": "swift test --package-path Core",
+      "icon": "test"
+    },
+    {
+      "name": "Simulator build",
+      "command": "xcodebuild build -project App/Quickie.xcodeproj -scheme Quickie -destination 'generic/platform=iOS Simulator' -derivedDataPath .build/t3-simulator CODE_SIGNING_ALLOWED=NO",
+      "icon": "build"
+    },
+    {
+      "name": "Agent integration checks",
+      "command": "python3 -B scripts/test-agent-dispatch.py && python3 -B scripts/test-agent-hooks.py",
+      "icon": "test"
+    }
+  ]
+}

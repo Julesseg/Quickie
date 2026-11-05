@@ -1,0 +1,38 @@
+name: Agent integration
+
+on:
+  pull_request:
+    paths:
+      - 'AGENTS.md'
+      - '.agents/**'
+      - '.claude/**'
+      - '.codex/**'
+      - '.pi/**'
+      - '.github/workflows/agent-*.yml'
+      - '.github/workflows/unblock-dispatch.yml'
+      - 'scripts/*agent*.py'
+      - 't3.json'
+      - 'docs/agents/**'
+  push:
+    branches: [main]
+    paths:
+      - '.agents/**'
+      - '.claude/**'
+      - '.codex/**'
+      - '.pi/**'
+      - '.github/workflows/agent-*.yml'
+      - '.github/workflows/unblock-dispatch.yml'
+      - 'scripts/*agent*.py'
+      - 't3.json'
+
+permissions:
+  contents: read
+
+jobs:
+  checks:
+    name: Agent launcher and hooks
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - run: python3 -B scripts/test-agent-dispatch.py
+      - run: python3 -B scripts/test-agent-hooks.py

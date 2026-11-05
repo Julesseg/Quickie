@@ -186,3 +186,11 @@ work since has been depth on top — the Catalog, the System umbrella, the Shelf
 and the brand/motion pass. See [`ROADMAP.md`](ROADMAP.md) for what each milestone
 covered and what remains in the Later bucket, and
 [GitHub issues](https://github.com/Julesseg/Quickie/issues) for work in flight.
+
+## Session orchestration
+
+T3 sessions use the [project adapter](docs/agents/t3-code.md); Paseo-launched
+sessions retain their existing skills and orchestration. Import the on-demand
+actions from `t3.json` on another T3 environment. Ready-issue auto-dispatch now
+uses T3 Code with the existing claim, duplicate and host-capacity guards; see
+[runner setup](docs/agents/auto-dispatch.md). Schedules move only when requested.
